@@ -1,38 +1,45 @@
 # ProfitPilot
 
-ProfitPilot is a premium Shopify merchant workspace designed around the AI-employee loop:
+ProfitPilot is an autonomous AI employee for Shopify merchants. The repository is a pnpm TypeScript monorepo that follows the blueprint build order **F0 → F9**.
 
-> Monitor → Detect → Explain → Approve → Execute → Measure
+## Current phase: F0 — Foundation
 
-This repository currently contains the first buildable vertical slice of the product experience: a responsive React/Vite workspace with the 16 blueprint sections, evidence-backed recommendation review, command palette, notifications, Jarvis chat/voice-session shell, theme switching, and responsive/mobile navigation.
+F0 establishes all 19 workspace projects, strict TypeScript project references, typed API contracts, real AES-256-GCM crypto, tenant-versioned cache, idempotent queue primitives, PostgreSQL/RLS access, Shopify HMAC/OAuth primitives, redacted structured logging, and the API/worker health boundaries. Future-phase packages are explicit and fail with `PhaseNotImplementedError`; they do not silently pretend to be production features.
 
-## Run locally
+### Workspace projects
+
+**Apps**
+
+- `@profitpilot/api` — Express API + readiness checks
+- `@profitpilot/worker` — worker bootstrap boundary
+- `@profitpilot/web` — web application boundary (F3)
+
+**Packages**
+
+- `@profitpilot/types`
+- `@profitpilot/db`
+- `@profitpilot/sync`
+- `@profitpilot/queue`
+- `@profitpilot/cache`
+- `@profitpilot/shopify`
+- `@profitpilot/crypto`
+- `@profitpilot/logger`
+- `@profitpilot/notifications`
+- `@profitpilot/ui`
+- `@profitpilot/ai`
+- `@profitpilot/billing`
+- `@profitpilot/automation`
+- `@profitpilot/forecasting`
+- `@profitpilot/reporting`
+- `@profitpilot/monitoring`
+
+## Commands
 
 ```bash
-npm install
-npm run dev
+corepack pnpm install
+corepack pnpm build
+corepack pnpm test
+corepack pnpm coverage
 ```
 
-Then open the Vite URL shown in the terminal. The dev server binds to `0.0.0.0` so it also works in a hosted preview.
-
-## Validate
-
-```bash
-npm run build
-```
-
-## Product surface included
-
-- Dashboard with revenue trend, store health, AI opportunities, briefing, and activity
-- Products, Orders, Customers, Inventory, and Analytics views
-- AI Command Center for the seven specialized agents
-- Recommendations queue with approve/reject actions and an immutable evidence drawer
-- Automation, Campaigns, Copilot, Reports, Exports, Support, Billing, and Settings views
-- Global `⌘ K` / `Ctrl K` command palette
-- Notifications drawer and profile menu
-- Jarvis floating orb, background live-session strip, chat panel, and voice-mode shell
-- Dark-first design system with optional light theme, keyboard focus states, reduced-motion support, and responsive layouts
-
-## Security boundary
-
-No credentials or provider secrets are stored in this repository. Shopify, database, Redis, OpenRouter, email, storage, and monitoring integrations should be added through server-side environment variables as the data plane is implemented. The UI deliberately keeps customer information minimized and only displays masked customer contact values.
+No provider credentials are committed. Use `.env.example` as a shape only and inject real values through the deployment secret manager.
