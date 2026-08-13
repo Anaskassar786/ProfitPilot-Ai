@@ -14,6 +14,8 @@ export default defineConfig({
       '/catalog': 'http://127.0.0.1:3000',
       '/live': 'http://127.0.0.1:3000',
       '/ready': 'http://127.0.0.1:3000',
+      '/ai': 'http://127.0.0.1:3000',
+      '/recommendations': 'http://127.0.0.1:3000',
     },
   },
   preview: {
