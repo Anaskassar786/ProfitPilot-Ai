@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PhaseNotImplementedError, storeId } from '@profitpilot/types'
-import { activateWorkflow, executeWorkflow, validateWorkflow } from './index.js'
+import { storeId } from '@profitpilot/types'
+import { activateWorkflow, validateWorkflow } from './index.js'
 import type { WorkflowDefinition } from './index.js'
 
-const definition: WorkflowDefinition = { id: 'wf-1', storeId: storeId('s1'), version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { event: 'order.created' }, next: ['action'] }, { id: 'action', type: 'action', config: { kind: 'tag' }, next: [] }] }
+const definition: WorkflowDefinition = { id: 'wf-1', storeId: storeId('s1'), version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['action'] }, { id: 'action', type: 'action', config: { action: 'tag' }, next: [] }] }
 
 describe('workflow graph validation', () => {
   it('accepts a valid trigger and action graph', () => expect(() => validateWorkflow(definition)).not.toThrow())
@@ -17,5 +17,5 @@ describe('workflow graph validation', () => {
     expect(activated.definitionHash).toHaveLength(64)
     expect(Object.isFrozen(activated)).toBe(true)
   })
-  it('marks worker execution as a future phase', () => expect(() => executeWorkflow(activateWorkflow(definition, 'now'))).toThrow(PhaseNotImplementedError))
+  it('activates a workflow with a stable definition hash', () => expect(activateWorkflow(definition, 'now').definitionHash).toHaveLength(64))
 })

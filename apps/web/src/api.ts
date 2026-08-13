@@ -58,9 +58,24 @@ export function fetchRecommendations(storeId: string, fetcher: Fetcher = fetch):
   return requestJson<readonly Recommendation[]>(`/recommendations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
 
+export type WorkflowRecord = Readonly<{ id: string; storeId: string; version: number; nodes: readonly Readonly<Record<string, unknown>>[]; status?: string; definitionHash?: string }>
+export type CampaignTemplateRecord = Readonly<{ id: string; name: string; kind: 'EMAIL' | 'SMS'; subject: string; body: string; variables: readonly string[] }>
+export type TicketRecord = Readonly<{ id: string; shopId: string; subject: string; priority: string; status: string; version: number; createdAt: number; updatedAt: number }>
+
 export function decideRecommendation(storeId: string, id: string, expectedVersion: number, decision: 'approve' | 'reject', fetcher: Fetcher = fetch): Promise<Recommendation> {
   return requestJson<Recommendation>(`/recommendations/${encodeURIComponent(id)}/${decision}?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedVersion }) }, fetcher)
 }
+
+export function fetchWorkflows(storeId: string, fetcher: Fetcher = fetch): Promise<readonly WorkflowRecord[]> { return requestJson<readonly WorkflowRecord[]>(`/automation/workflows?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function createWorkflow(workflow: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<WorkflowRecord> { return requestJson<WorkflowRecord>('/automation/workflows', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(workflow) }, fetcher) }
+export function activateWorkflow(id: string, fetcher: Fetcher = fetch): Promise<WorkflowRecord> { return requestJson<WorkflowRecord>(`/automation/workflows/${encodeURIComponent(id)}/activate`, { method: 'POST' }, fetcher) }
+export function fetchCampaignTemplates(fetcher: Fetcher = fetch): Promise<readonly CampaignTemplateRecord[]> { return requestJson<readonly CampaignTemplateRecord[]>('/campaigns/templates', {}, fetcher) }
+export function createCampaignTemplate(template: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<CampaignTemplateRecord> { return requestJson<CampaignTemplateRecord>('/campaigns/templates', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(template) }, fetcher) }
+export function exportRows(format: 'CSV' | 'XLSX' | 'PDF', rows: readonly Readonly<Record<string, string | number | boolean | null>>[], fetcher: Fetcher = fetch): Promise<Readonly<{ filename: string; contentType: string; bodyBase64: string; rows: number }>> { return requestJson(`/exports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format, rows }) }, fetcher) }
+export function fetchTickets(storeId: string, fetcher: Fetcher = fetch): Promise<readonly TicketRecord[]> { return requestJson<readonly TicketRecord[]>(`/support/tickets?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function createTicket(shopId: string, subject: string, plan: 'start' | 'growth' | 'commander', fetcher: Fetcher = fetch): Promise<TicketRecord> { return requestJson<TicketRecord>('/support/tickets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId, subject, plan }) }, fetcher) }
+export function saveMerchantEmail(shopId: string, email: string, fromName: string, fetcher: Fetcher = fetch): Promise<Readonly<{ config: Readonly<Record<string, unknown>>; verificationToken: string }>> { return requestJson(`/settings/merchant-email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId, email, fromName }) }, fetcher) }
+export function verifyMerchantEmail(token: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson('/settings/merchant-email/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }, fetcher) }
 
 export function fetchBillingPlans(fetcher: Fetcher = fetch): Promise<readonly BillingPlan[]> { return requestJson<readonly BillingPlan[]>('/billing/plans', {}, fetcher) }
 export function fetchBilling(storeId: string, fetcher: Fetcher = fetch): Promise<BillingAccount> { return requestJson<BillingAccount>(`/billing?shopId=${encodeURIComponent(storeId)}`, {}, fetcher) }

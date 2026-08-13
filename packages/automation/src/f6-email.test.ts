@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest'
+import { AppError } from '@profitpilot/types'
+import { CampaignEmailService, MerchantEmailVerifier } from './email.js'
+
+describe('F6 two-layer email flow', () => {
+  it('sends system mail from ProfitPilot identity', async () => { const calls: string[] = []; const service = new CampaignEmailService({ send: async (message) => { calls.push(message.from); return { messageId: 'system' } } }, { send: async () => ({ messageId: 'merchant' }) }, new MerchantEmailVerifier('secret'), 'system@example.com'); await service.sendSystem('merchant@example.com', 'Welcome', 'Hi'); expect(calls).toEqual(['system@example.com']) })
+  it('never sends a campaign before merchant verification', async () => { const verifier = new MerchantEmailVerifier('secret'); const service = new CampaignEmailService({ send: async () => ({ messageId: 'system' }) }, { send: async () => ({ messageId: 'merchant' }) }, verifier, 'system@example.com'); verifier.save('s', 'merchant@example.com', 'Store'); await expect(service.sendCampaign('s', { to: 'customer@example.com', subject: 'Hi', html: 'Hi' })).rejects.toBeInstanceOf(AppError) })
+  it('uses the verified merchant identity for campaign mail', async () => { const calls: string[] = []; const verifier = new MerchantEmailVerifier('secret'); verifier.save('s', 'merchant@example.com', 'Store'); verifier.verify(verifier.token('s', 'merchant@example.com', 2000), 100); const service = new CampaignEmailService({ send: async () => ({ messageId: 'system' }) }, { send: async (message) => { calls.push(message.from); return { messageId: 'merchant' } } }, verifier, 'system@example.com'); await service.sendCampaign('s', { to: 'customer@example.com', subject: 'Hi', html: 'Hi' }); expect(calls).toEqual(['merchant@example.com']) })
+  it('rejects an expired merchant verification token', () => { const verifier = new MerchantEmailVerifier('secret'); verifier.save('s', 'merchant@example.com', 'Store'); expect(() => verifier.verify(verifier.token('s', 'merchant@example.com', 100), 100)).toThrow('expired') })
+})

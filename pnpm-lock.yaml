@@ -29,6 +29,9 @@ importers:
       '@profitpilot/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@profitpilot/automation':
+        specifier: workspace:*
+        version: link:../../packages/automation
       '@profitpilot/billing':
         specifier: workspace:*
         version: link:../../packages/billing
@@ -44,6 +47,9 @@ importers:
       '@profitpilot/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@profitpilot/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@profitpilot/shopify':
         specifier: workspace:*
         version: link:../../packages/shopify
@@ -117,9 +123,22 @@ importers:
 
   packages/automation:
     dependencies:
+      '@profitpilot/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@profitpilot/db':
+        specifier: workspace:*
+        version: link:../db
       '@profitpilot/types':
         specifier: workspace:*
         version: link:../types
+      nodemailer:
+        specifier: ^7.0.3
+        version: 7.0.13
+    devDependencies:
+      '@types/nodemailer':
+        specifier: ^6.4.15
+        version: 6.4.24
 
   packages/billing:
     dependencies:
@@ -839,6 +858,9 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
+  '@types/nodemailer@6.4.24':
+    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+
   '@types/pg@8.21.0':
     resolution: {integrity: sha512-AYdtudzabjLZgVgRZmAnU8bAnVUXzuJX2IYHeSIiIHm68olD+LgQYCGWdtcNYnP0uq9c4S4NibVG3Ni7VbKW7Q==}
 
@@ -1315,6 +1337,10 @@ packages:
   node-releases@2.0.53:
     resolution: {integrity: sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ==}
     engines: {node: '>=18'}
+
+  nodemailer@7.0.13:
+    resolution: {integrity: sha512-PNDFSJdP+KFgdsG3ZzMXCgquO7I6McjY2vlqILjtJd0hy8wEvtugS9xKRF2NWlPNGxvLCXlTNIae4serI7dinw==}
+    engines: {node: '>=6.0.0'}
 
   object-inspect@1.13.4:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
@@ -2194,6 +2220,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@6.4.24':
+    dependencies:
+      '@types/node': 22.20.1
+
   '@types/pg@8.21.0':
     dependencies:
       '@types/node': 22.20.1
@@ -2728,6 +2758,8 @@ snapshots:
   negotiator@1.0.0: {}
 
   node-releases@2.0.53: {}
+
+  nodemailer@7.0.13: {}
 
   object-inspect@1.13.4: {}
 

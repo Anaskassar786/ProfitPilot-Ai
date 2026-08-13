@@ -13,8 +13,10 @@ import { createBillingRouter } from './billing-routes.js'
 import type { BillingRouteDependencies } from './billing-routes.js'
 import { createAdminRouter } from './admin-routes.js'
 import type { AdminRouteDependencies } from './admin-routes.js'
+import { createAutomationRouter } from './automation-routes.js'
+import type { AutomationRouteDependencies } from './automation-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -25,6 +27,7 @@ export function createApi(dependencies: ApiDependencies): Express {
   if (dependencies.ai) app.use(createAiRouter(dependencies.ai))
   if (dependencies.billing) app.use(createBillingRouter(dependencies.billing))
   if (dependencies.admin) app.use(createAdminRouter(dependencies.admin))
+  if (dependencies.automation) app.use(createAutomationRouter(dependencies.automation))
 
   app.get('/live', (_request, response) => {
     response.status(200).json({ ok: true, service: 'api', status: 'live' })

@@ -2,17 +2,17 @@
 
 ProfitPilot is an autonomous AI employee for Shopify merchants. The repository is a pnpm TypeScript monorepo that follows the blueprint build order **F0 → F9**.
 
-## Current phase: F5 — Billing + Growth
+## Current phase: F6 — Automation + Marketing
 
-F0 through F5 are complete. F5 adds data-driven plan definitions and entitlements, Shopify Recurring Application Charge transport with live verification, monthly/annual pricing, limited trials, gift-code redemption with auto-dead counts and kill switch, grandfathered price locks, ROI calculation, seven funnel milestones, 15-minute admin step-up sessions, billing reconciliation, RLS billing migrations, billing/admin APIs, and a real F5 billing surface in the web shell. Provider credentials are loaded from environment variables and are never committed.
+F0 through F6 are complete. F6 adds server-validated immutable DAG workflows, manual/cron/webhook triggers, YES/NO conditions, email/SMS/tag/discount/wait action nodes, idempotent step ledgers with worker-tick wait resumption, closed 11-variable campaign templates, A/B winner selection, suppression compliance, HMAC open/click tracking, 50-message batching with job dedupe, real SMTP/Brevo transport wiring, merchant email verification, custom CSV/XLSX/PDF writers, support ticket/thread ledgers, F6 database/RLS migration, F6 API routes, and F3 automation/campaign/export/support/settings wiring. SMS remains disabled until Twilio is configured. Future-phase capabilities remain explicit and fail with `PhaseNotImplementedError`.
 
 ### Workspace projects
 
 **Apps**
 
-- `@profitpilot/api` — Express API, Shopify install, F2 data-plane, F4 AI, F5 billing/admin routes, JWT/session service
-- `@profitpilot/worker` — worker bootstrap boundary
-- `@profitpilot/web` — React/Vite shell with F2, F4, and F5 API clients
+- `@profitpilot/api` — Express API, Shopify install, F2 data-plane, F4 AI, F5 billing/admin, F6 automation/marketing routes
+- `@profitpilot/worker` — queue worker plus billing tick boundaries
+- `@profitpilot/web` — React/Vite shell with real F2–F6 API clients
 
 **Packages**
 
@@ -28,9 +28,9 @@ F0 through F5 are complete. F5 adds data-driven plan definitions and entitlement
 - `@profitpilot/ui` — F0 design token boundary
 - `@profitpilot/ai` — context, health, rules, agents, OpenRouter, calibration, evidence, execution, attribution, costs, repositories
 - `@profitpilot/billing` — plans, entitlements, Shopify charges, trials, gift codes, grandfathering, ROI, funnel, admin sessions, reconciliation
-- `@profitpilot/automation` — DAG validation; F6 worker execution boundary
+- `@profitpilot/automation` — workflows, policies, campaigns, templates, SMTP, suppression, tracking, batching, tickets
 - `@profitpilot/forecasting` — deterministic formula foundation
-- `@profitpilot/reporting` — closed-period/report-key foundation; F8 PDF boundary
+- `@profitpilot/reporting` — closed-period reports and custom CSV/XLSX/PDF writers
 - `@profitpilot/monitoring`
 
 ## Commands
@@ -49,6 +49,6 @@ For the web shell:
 corepack pnpm --filter @profitpilot/web dev
 ```
 
-The Vite proxy keeps browser calls relative while forwarding F2/F4/F5 requests (`/sync`, `/analytics`, `/catalog`, `/ai`, `/recommendations`, `/billing`, `/admin`) to the API during local development. Pass `?storeId=<tenant-id>&shop=<shop>.myshopify.com` to the web URL to load a real tenant context.
+The Vite proxy keeps browser calls relative while forwarding F2–F6 requests (`/sync`, `/analytics`, `/catalog`, `/ai`, `/recommendations`, `/billing`, `/admin`, `/automation`, `/campaigns`, `/exports`, `/support`, `/settings`) to the API during local development. Pass `?storeId=<tenant-id>&shop=<shop>.myshopify.com` to the web URL to load a real tenant context.
 
 No provider credentials are committed. Use `.env.example` as a shape only and inject real values through the deployment secret manager.

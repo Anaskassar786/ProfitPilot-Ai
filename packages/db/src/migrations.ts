@@ -22,7 +22,11 @@ export const F5_MIGRATIONS: readonly Migration[] = [
   { id: '0007', filename: '0007_billing_growth.sql', sql: 'billing, trials, gift codes, usage, ROI, and funnel' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS]
+export const F6_MIGRATIONS: readonly Migration[] = [
+  { id: '0008', filename: '0008_automation_marketing.sql', sql: 'workflows, campaigns, sends, suppression, tracking, exports, and support threads' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)
