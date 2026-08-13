@@ -7,5 +7,5 @@
   "types": "dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "lint": "tsc -p tsconfig.json --noEmit" },
-  "dependencies": { "@profitpilot/types": "workspace:*", "@profitpilot/db": "workspace:*", "@profitpilot/queue": "workspace:*", "@profitpilot/shopify": "workspace:*", "@profitpilot/logger": "workspace:*" }
+  "dependencies": { "@profitpilot/types": "workspace:*", "@profitpilot/db": "workspace:*", "@profitpilot/cache": "workspace:*", "@profitpilot/queue": "workspace:*", "@profitpilot/shopify": "workspace:*", "@profitpilot/logger": "workspace:*" }
 }

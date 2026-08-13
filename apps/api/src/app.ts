@@ -5,14 +5,17 @@ import { evaluateReadiness } from './readiness.js'
 import type { DependencyCheck } from './readiness.js'
 import { createShopifyInstallRouter } from './shopify-routes.js'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
+import { createDataPlaneRouter } from './data-plane-routes.js'
+import type { DataPlaneDependencies } from './data-plane-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
   app.disable('x-powered-by')
   app.use(express.json({ limit: '100kb' }))
   if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter(dependencies.shopify))
+  if (dependencies.dataPlane) app.use(createDataPlaneRouter(dependencies.dataPlane))
 
   app.get('/live', (_request, response) => {
     response.status(200).json({ ok: true, service: 'api', status: 'live' })

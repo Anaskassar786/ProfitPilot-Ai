@@ -1,6 +1,6 @@
 export type ShopifyTransport = (url: string, init: RequestInit) => Promise<Response>
 export type ShopifyRequest = Readonly<{ method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; path: string; body?: string }>
-export type ShopifyResponse<Value> = Readonly<{ data: Value; status: number; requestId: string | null }>
+export type ShopifyResponse<Value> = Readonly<{ data: Value; status: number; requestId: string | null; headers: Readonly<Record<string, string>> }>
 
 export class ShopifyApiError extends Error {
   public readonly status: number
@@ -39,11 +39,13 @@ export class ShopifyClient {
     }
     const response = await this.transport(`https://${this.shop}/admin/api/${this.apiVersion}${request.path}`, init)
     const requestId = response.headers.get('x-request-id')
+    const responseHeaders: Record<string, string> = {}
+    response.headers.forEach((value, key) => { responseHeaders[key] = value })
     if (!response.ok) {
       const retryHeader = response.headers.get('retry-after')
       const retryAfterMs = retryHeader === null ? null : Number(retryHeader) * 1000
       throw new ShopifyApiError(response.status, `Shopify API request failed with ${response.status}`, Number.isFinite(retryAfterMs) ? retryAfterMs : null)
     }
-    return { data: (await response.json()) as Value, status: response.status, requestId }
+    return { data: (await response.json()) as Value, status: response.status, requestId, headers: responseHeaders }
   }
 }

@@ -10,7 +10,11 @@ export const F1_MIGRATIONS: readonly Migration[] = [
   { id: '0004', filename: '0004_shopify_webhooks.sql', sql: 'replay-safe webhook receipt ledger' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS]
+export const F2_MIGRATIONS: readonly Migration[] = [
+  { id: '0005', filename: '0005_data_plane.sql', sql: 'sync checkpoints, catalog facts, and four analytics aggregates' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

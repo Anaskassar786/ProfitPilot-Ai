@@ -19,7 +19,7 @@ describe('database configuration', () => {
 
 describe('F0 migrations', () => {
   it('contains core tenancy migrations', () => expect(F0_MIGRATIONS.map((migration) => migration.id)).toEqual(['0001', '0002']))
-  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004']))
+  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004', '0005']))
   it('returns no work when current', () => expect(pendingMigrations(ALL_MIGRATIONS.map((migration) => migration.id))).toEqual([]))
 })
 

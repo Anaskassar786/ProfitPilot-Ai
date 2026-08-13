@@ -26,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@profitpilot/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@profitpilot/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
@@ -38,6 +41,9 @@ importers:
       '@profitpilot/shopify':
         specifier: workspace:*
         version: link:../../packages/shopify
+      '@profitpilot/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@profitpilot/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -164,6 +170,9 @@ importers:
 
   packages/sync:
     dependencies:
+      '@profitpilot/cache':
+        specifier: workspace:*
+        version: link:../cache
       '@profitpilot/db':
         specifier: workspace:*
         version: link:../db

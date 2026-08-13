@@ -2,26 +2,26 @@
 
 ProfitPilot is an autonomous AI employee for Shopify merchants. The repository is a pnpm TypeScript monorepo that follows the blueprint build order **F0 → F9**.
 
-## Current phase: F1 — Shopify Core
+## Current phase: F2 — Data Plane
 
-F0 and F1 are complete. F1 adds a replay-proof Shopify install flow, AES-256-GCM token vault, webhook HMAC verification plus receipt deduplication, seeded RBAC permissions, rotating sessions, JWT access/refresh tokens, reuse detection, session expiry, and RLS-backed session/role/webhook migrations. Future-phase capabilities are explicit and fail with `PhaseNotImplementedError`; they do not silently pretend to be production features.
+F0, F1, and F2 are complete. F2 adds eight cursor-resumable Shopify sync modules, a Postgres checkpoint adapter, replay-safe webhook processing with retry/failure audit, Shopify REST pagination, GraphQL bulk operations, adaptive per-store rate control, priority lanes, store circuit isolation, four deterministic analytics aggregates, catalog persistence, tenant-versioned cache invalidation, and `/sync`, `/analytics`, and `/catalog` API routes. Future-phase capabilities are explicit and fail with `PhaseNotImplementedError`; they do not silently pretend to be production features.
 
 ### Workspace projects
 
 **Apps**
 
-- `@profitpilot/api` — Express API, readiness checks, Shopify install routes, JWT/session service
+- `@profitpilot/api` — Express API, readiness checks, Shopify install routes, F2 data-plane routes, JWT/session service
 - `@profitpilot/worker` — worker bootstrap boundary
 - `@profitpilot/web` — web application boundary (F3)
 
 **Packages**
 
 - `@profitpilot/types` — API contracts, identifiers, plans, RBAC roles and permissions
-- `@profitpilot/db` — PostgreSQL pool, RLS context, migrations, role assignments, session repositories
-- `@profitpilot/sync` — F2 checkpoint/planning boundary
+- `@profitpilot/db` — PostgreSQL pool, RLS context, migrations, role assignments, sessions, analytics repositories
+- `@profitpilot/sync` — eight-module sync engine, checkpoints, REST source, Postgres sink, analytics aggregation, rate/circuit policy, priority scheduler
 - `@profitpilot/queue` — idempotent queue primitives
-- `@profitpilot/cache` — tenant-versioned cache
-- `@profitpilot/shopify` — OAuth install, HMAC verification, API client, encrypted token vault, webhook receipt ledger
+- `@profitpilot/cache` — tenant-versioned cache with Upstash adapter
+- `@profitpilot/shopify` — OAuth install, HMAC verification, REST client, GraphQL bulk client, encrypted token vault, webhook retry ledger
 - `@profitpilot/crypto` — AES-256-GCM, HMAC, hashing, timing-safe comparisons
 - `@profitpilot/logger` — structured redacted logger
 - `@profitpilot/notifications`
