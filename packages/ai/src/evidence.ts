@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { AppError, PhaseNotImplementedError } from '@profitpilot/types'
+import { AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 
 export type EvidenceValue = string | number | boolean | null
@@ -34,8 +34,4 @@ export function buildEvidencePack(input: Readonly<{ id: string; storeId: StoreId
 export function verifyEvidencePack(pack: EvidencePack): boolean {
   const rebuilt = buildEvidencePack({ id: pack.id, storeId: pack.storeId, ruleId: pack.ruleId, ruleVersion: pack.ruleVersion, fields: pack.fields, generatedAt: pack.generatedAt })
   return rebuilt.sha256 === pack.sha256
-}
-
-export function runAgent(_agent: string): never {
-  throw new PhaseNotImplementedError('F4', 'AI decision engine execution')
 }

@@ -14,7 +14,11 @@ export const F2_MIGRATIONS: readonly Migration[] = [
   { id: '0005', filename: '0005_data_plane.sql', sql: 'sync checkpoints, catalog facts, and four analytics aggregates' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS]
+export const F4_MIGRATIONS: readonly Migration[] = [
+  { id: '0006', filename: '0006_ai_loop.sql', sql: 'recommendations, evidence, executions, calibration, cost, and attribution' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

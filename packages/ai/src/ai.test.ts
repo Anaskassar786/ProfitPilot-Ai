@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AppError, PhaseNotImplementedError, storeId } from '@profitpilot/types'
-import { CompareAndSetApprovals, assertPiiMinimized, buildEvidencePack, runAgent, verifyEvidencePack } from './index.js'
+import { AppError, storeId } from '@profitpilot/types'
+import { CompareAndSetApprovals, assertPiiMinimized, buildEvidencePack, verifyEvidencePack } from './index.js'
 
 const fields = [{ key: 'days_inactive', label: 'Days inactive', value: 80, source: 'customers.last_order_at' }, { key: 'average_ltv', label: 'Average LTV', value: 189, source: 'customers.ltv' }] as const
 
@@ -22,7 +22,10 @@ describe('immutable AI evidence packs', () => {
     expect(Object.isFrozen(pack)).toBe(true)
     expect(Object.isFrozen(pack.fields)).toBe(true)
   })
-  it('marks future agent execution explicitly', () => expect(() => runAgent('REVENUE_AGENT')).toThrow(PhaseNotImplementedError))
+  it('keeps evidence fields immutable after creation', () => {
+    const pack = buildEvidencePack({ id: 'e1', storeId: storeId('s1'), ruleId: 'r', ruleVersion: '1', fields, generatedAt: 'now' })
+    expect(verifyEvidencePack(pack)).toBe(true)
+  })
 })
 
 describe('CAS approval state', () => {

@@ -1,14 +1,14 @@
 import { Logger } from '@profitpilot/logger'
 import { createApi } from './app.js'
-import { createF2Bootstrap } from './f2-bootstrap.js'
+import { createF4Bootstrap } from './f4-bootstrap.js'
 import { readinessChecksFromEnv } from './readiness.js'
 
 const port = Number(process.env.PORT ?? '3000')
 const logger = new Logger()
-const bootstrap = createF2Bootstrap(process.env)
+const bootstrap = createF4Bootstrap(process.env)
 const app = bootstrap === null
   ? createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env) })
-  : createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), shopify: bootstrap.shopify, dataPlane: bootstrap.dataPlane })
+  : createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), shopify: bootstrap.shopify, dataPlane: bootstrap.dataPlane, ai: bootstrap.ai })
 const server = app.listen(port, '0.0.0.0', () => logger.info('ProfitPilot API listening', { port, shopifyRoutes: bootstrap !== null }))
 
 const shutdown = (): void => {

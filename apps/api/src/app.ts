@@ -7,8 +7,10 @@ import { createShopifyInstallRouter } from './shopify-routes.js'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 import { createDataPlaneRouter } from './data-plane-routes.js'
 import type { DataPlaneDependencies } from './data-plane-routes.js'
+import { createAiRouter } from './ai-routes.js'
+import type { AiRouteDependencies } from './ai-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -16,6 +18,7 @@ export function createApi(dependencies: ApiDependencies): Express {
   app.use(express.json({ limit: '100kb' }))
   if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter(dependencies.shopify))
   if (dependencies.dataPlane) app.use(createDataPlaneRouter(dependencies.dataPlane))
+  if (dependencies.ai) app.use(createAiRouter(dependencies.ai))
 
   app.get('/live', (_request, response) => {
     response.status(200).json({ ok: true, service: 'api', status: 'live' })

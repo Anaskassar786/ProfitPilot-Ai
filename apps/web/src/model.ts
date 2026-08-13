@@ -25,6 +25,8 @@ export type ProductSalesMetric = Readonly<{ storeId: string; day: string; produc
 export type CustomerCohortMetric = Readonly<{ storeId: string; cohortDay: string; activityDay: string; customerCount: number; grossRevenue: number }>
 export type AnalyticsSnapshot = Readonly<{ revenue: readonly RevenueMetric[]; orders: readonly OrdersMetric[]; productSales: readonly ProductSalesMetric[]; customerCohorts: readonly CustomerCohortMetric[] }>
 export type CatalogProduct = Readonly<{ storeId: string; productId: string; payload: JsonObject; syncedAt: number }>
+export type AgentStatus = Readonly<{ id: string; label: string; promptVersion: string; enabled: boolean; execution: 'READY' | 'UNCONFIGURED' | 'RUNNING' | 'PAUSED'; languageOnly: true }>
+export type Recommendation = Readonly<{ id: string; storeId: string; agent: string; ruleId: string; title: string; reason: string; impactValue: number; impactLabel: string; currency: string; confidence: number; confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW'; actionType: string; actionRisk: 'SAFE' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY'; status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED'; evidencePack: JsonObject; explanation: string | null; explanationStatus: 'AI_GENERATED' | 'AI_UNAVAILABLE' | 'AI_REJECTED'; model: string | null; version: number; createdAt: string }>
 
 export type ApiMeta = Readonly<{ requestId: string; timestamp: string }>
 export type ApiSuccess<Value> = Readonly<{ ok: true; data: Value; meta: ApiMeta }>

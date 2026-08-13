@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiClientError, fetchAnalytics, fetchCatalog, requestJson, requestSync } from './api.js'
 
-type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code: string; message: string } }>
+type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>
 
 function fetcher(payload: ResponsePayload, status = 200, calls: string[] = []) {
   return async (input: string, init?: RequestInit): Promise<Response> => {

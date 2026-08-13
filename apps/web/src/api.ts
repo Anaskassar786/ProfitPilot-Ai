@@ -1,4 +1,4 @@
-import type { AnalyticsSnapshot, CatalogProduct, SectionId } from './model.js'
+import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId } from './model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
@@ -48,6 +48,18 @@ export function fetchCatalog(storeId: string, fetcher: Fetcher = fetch): Promise
 
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch): Promise<SyncResult> {
   return requestJson<SyncResult>('/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, module }) }, fetcher)
+}
+
+export function fetchAgentStatuses(fetcher: Fetcher = fetch): Promise<readonly AgentStatus[]> {
+  return requestJson<readonly AgentStatus[]>('/ai/agents', {}, fetcher)
+}
+
+export function fetchRecommendations(storeId: string, fetcher: Fetcher = fetch): Promise<readonly Recommendation[]> {
+  return requestJson<readonly Recommendation[]>(`/recommendations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function decideRecommendation(storeId: string, id: string, expectedVersion: number, decision: 'approve' | 'reject', fetcher: Fetcher = fetch): Promise<Recommendation> {
+  return requestJson<Recommendation>(`/recommendations/${encodeURIComponent(id)}/${decision}?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedVersion }) }, fetcher)
 }
 
 function failureFromPayload(payload: unknown, status: number): ApiClientError {
