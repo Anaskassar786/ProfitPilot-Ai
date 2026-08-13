@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { InMemoryChargeLedger, reconcileCharges } from './reconcile.js'
 
 describe('daily billing reconciliation', () => {
+  it('returns zero work when no charges are pending', async () => expect(await reconcileCharges(new InMemoryChargeLedger(), () => { throw new Error('not called') }, 100)).toEqual({ checked: 0, activated: 0, declined: 0, cancelled: 0 }))
   it('activates a remotely active pending charge', async () => {
     const ledger = new InMemoryChargeLedger(); ledger.add({ id: '1', shopId: 's', plan: 'GROWTH', interval: 'MONTHLY', status: 'PENDING', createdAt: 100, lastVerifiedAt: null })
     const result = await reconcileCharges(ledger, () => ({ verifyCharge: async () => ({ status: 'active' }) } as unknown as import('./shopify-billing.js').ShopifyBillingClient), 200)

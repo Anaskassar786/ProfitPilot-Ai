@@ -15,6 +15,9 @@ describe('F5 plans and entitlements', () => {
   it('keeps billing page accessible for suspended stores', () => expect(accessGate({ ...active, state: 'SUSPENDED' }, { feature: 'orders_sync_month', used: 0, billingPage: true }).allowed).toBe(true))
   it('returns upgrade required for exhausted quota', () => expect(() => assertAccess(active, { feature: 'ai_recommendations_month', used: 150 })).toThrow(UpgradeRequiredError))
   it('allows commander unlimited quota', () => expect(accessGate({ ...active, plan: 'commander' }, { feature: 'ai_recommendations_month', used: 999 }).allowed).toBe(true))
+  it('returns remaining limited quota', () => expect(accessGate(active, { feature: 'ai_recommendations_month', used: 2 }).remaining).toBe(148))
+  it('blocks disabled trial features', () => expect(accessGate({ ...active, plan: 'trial', state: 'TRIAL_LIMITED' }, { feature: 'exports', used: 0 }).reason).toBe('UPGRADE_REQUIRED'))
+  it('keeps support and legal accessible in read-only mode', () => { expect(accessGate({ ...active, state: 'CANCELLED' }, { feature: 'reports', used: 0, support: true }).allowed).toBe(true); expect(accessGate({ ...active, state: 'CANCELLED' }, { feature: 'reports', used: 0, legal: true }).allowed).toBe(true) })
 })
 
 describe('trial and gift redemption', () => {
