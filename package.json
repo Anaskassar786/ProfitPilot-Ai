@@ -1,0 +1,22 @@
+{
+  "name": "profitpilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ProfitPilot \u2014 your AI employee for Shopify",
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "build": "corepack pnpm -r --workspace-concurrency=1 run build",
+    "typecheck": "corepack pnpm -r --workspace-concurrency=1 run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "lint": "corepack pnpm -r --workspace-concurrency=1 run lint"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.21",
+    "@vitest/coverage-v8": "^3.2.4",
+    "typescript": "~5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
