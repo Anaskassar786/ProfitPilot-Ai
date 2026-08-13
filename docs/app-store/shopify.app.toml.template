@@ -1,0 +1,20 @@
+# Generated configuration. Run `pnpm generate:shopify` with deployment environment variables.
+# This template intentionally contains placeholders and no client secret.
+client_id = "REPLACE_WITH_SHOPIFY_API_KEY"
+name = "ProfitPilot"
+application_url = "https://REPLACE_WITH_APP_HOST"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[auth]
+redirect_urls = [
+  "https://REPLACE_WITH_APP_HOST/shopify/callback"
+]
+
+[access_scopes]
+scopes = "read_products,read_orders,read_customers"
+
+[webhooks]
+api_version = "2025-10"
