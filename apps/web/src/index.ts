@@ -1,7 +1,6 @@
-import { PhaseNotImplementedError } from '@profitpilot/types'
+export const WEB_PHASE = 'F3' as const
+export const WEB_SHELL_READY = true
 
-export const WEB_PHASE = 'F3'
-
-export function assertWebShellReady(): never {
-  throw new PhaseNotImplementedError(WEB_PHASE, 'Embedded Shopify web shell')
+export function webShellStatus(): Readonly<{ phase: typeof WEB_PHASE; ready: true }> {
+  return { phase: WEB_PHASE, ready: WEB_SHELL_READY }
 }
