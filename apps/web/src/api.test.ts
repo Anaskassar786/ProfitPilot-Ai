@@ -39,5 +39,8 @@ describe('F3 relative API client', () => {
     const network = async (): Promise<Response> => new Response('not-json', { status: 502 })
     await expect(requestJson('/analytics', {}, network)).rejects.toMatchObject({ status: 502, code: 'API_ERROR' })
   })
+  it('falls back when an API error omits code and message', async () => {
+    await expect(requestJson('/analytics', {}, fetcher({ ok: false, error: {} }, 500))).rejects.toMatchObject({ status: 500, code: 'API_ERROR', message: 'API request failed' })
+  })
   it('is an Error instance for consumer boundaries', () => expect(new ApiClientError('no', 503)).toBeInstanceOf(Error))
 })
