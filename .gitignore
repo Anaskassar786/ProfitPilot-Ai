@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.vitest/
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+
+*.tsbuildinfo
+shopify.app.toml
