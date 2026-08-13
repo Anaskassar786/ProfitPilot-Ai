@@ -90,6 +90,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@profitpilot/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@profitpilot/logger':
         specifier: workspace:*
         version: link:../../packages/logger

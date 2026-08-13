@@ -24,6 +24,7 @@ describe('trial and gift redemption', () => {
   it('returns null for a shop without a trial', () => expect(new TrialAndGiftLedger().trial('missing')).toBeNull())
   it('tracks one limited trial for a shop id', () => { const ledger = new TrialAndGiftLedger(); const first = ledger.startTrial('s', 100); expect(ledger.startTrial('s', 200)).toEqual(first); expect(subscriptionForTrial('s', first, 200).state).toBe('TRIAL_LIMITED') })
   it('expires trials after fourteen days', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); expect(ledger.trial('s', 100 + 14 * 86_400_000)?.state).toBe('EXPIRED') })
+  it('finds trials for an hourly nudge window', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100, 1); expect(ledger.expiringTrials(100, 86_400_000)).toHaveLength(1) })
   it('redeems a gift and cancels the trial', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'KASSAR786', 200); expect(redemption.code).toBe('KASSAR786'); expect(ledger.trial('s')?.state).toBe('CANCELLED') })
   it('prevents a store from redeeming twice', () => { const ledger = new TrialAndGiftLedger(); ledger.redeemGift('s', 'KASSAR786'); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('already redeemed') })
   it('auto-deactivates an exhausted code', () => { const ledger = new TrialAndGiftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786'); expect(ledger.gift('KASSAR786')?.active).toBe(false) })

@@ -51,6 +51,7 @@ export class TrialAndGiftLedger {
     return redemption
   }
 
+  public expiringTrials(now = Date.now(), withinMs = 24 * 60 * 60 * 1000): readonly TrialRecord[] { return [...this.trials.values()].filter((trial) => trial.state === 'ACTIVE' && trial.expiresAt > now && trial.expiresAt - now <= withinMs) }
   public setGiftKillSwitch(active: boolean): void { this.giftKillSwitch = active }
   public gift(code: string): GiftCode | null { return this.gifts.get(code.trim().toUpperCase()) ?? null }
   public redemption(shopId: string): GiftRedemption | null { return this.redemptions.get(shopId) ?? null }
