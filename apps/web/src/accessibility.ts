@@ -1,10 +1,8 @@
-import axe from 'axe-core'
-
 export type AccessibilityViolation = Readonly<{ id: string; impact: string | null; help: string; helpUrl: string; nodes: readonly string[] }>
 export type AccessibilityAudit = Readonly<{ tool: 'axe-core'; violations: readonly AccessibilityViolation[]; passes: number; incomplete: number }>
 
 export function runAxeGate(root: Element | Document): Promise<AccessibilityAudit> {
-  return axe.run(root, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] } }).then((result) => ({
+  return import('axe-core').then(({ default: axe }) => axe.run(root, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] } })).then((result) => ({
     tool: 'axe-core',
     violations: result.violations.map((violation) => ({ id: violation.id, impact: violation.impact ?? null, help: violation.help, helpUrl: violation.helpUrl, nodes: violation.nodes.map((node) => node.html) })),
     passes: result.passes.length,
