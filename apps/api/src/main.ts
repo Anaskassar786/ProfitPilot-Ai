@@ -1,7 +1,6 @@
 import { loggerFromEnv } from '@profitpilot/logger'
 import { createApi } from './app.js'
 import { createF9Bootstrap } from './f9-bootstrap.js'
-
 import { readinessChecksFromEnv } from './readiness.js'
 import { runMigrations } from './migrations.js'
 
