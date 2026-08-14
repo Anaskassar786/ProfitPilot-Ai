@@ -83,10 +83,14 @@ function spaFallback(indexPath: string): RequestHandler {
   }
 }
 
+export function isApiPath(requestPath: string): boolean {
+  return API_PATH_PREFIXES.some((prefix) => requestPath === prefix || requestPath.startsWith(`${prefix}/`))
+}
+
 function isWebNavigation(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false
   if (extname(request.path) !== '') return false
-  return !API_PATH_PREFIXES.some((prefix) => request.path === prefix || request.path.startsWith(`${prefix}/`))
+  return !isApiPath(request.path)
 }
 
 function setWebHeaders(response: Response, filePath: string): void {

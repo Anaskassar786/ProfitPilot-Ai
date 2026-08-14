@@ -1,4 +1,4 @@
-import express, { type Express } from 'express'
+import express, { type Express, type RequestHandler } from 'express'
 import { requestId, success } from '@profitpilot/types'
 import type { Logger } from '@profitpilot/logger'
 import type { ErrorMonitor, ProductAnalytics } from '@profitpilot/monitoring'
@@ -24,7 +24,7 @@ import { launchControlMiddleware, createF9Router } from './f9.js'
 import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
-import { mountWebApp } from './web-app.js'
+import { isApiPath, mountWebApp } from './web-app.js'
 
 export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
@@ -38,19 +38,25 @@ export function createApi(dependencies: ApiDependencies): Express {
     response.once('finish', () => dependencies.logger.info('HTTP request', { method: request.method, path: request.path, status: response.statusCode, durationMs: Date.now() - startedAt, requestId: String(response.getHeader('x-request-id') ?? '') }))
     next()
   })
+
+  // Headers run first for every response. Web responses replace the API-only
+  // frame policy below with Shopify's frame-ancestors allowlist.
   app.use(securityHeadersMiddleware(security.environment))
   app.use(corsMiddleware(security.allowedOrigins))
   app.use(rateLimitMiddleware(security.rateLimiter ?? new EndpointRateLimiter()))
-  // Mount the built Vite app before API authentication so Shopify can load the
-  // embedded shell (including its shop/host query parameters) in an iframe.
-  // Known API namespaces are excluded by the SPA fallback.
-  mountWebApp(app, dependencies.webDistPath)
-  app.use(express.json({ limit: '100kb', verify: (request, _response, body) => captureRawBody(request as express.Request, body) }))
-  app.use(launchControlMiddleware(dependencies.f9?.controls ?? null))
-  app.use(tenantInputGuard())
-  app.use(authenticationMiddleware(security))
-  app.use(tenantContextMiddleware(security.requireAuthentication))
-  app.use(csrfMiddleware(security.csrfSecret))
+
+  // Keep API parsing/authentication ahead of API routes without applying it to
+  // browser navigation. In particular, a Shopify SPA URL containing storeId
+  // must still be able to reach index.html before an API session is created.
+  app.use(apiOnly(express.json({ limit: '100kb', verify: (request, _response, body) => captureRawBody(request as express.Request, body) })))
+  app.use(apiOnly(launchControlMiddleware(dependencies.f9?.controls ?? null)))
+  app.use(apiOnly(tenantInputGuard()))
+  app.use(apiOnly(authenticationMiddleware(security)))
+  app.use(apiOnly(tenantContextMiddleware(security.requireAuthentication)))
+  app.use(apiOnly(csrfMiddleware(security.csrfSecret)))
+
+  // API routes must be registered before the static server and SPA fallback so
+  // neither a real endpoint nor an unknown API URL can return index.html.
   app.use(createSecurityRouter({ environment: security.environment, csrfSecret: security.csrfSecret }))
   if (dependencies.legal) app.use(createLegalRouter(dependencies.legal))
   if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter(dependencies.shopify))
@@ -76,6 +82,11 @@ export function createApi(dependencies: ApiDependencies): Express {
     response.status(readiness.ok ? 200 : 503).json(success(readiness, requestId(String(response.getHeader('x-request-id') ?? 'ready'))))
   })
 
+  // Express 5 no longer accepts app.get('*'). A terminal app.use handler is the
+  // equivalent safe SPA fallback and mountWebApp restricts it to GET/HEAD web
+  // navigation only.
+  mountWebApp(app, dependencies.webDistPath)
+
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const appError = normalizeRequestError(error)
     dependencies.logger.error(appError.expose ? appError.message : 'Internal server error', { code: appError.code, status: appError.status })
@@ -86,4 +97,14 @@ export function createApi(dependencies: ApiDependencies): Express {
   })
 
   return app
+}
+
+function apiOnly(handler: RequestHandler): RequestHandler {
+  return (request, response, next): void => {
+    if (!isApiPath(request.path)) {
+      next()
+      return
+    }
+    void handler(request, response, next)
+  }
 }
