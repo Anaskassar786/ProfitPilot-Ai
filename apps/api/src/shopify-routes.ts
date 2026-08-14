@@ -30,6 +30,10 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
 
   router.get('/callback', async (request, response, next) => {
     const callback = callbackQuery(request)
+    // Secret-safe HMAC diagnostics on every attempt: if verification fails in
+    // production, the log shows the signed parameter set and message bytes vs
+    // the received signature without exposing the secret, code, or state.
+    dependencies.logger?.info('Shopify OAuth HMAC verification attempt', { ...dependencies.installer.hmacDiagnostics(callback), requestId: String(response.getHeader('x-request-id') ?? '') })
     try {
       const result = await dependencies.installer.complete(callback, dependencies.exchange)
       const location = dependencies.installer.postInstallRedirect(callback, result.shop)
@@ -40,12 +44,14 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
     } catch (error: unknown) {
       // Response bodies stay sanitized; the real diagnostics belong in logs.
       // Never log the raw query: it contains the code, state token, and hmac.
+      // hmacDiagnostics is the redacted equivalent and is safe to include.
       dependencies.logger?.error('Shopify OAuth callback failed', {
         step: installStepFromError(error) ?? 'unknown',
         shopDomain: callback.shop ?? '',
         error: error instanceof Error ? error.message : String(error),
         cause: describeCause(error),
         stack: error instanceof Error ? error.stack ?? '' : '',
+        hmac: dependencies.installer.hmacDiagnostics(callback),
         requestId: String(response.getHeader('x-request-id') ?? ''),
       })
       next(error)

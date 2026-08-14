@@ -1,7 +1,7 @@
 import { AppError } from '@profitpilot/types'
 import type { ErrorCode } from '@profitpilot/types'
-import { parseShopDomain, verifyOAuthHmac } from './oauth.js'
-import type { OAuthStates } from './oauth.js'
+import { inspectOAuthHmac, parseShopDomain, verifyOAuthHmac } from './oauth.js'
+import type { OAuthHmacDiagnostics, OAuthStates } from './oauth.js'
 import type { TokenVault } from './token-vault.js'
 
 export type ShopifyInstallConfig = Readonly<{ apiKey: string; apiSecret: string; scopes: readonly string[]; redirectUri: string }>
@@ -58,6 +58,15 @@ export class ShopifyInstallService {
       throw installError('INTERNAL_ERROR', 'token-storage', 'Failed to store the Shopify access token', 500, error, false)
     }
     return { shop, tokenStored: true }
+  }
+
+  /**
+   * Secret-safe HMAC diagnostics for the callback route's logs. Uses the same
+   * message builder as verification, so logs show exactly what was signed and
+   * why a mismatch occurred (wrong message bytes vs wrong secret).
+   */
+  public hmacDiagnostics(callback: OAuthCallback): OAuthHmacDiagnostics {
+    return inspectOAuthHmac(callback, this.config.apiSecret)
   }
 
   /**
