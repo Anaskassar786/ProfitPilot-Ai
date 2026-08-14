@@ -1,0 +1,24 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" },
+    { "path": "./apps/web" },
+    { "path": "./packages/types" },
+    { "path": "./packages/db" },
+    { "path": "./packages/sync" },
+    { "path": "./packages/queue" },
+    { "path": "./packages/cache" },
+    { "path": "./packages/shopify" },
+    { "path": "./packages/crypto" },
+    { "path": "./packages/logger" },
+    { "path": "./packages/notifications" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/ai" },
+    { "path": "./packages/billing" },
+    { "path": "./packages/automation" },
+    { "path": "./packages/forecasting" },
+    { "path": "./packages/reporting" },
+    { "path": "./packages/monitoring" }
+  ]
+}

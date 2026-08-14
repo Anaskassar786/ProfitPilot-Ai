@@ -1,0 +1,16 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/ready"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# API service start command:
+# node apps/api/dist/main.js
+# Worker service start command:
+# node apps/worker/dist/main.js
+# Web service start command:
+# pnpm --filter @profitpilot/web preview --host 0.0.0.0
