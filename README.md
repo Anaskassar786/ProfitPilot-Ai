@@ -56,3 +56,5 @@ corepack pnpm --filter @profitpilot/web dev
 The Vite proxy keeps browser calls relative while forwarding F2–F8 requests (`/sync`, `/analytics`, `/catalog`, `/ai`, `/recommendations`, `/billing`, `/admin`, `/automation`, `/campaigns`, `/exports`, `/support`, `/settings`, `/security`, `/legal`, `/jarvis`, `/copilot`, `/forecasting`, `/reports`) to the API during local development. Pass `?storeId=<tenant-id>&shop=<shop>.myshopify.com` to the web URL to load a real tenant context.
 
 No provider credentials are committed. Use `.env.example` as a shape only and inject real values through the deployment secret manager.
+
+<!-- trigger redeploy -->
