@@ -24,8 +24,9 @@ import { launchControlMiddleware, createF9Router } from './f9.js'
 import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
+import { mountWebApp } from './web-app.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -40,6 +41,10 @@ export function createApi(dependencies: ApiDependencies): Express {
   app.use(securityHeadersMiddleware(security.environment))
   app.use(corsMiddleware(security.allowedOrigins))
   app.use(rateLimitMiddleware(security.rateLimiter ?? new EndpointRateLimiter()))
+  // Mount the built Vite app before API authentication so Shopify can load the
+  // embedded shell (including its shop/host query parameters) in an iframe.
+  // Known API namespaces are excluded by the SPA fallback.
+  mountWebApp(app, dependencies.webDistPath)
   app.use(express.json({ limit: '100kb', verify: (request, _response, body) => captureRawBody(request as express.Request, body) }))
   app.use(launchControlMiddleware(dependencies.f9?.controls ?? null))
   app.use(tenantInputGuard())
