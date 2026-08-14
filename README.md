@@ -57,4 +57,4 @@ The Vite proxy keeps browser calls relative while forwarding F2–F8 requests (`
 
 No provider credentials are committed. Use `.env.example` as a shape only and inject real values through the deployment secret manager.
 
-<!-- trigger redeploy 2 -->
+<!-- trigger redeploy 3 -->
