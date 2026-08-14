@@ -13,7 +13,7 @@ healthcheckPath = "/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
-
+# force rebuild
 # Service-specific start commands (set in Railway UI if not using separate Dockerfiles):
 # API + Web: node apps/api/dist/main.js    (default CMD in Dockerfile)
 # Worker:    node apps/worker/dist/main.js (set via Dockerfile.worker CMD or UI override)
