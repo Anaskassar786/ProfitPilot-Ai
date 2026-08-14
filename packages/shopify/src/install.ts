@@ -35,9 +35,9 @@ export class ShopifyInstallService {
     return { shop: normalizedShop, state: state.token, authorizationUrl: `https://${normalizedShop}/admin/oauth/authorize?${params.toString()}` }
   }
 
-  public async complete(callback: OAuthCallback, exchange: AccessTokenExchange): Promise<Readonly<{ shop: string; tokenStored: true }>> {
+  public async complete(callback: OAuthCallback, exchange: AccessTokenExchange, rawQuery?: string): Promise<Readonly<{ shop: string; tokenStored: true }>> {
     const shop = requireShopDomain(callback.shop ?? '')
-    if (!verifyOAuthHmac(callback, this.config.apiSecret)) {
+    if (!verifyOAuthHmac(callback, this.config.apiSecret, rawQuery)) {
       throw installError('UNAUTHORIZED', 'hmac-verification', 'Shopify OAuth callback signature verification failed', 401)
     }
     if (!callback.state || !(await this.states.consume(callback.state, shop))) {
@@ -62,11 +62,12 @@ export class ShopifyInstallService {
 
   /**
    * Secret-safe HMAC diagnostics for the callback route's logs. Uses the same
-   * message builder as verification, so logs show exactly what was signed and
-   * why a mismatch occurred (wrong message bytes vs wrong secret).
+   * candidate message builders as verification (including the raw query string),
+   * so logs show exactly what was signed under each convention and which one —
+   * if any — matched the received signature.
    */
-  public hmacDiagnostics(callback: OAuthCallback): OAuthHmacDiagnostics {
-    return inspectOAuthHmac(callback, this.config.apiSecret)
+  public hmacDiagnostics(callback: OAuthCallback, rawQuery?: string): OAuthHmacDiagnostics {
+    return inspectOAuthHmac(callback, this.config.apiSecret, rawQuery)
   }
 
   /**

@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { InMemoryTokenRecordStore, InMemoryWebhookReceiptStore, OAuthStateStore, ShopifyInstallService, TokenVault, WebhookVerifier, inspectOAuthHmac, installStepFromError, shopifyHmacMessage, verifyOAuthHmac } from './index.js'
+import { InMemoryTokenRecordStore, InMemoryWebhookReceiptStore, OAuthStateStore, ShopifyInstallService, TokenVault, WebhookVerifier, inspectOAuthHmac, installStepFromError, shopifyHmacMessage, shopifyHmacSelfTest, verifyOAuthHmac } from './index.js'
 import { AppError, storeId } from '@profitpilot/types'
 
 const key = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -103,15 +103,42 @@ describe('Shopify OAuth install flow', () => {
     }
   })
 
-  it('rejects a signature computed over decoded (unencoded) values — the production regression', async () => {
+  it('accepts a signature computed over decoded (unencoded) values — Shopify signs either convention', async () => {
+    // Shopify's OAuth HMAC docs are ambiguous about whether values are signed
+    // URL-encoded or raw-decoded (the worked example uses only chars that need
+    // no encoding). A real callback can therefore arrive signed either way, so
+    // verification must accept both the encoded AND decoded message forms rather
+    // than rejecting one as a forgery — otherwise a correctly-signed callback
+    // from Shopify fails and looks like a secret bug.
     const states = new OAuthStateStore(() => 100)
     const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100', host: 'YWRtaW4uLi4=' }
     const decodedJoin = Object.entries(fields).sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('&')
     const callback = { ...fields, hmac: createHmac('sha256', 'secret').update(decodedJoin).digest('hex') }
-    const failure = await service.complete(callback, async () => 'token').catch((error: unknown) => error)
+    await expect(service.complete(callback, async () => 'token')).resolves.toMatchObject({ shop: 'demo.myshopify.com', tokenStored: true })
+    // ...but a genuinely invalid (random) signature is still rejected.
+    const tampered = { ...fields, hmac: 'deadbeef' }
+    const failure = await service.complete(tampered, async () => 'token').catch((error: unknown) => error)
     expect((failure as AppError).details.step).toBe('hmac-verification')
+  })
+
+  it('verifies a callback signed from the raw query string (ground-truth method)', async () => {
+    const states = new OAuthStateStore(() => 100)
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const start = await service.start('demo.myshopify.com')
+    const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100', host: 'YWRtaW4uLi4=' }
+    // Sign the literal wire bytes (host's '=' stays %3D), exactly as Shopify emits.
+    const rawMessage = Object.entries(fields).sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1)).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+    const callback = { ...fields, hmac: createHmac('sha256', 'secret').update(rawMessage).digest('hex') }
+    await expect(service.complete(callback, async () => 'token', rawMessage)).resolves.toMatchObject({ shop: 'demo.myshopify.com', tokenStored: true })
+    expect(inspectOAuthHmac(callback, 'secret', rawMessage).matchedMethod).toBe('raw')
+  })
+
+  it('reports the canonical Shopify docs HMAC via the startup self-test', () => {
+    const result = shopifyHmacSelfTest()
+    expect(result.passed).toBe(true)
+    expect(result.expected).toBe('700e2dadb827fcc8609e9d5ce208b2e9cdaab9df07390d2cbca10d7c328fc4bf')
   })
 
   it('reports secret-safe HMAC diagnostics: redacted code/state, prefixed hmacs, secret metadata only', () => {
@@ -125,10 +152,17 @@ describe('Shopify OAuth install flow', () => {
     expect(diagnostics.signedMessagePreview).not.toContain('csrf-token-value')
     expect(diagnostics.receivedHmacPrefix).toBe((query.hmac ?? '').slice(0, 20))
     expect(diagnostics.receivedHmacPrefix).not.toBe(query.hmac)
-    // Scheme tag + length only: catches a stale/quoted/wrong env secret without leaking key material.
-    expect(diagnostics.secretPrefix).toBe(fakeSecret.slice(0, 6))
+    // Scheme tag + two chars + length: catches a stale/quoted/wrong env secret
+    // without leaking key material. The logger exempts these two keys from its
+    // blanket `secret` redaction for exactly this reason.
+    expect(diagnostics.secretPrefix).toBe(fakeSecret.slice(0, 8))
     expect(diagnostics.secretPrefix).not.toBe(fakeSecret)
     expect(diagnostics.secretLength).toBe(fakeSecret.length)
+    // Every method we compute is reported, and the encoded method (how this
+    // callback was signed) is the one that matched.
+    expect(diagnostics.matchedMethod).toBe('encoded')
+    expect(diagnostics.methods.map((method) => method.method)).toEqual(['raw', 'raw-sorted', 'decoded', 'encoded'])
+    expect(diagnostics.methods.find((method) => method.method === 'encoded')?.matched).toBe(true)
     const mismatch = inspectOAuthHmac(query, 'wrong-secret')
     expect(mismatch.matched).toBe(false)
     expect(mismatch.computedHmacPrefix).not.toBe(diagnostics.computedHmacPrefix)
