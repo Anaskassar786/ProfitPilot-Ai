@@ -2,31 +2,52 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, PhaseNotImplementedError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
+import type { Logger } from '@profitpilot/logger'
+import { installStepFromError } from '@profitpilot/shopify'
 import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookProcessor } from '@profitpilot/shopify'
 import { rawBodyFor } from './security.js'
 
 export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void> }>
-export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; webhook?: WebhookRouteDependencies }>
+export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies }>
 
 export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencies): Router {
   const router = Router()
 
-  router.get('/install', (request, response) => {
-    const shop = queryString(request.query.shop)
-    if (!shop) {
-      response.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'shop query parameter is required' } })
-      return
+  router.get('/install', async (request, response, next) => {
+    try {
+      const shop = queryString(request.query.shop)
+      if (!shop) {
+        response.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'shop query parameter is required' } })
+        return
+      }
+      const start = await dependencies.installer.start(shop)
+      dependencies.logger?.info('Shopify OAuth install started', { shopDomain: start.shop, requestId: String(response.getHeader('x-request-id') ?? '') })
+      response.redirect(302, start.authorizationUrl)
+    } catch (error: unknown) {
+      next(error)
     }
-    const start = dependencies.installer.start(shop)
-    response.redirect(302, start.authorizationUrl)
   })
 
   router.get('/callback', async (request, response, next) => {
+    const callback = callbackQuery(request)
     try {
-      const callback = callbackQuery(request)
-      await dependencies.installer.complete(callback, dependencies.exchange)
-      response.status(200).json({ ok: true, shop: callback.shop, installed: true })
+      const result = await dependencies.installer.complete(callback, dependencies.exchange)
+      const location = dependencies.installer.postInstallRedirect(callback, result.shop)
+      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, requestId: String(response.getHeader('x-request-id') ?? '') })
+      // OAuth completes in the merchant's browser; send them into the embedded
+      // app inside Shopify admin rather than returning a bare JSON body.
+      response.redirect(302, location)
     } catch (error: unknown) {
+      // Response bodies stay sanitized; the real diagnostics belong in logs.
+      // Never log the raw query: it contains the code, state token, and hmac.
+      dependencies.logger?.error('Shopify OAuth callback failed', {
+        step: installStepFromError(error) ?? 'unknown',
+        shopDomain: callback.shop ?? '',
+        error: error instanceof Error ? error.message : String(error),
+        cause: describeCause(error),
+        stack: error instanceof Error ? error.stack ?? '' : '',
+        requestId: String(response.getHeader('x-request-id') ?? ''),
+      })
       next(error)
     }
   })
@@ -54,12 +75,17 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
   return router
 }
 
+/**
+ * Every query parameter Shopify sent. HMAC verification must cover the exact
+ * signed parameter set (code, hmac, host, shop, state, timestamp today), so a
+ * fixed whitelist would silently break verification whenever Shopify adds or
+ * renames a parameter.
+ */
 function callbackQuery(request: Request): Record<string, string> {
-  const keys = ['shop', 'state', 'code', 'hmac', 'timestamp', 'host']
   const result: Record<string, string> = {}
-  for (const key of keys) {
-    const value = queryString(request.query[key])
-    if (value !== null) result[key] = value
+  for (const [key, value] of Object.entries(request.query)) {
+    const normalized = queryString(value)
+    if (normalized !== null) result[key] = normalized
   }
   return result
 }
@@ -77,4 +103,11 @@ function queryString(value: unknown): string | null {
     return typeof first === 'string' ? first : null
   }
   return null
+}
+
+function describeCause(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  const cause: unknown = error.cause
+  if (cause instanceof Error) return `${cause.name}: ${cause.message}`
+  return typeof cause === 'string' ? cause : ''
 }

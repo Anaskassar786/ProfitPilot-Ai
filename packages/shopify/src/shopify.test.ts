@@ -6,22 +6,23 @@ import { createHmac } from 'node:crypto'
 describe('Shopify domain and OAuth primitives', () => {
   it('normalizes a valid shop domain', () => expect(parseShopDomain(' Demo-Store.myshopify.com ')).toBe('demo-store.myshopify.com'))
   it('rejects a non-Shopify domain', () => expect(() => parseShopDomain('demo.example.com')).toThrow('shop domain'))
-  it('issues a single-use OAuth state', () => {
+  it('issues a single-use OAuth state', async () => {
     const states = new OAuthStateStore(() => 100)
-    const state = states.issue('demo.myshopify.com', 50)
-    expect(states.consume(state.token, 'demo.myshopify.com')).toBe(true)
-    expect(states.consume(state.token, 'demo.myshopify.com')).toBe(false)
+    const state = await states.issue('demo.myshopify.com', 50)
+    expect(await states.consume(state.token, 'demo.myshopify.com')).toBe(true)
+    expect(await states.consume(state.token, 'demo.myshopify.com')).toBe(false)
   })
-  it('rejects an OAuth state for a different shop', () => {
-    const state = new OAuthStateStore(() => 100).issue('demo.myshopify.com')
-    expect(() => new OAuthStateStore().consume(state.token, 'other.myshopify.com')).not.toThrow()
+  it('rejects an OAuth state for a different shop', async () => {
+    const states = new OAuthStateStore(() => 100)
+    const state = await states.issue('demo.myshopify.com')
+    await expect(states.consume(state.token, 'other.myshopify.com')).resolves.toBe(false)
   })
-  it('rejects an expired OAuth state', () => {
+  it('rejects an expired OAuth state', async () => {
     let now = 100
     const states = new OAuthStateStore(() => now)
-    const state = states.issue('demo.myshopify.com', 10)
+    const state = await states.issue('demo.myshopify.com', 10)
     now = 111
-    expect(states.consume(state.token, 'demo.myshopify.com')).toBe(false)
+    expect(await states.consume(state.token, 'demo.myshopify.com')).toBe(false)
   })
   it('verifies OAuth query HMAC', () => {
     const query = { shop: 'demo.myshopify.com', timestamp: '1' }
