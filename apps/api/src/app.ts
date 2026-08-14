@@ -59,7 +59,7 @@ export function createApi(dependencies: ApiDependencies): Express {
   // neither a real endpoint nor an unknown API URL can return index.html.
   app.use(createSecurityRouter({ environment: security.environment, csrfSecret: security.csrfSecret }))
   if (dependencies.legal) app.use(createLegalRouter(dependencies.legal))
-  if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter(dependencies.shopify))
+  if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter({ ...dependencies.shopify, logger: dependencies.logger }))
   if (dependencies.dataPlane) app.use(createDataPlaneRouter(dependencies.dataPlane))
   if (dependencies.ai) app.use(createAiRouter(dependencies.ai))
   if (dependencies.billing) app.use(createBillingRouter(dependencies.billing))
@@ -89,7 +89,20 @@ export function createApi(dependencies: ApiDependencies): Express {
 
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const appError = normalizeRequestError(error)
-    dependencies.logger.error(appError.expose ? appError.message : 'Internal server error', { code: appError.code, status: appError.status })
+    // The HTTP response stays sanitized, but production logs must carry the
+    // real failure: previously everything collapsed into "INTERNAL_ERROR {}
+    // context.status: 500", which made the OAuth callback failure undebuggable.
+    dependencies.logger.error(appError.expose ? appError.message : 'Internal server error', {
+      code: appError.code,
+      status: appError.status,
+      internalMessage: appError.message,
+      step: typeof appError.details.step === 'string' ? appError.details.step : '',
+      stack: appError.stack ?? '',
+      cause: describeCauseChains(appError),
+      method: request.method,
+      path: request.path,
+      requestId: String(response.getHeader('x-request-id') ?? ''),
+    })
     const storeId = getAuthContext(request)?.claims.storeId ?? String(request.query.storeId ?? request.query.shopId ?? '')
     if (dependencies.monitor) dependencies.monitor.capture(appError, { path: request.path, method: request.method, errorCode: appError.code, storeId })
     dependencies.productAnalytics?.capture('api_error', { path: request.path, method: request.method, errorCode: appError.code, storeId })
@@ -107,4 +120,14 @@ function apiOnly(handler: RequestHandler): RequestHandler {
     }
     void handler(request, response, next)
   }
+}
+
+function describeCauseChains(error: Error): string {
+  const chain: string[] = []
+  let current: unknown = error.cause
+  while (current instanceof Error && chain.length < 3) {
+    chain.push(`${current.name}: ${current.message}`)
+    current = current.cause
+  }
+  return chain.join(' <- ')
 }

@@ -25,6 +25,7 @@
 ## Shopify
 
 - [ ] HTTPS app URL and OAuth redirect URL match Partner Dashboard.
+- [ ] Full install→callback round trip verified in a development store: callback returns 302 into `admin.shopify.com/store/{store}/apps/{client_id}`, an encrypted row appears in `shopify_tokens`, and a burned state row is gone from `shopify_oauth_states`.
 - [ ] HMAC webhook receipt/replay behavior verified in a development store.
 - [ ] `app/uninstalled`, GDPR data request, and redaction handlers have an owner/runbook.
 - [ ] Requested scopes are the minimum required scopes.

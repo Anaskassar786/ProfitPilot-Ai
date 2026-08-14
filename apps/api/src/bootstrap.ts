@@ -1,6 +1,6 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { databaseConfigFromEnv, PostgresDatabase } from '@profitpilot/db'
-import { PostgresTokenRecordStore, ShopifyInstallService, TokenVault, OAuthStateStore } from '@profitpilot/shopify'
+import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallService, TokenVault } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 
@@ -19,7 +19,9 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   const database = new PostgresDatabase(databaseConfigFromEnv(env))
   const tokenStore = new PostgresTokenRecordStore(database)
   const vault = new TokenVault(AesGcmCipher.fromHex(encryptionKey), tokenStore)
-  const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new OAuthStateStore(), vault)
+  // OAuth state lives in Postgres so the callback survives process restarts and
+  // any replica topology, and can be consumed exactly once (replay-safe).
+  const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault)
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, requiredEnv(env, 'SHOPIFY_API_KEY'), requiredEnv(env, 'SHOPIFY_API_SECRET'))
   return { database, shopify: { installer, exchange } }
 }
@@ -35,8 +37,20 @@ function parseScopes(value: string | undefined): readonly string[] {
 }
 
 async function exchangeCode(shop: string, code: string, apiKey: string, apiSecret: string): Promise<string> {
-  const response = await fetch(`https://${shop}/admin/oauth/access_tokens`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ client_id: apiKey, client_secret: apiSecret, code }) })
-  if (!response.ok) throw new Error(`Shopify OAuth token exchange failed with ${response.status}`)
+  // Shopify's authorization-code exchange endpoint is the SINGULAR
+  // /admin/oauth/access_token. The plural path returns an HTML 404 page and
+  // was the root cause of the production callback failures.
+  let response: Response
+  try {
+    response = await fetch(`https://${shop}/admin/oauth/access_token`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ client_id: apiKey, client_secret: apiSecret, code }) })
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`Shopify OAuth token exchange request could not reach ${shop}: ${detail}`)
+  }
+  if (!response.ok) {
+    const snippet = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500)
+    throw new Error(`Shopify OAuth token exchange failed with HTTP ${response.status}${snippet ? ` (${snippet})` : ''}`)
+  }
   const payload: unknown = await response.json()
   if (!isRecord(payload) || typeof payload.access_token !== 'string' || payload.access_token.trim().length === 0) throw new Error('Shopify OAuth response did not contain an access token')
   return payload.access_token

@@ -38,7 +38,11 @@ export const F9_MIGRATIONS: readonly Migration[] = [
   { id: '0011', filename: '0011_launch_controls.sql', sql: 'maintenance mode, merchant flags, and launch audit history' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS]
+export const F10_MIGRATIONS: readonly Migration[] = [
+  { id: '0012', filename: '0012_shopify_oauth_states.sql', sql: 'single-use Shopify OAuth state tokens shared across API processes' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

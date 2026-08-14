@@ -49,16 +49,46 @@ describe('Shopify install API routes', () => {
     expect(response.headers.get('location')).toContain('demo.myshopify.com/admin/oauth/authorize')
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
-  it('completes the callback route with HMAC and state', async () => {
+  it('completes the callback route with HMAC and state, then redirects into the embedded app', async () => {
     const service = installer()
-    const start = service.start('demo.myshopify.com')
-    const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1' }
-    const message = Object.entries(fields).sort(([left], [right]) => left.localeCompare(right)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+    const start = await service.start('demo.myshopify.com')
+    const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1', host: Buffer.from('admin.shopify.com/store/demo', 'utf8').toString('base64') }
+    const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
     const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`)
-      expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({ ok: true, installed: true })
+      const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('https://admin.shopify.com/store/demo/apps/api-key')
+    })
+  })
+
+  it('fails the callback with the exact failing step instead of a bare 500', async () => {
+    const service = installer()
+    await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
+      const fields = { shop: 'demo.myshopify.com', state: 'unknown-state', code: 'code', timestamp: '1' }
+      const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+      const validHmacUnknownState = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
+      const stateFailure = await fetch(`${baseUrl}/shopify/callback?${validHmacUnknownState.toString()}`, { redirect: 'manual' })
+      expect(stateFailure.status).toBe(401)
+      expect(await stateFailure.json()).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED', details: { step: 'state-verification' } } })
+
+      const tampered = new URLSearchParams({ ...fields, hmac: 'deadbeef' })
+      const hmacFailure = await fetch(`${baseUrl}/shopify/callback?${tampered.toString()}`, { redirect: 'manual' })
+      expect(hmacFailure.status).toBe(401)
+      expect(await hmacFailure.json()).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED', details: { step: 'hmac-verification' } } })
+    })
+  })
+
+  it('maps a token-exchange outage to 502 with a token-exchange step', async () => {
+    const service = installer()
+    const start = await service.start('demo.myshopify.com')
+    const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1' }
+    const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+    const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
+    await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => { throw new Error('Shopify OAuth token exchange failed with HTTP 404') } } }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
+      expect(response.status).toBe(502)
+      expect(await response.json()).toMatchObject({ ok: false, error: { code: 'DEPENDENCY_ERROR', details: { step: 'token-exchange' } } })
     })
   })
 

@@ -15,7 +15,13 @@ The API/web and worker bind to `0.0.0.0`. Browser requests use relative URLs on 
 2. Configure the environment variables from `.env.example` in Railway Secret Variables. Never commit `.env` or provider credentials.
 3. Configure `R2_*` **or** `CLOUDFLARE_R2_*` variables. F9 normalizes both names.
 4. Set `NODE_ENV=production`, `SECURITY_REQUIRE_AUTH=true`, `RUN_MIGRATIONS=true`, and `SHOPIFY_BILLING_TEST_MODE=false`.
-5. Configure `APP_URL` and `SHOPIFY_APP_URL` to the final API/web HTTPS URL, then deploy the API + Web service. Startup validation fails fast on missing production variables; migration `0011` runs after the F8/F9 bootstrap when `RUN_MIGRATIONS=true`.
+5. Configure `APP_URL` and `SHOPIFY_APP_URL` to the final API/web HTTPS URL, then deploy the API + Web service. Startup validation fails fast on missing production variables; migration `0012` runs after the F8/F9 bootstrap when `RUN_MIGRATIONS=true`.
+
+### Shopify OAuth
+
+- `/shopify/install` redirects to Shopify; `/shopify/callback` verifies the HMAC and single-use state token, exchanges the authorization code at Shopify's **singular** `POST https://{shop}/admin/oauth/access_token` endpoint, encrypts the token (AES-256-GCM) into `shopify_tokens`, and 302-redirects the merchant into the embedded app at `https://admin.shopify.com/store/{store}/apps/{client_id}`.
+- OAuth state tokens persist in `shopify_oauth_states` (migration `0012`), so the callback survives restarts/replicas and a replayed state returns `401` with `details.step = "state-verification"`.
+- Callback failures are labeled end-to-end: the JSON body and the logs both carry `details.step` (`validation`, `hmac-verification`, `state-verification`, `token-exchange`, `token-storage`), and the server log includes the underlying message, stack, and cause chain — the HTTP body itself stays sanitized for 5xx.
 6. Confirm `/`, a client route such as `/dashboard`, and a built `/assets/*` URL return the web app. Confirm `/health`, `/live`, and `/ready` still return API responses. `/ready` reports PostgreSQL, Redis, OpenRouter, and Shopify independently; a degraded dependency returns HTTP 503 honestly.
 7. Deploy the worker using `Dockerfile.worker` (set `dockerfilePath = "Dockerfile.worker"` in Railway service settings) and confirm `http://worker:3100/health` and `/ready`.
 8. Run the security, load, accessibility, and full coverage suites against the release commit.

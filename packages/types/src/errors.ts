@@ -47,7 +47,12 @@ export function toAppError(error: unknown): AppError {
     return error
   }
   if (error instanceof Error) {
-    return new AppError('INTERNAL_ERROR', error.message, 500, {}, false)
+    const appError = new AppError('INTERNAL_ERROR', error.message, 500, {}, false)
+    // Keep the original stack/cause so server-side logs can pinpoint the
+    // failing line even though the HTTP body stays sanitized.
+    if (error.stack) appError.stack = error.stack
+    appError.cause = error
+    return appError
   }
   return new AppError('INTERNAL_ERROR', 'Unknown error', 500, {}, false)
 }
