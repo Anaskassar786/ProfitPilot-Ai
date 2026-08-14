@@ -1,7 +1,7 @@
 import express, { type Express } from 'express'
 import { requestId, success } from '@profitpilot/types'
 import type { Logger } from '@profitpilot/logger'
-import type { ErrorMonitor } from '@profitpilot/monitoring'
+import type { ErrorMonitor, ProductAnalytics } from '@profitpilot/monitoring'
 import { createLegalRouter } from './legal-routes.js'
 import type { LegalRouteDependencies } from './legal-routes.js'
 import { EndpointRateLimiter, captureRawBody, createSecurityRouter, authenticationMiddleware, corsMiddleware, csrfMiddleware, defaultSecurityOptions, getAuthContext, normalizeRequestError, rateLimitMiddleware, requestIdMiddleware, securityHeadersMiddleware, tenantContextMiddleware, tenantInputGuard } from './security.js'
@@ -25,7 +25,7 @@ import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -74,7 +74,9 @@ export function createApi(dependencies: ApiDependencies): Express {
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const appError = normalizeRequestError(error)
     dependencies.logger.error(appError.expose ? appError.message : 'Internal server error', { code: appError.code, status: appError.status })
-    if (dependencies.monitor) dependencies.monitor.capture(appError, { path: request.path, method: request.method, errorCode: appError.code, storeId: getAuthContext(request)?.claims.storeId ?? String(request.query.storeId ?? request.query.shopId ?? '') })
+    const storeId = getAuthContext(request)?.claims.storeId ?? String(request.query.storeId ?? request.query.shopId ?? '')
+    if (dependencies.monitor) dependencies.monitor.capture(appError, { path: request.path, method: request.method, errorCode: appError.code, storeId })
+    dependencies.productAnalytics?.capture('api_error', { path: request.path, method: request.method, errorCode: appError.code, storeId })
     response.status(appError.status).json({ ok: false, error: appError.toJSON() })
   })
 
