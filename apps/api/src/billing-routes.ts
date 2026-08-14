@@ -1,0 +1,25 @@
+import { randomUUID } from 'node:crypto'
+import { Router } from 'express'
+import type { Request } from 'express'
+import { AppError, requestId, success } from '@profitpilot/types'
+import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, TrialAndGiftLedger, FunnelLedger } from '@profitpilot/billing'
+import { PLAN_DEFINITIONS } from '@profitpilot/billing'
+
+export type BillingRouteDependencies = Readonly<{ repository: BillingRepository; trials: TrialAndGiftLedger; funnel: FunnelLedger; createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>; verifyCharge: (shopId: string, chargeId: string, plan: PlanCode, interval: BillingInterval) => Promise<RecurringCharge>; usage: (shopId: string) => Promise<readonly Readonly<{ feature: string; used: number; limit: number | null }>[] >; roi: (shopId: string) => Promise<RoiMetrics> }>
+
+export function createBillingRouter(dependencies: BillingRouteDependencies): Router {
+  const router = Router()
+  router.get('/billing/plans', (_request, response) => response.status(200).json(success(Object.values(PLAN_DEFINITIONS), requestIdFrom(_request))))
+  router.get('/billing', async (request, response, next) => { try { const shopId = queryShop(request); const record = await dependencies.repository.get(shopId); response.status(200).json(success({ subscription: record, trial: dependencies.trials.trial(shopId), gift: dependencies.trials.redemption(shopId) }, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  router.get('/billing/usage', async (request, response, next) => { try { const shopId = queryShop(request); response.status(200).json(success(await dependencies.usage(shopId), requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  router.get('/billing/roi', async (request, response, next) => { try { const shopId = queryShop(request); response.status(200).json(success(await dependencies.roi(shopId), requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  router.post('/billing/charge', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL') || typeof body.returnUrl !== 'string') throw new AppError('VALIDATION_ERROR', 'plan, interval, and returnUrl are required', 400); const charge = await dependencies.createCharge(shopId, body.plan, body.interval, body.returnUrl, 14); dependencies.funnel.record(shopId, 'install'); response.status(201).json(success(charge, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  router.post('/billing/gift', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || typeof body.code !== 'string') throw new AppError('VALIDATION_ERROR', 'Gift code is required', 400); const redemption = dependencies.trials.redeemGift(shopId, body.code); await dependencies.repository.put({ storeId: shopId, plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: redemption.expiresAt, version: 0, interval: null, chargeId: null }); dependencies.funnel.record(shopId, 'oauth_complete'); response.status(201).json(success(redemption, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  router.post('/billing/charge/verify', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || typeof body.chargeId !== 'string' || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL')) throw new AppError('VALIDATION_ERROR', 'chargeId, plan, and interval are required', 400); const charge = await dependencies.verifyCharge(shopId, body.chargeId, body.plan, body.interval); const state = body.interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'; await dependencies.repository.put({ storeId: shopId, plan: body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander', state, currentPeriodEnd: charge.billingOn ? Date.parse(charge.billingOn) : null, version: 0, interval: body.interval, chargeId: charge.id }); dependencies.funnel.record(shopId, 'oauth_complete'); response.status(200).json(success(charge, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+  return router
+}
+
+function queryShop(request: Request): string { const value = request.query.shopId; if (typeof value !== 'string' || !value.trim()) throw new AppError('VALIDATION_ERROR', 'shopId is required', 400); return value }
+function requestIdFrom(request: Request) { return requestId(request.header('x-request-id') || randomUUID()) }
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function isPlan(value: unknown): value is PlanCode { return value === 'START' || value === 'GROWTH' || value === 'COMMANDER' }
