@@ -27,6 +27,15 @@ function installer(): ShopifyInstallService {
   return new ShopifyInstallService({ apiKey: 'api-key', apiSecret: secret, scopes: ['read_products'], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
 }
 
+/** Signs exactly like Shopify's backend: sorted keys, URL-encoded values (the raw query minus hmac). */
+function shopifyMessage(fields: Record<string, string>): string {
+  return Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${encodeURIComponent(value)}`).join('&')
+}
+
+function shopifyHmac(fields: Record<string, string>): string {
+  return createHmac('sha256', secret).update(shopifyMessage(fields)).digest('hex')
+}
+
 describe('Shopify install API routes', () => {
   it('rejects an install request without a shop', async () => {
     const app = createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: installer(), exchange: async () => 'token' } })
@@ -53,7 +62,7 @@ describe('Shopify install API routes', () => {
     const service = installer()
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1', host: Buffer.from('admin.shopify.com/store/demo', 'utf8').toString('base64') }
-    const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+    const message = shopifyMessage(fields)
     const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
@@ -62,11 +71,29 @@ describe('Shopify install API routes', () => {
     })
   })
 
+  it('accepts a Shopify-signed callback whose encoded values differ from their decoded form (padded base64 host)', async () => {
+    const service = installer()
+    const start = await service.start('my-demo-shop1.myshopify.com')
+    // 38 base64 chars => ends in '=='. Shopify emits `%3D%3D` in the URL and
+    // signs the encoded form; the previous decoded-value join 401'd here.
+    const host = Buffer.from('admin.shopify.com/store/my-demo-shop1', 'utf8').toString('base64')
+    expect(host.endsWith('==')).toBe(true)
+    const fields = { shop: 'my-demo-shop1.myshopify.com', state: start.state, code: '6e3714192b241213900f4e1bf8065104', timestamp: '1786224000', host }
+    // Build the raw callback query exactly as Shopify emits it over the wire.
+    const rawQuery = `${shopifyMessage(fields)}&hmac=${shopifyHmac(fields)}`
+    expect(rawQuery).toContain('host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvbXktZGVtby1zaG9wMQ%3D%3D')
+    await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/shopify/callback?${rawQuery}`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('https://admin.shopify.com/store/my-demo-shop1/apps/api-key')
+    })
+  })
+
   it('fails the callback with the exact failing step instead of a bare 500', async () => {
     const service = installer()
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
       const fields = { shop: 'demo.myshopify.com', state: 'unknown-state', code: 'code', timestamp: '1' }
-      const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+      const message = shopifyMessage(fields)
       const validHmacUnknownState = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
       const stateFailure = await fetch(`${baseUrl}/shopify/callback?${validHmacUnknownState.toString()}`, { redirect: 'manual' })
       expect(stateFailure.status).toBe(401)
@@ -83,7 +110,7 @@ describe('Shopify install API routes', () => {
     const service = installer()
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1' }
-    const message = Object.entries(fields).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1)).map(([keyName, value]) => `${keyName}=${value}`).join('&')
+    const message = shopifyMessage(fields)
     const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => { throw new Error('Shopify OAuth token exchange failed with HTTP 404') } } }), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
