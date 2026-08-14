@@ -1,21 +1,19 @@
 [build]
 builder = "DOCKERFILE"
-# API service: use default dockerfilePath = "Dockerfile"
+# API + Web service: use default dockerfilePath = "Dockerfile". The API serves
+# the built apps/web/dist directory from the same port and origin.
 # Worker service: set dockerfilePath = "Dockerfile.worker" in Railway service settings
-# Web service: set dockerfilePath = "Dockerfile" (or create Dockerfile.web if needed) and startCommand = "pnpm --filter @profitpilot/web preview --host 0.0.0.0"
 dockerfilePath = "Dockerfile"
 
 [deploy]
 # Healthcheck paths by service:
-# API: /live (or /health depending on deployment)
+# API + Web: /live (the web app is served at /)
 # Worker: /health (also responds to /live and /ready)
-# Web: / (or Vite default)
 healthcheckPath = "/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
 # Service-specific start commands (set in Railway UI if not using separate Dockerfiles):
-# API:    node apps/api/dist/main.js      (default CMD in Dockerfile)
-# Worker: node apps/worker/dist/main.js    (set via Dockerfile.worker CMD or UI override)
-# Web:    pnpm --filter @profitpilot/web preview --host 0.0.0.0
+# API + Web: node apps/api/dist/main.js    (default CMD in Dockerfile)
+# Worker:    node apps/worker/dist/main.js (set via Dockerfile.worker CMD or UI override)
