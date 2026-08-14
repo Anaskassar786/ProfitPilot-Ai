@@ -43,70 +43,193 @@ export class OAuthStateStore implements OAuthStates {
   }
 }
 
-export function verifyOAuthHmac(query: Readonly<Record<string, string>>, secret: string): boolean {
+/**
+ * Version tag surfaced in every OAuth diagnostics record and at startup. A stale
+ * deploy is the single most common "I shipped the fix but it still fails" cause,
+ * so this string lets anyone reading the logs confirm the new code is actually
+ * running before chasing an algorithm that isn't even live yet.
+ */
+export const OAUTH_DIAGNOSTICS_VERSION = 'PR9-multi-method-2026-08-14'
+
+/**
+ * The parameter set Shopify signs on an OAuth callback today (plus the legacy
+ * `signature`). A callback carrying anything outside this set is flagged in
+ * diagnostics: an unexpected parameter is part of the signed message, so even a
+ * correctly computed HMAC mismatches and looks like a secret bug when it is
+ * really an extra-param bug.
+ */
+const SHOPIFY_CALLBACK_KEYS: ReadonlySet<string> = new Set(['code', 'hmac', 'host', 'shop', 'state', 'timestamp', 'signature'])
+
+/**
+ * The canonical message constructions Shopify and its official SDK use to sign
+ * an OAuth callback. Shopify's documentation is deliberately ambiguous about
+ * whether values are signed URL-encoded or raw-decoded (its worked example uses
+ * only characters that need no encoding), so a callback that verifies under one
+ * convention can fail under another. We compute all of them:
+ *
+ *  - `raw`         the exact query bytes Shopify sent (from the original URL),
+ *                  hmac/signature removed, order preserved. Ground truth for the
+ *                  "Shopify signed the encoded form" case.
+ *  - `raw-sorted`  the same segments re-sorted by key, in case an intermediary
+ *                  reordered the query string.
+ *  - `decoded`     parsed query values joined raw (`key=value`), as in
+ *                  Shopify's own documentation example. Ground truth for the
+ *                  "Shopify signed the decoded form" case.
+ *  - `encoded`     parsed query values percent-encoded with encodeURIComponent,
+ *                  mirroring @shopify/shopify-api's URLSearchParams validator.
+ *
+ * All four are HMAC-SHA256 over a deterministic message with the same secret, so
+ * accepting any of them does not weaken verification: an attacker still needs
+ * the secret to produce a single valid digest. The base64 `host` callback
+ * parameter is what forces this — roughly two thirds of store handles base64-
+ * encode to a value containing `=` padding / `+` / `/`, where the encoded and
+ * decoded forms genuinely differ.
+ */
+type HmacMethodName = 'raw' | 'raw-sorted' | 'decoded' | 'encoded'
+
+export function verifyOAuthHmac(query: Readonly<Record<string, string>>, secret: string, rawQuery?: string): boolean {
   const provided = query.hmac
   if (!provided) return false
-  const expected = createHmac('sha256', secret).update(shopifyHmacMessage(query)).digest('hex')
-  return safeEqualString(expected, provided)
+  // Evaluate every method (no short-circuit) so the match/no-match signal is
+  // not gated on ordering and the diagnostics stay self-consistent.
+  let matched = false
+  for (const candidate of computeHmacCandidates(query, secret, rawQuery)) {
+    if (safeEqualString(candidate.hmac, provided)) matched = true
+  }
+  return matched
 }
 
 /**
- * The exact string Shopify HMAC-signs for an OAuth callback: every query
- * parameter except `hmac`/`signature`, sorted by key in byte order
- * (localeCompare output differs under some ICU locales and must not be used),
- * joined as `key=value&key=value`, with EACH VALUE percent-encoded as it
- * appeared in the redirect URL Shopify generated.
+ * The "encoded" signed message (matches @shopify/shopify-api): every query
+ * parameter except `hmac`/`signature`, sorted by key in byte order, joined as
+ * `key=value` with each value percent-encoded via encodeURIComponent.
  *
- * Shopify signs the encoded form — the official @shopify/shopify-api validator
- * rebuilds the message with URLSearchParams.toString(), which percent-encodes
- * values. Framework query parsers (Express/qs) hand us DECODED values, so
- * joining them raw breaks verification whenever a value differs from its
- * encoded form. The OAuth callback's base64 `host` parameter is the classic
- * trigger: for roughly two thirds of store handles the base64 ends in `=`
- * padding (`%3D` in the URL), and any `+`/`/` in the alphabet breaks it too.
- *
- * encodeURIComponent is byte-identical to the SDK's URLSearchParams encoding
- * (after its + -> %20 normalization) for every character class Shopify uses in
- * these values (hex, domains, base64).
+ * Kept as the canonical preview builder for diagnostics; verification itself
+ * consults several message forms (see computeHmacCandidates).
  */
 export function shopifyHmacMessage(query: Readonly<Record<string, string>>): string {
-  return Object.entries(query)
-    .filter(([key]) => key !== 'hmac' && key !== 'signature')
+  return encodedMessage(query)
+}
+
+/** Every signed parameter (hmac/signature removed). */
+function signedEntries(query: Readonly<Record<string, string>>): Array<readonly [string, string]> {
+  return Object.entries(query).filter(([key]) => key !== 'hmac' && key !== 'signature')
+}
+
+function encodedMessage(query: Readonly<Record<string, string>>): string {
+  return signedEntries(query)
     .sort(([left], [right]) => compareBytes(left, right))
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&')
 }
 
+function decodedMessage(query: Readonly<Record<string, string>>): string {
+  return signedEntries(query)
+    .sort(([left], [right]) => compareBytes(left, right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&')
+}
+
+function rawSegments(rawQuery: string | undefined): readonly string[] {
+  if (!rawQuery) return []
+  return rawQuery.split('&').filter((segment) => segment.length > 0 && !segment.startsWith('hmac=') && !segment.startsWith('signature='))
+}
+
+function segmentKey(segment: string): string {
+  const eq = segment.indexOf('=')
+  return eq < 0 ? segment : segment.slice(0, eq)
+}
+
+function rawPreservedMessage(rawQuery: string | undefined): string {
+  return rawSegments(rawQuery).join('&')
+}
+
+function rawSortedMessage(rawQuery: string | undefined): string {
+  return [...rawSegments(rawQuery)].sort((left, right) => compareBytes(segmentKey(left), segmentKey(right))).join('&')
+}
+
+type HmacCandidate = Readonly<{ method: HmacMethodName; message: string; hmac: string }>
+
+function computeHmacCandidates(query: Readonly<Record<string, string>>, secret: string, rawQuery?: string): readonly HmacCandidate[] {
+  const builders: ReadonlyArray<Readonly<{ method: HmacMethodName; message: string }>> = [
+    { method: 'raw', message: rawPreservedMessage(rawQuery) },
+    { method: 'raw-sorted', message: rawSortedMessage(rawQuery) },
+    { method: 'decoded', message: decodedMessage(query) },
+    { method: 'encoded', message: encodedMessage(query) },
+  ]
+  return builders.map(({ method, message }) => ({ method, message, hmac: createHmac('sha256', secret).update(message).digest('hex') }))
+}
+
+export type HmacMethodDiagnostic = Readonly<{ method: HmacMethodName; hmacPrefix: string; matched: boolean }>
+
+/**
+ * Diagnostics for the `host` callback parameter — the value most likely to
+ * expose an encoding mismatch. We compare the raw (still percent-encoded) form
+ * taken from the request URL against the parser-decoded form and its
+ * re-encoding, so a framework that double-decodes is visible at a glance.
+ */
+export type CallbackHostDiagnostic = Readonly<{
+  present: boolean
+  fromRawQuery: string | null
+  decodedByParser: string | null
+  reencoded: string | null
+  parserMatchesRaw: boolean
+  base64Decoded: string | null
+  base64RoundTrips: boolean
+  hasPadding: boolean
+}>
+
 /**
  * Secret-safe snapshot of an HMAC verification attempt, for production
  * diagnostics. Deliberately prefixes-only: never logs the API secret, the
- * authorization `code`, the CSRF `state`, or more than a prefix of either
- * HMAC. `secretPrefix` is capped at the scheme tag (e.g. `shpss_`) precisely so
- * a stale/new-format secret, stray quotes, or padding in the environment
- * variable is visible via `secretLength` without leaking key material.
+ * authorization `code`, the CSRF `state`, or more than a prefix of any HMAC.
+ *
+ * `secretPrefix` is the scheme tag plus two characters (e.g. `shpss_b8`) and
+ * `secretLength` is the raw length: together they make a stale secret, a
+ * stray-quoted env value, or trailing whitespace obvious without leaking key
+ * material. The logger exempts these two keys from its blanket `secret`
+ * redaction (see @profitpilot/logger) precisely because they carry no secret.
  */
 export type OAuthHmacDiagnostics = Readonly<{
+  version: string
   parameterKeys: string[]
-  signedMessagePreview: string
+  parameterCount: number
+  extraParameters: string[]
   receivedHmacPrefix: string | null
+  receivedHmacLength: number
   computedHmacPrefix: string
+  matchedMethod: HmacMethodName | null
+  matched: boolean
   secretPrefix: string
   secretLength: number
-  matched: boolean
+  methods: HmacMethodDiagnostic[]
+  signedMessagePreview: string
+  host: CallbackHostDiagnostic
 }>
 
-export function inspectOAuthHmac(query: Readonly<Record<string, string>>, secret: string): OAuthHmacDiagnostics {
+export function inspectOAuthHmac(query: Readonly<Record<string, string>>, secret: string, rawQuery?: string): OAuthHmacDiagnostics {
   const provided = query.hmac ?? null
-  const message = shopifyHmacMessage(query)
-  const computed = createHmac('sha256', secret).update(message).digest('hex')
+  const candidates = computeHmacCandidates(query, secret, rawQuery)
+  const encodedCandidate = candidates.find((candidate) => candidate.method === 'encoded') ?? candidates[candidates.length - 1]!
+  const matchedCandidate = candidates.find((candidate) => provided !== null && safeEqualString(candidate.hmac, provided)) ?? null
+  const parameterKeys = Object.keys(query).filter((key) => key !== 'hmac' && key !== 'signature').sort(compareBytes)
   return {
-    parameterKeys: Object.keys(query).filter((key) => key !== 'hmac' && key !== 'signature').sort(compareBytes),
-    signedMessagePreview: redactSensitiveValues(message, query),
+    version: OAUTH_DIAGNOSTICS_VERSION,
+    parameterKeys,
+    parameterCount: parameterKeys.length,
+    extraParameters: Object.keys(query).filter((key) => !SHOPIFY_CALLBACK_KEYS.has(key)),
     receivedHmacPrefix: provided === null ? null : provided.slice(0, 20),
-    computedHmacPrefix: computed.slice(0, 20),
-    secretPrefix: secret.slice(0, 6),
+    receivedHmacLength: provided === null ? 0 : provided.length,
+    // Backward-compatible field: the encoded-method digest prefix. The methods[]
+    // array below carries the full per-method comparison.
+    computedHmacPrefix: encodedCandidate.hmac.slice(0, 20),
+    matchedMethod: matchedCandidate?.method ?? null,
+    matched: matchedCandidate !== null,
+    secretPrefix: secret.slice(0, 8),
     secretLength: secret.length,
-    matched: provided !== null && safeEqualString(computed, provided),
+    methods: candidates.map((candidate) => ({ method: candidate.method, hmacPrefix: candidate.hmac.slice(0, 16), matched: provided !== null && safeEqualString(candidate.hmac, provided) })),
+    signedMessagePreview: redactSensitiveValues(encodedMessage(query), query),
+    host: inspectCallbackHost(query.host, rawQuery),
   }
 }
 
@@ -118,6 +241,56 @@ function redactSensitiveValues(message: string, query: Readonly<Record<string, s
     if (value) preview = preview.split(`${key}=${encodeURIComponent(value)}`).join(`${key}=<redacted:${value.length}chars>`)
   }
   return preview
+}
+
+function inspectCallbackHost(host: string | undefined, rawQuery: string | undefined): CallbackHostDiagnostic {
+  const fromRawQuery = rawQuery === undefined ? null : rawParam(rawQuery, 'host')
+  if (!host) {
+    return { present: false, fromRawQuery, decodedByParser: null, reencoded: null, parserMatchesRaw: false, base64Decoded: null, base64RoundTrips: false, hasPadding: false }
+  }
+  const reencoded = encodeURIComponent(host)
+  const base64Decoded = Buffer.from(host, 'base64').toString('utf8')
+  return {
+    present: true,
+    fromRawQuery,
+    decodedByParser: host,
+    reencoded,
+    parserMatchesRaw: fromRawQuery === null ? false : fromRawQuery === reencoded,
+    base64Decoded,
+    base64RoundTrips: Buffer.from(base64Decoded, 'utf8').toString('base64') === host,
+    hasPadding: host.includes('='),
+  }
+}
+
+function rawParam(rawQuery: string, key: string): string | null {
+  for (const segment of rawQuery.split('&')) {
+    const eq = segment.indexOf('=')
+    if (eq < 0) continue
+    if (segment.slice(0, eq) === key) return segment.slice(eq + 1)
+  }
+  return null
+}
+
+export type ShopifyHmacSelfTestResult = Readonly<{ passed: boolean; expected: string; computed: string }>
+
+/**
+ * Shopify's documented OAuth HMAC example (shopify.dev
+ * authorization-code-grant). The docs render `{shop}` and `my_client_secret` as
+ * display placeholders, but the canonical digest `700e2dad…fc4bf` is produced
+ * by secret `hush` and shop `some-shop.myshopify.com`. Reproducing it at startup
+ * proves the deployed HMAC function is algorithmically correct, independent of
+ * any live request or secret — a failure here means the code itself (or the
+ * deploy) is broken, not the merchant's callback.
+ */
+const SHOPIFY_DOCS_SELF_TEST = {
+  secret: 'hush',
+  query: { code: '0907a61c0c8d55e99db179b68161bc00', shop: 'some-shop.myshopify.com', state: '0.6784241404160823', timestamp: '1337178173' } as Readonly<Record<string, string>>,
+  expectedHmac: '700e2dadb827fcc8609e9d5ce208b2e9cdaab9df07390d2cbca10d7c328fc4bf',
+}
+
+export function shopifyHmacSelfTest(): ShopifyHmacSelfTestResult {
+  const computed = createHmac('sha256', SHOPIFY_DOCS_SELF_TEST.secret).update(encodedMessage(SHOPIFY_DOCS_SELF_TEST.query)).digest('hex')
+  return { passed: computed === SHOPIFY_DOCS_SELF_TEST.expectedHmac, expected: SHOPIFY_DOCS_SELF_TEST.expectedHmac, computed }
 }
 
 export function verifyWebhookHmac(rawBody: string, providedBase64: string, secret: string): boolean {

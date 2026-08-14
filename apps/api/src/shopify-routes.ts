@@ -30,28 +30,36 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
 
   router.get('/callback', async (request, response, next) => {
     const callback = callbackQuery(request)
+    const rawQuery = rawQueryString(request)
     // Secret-safe HMAC diagnostics on every attempt: if verification fails in
-    // production, the log shows the signed parameter set and message bytes vs
-    // the received signature without exposing the secret, code, or state.
-    dependencies.logger?.info('Shopify OAuth HMAC verification attempt', { ...dependencies.installer.hmacDiagnostics(callback), requestId: String(response.getHeader('x-request-id') ?? '') })
+    // production, the log shows the signed parameter set, the per-method
+    // computed HMACs vs the received signature, the secret's scheme tag and
+    // length, and the raw-vs-parsed host comparison — without exposing the
+    // secret, the authorization code, or the CSRF state.
+    const diagnostics = dependencies.installer.hmacDiagnostics(callback, rawQuery)
+    dependencies.logger?.info('Shopify OAuth HMAC verification attempt', {
+      ...diagnostics,
+      rawUrl: redactedRawUrl(request),
+      requestId: String(response.getHeader('x-request-id') ?? ''),
+    })
     try {
-      const result = await dependencies.installer.complete(callback, dependencies.exchange)
+      const result = await dependencies.installer.complete(callback, dependencies.exchange, rawQuery)
       const location = dependencies.installer.postInstallRedirect(callback, result.shop)
-      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, requestId: String(response.getHeader('x-request-id') ?? '') })
+      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, matchedHmacMethod: diagnostics.matchedMethod, requestId: String(response.getHeader('x-request-id') ?? '') })
       // OAuth completes in the merchant's browser; send them into the embedded
       // app inside Shopify admin rather than returning a bare JSON body.
       response.redirect(302, location)
     } catch (error: unknown) {
       // Response bodies stay sanitized; the real diagnostics belong in logs.
       // Never log the raw query: it contains the code, state token, and hmac.
-      // hmacDiagnostics is the redacted equivalent and is safe to include.
+      // diagnostics (and redactedRawUrl) are the safe equivalent.
       dependencies.logger?.error('Shopify OAuth callback failed', {
         step: installStepFromError(error) ?? 'unknown',
         shopDomain: callback.shop ?? '',
         error: error instanceof Error ? error.message : String(error),
         cause: describeCause(error),
         stack: error instanceof Error ? error.stack ?? '' : '',
-        hmac: dependencies.installer.hmacDiagnostics(callback),
+        hmac: diagnostics,
         requestId: String(response.getHeader('x-request-id') ?? ''),
       })
       next(error)
@@ -94,6 +102,42 @@ function callbackQuery(request: Request): Record<string, string> {
     if (normalized !== null) result[key] = normalized
   }
   return result
+}
+
+/**
+ * The exact query bytes Shopify sent, taken from the original URL before any
+ * middleware parses it. This is what Shopify HMAC-signed, so the "raw"
+ * verification method signs it verbatim and is immune to a framework that
+ * decodes/re-encodes values differently. Express preserves originalUrl exactly
+ * as received by Node's HTTP parser.
+ */
+function rawQueryString(request: Request): string | undefined {
+  const url = request.originalUrl ?? request.url ?? ''
+  const queryIndex = url.indexOf('?')
+  return queryIndex < 0 ? undefined : url.slice(queryIndex + 1)
+}
+
+/**
+ * The raw callback URL with the authorization `code` and CSRF `state` masked and
+ * the `hmac` truncated to a prefix. Surfaces the on-the-wire structure Shopify
+ * sent — parameter order, the host's percent-encoding, and any unexpected
+ * parameter — without leaking the secrets a raw query string would expose.
+ */
+function redactedRawUrl(request: Request): string {
+  const url = request.originalUrl ?? request.url ?? ''
+  const queryIndex = url.indexOf('?')
+  if (queryIndex < 0) return url
+  const path = url.slice(0, queryIndex)
+  const segments = url.slice(queryIndex + 1).split('&').map((segment) => {
+    const eq = segment.indexOf('=')
+    if (eq < 0) return segment
+    const key = segment.slice(0, eq)
+    const value = segment.slice(eq + 1)
+    if (key === 'code' || key === 'state') return `${key}=<redacted:${value.length}chars>`
+    if (key === 'hmac') return `${key}=${value.slice(0, 12)}…`
+    return segment
+  })
+  return `${path}?${segments.join('&')}`
 }
 
 function requiredHeader(request: Request, name: string): string {

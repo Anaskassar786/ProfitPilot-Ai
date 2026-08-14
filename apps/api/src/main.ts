@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { loggerFromEnv } from '@profitpilot/logger'
+import { OAUTH_DIAGNOSTICS_VERSION, shopifyHmacSelfTest } from '@profitpilot/shopify'
 import { createApi } from './app.js'
 import { createF9Bootstrap } from './f9-bootstrap.js'
 import { readinessChecksFromEnv } from './readiness.js'
@@ -19,6 +20,18 @@ const main = async (): Promise<void> => {
     node: process.version,
     environment: process.env.NODE_ENV ?? 'development',
     pid: process.pid,
+  })
+  // Reproduce Shopify's documented OAuth HMAC example at boot. A failure here
+  // means the HMAC function itself (or the deploy) is broken — independent of
+  // any live callback or secret — and is the fastest way to rule out stale code
+  // before chasing a merchant-specific signature mismatch.
+  const hmacSelfTest = shopifyHmacSelfTest()
+  logger.info('Shopify OAuth HMAC module ready', {
+    version: OAUTH_DIAGNOSTICS_VERSION,
+    buildTime: '2026-08-14',
+    selfTestPassed: hmacSelfTest.passed,
+    selfTestComputed: hmacSelfTest.computed,
+    selfTestExpected: hmacSelfTest.expected,
   })
   const webDistExists = existsSync(webDistPath)
   const webIndexExists = existsSync(webIndexPath)

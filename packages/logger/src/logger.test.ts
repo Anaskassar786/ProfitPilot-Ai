@@ -31,6 +31,17 @@ describe('structured logger', () => {
     const fields = redactFields({ values: [{ safe: 'yes' }, { apiKey: 'secret' }] })
     expect(fields).toEqual({ values: [{ safe: 'yes' }, { apiKey: '[REDACTED]' }] })
   })
+  it('keeps OAuth HMAC safe-debug fields visible (scheme tag + length)', () => {
+    // secretPrefix/secretLength trip the `secret` key-name rule but carry no
+    // key material, so the OAuth diagnostics must surface them to distinguish a
+    // stale secret from a trailing-whitespace value. The full secret value
+    // itself is still redacted.
+    const syntheticSecret = 'shpss_synthetictestkeynotrealsecretabc'
+    const fields = redactFields({ secretPrefix: syntheticSecret.slice(0, 8), secretLength: syntheticSecret.length, secret: syntheticSecret })
+    expect(fields.secretPrefix).toBe('shpss_sy')
+    expect(fields.secretLength).toBe(38)
+    expect(fields.secret).toBe('[REDACTED]')
+  })
   it('merges context with later fields', () => {
     expect(mergeFields({ version: 1, state: 'old' }, { state: 'new' })).toEqual({ version: 1, state: 'new' })
   })

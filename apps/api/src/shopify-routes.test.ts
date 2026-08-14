@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { Logger } from '@profitpilot/logger'
+import { createMemorySink, Logger } from '@profitpilot/logger'
 import { InMemoryTokenRecordStore, InMemoryWebhookProcessingLedger, OAuthStateStore, ShopifyInstallService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import { createApi } from './app.js'
 import { storeId } from '@profitpilot/types'
@@ -87,6 +87,46 @@ describe('Shopify install API routes', () => {
       expect(response.status).toBe(302)
       expect(response.headers.get('location')).toBe('https://admin.shopify.com/store/my-demo-shop1/apps/api-key')
     })
+  })
+
+  it('emits multi-method HMAC diagnostics and a redacted raw URL on the callback attempt', async () => {
+    const memory = createMemorySink()
+    const service = installer()
+    const start = await service.start('my-demo-shop1.myshopify.com')
+    const host = Buffer.from('admin.shopify.com/store/my-demo-shop1', 'utf8').toString('base64')
+    const fields = { shop: 'my-demo-shop1.myshopify.com', state: start.state, code: '6e3714192b241213900f4e1bf8065104', timestamp: '1786224000', host }
+    const rawQuery = `${shopifyMessage(fields)}&hmac=${shopifyHmac(fields)}`
+    await withServer(createApi({ logger: new Logger(memory.sink), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/shopify/callback?${rawQuery}`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+    })
+    const attempt = memory.records.find((record) => record.message === 'Shopify OAuth HMAC verification attempt')
+    expect(attempt).toBeDefined()
+    const context = attempt!.context as Record<string, unknown>
+    // Version tag confirms the deployed code, and the raw ground-truth method
+    // matched the wire bytes Shopify signed.
+    expect(context.version).toBe('PR9-multi-method-2026-08-14')
+    expect(context.matchedMethod).toBe('raw')
+    expect(context.matched).toBe(true)
+    // Every candidate method is reported so a no-match failure shows which
+    // convention Shopify used.
+    const methods = context.methods as Array<{ method: string; matched: boolean }>
+    expect(methods.map((method) => method.method)).toEqual(['raw', 'raw-sorted', 'decoded', 'encoded'])
+    expect(methods.find((method) => method.method === 'raw')?.matched).toBe(true)
+    // Secret scheme tag + length are visible (the logger exempts these), while
+    // full secrets stay redacted.
+    expect(context.secretPrefix).toBe(secret.slice(0, 8))
+    expect(context.secretLength).toBe(secret.length)
+    // The host diagnostic proves Express did not double-decode: the wire form
+    // (still %3D%3D) round-trips through the parser's decode + re-encode.
+    const hostContext = context.host as Record<string, unknown>
+    expect(hostContext.fromRawQuery).toBe('YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvbXktZGVtby1zaG9wMQ%3D%3D')
+    expect(hostContext.parserMatchesRaw).toBe(true)
+    expect(hostContext.hasPadding).toBe(true)
+    // The raw URL preview masks code/state and truncates hmac.
+    expect(context.rawUrl).toMatch(/code=<redacted:\d+chars>/)
+    expect(context.rawUrl).toMatch(/state=<redacted:\d+chars>/)
+    expect(context.rawUrl).not.toContain('6e3714192b241213900f4e1bf8065104')
   })
 
   it('fails the callback with the exact failing step instead of a bare 500', async () => {
