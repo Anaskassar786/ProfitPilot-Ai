@@ -62,9 +62,12 @@ const server = createWorkerHealthServer(port, state, () => {
 })
 
 logger.info('ProfitPilot worker started', {
+  entry: 'apps/worker/dist/main.js',
   port,
   queueType: isUpstash ? 'upstash' : 'in-memory',
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  node: process.version,
+  environment: process.env.NODE_ENV ?? 'development',
+  pid: process.pid,
 })
 
 const intervalRaw = Number(process.env.REPORT_TICK_INTERVAL_MS ?? '3600000')
