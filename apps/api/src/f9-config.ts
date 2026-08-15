@@ -2,7 +2,7 @@ export type EnvironmentCategory = 'database' | 'redis' | 'shopify' | 'ai' | 'sec
 export type StartupValidation = Readonly<{ ok: boolean; missing: Readonly<Record<EnvironmentCategory, readonly string[]>> }>
 export type NormalizedEnvironment = Readonly<Record<string, string | undefined>>
 
-const R2_ALIASES: Readonly<Record<string, readonly string[]>> = { R2_ENDPOINT: ['R2_ENDPOINT', 'CLOUDFLARE_R2_ENDPOINT'], R2_BUCKET: ['R2_BUCKET', 'CLOUDFLARE_R2_BUCKET', 'CLOUDFLARE_R2_BUCKET_NAME'], R2_ACCESS_KEY_ID: ['R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID'], R2_SECRET_ACCESS_KEY: ['R2_SECRET_ACCESS_KEY', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY'] }
+const ENV_ALIASES: Readonly<Record<string, readonly string[]>> = { OPENROUTER_API_KEY_1: ['OPENROUTER_API_KEY_1', 'OPENROUTER_API_KEY'], R2_ENDPOINT: ['R2_ENDPOINT', 'CLOUDFLARE_R2_ENDPOINT'], R2_BUCKET: ['R2_BUCKET', 'CLOUDFLARE_R2_BUCKET', 'CLOUDFLARE_R2_BUCKET_NAME'], R2_ACCESS_KEY_ID: ['R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID'], R2_SECRET_ACCESS_KEY: ['R2_SECRET_ACCESS_KEY', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY'] }
 const REQUIRED: Readonly<Record<EnvironmentCategory, readonly string[]>> = { database: ['DATABASE_URL'], redis: ['REDIS_URL', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'], shopify: ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'SHOPIFY_REDIRECT_URI'], ai: ['OPENROUTER_API_KEY_1'], security: ['ENCRYPTION_KEY', 'JWT_SECRET', 'ADMIN_KEY'], legal: ['LEGAL_ENTITY_NAME', 'LEGAL_ENTITY_ADDRESS', 'LEGAL_JURISDICTION', 'SUPPORT_EMAIL'], storage: ['R2_ENDPOINT', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'], email: [] }
 
 export class StartupConfigurationError extends Error {
@@ -12,7 +12,7 @@ export class StartupConfigurationError extends Error {
 
 export function normalizeEnvironment(env: Readonly<Record<string, string | undefined>>): NormalizedEnvironment {
   const normalized: Record<string, string | undefined> = { ...env }
-  for (const [canonical, aliases] of Object.entries(R2_ALIASES)) { const value = aliases.map((key) => env[key]?.trim()).find((candidate) => Boolean(candidate)); if (value) normalized[canonical] = value }
+  for (const [canonical, aliases] of Object.entries(ENV_ALIASES)) { const value = aliases.map((key) => env[key]?.trim()).find((candidate) => Boolean(candidate)); if (value) normalized[canonical] = value }
   return normalized
 }
 

@@ -12,7 +12,7 @@ export type F9Bootstrap = Readonly<F8Bootstrap & { f9: Readonly<{ controls: F9Co
 
 export function createF9Bootstrap(rawEnv: Readonly<Record<string, string | undefined>>, logger = new Logger()): F9Bootstrap | null {
   const env = normalizeEnvironment(rawEnv)
-  const f8 = createF8Bootstrap(env)
+  const f8 = createF8Bootstrap(env, logger)
   if (!f8) return null
   requireStartupEnvironment(env)
   const controls = new F9ControlService(new PostgresF9ControlRepository(f8.database))
@@ -23,7 +23,7 @@ export function createF9Bootstrap(rawEnv: Readonly<Record<string, string | undef
   const readinessChecks = readinessChecksFromAdapters({
     database: async () => { await f8.database.query('SELECT 1'); return true },
     redis: upstashPing(env),
-    ai: openRouterHealth(env),
+    ai: cachedAiCompletionHealth(f8.jarvisProvider),
     shopify: shopifyHealth(env),
   })
   return { ...f8, f9: { controls, ops, monitor, analytics, readinessChecks } }
@@ -34,10 +34,16 @@ function upstashPing(env: Readonly<Record<string, string | undefined>>): () => P
   if (!url || !token) return async () => false
   return async () => { const response = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(['PING']) }); return response.ok }
 }
-function openRouterHealth(env: Readonly<Record<string, string | undefined>>): () => Promise<boolean> {
-  const key = env.OPENROUTER_API_KEY_1?.trim()
-  if (!key) return async () => false
-  return async () => { const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { authorization: `Bearer ${key}` } }); return response.ok }
+export function cachedAiCompletionHealth(provider: Pick<import('@profitpilot/ai').OpenRouterClient, 'completionHealthCheck'>, ttlMs = 300_000, now: () => number = () => Date.now()): () => Promise<boolean> {
+  let cached: Readonly<{ value: boolean; expiresAt: number }> | null = null
+  let pending: Promise<boolean> | null = null
+  return async () => {
+    const checkedAt = now()
+    if (cached && cached.expiresAt > checkedAt) return cached.value
+    if (pending) return pending
+    pending = provider.completionHealthCheck().then((value) => { cached = { value, expiresAt: now() + ttlMs }; return value }).finally(() => { pending = null })
+    return pending
+  }
 }
 function shopifyHealth(env: Readonly<Record<string, string | undefined>>): () => Promise<boolean> {
   const shop = env.SHOPIFY_HEALTH_SHOP?.trim(); const token = env.SHOPIFY_HEALTH_ACCESS_TOKEN?.trim()

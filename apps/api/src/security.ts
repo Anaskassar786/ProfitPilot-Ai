@@ -118,6 +118,7 @@ export function requestIdMiddleware(): RequestHandler {
     const incoming = request.header('x-request-id')
     const id = incoming && /^[a-zA-Z0-9._:-]{1,128}$/.test(incoming) ? incoming : randomUUID()
     response.setHeader('x-request-id', id)
+    request.headers['x-request-id'] = id
     next()
   }
 }
@@ -153,7 +154,7 @@ export function securityHeadersMiddleware(environment = 'development'): RequestH
     if (embeddable) response.removeHeader('X-Frame-Options')
     else response.setHeader('X-Frame-Options', 'DENY')
     const microphonePolicy = embeddable ? '(self "https://admin.shopify.com")' : '()'
-    response.setHeader('Permissions-Policy', `camera=(), microphone=${microphonePolicy}, geolocation=(), payment=()`)
+    response.setHeader('Permissions-Policy', `microphone=${microphonePolicy}, geolocation=(), payment=()`)
     if (environment === 'production') response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     next()
   }

@@ -1,0 +1,28 @@
+.jarvis-particle-orb {
+  --jarvis-orb-size: 48px;
+  position: relative;
+  display: inline-grid;
+  width: var(--jarvis-orb-size);
+  height: var(--jarvis-orb-size);
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #07101f;
+  box-shadow: 0 0 0 1px rgba(112, 223, 255, .34), 0 0 16px rgba(54, 186, 255, .26);
+  isolation: isolate;
+}
+.jarvis-particle-orb canvas { display: block; width: 100%; height: 100%; border-radius: inherit; }
+.jarvis-particle-orb.state-listening { box-shadow: 0 0 0 1px rgba(145, 242, 255, .62), 0 0 19px rgba(65, 208, 255, .46); }
+.jarvis-particle-orb.state-thinking,
+.jarvis-particle-orb.state-activating { animation: jarvis-particle-think 1.25s ease-in-out infinite; }
+.jarvis-particle-orb.state-speaking { animation: jarvis-particle-speak .72s ease-in-out infinite; }
+.jarvis-particle-orb.state-warning { box-shadow: 0 0 0 1px rgba(251, 191, 36, .55), 0 0 16px rgba(245, 158, 11, .28); }
+.jarvis-particle-orb.state-sleeping { opacity: .55; filter: saturate(.55); box-shadow: 0 0 0 1px rgba(107, 114, 128, .25); }
+.jarvis-particle-orb.orb-header-size { width: 31px; height: 31px; }
+.jarvis-particle-orb.orb-live-size { width: 20px; height: 20px; }
+@keyframes jarvis-particle-think { 0%, 100% { filter: brightness(.92); } 50% { filter: brightness(1.2); } }
+@keyframes jarvis-particle-speak { 0%, 100% { transform: scale(.98); filter: brightness(.95); } 50% { transform: scale(1.025); filter: brightness(1.22); } }
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-particle-orb { animation: none !important; }
+}

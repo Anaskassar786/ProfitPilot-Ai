@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AiUnavailableError, DEFAULT_AI_MODELS, OpenRouterClient, OpenRouterError } from './provider.js'
+import { AiUnavailableError, DEFAULT_AI_MODELS, DEFAULT_AI_TIMEOUT_MS, OpenRouterClient, OpenRouterError } from './provider.js'
+import type { ProviderFailureTelemetry } from './provider.js'
 
 function okResponse(text = 'Grounded explanation', usage = { prompt_tokens: 4, completion_tokens: 3, total_tokens: 7 }): Response {
   return new Response(JSON.stringify({ choices: [{ message: { content: text } }], usage }), { status: 200, headers: { 'content-type': 'application/json' } })
@@ -15,7 +16,11 @@ describe('OpenRouter fallback client', () => {
     expect(generation.usage.totalTokens).toBe(7)
     expect(calls[0]).toContain('key-1')
   })
-  it('defaults to all three blueprint models', () => expect(new OpenRouterClient({ keys: ['key'] }).models).toEqual([...DEFAULT_AI_MODELS]))
+  it('defaults to the verified free model chain and a 25-second timeout', () => {
+    expect(new OpenRouterClient({ keys: ['key'] }).models).toEqual([...DEFAULT_AI_MODELS])
+    expect(DEFAULT_AI_TIMEOUT_MS).toBe(25_000)
+    expect(DEFAULT_AI_MODELS.every((model) => model.endsWith(':free'))).toBe(true)
+  })
   it('switches models immediately on rate limits', async () => {
     const models: string[] = []
     const client = new OpenRouterClient({ keys: ['key'], models: ['primary', 'fallback'], fetcher: async (_url, init) => { const body = JSON.parse(String(init.body)) as { model: string }; models.push(body.model); return models.length === 1 ? new Response('', { status: 429 }) : okResponse() }, sleep: async () => undefined })
@@ -71,6 +76,22 @@ describe('OpenRouter fallback client', () => {
   it('rejects invalid retry configuration', () => expect(() => new OpenRouterClient({ keys: ['key'], maxRetries: -1 })).toThrow('Invalid'))
   it('rejects invalid timeout configuration', () => expect(() => new OpenRouterClient({ keys: ['key'], timeoutMs: 0 })).toThrow('Invalid'))
   it('exposes typed provider error fields', () => expect(new OpenRouterError('rate_limit', 'limited', 429).status).toBe(429))
+  it('emits safe structured telemetry for every failed provider attempt', async () => {
+    const failures: ProviderFailureTelemetry[] = []
+    const client = new OpenRouterClient({ keys: ['secret-key'], models: ['missing-model'], fetcher: async () => new Response('', { status: 404 }), onFailure: (failure) => failures.push(failure) })
+    await expect(client.generate('private system prompt', 'merchant@example.com', { requestId: 'request-123' })).rejects.toBeInstanceOf(AiUnavailableError)
+    expect(failures).toEqual([{ model: 'missing-model', statusCode: 404, failureKind: 'bad_response', attemptNumber: 1, durationMs: expect.any(Number), requestId: 'request-123' }])
+    expect(JSON.stringify(failures)).not.toContain('secret-key')
+    expect(JSON.stringify(failures)).not.toContain('merchant@example.com')
+  })
+  it('validates configured model IDs and rejects models with no active endpoint', async () => {
+    const client = new OpenRouterClient({ keys: ['key'], models: ['valid', 'gone', 'dormant'], fetcher: async (url) => url.includes('/valid/') ? new Response(JSON.stringify({ data: { endpoints: [{}] } }), { status: 200 }) : url.includes('/gone/') ? new Response('', { status: 404 }) : new Response(JSON.stringify({ data: { endpoints: [] } }), { status: 200 }) })
+    await expect(client.validateModels()).resolves.toEqual([
+      { model: 'valid', available: true, statusCode: 200, reason: 'available' },
+      { model: 'gone', available: false, statusCode: 404, reason: 'not_found' },
+      { model: 'dormant', available: false, statusCode: 200, reason: 'no_endpoints' },
+    ])
+  })
   it('does not call a provider without configured keys', async () => {
     let calls = 0
     const client = new OpenRouterClient({ keys: [], fetcher: async () => { calls += 1; return okResponse() } })

@@ -1,5 +1,6 @@
 import { createBrevoMailer } from '@profitpilot/automation'
 import { sha256Hex } from '@profitpilot/crypto'
+import type { Logger } from '@profitpilot/logger'
 import type { QueryResultRow } from '@profitpilot/db'
 import { OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
 import { PostgresCopilotRepository, PostgresJarvisRepository, PostgresReportRepository } from './f8-repositories.js'
@@ -12,18 +13,35 @@ import { CloudflareR2ObjectStore, ReportService } from '@profitpilot/reporting'
 import type { ReportDataProvider } from '@profitpilot/reporting'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
-export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies }>
+export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; jarvisProvider: OpenRouterClient }>
 
-export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>): F8Bootstrap | null {
+export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>, logger?: Logger): F8Bootstrap | null {
   const f7 = createF7Bootstrap(env)
   if (!f7) return null
   const context = new F8ContextProvider({ analytics: f7.dataPlane.analytics, recommendations: f7.ai.recommendations, usage: f7.billing.usage })
-  const provider = new OpenRouterClient({ keys: [env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3].filter((key): key is string => typeof key === 'string'), models: [env.AI_MODEL_PRIMARY, env.AI_MODEL_FALLBACK1, env.AI_MODEL_FALLBACK2].filter((model): model is string => typeof model === 'string' && model.trim().length > 0), timeoutMs: positiveNumber(env.AI_TIMEOUT_MS, 5_000), maxRetries: nonNegativeNumber(env.AI_MAX_RETRIES, 1), temperature: numberEnv(env.AI_TEMPERATURE, .3), maxTokens: positiveNumber(env.AI_MAX_TOKENS, 2_000) })
+  const provider = new OpenRouterClient({
+    keys: [env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string'),
+    models: [env.AI_MODEL_PRIMARY, env.AI_MODEL_FALLBACK1, env.AI_MODEL_FALLBACK2].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
+    timeoutMs: positiveNumber(env.AI_TIMEOUT_MS, 25_000),
+    maxRetries: nonNegativeNumber(env.AI_MAX_RETRIES, 1),
+    temperature: numberEnv(env.AI_TEMPERATURE, .3),
+    maxTokens: positiveNumber(env.AI_MAX_TOKENS, 2_000),
+    ...(logger ? { onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => logger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }) } : {}),
+  })
+  if (logger) void validateOpenRouterModels(provider, logger)
   const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) })
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
   const reports = createReports(f7, env)
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } } }
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, jarvisProvider: provider }
+}
+
+async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {
+  const validations = await provider.validateModels()
+  for (const validation of validations) {
+    if (validation.available) logger.info('OpenRouter model validated', { model: validation.model, status_code: validation.statusCode })
+    else logger.warn('OpenRouter model unavailable at startup', { model: validation.model, status_code: validation.statusCode, reason: validation.reason })
+  }
 }
 
 function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | undefined>>): ReportService {

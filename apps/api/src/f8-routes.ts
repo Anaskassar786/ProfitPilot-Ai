@@ -32,7 +32,13 @@ function registerJarvis(router: Router, dependencies: JarvisRouteDependencies): 
   router.post('/jarvis/sessions', asyncRoute(async (request) => { const body = requireRecord(request.body); return dependencies.service.startSession(queryStore(request), pageValue(body.page), planValue(body.plan)) }))
   router.get('/jarvis/sessions/:id', asyncRoute(async (request) => dependencies.service.getSession(queryStore(request), param(request.params.id, 'session id'))))
   router.get('/jarvis/sessions/:id/messages', asyncRoute(async (request) => dependencies.service.messages(queryStore(request), param(request.params.id, 'session id'))))
-  router.post('/jarvis/sessions/:id/message', asyncRoute(async (request) => { const body = requireRecord(request.body); if (typeof body.text !== 'string') throw new AppError('VALIDATION_ERROR', 'Jarvis text is required', 400); return dependencies.service.message(queryStore(request), param(request.params.id, 'session id'), { text: body.text, page: pageValue(body.page), voice: body.voice === true }) }))
+  router.post('/jarvis/sessions/:id/message', asyncRoute(async (request) => {
+    const body = requireRecord(request.body)
+    if (typeof body.text !== 'string') throw new AppError('VALIDATION_ERROR', 'Jarvis text is required', 400)
+    const requestIdValue = request.header('x-request-id')
+    const input = { text: body.text, page: pageValue(body.page), voice: body.voice === true, ...(requestIdValue ? { requestId: requestIdValue } : {}) }
+    return dependencies.service.message(queryStore(request), param(request.params.id, 'session id'), input)
+  }))
   router.post('/jarvis/sessions/:id/action', asyncRoute(async (request) => { const body = requireRecord(request.body); if (typeof body.actionId !== 'string') throw new AppError('VALIDATION_ERROR', 'actionId is required', 400); return dependencies.service.confirmAction(queryStore(request), param(request.params.id, 'session id'), body.actionId) }))
   router.post('/jarvis/sessions/:id/:state', asyncRoute(async (request) => { const state = request.params.state; if (state !== 'pause' && state !== 'resume' && state !== 'end') throw new AppError('NOT_FOUND', 'Jarvis session command not found', 404); return dependencies.service.setSessionState(queryStore(request), param(request.params.id, 'session id'), state) }))
 }

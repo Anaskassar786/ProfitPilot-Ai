@@ -9,6 +9,10 @@ describe('F9 startup environment normalization', () => {
     expect(normalized.R2_ACCESS_KEY_ID).toBe('key')
     expect(normalized.R2_SECRET_ACCESS_KEY).toBe('secret')
   })
+  it('accepts OPENROUTER_API_KEY as the primary-key fallback', () => {
+    expect(normalizeEnvironment({ OPENROUTER_API_KEY: 'generic-key' }).OPENROUTER_API_KEY_1).toBe('generic-key')
+    expect(normalizeEnvironment({ OPENROUTER_API_KEY_1: 'numbered', OPENROUTER_API_KEY: 'generic' }).OPENROUTER_API_KEY_1).toBe('numbered')
+  })
   it('prefers canonical values and reports grouped production gaps', () => {
     const normalized = normalizeEnvironment({ R2_ENDPOINT: 'canonical', CLOUDFLARE_R2_ENDPOINT: 'alias' })
     expect(normalized.R2_ENDPOINT).toBe('canonical')

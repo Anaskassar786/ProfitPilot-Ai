@@ -23,6 +23,10 @@ describe('provider configuration readiness', () => {
     const result = await evaluateReadiness(readinessChecksFromEnv({ DATABASE_URL: 'postgres://db', REDIS_URL: 'redis://cache', OPENROUTER_API_KEY_1: 'key', SHOPIFY_API_KEY: 'key' }))
     expect(result.ok).toBe(true)
   })
+  it('accepts the generic OpenRouter key as a readiness fallback', async () => {
+    const result = await evaluateReadiness(readinessChecksFromEnv({ DATABASE_URL: 'postgres://db', REDIS_URL: 'redis://cache', OPENROUTER_API_KEY: 'key', SHOPIFY_API_KEY: 'key' }))
+    expect(result.ok).toBe(true)
+  })
   it('does not report ready without provider configuration', async () => {
     const result = await evaluateReadiness(readinessChecksFromEnv({}))
     expect(result.ok).toBe(false)
