@@ -5,6 +5,9 @@ import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
 
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+let csrfToken: string | null = null
+
 export class ApiClientError extends Error {
   public readonly status: number
   public readonly code: string
@@ -18,9 +21,12 @@ export class ApiClientError extends Error {
 }
 
 export async function requestJson<Value>(path: string, init: RequestInit = {}, fetcher: Fetcher = fetch): Promise<Value> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  const headers = new Headers(init.headers)
+  if (UNSAFE_METHODS.has(method) && csrfToken) headers.set('x-csrf-token', csrfToken)
   let response: Response
   try {
-    response = await fetcher(path, init)
+    response = await fetcher(path, { ...init, headers })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Network request failed'
     throw new ApiClientError(message, 0, 'NETWORK_ERROR')
@@ -42,6 +48,18 @@ export async function requestJson<Value>(path: string, init: RequestInit = {}, f
 
 export function fetchSessionContext(query = '', fetcher: Fetcher = fetch): Promise<WorkspaceContext> {
   return requestJson<WorkspaceContext>(`/session/context${query}`, {}, fetcher)
+}
+
+/**
+ * Fetches the signed CSRF token from the API. The response also sets the
+ * `profitpilot_csrf` cookie; unsafe requests then echo the token back via the
+ * `x-csrf-token` header so the server's double-submit check passes. The token
+ * is cached in-memory for the lifetime of the page.
+ */
+export async function fetchCsrfToken(fetcher: Fetcher = fetch): Promise<string> {
+  const result = await requestJson<{ csrfToken: string }>('/security/csrf', {}, fetcher)
+  csrfToken = result.csrfToken
+  return result.csrfToken
 }
 
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {

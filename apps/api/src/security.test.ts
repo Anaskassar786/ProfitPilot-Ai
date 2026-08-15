@@ -71,7 +71,8 @@ describe('F7 security primitives', () => {
     expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('HttpOnly')
     expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('Secure')
     expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('SameSite=None')
-    expect(serializeCookie('csrf', 'value', csrfCookieOptions('development'))).not.toContain('HttpOnly')
+    expect(serializeCookie('csrf', 'value', csrfCookieOptions())).not.toContain('HttpOnly')
+    expect(serializeCookie('csrf', 'value', csrfCookieOptions())).toContain('SameSite=None')
   })
 
   it('derives strict CORS and production authentication requirements from env', () => {

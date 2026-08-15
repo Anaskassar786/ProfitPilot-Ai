@@ -18,8 +18,14 @@ export function sessionCookieOptions(): CookieOptions {
   return { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAgeSeconds: 7 * 24 * 60 * 60 }
 }
 
-export function csrfCookieOptions(environment: string): CookieOptions {
-  return { httpOnly: false, secure: environment === 'production', sameSite: 'Lax', path: '/', maxAgeSeconds: 60 * 60 }
+/**
+ * The CSRF cookie participates in a double-submit token check for unsafe
+ * requests. The dashboard runs inside the Shopify admin iframe, so this cookie
+ * must also be sent cross-site: SameSite=None with Secure, matching the session
+ * cookie. It stays non-HttpOnly so client code may read the token if needed.
+ */
+export function csrfCookieOptions(): CookieOptions {
+  return { httpOnly: false, secure: true, sameSite: 'None', path: '/', maxAgeSeconds: 7 * 24 * 60 * 60 }
 }
 
 export function serializeCookie(name: string, value: string, options: CookieOptions): string {
@@ -34,8 +40,8 @@ export function setSessionCookie(response: Response, sessionValue: string): void
   response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, sessionValue, sessionCookieOptions()))
 }
 
-export function setCsrfCookie(response: Response, token: string, environment: string): void {
-  response.append('Set-Cookie', serializeCookie(CSRF_COOKIE_NAME, token, csrfCookieOptions(environment)))
+export function setCsrfCookie(response: Response, token: string): void {
+  response.append('Set-Cookie', serializeCookie(CSRF_COOKIE_NAME, token, csrfCookieOptions()))
 }
 
 export function clearSessionCookie(response: Response): void {

@@ -81,7 +81,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { activateWorkflow, createBillingCharge, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { activateWorkflow, createBillingCharge, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchCsrfToken, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, JsonValue, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
@@ -189,6 +189,12 @@ export default function App() {
       .then((result) => setResolvedContext(result))
       .catch(() => setResolvedContext({ storeId: null, shop: null }))
   }, [urlContext.storeId, urlContext.shop])
+
+  useEffect(() => {
+    // Unsafe requests (sync, billing, tickets, ...) must echo a signed CSRF
+    // token once the session cookie is present, or the API rejects them.
+    void fetchCsrfToken().catch(() => {})
+  }, [])
 
   const showToast = (message: string, kind: ToastKind = 'success') => {
     setToast({ message, kind })
