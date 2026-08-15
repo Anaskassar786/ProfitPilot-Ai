@@ -24,12 +24,15 @@ export class ShopifyTokenExchangeService {
   private readonly vault: TokenVault
   private readonly transport: TokenExchangeTransport
   private readonly exchanges = new Map<string, Promise<OfflineTokenResult>>()
+  /** Comma-separated list of OAuth scopes to request during token exchange. */
+  private readonly scopes: string
 
   public constructor(config: SessionTokenConfig, vault: TokenVault, transport: TokenExchangeTransport = fetch) {
     if (!config.apiKey.trim() || !config.apiSecret.trim()) throw new TypeError('Shopify token exchange requires API credentials')
     this.config = config
     this.vault = vault
     this.transport = transport
+    this.scopes = config.scopes?.trim() ?? ''
   }
 
   public async hasAccessToken(shop: string): Promise<boolean> {
@@ -79,6 +82,11 @@ export class ShopifyTokenExchangeService {
       requested_token_type: OFFLINE_ACCESS_TOKEN_TYPE,
       expiring: '0',
     })
+    // Request the configured OAuth scopes during token exchange so the offline
+    // token has access to all declared API resources. Without a scope parameter
+    // Shopify may grant a token with fewer scopes than the app declared in the
+    // Partner Dashboard, causing 403 Forbidden on subsequent API calls.
+    if (this.scopes) body.set('scope', this.scopes)
 
     let response: Response
     try {

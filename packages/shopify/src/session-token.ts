@@ -24,7 +24,7 @@ export type ShopifySessionTokenClaims = Readonly<{
   sid: string
 }>
 
-export type SessionTokenConfig = Readonly<{ apiKey: string; apiSecret: string }>
+export type SessionTokenConfig = Readonly<{ apiKey: string; apiSecret: string; scopes?: string }>
 
 /** Clock skew tolerated when checking `exp`/`nbf`. Session tokens live ~60s. */
 const DEFAULT_LEEWAY_SECONDS = 10

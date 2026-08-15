@@ -8,8 +8,10 @@ import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookP
 import { rawBodyFor } from './security.js'
 import { setSessionCookie } from './cookies.js'
 
+export type StoreLookup = Readonly<{ getByShopDomain(shop: string): Promise<{ storeId: StoreId; shopDomain: string } | null>; get(storeId: StoreId): Promise<{ storeId: StoreId; shopDomain: string } | null> }>
+
 export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void> }>
-export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies }>
+export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies; directory?: StoreLookup; tokenExchange?: import('@profitpilot/shopify').ShopifyTokenExchangeService }>
 
 export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencies): Router {
   const router = Router()
@@ -70,6 +72,113 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
     }
   })
 
+  /**
+   * Diagnostic endpoint that reports the app's installation status for a shop.
+   * Useful after an app becomes inaccessible (e.g. 404 in admin sidebar) to
+   * verify whether the store is registered and has an access token.
+   */
+  router.get('/status', async (request, response, next) => {
+    try {
+      const shop = queryString(request.query.shop)
+      const storeId = queryString(request.query.storeId)
+      let connection: { storeId: StoreId; shopDomain: string } | null = null
+      if (shop) {
+        connection = await dependencies.directory?.getByShopDomain(shop) ?? null
+      } else if (storeId) {
+        connection = await dependencies.directory?.get(storeId as StoreId) ?? null
+      }
+      const scopesList = parseScopesFromQuery(request.query.scopes)
+      const status = {
+        registered: connection !== null,
+        shopDomain: connection?.shopDomain ?? shop ?? null,
+        storeId: connection?.storeId ?? null,
+        hasToken: false,
+        missingScopes: scopesList.length > 0 ? scopesList.filter((scope) => !request.query.scopes?.toString().includes(scope)) : [],
+        installUrl: connection
+          ? `https://admin.shopify.com/store/${connection.shopDomain.replace(/\.myshopify\.com$/, '')}/apps/${dependencies.installer['config'].apiKey}`
+          : null,
+      }
+      if (dependencies.tokenExchange && connection) {
+        status.hasToken = await dependencies.tokenExchange.hasAccessToken(connection.shopDomain)
+      }
+      response.status(200).json({ ok: true, status })
+    } catch (error: unknown) {
+      next(error)
+    }
+  })
+
+  /**
+   * Reinstall endpoint for embedded apps. When the app becomes inaccessible
+   * (e.g. 404 in the admin sidebar or "There's no page at this address"),
+   * this directs the merchant to the correct managed-install entry point.
+   *
+   * For embedded apps using managed installation, the correct way to install
+   * is via the Partner Dashboard, NOT via a custom install link like
+   * `admin.shopify.com/oauth/install_custom_app`.
+   *
+   * However, this endpoint provides the recoverable OAuth authorize URL for
+   * legacy/fallback install flows and diagnostic guidance.
+   */
+  router.get('/reinstall', async (request, response, next) => {
+    try {
+      const shop = queryString(request.query.shop)
+      const storeId = queryString(request.query.storeId)
+      let shopDomain = shop ?? ''
+      let registered = false
+
+      if (storeId && !shopDomain) {
+        const connection = await dependencies.directory?.get(storeId as StoreId) ?? null
+        if (connection) {
+          shopDomain = connection.shopDomain
+          registered = true
+        }
+      } else if (shopDomain) {
+        const connection = await dependencies.directory?.getByShopDomain(shopDomain) ?? null
+        registered = connection !== null
+      }
+
+      if (!shopDomain) {
+        response.status(400).json({
+          ok: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'shop query parameter is required. Provide your *.myshopify.com domain.',
+          },
+          recovery: [
+            'Go to the Shopify Partner Dashboard → Apps → ProfitPilot → Distribution',
+            'Click "Install app" and select your store',
+            'The app will appear in your Shopify admin sidebar under "Apps"',
+          ],
+        })
+        return
+      }
+
+      const correctAdminUrl = `https://admin.shopify.com/store/${shopDomain.replace(/\.myshopify\.com$/, '')}/apps/${dependencies.installer['config'].apiKey}`
+      const partnerDashboardUrl = `https://partners.shopify.com/organizations/apps/${dependencies.installer['config'].apiKey}/distribution`
+
+      response.status(200).json({
+        ok: true,
+        guidance: {
+          registered,
+          shop: shopDomain,
+          appApiKey: dependencies.installer['config'].apiKey,
+          // For managed-install embedded apps, the correct way to install is
+          // via the Partner Dashboard. The OAuth URL below is a fallback.
+          partnerDashboardUrl,
+          correctAppUrlInAdmin: correctAdminUrl,
+          steps: [
+            `Step 1: If the app shows 404 in admin, go to ${partnerDashboardUrl} and install the app again.`,
+            `Step 2: After installation, access the app at ${correctAdminUrl}`,
+            'Step 3: If the app still does not appear, try clearing your browser cache and refreshing the Shopify admin.',
+            'Note: The URL https://admin.shopify.com/oauth/install_custom_app?client_id=... is NOT the correct way to install embedded apps. It is designed for custom (non-embedded) apps only.',
+          ],
+        },
+      })
+    } catch (error: unknown) {
+      next(error)
+    }
+  })
+
   router.post('/webhooks', async (request, response, next) => {
     try {
       if (!dependencies.webhook) throw new PhaseNotImplementedError('F7', 'Shopify webhook HTTP handler')
@@ -115,6 +224,12 @@ function callbackQuery(request: Request): Record<string, string> {
  * decodes/re-encodes values differently. Express preserves originalUrl exactly
  * as received by Node's HTTP parser.
  */
+function parseScopesFromQuery(value: unknown): readonly string[] {
+  if (typeof value === 'string') return value.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+  if (Array.isArray(value)) return value.flatMap((v) => parseScopesFromQuery(v))
+  return []
+}
+
 function rawQueryString(request: Request): string | undefined {
   const url = request.originalUrl ?? request.url ?? ''
   const queryIndex = url.indexOf('?')

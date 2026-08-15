@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
-import { isShopifyApiError } from '@profitpilot/shopify'
+import { isShopifyApiError, ShopifyApiError } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
 import type { SessionRecord, SessionRepository } from '@profitpilot/db'
@@ -296,8 +296,16 @@ export function normalizeRequestError(error: unknown): AppError {
   if (isShopifyApiError(error) || (isRecord(error) && error.name === 'ShopifyApiError')) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 502
     const message = error instanceof Error ? error.message : 'Shopify API error'
-    const code = status === 401 ? 'UNAUTHORIZED' : status === 429 ? 'RATE_LIMITED' : 'DEPENDENCY_ERROR'
-    const appError = new AppError(code, message, status, { upstreamStatus: status }, true)
+    // 403 Forbidden from Shopify means a valid token lacks the required OAuth
+    // scope. Provide an actionable message that includes the missing scope.
+    const code = status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 429 ? 'RATE_LIMITED' : 'DEPENDENCY_ERROR'
+    // Use the ShopifyApiError.scopeMessage() helper when available.
+    let errorMessage = message
+    if (status === 403 && error instanceof ShopifyApiError) {
+      const scopeHint = error.scopeMessage()
+      if (scopeHint) errorMessage = scopeHint
+    }
+    const appError = new AppError(code, errorMessage, status === 403 ? 502 : status, { upstreamStatus: status, ...(status === 403 ? { errorType: 'missing_scope' } : {}) }, true)
     if (error instanceof Error && error.stack) appError.stack = error.stack
     appError.cause = error
     return appError

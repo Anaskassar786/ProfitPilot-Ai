@@ -33,11 +33,15 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // The store directory is what registers the tenant (stores row) during OAuth
   // and resolves shop <-> storeId for the session context endpoint.
   const sessionToken = { apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET') }
-  const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
+  const scopes = parseScopes(env.SHOPIFY_SCOPES)
+  const installer = new ShopifyInstallService({ ...sessionToken, scopes, redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, sessionToken.apiKey, sessionToken.apiSecret)
   // Managed installation uses the same credentials to validate the id_token,
   // exchange it for a non-expiring offline token, and persist via this vault.
-  const tokenExchange = new ShopifyTokenExchangeService(sessionToken, vault)
+  // The scopes are passed during token exchange so the offline access token
+  // is granted the declared resource permissions. Without them Shopify may
+  // return a token with fewer or no scopes, causing 403 Forbidden on API calls.
+  const tokenExchange = new ShopifyTokenExchangeService({ ...sessionToken, scopes: scopes.join(',') }, vault)
   return { database, shopify: { installer, exchange }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
 }
 

@@ -65,6 +65,60 @@ and closes automatically after `SYNC_CIRCUIT_COOLDOWN_MS` (default 60000 ms).
   the rejected fields, and the full upstream body is recorded on the error
   cause in the API error log. Shopify 5xx/401/403 map to `502 DEPENDENCY_ERROR`.
 
+### Shopify OAuth scopes
+
+The app declares required OAuth scopes in the `SHOPIFY_SCOPES` environment variable.
+These must match the scopes configured in the Shopify Partner Dashboard
+(App Setup → Scopes). Always update both when adding a new sync module.
+
+| Sync module       | Shopify endpoint              | Required scope       |
+|-------------------|-------------------------------|----------------------|
+| Products          | `/admin/api/*/products.json`  | `read_products`      |
+| Orders            | `/admin/api/*/orders.json`    | `read_orders`        |
+| Customers         | `/admin/api/*/customers.json` | `read_customers`     |
+| Inventory         | `/admin/api/*/inventory_levels.json` | `read_inventory` |
+| Checkouts         | `/admin/api/*/checkouts.json` | `read_checkouts`     |
+| Collections       | `/admin/api/*/collections.json` | `read_collections` |
+| Discounts         | `/admin/api/*/price_rules.json` | `read_price_rules` |
+| Transactions      | `/admin/api/*/transactions.json` | `read_orders`    |
+| Locations         | `/admin/api/*/locations.json` | `read_locations`     |
+
+**Recommended `SHOPIFY_SCOPES` value:**
+```
+read_products,read_orders,read_customers,read_inventory,read_collections,read_price_rules,read_checkouts,read_locations
+```
+
+**Important**: The scopes are used during **token exchange** (RFC 8693
+`requested_token_type=urn:shopify:params:oauth:token-type:offline-access-token`).
+Without the `scope` parameter in the exchange request, Shopify may grant an
+offline token with fewer scopes than declared, causing `403 Forbidden` on API
+calls. The app now passes scopes during token exchange, but a token that was
+exchanged before this fix (PR #17) still has the old (insufficient) scopes
+and must be re-exchanged — trigger this by removing the stored token from
+`shopify_tokens` or by triggering a hard refresh with an expired session token.
+
+### App recovery (404 / "There's no page at this address")
+
+If the app becomes inaccessible in the Shopify admin (returns 404 or "There's no
+page at this address"), follow these recovery steps:
+
+1. **Do NOT use** the `https://admin.shopify.com/oauth/install_custom_app?client_id=...`
+   URL. This is for non-embedded custom apps only and will corrupt the installation
+   of embedded managed-install apps.
+
+2. **Reinstall from the Partner Dashboard**: Go to
+   `https://partners.shopify.com/organizations/apps/{API_KEY}/distribution`
+   and click "Install app" on your development store.
+
+3. **After reinstallation**, access the app at the correct admin URL:
+   `https://admin.shopify.com/store/{store-name}/apps/{API_KEY}`
+
+4. **Verify the app is installed** via the diagnostic endpoint:
+   `GET /shopify/status?shop={store}.myshopify.com`
+
+5. The app also provides a `/shopify/reinstall?shop={store}.myshopify.com`
+   endpoint that returns step-by-step recovery guidance.
+
 ## Rollback
 
 Use Railway's previous deployment for API and worker together. Do not roll back only one process when a migration has already run. Review `schema_migrations` and take a database backup before destructive changes.
