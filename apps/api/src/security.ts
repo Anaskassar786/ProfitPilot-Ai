@@ -152,7 +152,8 @@ export function securityHeadersMiddleware(environment = 'development'): RequestH
     response.setHeader('X-Content-Type-Options', 'nosniff')
     if (embeddable) response.removeHeader('X-Frame-Options')
     else response.setHeader('X-Frame-Options', 'DENY')
-    response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+    const microphonePolicy = embeddable ? '(self "https://admin.shopify.com")' : '()'
+    response.setHeader('Permissions-Policy', `camera=(), microphone=${microphonePolicy}, geolocation=(), payment=()`)
     if (environment === 'production') response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     next()
   }

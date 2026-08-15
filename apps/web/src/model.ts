@@ -55,6 +55,11 @@ export function formatNumber(value: number | null): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)
 }
 
+export function catalogProductTitle(product: CatalogProduct): string {
+  const title = product.payload.title
+  return typeof title === 'string' && title.trim() ? title : product.productId
+}
+
 export function sumRevenue(snapshot: AnalyticsSnapshot | null): number | null {
   if (!snapshot || snapshot.revenue.length === 0) return null
   return snapshot.revenue.reduce((total, row) => total + row.grossRevenue, 0)

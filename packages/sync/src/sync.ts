@@ -7,7 +7,8 @@ import type { StoreRequestPolicy } from './rate.js'
 export const SYNC_MODULES = ['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'] as const
 export type SyncModule = (typeof SYNC_MODULES)[number]
 export type SyncScalar = string | number | boolean | null
-export type SyncRecord = Readonly<Record<string, SyncScalar>>
+/** A normalized Shopify resource. Nested arrays/objects remain intact. */
+export type SyncRecord = Readonly<Record<string, unknown>>
 export type SyncCheckpoint = Readonly<{ storeId: StoreId; module: SyncModule; cursor: string | null; version: number; updatedAt: number }>
 export type SyncPage = Readonly<{ records: readonly SyncRecord[]; nextCursor: string | null }>
 export type SyncRunResult = Readonly<{ storeId: StoreId; module: SyncModule; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
@@ -19,6 +20,8 @@ export interface SyncSource {
 
 export interface SyncSink {
   upsert(storeId: StoreId, module: SyncModule, records: readonly SyncRecord[]): Promise<void>
+  /** Runs only after every page has persisted and the terminal checkpoint is saved. */
+  complete?(storeId: StoreId, module: SyncModule): Promise<void>
 }
 
 export interface CheckpointStore {
@@ -81,14 +84,20 @@ export class SyncEngine {
       const page = await this.policy.execute(storeId, () => this.source.fetchPage(storeId, module, cursor))
       if (page.nextCursor === cursor && page.nextCursor !== null) throw new AppError('DEPENDENCY_ERROR', 'Shopify sync returned a non-advancing cursor', 502, { module, cursor })
       await this.sink.upsert(storeId, module, page.records)
-      await this.cache?.invalidateTenant(storeId)
       records += page.records.length
       pages += 1
       const checkpoint = await this.checkpoints.save({ storeId, module, cursor: page.nextCursor, updatedAt: this.now() }, version)
       version = checkpoint.version
       cursor = page.nextCursor
       this.logger?.info('Sync page committed', { storeId, module, page: pages, records: page.records.length, cursor: cursor ?? 'complete' })
-      if (cursor === null) return { storeId, module, pages, records, cursor, resumedFrom }
+      if (cursor === null) {
+        // Rebuild completion-dependent projections from all persisted records,
+        // never from one page. This stays correct across pagination and resume.
+        await this.sink.complete?.(storeId, module)
+        await this.cache?.invalidateTenant(storeId)
+        return { storeId, module, pages, records, cursor, resumedFrom }
+      }
+      await this.cache?.invalidateTenant(storeId)
     }
   }
 }

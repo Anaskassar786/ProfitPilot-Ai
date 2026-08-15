@@ -99,11 +99,13 @@ describe('F7 API security suite', () => {
       const live = await fetch(`${base}/live`)
       expect(live.headers.get('content-security-policy')).toContain("default-src 'none'")
       expect(live.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(live.headers.get('permissions-policy')).toContain('microphone=()')
       const cors = await fetch(`${base}/live`, { headers: { origin: 'https://evil.example' } })
       expect(cors.status).toBe(403)
       const sqlInjection = await fetch(`${base}/analytics?storeId=${encodeURIComponent("1 OR 1=1")}`)
       expect(sqlInjection.status).toBe(400)
       const failure = await fetch(`${base}/analytics?storeId=store-1`)
+      expect(failure.headers.get('permissions-policy')).toContain('microphone=(self "https://admin.shopify.com")')
       const payload = await failure.json() as { error: { message: string; details: Readonly<Record<string, unknown>> } }
       expect(failure.status).toBe(500)
       expect(payload.error.message).toBe('Internal server error')

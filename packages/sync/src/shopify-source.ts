@@ -56,7 +56,10 @@ export class ShopifyRestSyncSource implements SyncSource {
 function toSyncRecord(record: Readonly<Record<string, unknown>>): SyncRecord {
   const id = record.id ?? record.admin_graphql_api_id
   if (typeof id !== 'string' && typeof id !== 'number') throw new Error('Shopify resource is missing a stable id')
-  return { id, payload: JSON.stringify(record) }
+  // Normalize once at the Shopify boundary. Persisting the resource itself
+  // keeps fields such as product.payload.title directly addressable and avoids
+  // a second JSON-string envelope in every downstream consumer.
+  return { ...record, id: String(id) }
 }
 
 function parseNextCursor(link: string | null): string | null {

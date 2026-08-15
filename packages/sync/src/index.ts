@@ -1,4 +1,5 @@
 export * from './analytics.js'
+export * from './order-facts.js'
 export * from './postgres-checkpoints.js'
 export * from './postgres-sink.js'
 export * from './rate.js'

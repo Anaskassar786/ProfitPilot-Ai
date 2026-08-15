@@ -1,3 +1,18 @@
+export type JarvisSessionStatus = 'starting' | 'ready' | 'failed' | 'error'
+export type JarvisSessionLifecycle = Readonly<{ status: JarvisSessionStatus; error: string | null }>
+export type JarvisSessionAction =
+  | Readonly<{ type: 'start' }>
+  | Readonly<{ type: 'ready' }>
+  | Readonly<{ type: 'recover' }>
+  | Readonly<{ type: 'failed'; message: string }>
+  | Readonly<{ type: 'error'; message: string }>
+
+export function reduceJarvisSession(_current: JarvisSessionLifecycle, action: JarvisSessionAction): JarvisSessionLifecycle {
+  if (action.type === 'start') return { status: 'starting', error: null }
+  if (action.type === 'ready' || action.type === 'recover') return { status: 'ready', error: null }
+  return { status: action.type, error: action.message }
+}
+
 export type JarvisAddressing = 'Sir' | "Ma'am" | 'Boss' | 'Miss'
 export type JarvisEngagementMode = 'proactive' | 'balanced' | 'quiet' | 'answer-only'
 export type JarvisPreference = Readonly<{ storeId: string; addressing: JarvisAddressing; language: 'en' | 'hi' | 'auto'; engagementMode: JarvisEngagementMode; silenceUntil: number | null; navigationSuggestions: boolean; onlyAnswerWhenAsked: boolean; updatedAt: number }>
