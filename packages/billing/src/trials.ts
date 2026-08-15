@@ -20,6 +20,8 @@ export class TrialAndGiftLedger {
   private readonly redemptions = new Map<string, GiftRedemption>()
   private giftKillSwitch = false
 
+  public hydrate(trial: TrialRecord): void { if (!this.trials.has(trial.shopId)) this.trials.set(trial.shopId, trial) }
+
   public startTrial(shopId: string, now = Date.now(), days = 14): TrialRecord {
     const existing = this.trials.get(shopId)
     if (existing) return existing

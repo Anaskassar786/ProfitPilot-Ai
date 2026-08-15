@@ -20,6 +20,8 @@ export interface ReportRepository {
   updateRun(run: ReportRun): Promise<void>
   listSchedules(storeId: string): Promise<readonly ReportSchedule[]>
   saveSchedule(schedule: ReportSchedule): Promise<ReportSchedule>
+  saveBody?(storeId: string, id: string, body: Buffer): Promise<void>
+  getBody?(storeId: string, id: string): Promise<Buffer | null>
 }
 
 export interface ReportObjectStore {
@@ -38,6 +40,7 @@ export interface ReportDataProvider {
 export class InMemoryReportRepository implements ReportRepository {
   private readonly runs = new Map<string, ReportRun>()
   private readonly schedules = new Map<string, ReportSchedule>()
+  private readonly bodies = new Map<string, Buffer>()
   public async listRuns(storeId: string): Promise<readonly ReportRun[]> { return [...this.runs.values()].filter((run) => run.storeId === storeId).sort((a, b) => b.createdAt - a.createdAt) }
   public async getRun(storeId: string, id: string): Promise<ReportRun | null> { const run = this.runs.get(id); return run?.storeId === storeId ? run : null }
   public async getByIdempotency(storeId: string, idempotencyKey: string): Promise<ReportRun | null> { return [...this.runs.values()].find((run) => run.storeId === storeId && run.idempotencyKey === idempotencyKey) ?? null }
@@ -45,6 +48,8 @@ export class InMemoryReportRepository implements ReportRepository {
   public async updateRun(run: ReportRun): Promise<void> { this.runs.set(run.id, run) }
   public async listSchedules(storeId: string): Promise<readonly ReportSchedule[]> { return [...this.schedules.values()].filter((schedule) => schedule.storeId === storeId) }
   public async saveSchedule(schedule: ReportSchedule): Promise<ReportSchedule> { this.schedules.set(schedule.id, schedule); return schedule }
+  public async saveBody(storeId: string, id: string, body: Buffer): Promise<void> { this.bodies.set(`${storeId}:${id}`, Buffer.from(body)) }
+  public async getBody(storeId: string, id: string): Promise<Buffer | null> { const value = this.bodies.get(`${storeId}:${id}`); return value ? Buffer.from(value) : null }
 }
 
 export class InMemoryReportObjectStore implements ReportObjectStore {
@@ -105,10 +110,12 @@ export class ReportService {
   public async get(storeId: string, id: string): Promise<ReportRun> { const run = await this.repository.getRun(storeId, id); if (!run) throw new AppError('NOT_FOUND', 'Report run not found', 404); return run }
   public async generate(input: Readonly<{ storeId: string; frequency: ReportFrequency; period: ClosedPeriod; email: boolean }>): Promise<ReportGeneration> {
     assertClosedPeriod(input.period, new Date(this.now()))
-    if (!this.objectStore) throw new AppError('DEPENDENCY_ERROR', 'Cloudflare R2 report vault is not configured', 503)
     const idempotencyKey = `${input.frequency}:${input.period.start}:${input.period.end}`
     const existing = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
-    if (existing?.status === 'COMPLETED') return { run: existing, file: null }
+    if (existing?.status === 'COMPLETED') {
+      const stored = await this.readStoredBody(existing)
+      return { run: existing, file: stored ? { filename: existing.filename, contentType: 'application/pdf', body: stored } : null }
+    }
     const data = await this.dataProvider.get(input.storeId, input.frequency, input.period)
     const filename = reportFileName(input.storeId, input.frequency, input.period)
     const rows: readonly ExportRow[] = [{ section: 'Executive summary', metric: 'summary', value: data.summary, source: 'reporting' }, { section: 'Standard sections', metric: 'currency', value: data.currency, source: 'store configuration' }, ...data.rows]
@@ -116,10 +123,18 @@ export class ReportService {
     const objectKey = `reports/${input.storeId}/${filename}`
     const hash = createHash('sha256').update(file.body).digest('hex')
     const now = this.now()
-    const run: ReportRun = { id: existing?.id ?? randomUUID(), storeId: input.storeId, frequency: input.frequency, period: input.period, idempotencyKey, filename, objectKey, contentSha256: hash, status: 'GENERATING', emailStatus: input.email ? 'NOT_REQUESTED' : 'NOT_REQUESTED', createdAt: existing?.createdAt ?? now, completedAt: null }
-    if (!(await this.repository.createRunIfAbsent(run))) { const concurrent = await this.repository.getByIdempotency(input.storeId, idempotencyKey); if (concurrent?.status === 'COMPLETED') return { run: concurrent, file: null }; throw new AppError('CONFLICT', 'Report generation is already in progress', 409) }
+    const run: ReportRun = { id: existing?.id ?? randomUUID(), storeId: input.storeId, frequency: input.frequency, period: input.period, idempotencyKey, filename, objectKey, contentSha256: hash, status: 'GENERATING', emailStatus: 'NOT_REQUESTED', createdAt: existing?.createdAt ?? now, completedAt: null }
+    if (existing?.status === 'GENERATING' || existing?.status === 'FAILED') await this.repository.updateRun(run)
+    else if (!(await this.repository.createRunIfAbsent(run))) {
+      const concurrent = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
+      if (concurrent?.status === 'COMPLETED') return { run: concurrent, file: null }
+      if (concurrent?.status === 'GENERATING') throw new AppError('CONFLICT', 'Report generation is already in progress', 409)
+    }
     try {
-      await this.objectStore.put(objectKey, file.body, file.contentType)
+      await this.repository.saveBody?.(input.storeId, run.id, file.body)
+      if (this.objectStore) {
+        try { await this.objectStore.put(objectKey, file.body, file.contentType) } catch { /* PDF remains available from the database vault */ }
+      }
       let emailStatus: ReportEmailStatus = input.email ? 'EMAIL_UNAVAILABLE' : 'NOT_REQUESTED'
       if (input.email && this.delivery) { try { await this.delivery.send({ storeId: input.storeId, filename, body: file.body, subject: `${input.frequency} ProfitPilot report` }); emailStatus = 'SENT' } catch { emailStatus = 'FAILED' } }
       const completed: ReportRun = { ...run, status: 'COMPLETED', emailStatus, completedAt: this.now() }
@@ -131,7 +146,19 @@ export class ReportService {
       throw error
     }
   }
-  public async download(storeId: string, id: string): Promise<Readonly<{ run: ReportRun; body: Buffer }>> { const run = await this.get(storeId, id); if (!this.objectStore || run.status !== 'COMPLETED') throw new AppError('DEPENDENCY_ERROR', 'Report file is unavailable', 503); const body = await this.objectStore.get(run.objectKey); if (!body) throw new AppError('NOT_FOUND', 'Report file not found', 404); return { run, body } }
+  public async download(storeId: string, id: string): Promise<Readonly<{ run: ReportRun; body: Buffer }>> {
+    const run = await this.get(storeId, id)
+    if (run.status !== 'COMPLETED') throw new AppError('DEPENDENCY_ERROR', run.status === 'GENERATING' ? 'This report is still generating. Refresh in a moment.' : 'This report failed and has no file to download.', 409, { status: run.status })
+    const stored = await this.readStoredBody(run)
+    if (stored) return { run, body: stored }
+    throw new AppError('NOT_FOUND', 'Report file not found', 404)
+  }
+  private async readStoredBody(run: ReportRun): Promise<Buffer | null> {
+    const fromRepo = await this.repository.getBody?.(run.storeId, run.id)
+    if (fromRepo) return fromRepo
+    if (!this.objectStore) return null
+    return this.objectStore.get(run.objectKey)
+  }
   public async saveSchedule(schedule: ReportSchedule): Promise<ReportSchedule> { if (!['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY'].includes(schedule.frequency)) throw new AppError('VALIDATION_ERROR', 'Invalid report frequency', 400); return this.repository.saveSchedule(schedule) }
   public async schedules(storeId: string): Promise<readonly ReportSchedule[]> { return this.repository.listSchedules(storeId) }
 }

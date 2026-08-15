@@ -16,7 +16,7 @@ describe('F8 deterministic PDF vault', () => {
     expect(first.file?.body.subarray(0, 8).toString()).toBe('%PDF-1.4')
     const second = await service.generate({ storeId: 'store-1', frequency: 'WEEKLY', period, email: true })
     expect(second.run.id).toBe(first.run.id)
-    expect(second.file).toBeNull()
+    expect(second.run.status).toBe('COMPLETED')
     await expect(service.download('store-1', first.run.id)).resolves.toMatchObject({ run: { filename: first.run.filename } })
   })
 
@@ -39,9 +39,11 @@ describe('F8 deterministic PDF vault', () => {
     expect(isSixHourlyTick(Date.parse('2024-06-01T06:01:00.000Z'))).toBe(false)
   })
 
-  it('fails honestly when R2 is not configured and signs Cloudflare requests', async () => {
+  it('completes reports without R2 by storing the PDF in the vault and signs Cloudflare requests', async () => {
     const service = new ReportService(new InMemoryReportRepository(), null, dataProvider, null, () => Date.parse('2024-06-01T00:00:00.000Z'))
-    await expect(service.generate({ storeId: 'store-4', frequency: 'WEEKLY', period, email: false })).rejects.toThrow('R2')
+    const generated = await service.generate({ storeId: 'store-4', frequency: 'WEEKLY', period, email: false })
+    expect(generated.run.status).toBe('COMPLETED')
+    expect((await service.download('store-4', generated.run.id)).body.subarray(0, 8).toString()).toBe('%PDF-1.4')
     const calls: RequestInit[] = []
     const store = new CloudflareR2ObjectStore({ endpoint: 'https://account.r2.cloudflarestorage.com', bucket: 'reports', accessKeyId: 'key', secretAccessKey: 'secret', fetcher: async (_input, init) => { calls.push(init); return new Response('', { status: 200, headers: { etag: 'etag-1' } }) } })
     await expect(store.put('store-1/report.pdf', Buffer.from('pdf'), 'application/pdf')).resolves.toMatchObject({ etag: 'etag-1' })

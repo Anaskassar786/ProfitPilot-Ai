@@ -42,30 +42,35 @@ export class CopilotService {
 
   public constructor(evidenceProvider: CopilotEvidenceProvider, repository: CopilotRepository, now: () => number = () => Date.now()) { this.evidenceProvider = evidenceProvider; this.repository = repository; this.now = now }
 
-  public async listThreads(storeId: StoreId): Promise<readonly CopilotThread[]> { return this.repository.listThreads(storeId) }
-  public async threadAnswers(storeId: StoreId, threadId: string): Promise<readonly CopilotAnswer[]> { return this.repository.listAnswers(storeId, threadId) }
+  public async listThreads(storeId: StoreId): Promise<readonly CopilotThread[]> { try { return await this.repository.listThreads(storeId) } catch { return [] } }
+  public async threadAnswers(storeId: StoreId, threadId: string): Promise<readonly CopilotAnswer[]> { try { return await this.repository.listAnswers(storeId, threadId) } catch { return [] } }
 
   public async query(input: Readonly<{ storeId: StoreId; query: string; page: JarvisPage; threadId?: string }>): Promise<CopilotAnswer> {
     const query = input.query.trim().slice(0, 500)
     if (!query) throw new AppError('VALIDATION_ERROR', 'Copilot query cannot be empty', 400)
     const intent = parseCopilotIntent(query)
     const now = this.now()
-    const thread = input.threadId ? await this.repository.getThread(input.storeId, input.threadId) : null
-    if (input.threadId && !thread) throw new AppError('NOT_FOUND', 'Copilot thread not found', 404)
-    const actualThread = thread ?? await this.repository.createThread({ id: randomUUID(), storeId: input.storeId, title: query.slice(0, 80), createdAt: now, updatedAt: now })
+    let thread: CopilotThread | null = null
+    if (input.threadId) {
+      try { thread = await this.repository.getThread(input.storeId, input.threadId) } catch { thread = { id: input.threadId, storeId: input.storeId, title: query.slice(0, 80), createdAt: now, updatedAt: now } }
+      if (!thread) throw new AppError('NOT_FOUND', 'Copilot thread not found', 404)
+    }
+    const actualThread = thread ?? await this.ensureThread({ id: randomUUID(), storeId: input.storeId, title: query.slice(0, 80), createdAt: now, updatedAt: now })
     if (!intent) {
       const answer: CopilotAnswer = { id: randomUUID(), storeId: input.storeId, threadId: actualThread.id, query, intent: null, answer: 'I can answer revenue, revenue change, top products, stockout risk, dead stock, customer churn, order summary, campaign performance, billing usage, or store health.', clarification: 'Which supported store question should I answer?', evidence: null, slots: [], createdAt: now }
-      await this.repository.appendAnswer(answer)
+      await this.remember(answer)
       return answer
     }
     const evidence = await this.evidenceProvider.get(input.storeId, intent, input.page)
     const slots = evidence.facts.filter((fact): fact is EvidenceField & { value: number } => typeof fact.value === 'number' && Number.isFinite(fact.value)).map((fact, index) => ({ name: `N${index + 1}`, value: fact.value, formatted: formatNumber(fact.value), source: fact.source }))
     const answer: CopilotAnswer = { id: randomUUID(), storeId: input.storeId, threadId: actualThread.id, query, intent, answer: renderCopilotAnswer(intent, evidence, slots), clarification: null, evidence, slots, createdAt: now }
-    await this.repository.appendAnswer(answer)
+    await this.remember(answer)
     return answer
   }
 
-  public async createThread(storeId: StoreId, title: string): Promise<CopilotThread> { const now = this.now(); return this.repository.createThread({ id: randomUUID(), storeId, title: title.trim().slice(0, 80) || 'Copilot thread', createdAt: now, updatedAt: now }) }
+  public async createThread(storeId: StoreId, title: string): Promise<CopilotThread> { const now = this.now(); return this.ensureThread({ id: randomUUID(), storeId, title: title.trim().slice(0, 80) || 'Copilot thread', createdAt: now, updatedAt: now }) }
+  private async ensureThread(thread: CopilotThread): Promise<CopilotThread> { try { return await this.repository.createThread(thread) } catch { return thread } }
+  private async remember(answer: CopilotAnswer): Promise<void> { try { await this.repository.appendAnswer(answer) } catch { /* answer still returns */ } }
 }
 
 export function parseCopilotIntent(query: string): CopilotIntent | null {

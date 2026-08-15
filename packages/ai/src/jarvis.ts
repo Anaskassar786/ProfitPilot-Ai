@@ -127,6 +127,7 @@ export class JarvisService {
   private readonly executeAction: JarvisActionExecutor | null
   private readonly now: () => number
   private readonly recordCost: JarvisCostRecorder | null
+  private readonly ephemeral = new Map<string, JarvisSession>()
 
   public constructor(provider: OpenRouterClient, evidenceProvider: JarvisEvidenceProvider, repository: JarvisRepository, executeAction: JarvisActionExecutor | null = null, now: () => number = () => Date.now(), recordCost: JarvisCostRecorder | null = null) {
     this.provider = provider
@@ -138,7 +139,7 @@ export class JarvisService {
   }
 
   public async preferences(storeId: StoreId): Promise<JarvisPreference> {
-    return (await this.repository.getPreferences(storeId)) ?? defaultPreferences(storeId, this.now())
+    try { return (await this.repository.getPreferences(storeId)) ?? defaultPreferences(storeId, this.now()) } catch { return defaultPreferences(storeId, this.now()) }
   }
 
   public async updatePreferences(storeId: StoreId, patch: Readonly<Partial<Omit<JarvisPreference, 'storeId' | 'updatedAt'>>>): Promise<JarvisPreference> {
@@ -148,18 +149,31 @@ export class JarvisService {
   }
 
   public async startSession(storeId: StoreId, page: JarvisPage, plan: JarvisPlan): Promise<JarvisSession> {
-    const existing = await this.repository.getActiveSession(storeId)
-    if (existing) return this.repository.saveSession({ ...existing, lastPage: page, lastActivityAt: this.now(), paused: false })
-    const now = this.now()
-    const memoryDays = plan === 'trial' ? 1 : plan === 'start' ? 7 : plan === 'growth' ? 30 : 90
-    const undoWindowSeconds = plan === 'trial' || plan === 'start' ? 60 : plan === 'growth' ? 120 : 300
-    return this.repository.saveSession({ id: randomUUID(), storeId, plan, active: true, paused: false, startedAt: now, lastActivityAt: now, lastPage: page, memoryExpiresAt: now + memoryDays * 86_400_000, undoWindowSeconds, nonsenseCount: 0, pendingAction: null, endedAt: null })
+    try {
+      const existing = await this.repository.getActiveSession(storeId)
+      if (existing) return this.persistSession({ ...existing, lastPage: page, lastActivityAt: this.now(), paused: false })
+      const now = this.now()
+      const memoryDays = plan === 'trial' ? 1 : plan === 'start' ? 7 : plan === 'growth' ? 30 : 90
+      const undoWindowSeconds = plan === 'trial' || plan === 'start' ? 60 : plan === 'growth' ? 120 : 300
+      return this.persistSession({ id: randomUUID(), storeId, plan, active: true, paused: false, startedAt: now, lastActivityAt: now, lastPage: page, memoryExpiresAt: now + memoryDays * 86_400_000, undoWindowSeconds, nonsenseCount: 0, pendingAction: null, endedAt: null })
+    } catch {
+      const now = this.now()
+      const memoryDays = plan === 'trial' ? 1 : plan === 'start' ? 7 : plan === 'growth' ? 30 : 90
+      const undoWindowSeconds = plan === 'trial' || plan === 'start' ? 60 : plan === 'growth' ? 120 : 300
+      const session: JarvisSession = { id: randomUUID(), storeId, plan, active: true, paused: false, startedAt: now, lastActivityAt: now, lastPage: page, memoryExpiresAt: now + memoryDays * 86_400_000, undoWindowSeconds, nonsenseCount: 0, pendingAction: null, endedAt: null }
+      this.ephemeral.set(`${storeId}:${session.id}`, session)
+      return session
+    }
   }
 
   public async getSession(storeId: StoreId, sessionId: string): Promise<JarvisSession> {
-    const session = await this.repository.getSession(storeId, sessionId)
-    if (!session) throw new AppError('NOT_FOUND', 'Jarvis session not found', 404)
-    return session
+    const ephemeral = this.ephemeral.get(`${storeId}:${sessionId}`)
+    if (ephemeral) return ephemeral
+    try {
+      const session = await this.repository.getSession(storeId, sessionId)
+      if (session) return session
+    } catch { /* fall through to not-found if storage is down and no ephemeral session exists */ }
+    throw new AppError('NOT_FOUND', 'Jarvis session not found', 404)
   }
 
   public async messages(storeId: StoreId, sessionId: string): Promise<readonly JarvisMessage[]> {
@@ -175,15 +189,15 @@ export class JarvisService {
     const available = evidence.facts.filter((fact) => fact.value !== null).slice(0, 4)
     const detail = available.length > 0 ? available.map((fact) => `${fact.label}: ${String(fact.value)}`).join(' · ') : 'No closed store evidence is available yet.'
     const response: JarvisResponse = { session, status: 'ANSWER', text: `${greeting(new Date(this.now()), preferences.addressing)} Quick briefing: ${detail}`, addressing: preferences.addressing, language: preferences.language === 'hi' ? 'hi' : 'en', mode: 'TELL', evidence, action: evidence.suggestedAction, showEvidence: Boolean(evidence.suggestedAction), requiresConfirmation: false }
-    await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence, createdAt: this.now() })
+    try { await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence, createdAt: this.now() }) } catch { /* briefing still returns */ }
     return response
   }
 
   public async setSessionState(storeId: StoreId, sessionId: string, state: 'pause' | 'resume' | 'end'): Promise<JarvisSession> {
     const session = await this.getSession(storeId, sessionId)
     const now = this.now()
-    if (state === 'end') return this.repository.saveSession({ ...session, active: false, paused: false, endedAt: now, lastActivityAt: now })
-    return this.repository.saveSession({ ...session, active: true, paused: state === 'pause', lastActivityAt: now })
+    if (state === 'end') return this.persistSession({ ...session, active: false, paused: false, endedAt: now, lastActivityAt: now })
+    return this.persistSession({ ...session, active: true, paused: state === 'pause', lastActivityAt: now })
   }
 
   public async message(storeId: StoreId, sessionId: string, input: Readonly<{ text: string; page: JarvisPage; voice?: boolean }>): Promise<JarvisResponse> {
@@ -200,19 +214,19 @@ export class JarvisService {
     const control = controlCommand(query, now)
     if (control) {
       const savedPreferences = await this.updatePreferences(storeId, control.patch)
-      const savedSession = await this.repository.saveSession(nextBase)
+      const savedSession = await this.persistSession(nextBase)
       const response = this.controlResponse(savedSession, savedPreferences, language)
       await this.persistExchange(nextBase, query, response, now)
       return response
     }
     if (session.paused || (preferences.silenceUntil !== null && preferences.silenceUntil > now && !isDirectQuestion(query))) {
-      const saved = await this.repository.saveSession(nextBase)
+      const saved = await this.persistSession(nextBase)
       const response: JarvisResponse = { session: saved, status: 'SUPPRESSED', text: `${addressing}, I\'m staying quiet for now. Say “resume” or ask me directly when you need me.`, addressing, language, mode: 'TELL', evidence: null, action: null, showEvidence: false, requiresConfirmation: false }
       await this.persistExchange(saved, query, response, now)
       return response
     }
     if (isUnsafeOrOffTopic(query)) {
-      const saved = await this.repository.saveSession({ ...nextBase, nonsenseCount: Math.min(10, session.nonsenseCount + 1) })
+      const saved = await this.persistSession({ ...nextBase, nonsenseCount: Math.min(10, session.nonsenseCount + 1) })
       const text = saved.nonsenseCount >= 5 ? `${addressing}, I can help with your Shopify store, revenue, inventory, customers, orders, campaigns, or reports. Let\'s keep this business-focused.` : `${addressing}, I\'m here for your Shopify business. I can help with store performance, inventory, customers, orders, campaigns, or safe approved actions.`
       const response: JarvisResponse = { session: saved, status: 'DEFLECTION', text, addressing, language, mode: 'ASK', evidence: null, action: null, showEvidence: false, requiresConfirmation: false }
       await this.persistExchange(saved, query, response, now)
@@ -220,14 +234,14 @@ export class JarvisService {
     }
     const evidence = await this.evidenceProvider.get(storeId, input.page)
     if (isShowEvidence(query) && session.pendingAction) {
-      const saved = await this.repository.saveSession({ ...nextBase, nonsenseCount: 0 })
+      const saved = await this.persistSession({ ...nextBase, nonsenseCount: 0 })
       const response: JarvisResponse = { session: saved, status: 'ACTION_PENDING', text: `${addressing}, I\'ve opened the evidence. Review the facts, draft, and confidence before you tell me to send it.`, addressing, language, mode: 'SUGGEST', evidence, action: session.pendingAction, showEvidence: true, requiresConfirmation: false }
       await this.persistExchange(saved, query, response, now)
       return response
     }
     if ((isSendCommand(query) || isConfirmCommand(query)) && session.pendingAction) {
       if (input.voice && session.pendingAction.requiresVoiceConfirmation && !isConfirmCommand(query)) {
-        const saved = await this.repository.saveSession(nextBase)
+        const saved = await this.persistSession(nextBase)
         const response: JarvisResponse = { session: saved, status: 'ACTION_PENDING', text: `${addressing}, I heard “${session.pendingAction.label}”. Please say or type “confirm” once more to execute it.`, addressing, language, mode: 'ACTION', evidence, action: session.pendingAction, showEvidence: true, requiresConfirmation: true }
         await this.persistExchange(saved, query, response, now)
         return response
@@ -247,11 +261,11 @@ export class JarvisService {
     const language = preferences.language === 'hi' ? 'hi' : 'en'
     if (!action || action.id !== actionId) throw new AppError('CONFLICT', 'No matching Jarvis action is waiting for confirmation', 409)
     if (!this.executeAction) {
-      const saved = await this.repository.saveSession({ ...session, lastActivityAt: this.now() })
+      const saved = await this.persistSession({ ...session, lastActivityAt: this.now() })
       return { session: saved, status: 'ACTION_UNAVAILABLE', text: `${preferences.addressing}, the action adapter is not connected. I will not pretend it was sent.`, addressing: preferences.addressing, language, mode: 'ACTION', evidence: null, action, showEvidence: true, requiresConfirmation: false }
     }
     const outcome = await this.executeAction(action, session)
-    const saved = await this.repository.saveSession({ ...session, pendingAction: outcome.executed ? null : action, lastActivityAt: this.now() })
+    const saved = await this.persistSession({ ...session, pendingAction: outcome.executed ? null : action, lastActivityAt: this.now() })
     return { session: saved, status: outcome.executed ? 'ACTION_EXECUTED' : 'ACTION_UNAVAILABLE', text: `${preferences.addressing}, ${outcome.message}`, addressing: preferences.addressing, language, mode: 'ACTION', evidence: null, action: outcome.executed ? null : action, showEvidence: false, requiresConfirmation: false }
   }
 
@@ -262,10 +276,10 @@ export class JarvisService {
       validateJarvisNumbers(generated.text, evidence.facts)
       this.recordCost?.(session.storeId, generated)
       const pendingSession = action ? { ...session, pendingAction: action, nonsenseCount: 0 } : { ...session, nonsenseCount: 0 }
-      const saved = await this.repository.saveSession(pendingSession)
+      const saved = await this.persistSession(pendingSession)
       return { session: saved, status: action && isSendCommand(query) ? 'ACTION_PENDING' : 'ANSWER', text: generated.text.trim(), addressing, language, mode: responseMode(query, action), evidence, action, showEvidence: isShowEvidence(query), requiresConfirmation: Boolean(action?.requiresVoiceConfirmation && isSendCommand(query)) }
     } catch (error: unknown) {
-      const saved = await this.repository.saveSession({ ...session, pendingAction: action, nonsenseCount: 0 })
+      const saved = await this.persistSession({ ...session, pendingAction: action, nonsenseCount: 0 })
       if (error instanceof AppError && error.code === 'VALIDATION_ERROR') return { session: saved, status: 'ANSWER', text: `${addressing}, I can show the grounded evidence, but I won\'t repeat an unsupported number.`, addressing, language, mode: 'ASK', evidence, action, showEvidence: true, requiresConfirmation: false }
       if (!(error instanceof AiUnavailableError) && !(error instanceof AppError)) throw error
       return { session: saved, status: 'ANSWER', text: `${addressing}, the language service is temporarily unavailable. I can still show the deterministic evidence and safe next steps.`, addressing, language, mode: responseMode(query, action), evidence, action, showEvidence: Boolean(action), requiresConfirmation: false }
@@ -273,10 +287,10 @@ export class JarvisService {
   }
 
   private async confirmPendingAction(session: JarvisSession, query: string, language: JarvisLanguage, addressing: JarvisAddressing, action: JarvisActionPlan): Promise<JarvisResponse> {
-    const saved = await this.repository.saveSession({ ...session, lastActivityAt: this.now() })
+    const saved = await this.persistSession({ ...session, lastActivityAt: this.now() })
     if (!this.executeAction) return { session: saved, status: 'ACTION_UNAVAILABLE', text: `${addressing}, I won\'t claim it was sent because the action adapter is unavailable.`, addressing, language, mode: 'ACTION', evidence: null, action, showEvidence: true, requiresConfirmation: false }
     const outcome = await this.executeAction(action, saved)
-    const finalSession = await this.repository.saveSession({ ...saved, pendingAction: outcome.executed ? null : action })
+    const finalSession = await this.persistSession({ ...saved, pendingAction: outcome.executed ? null : action })
     return { session: finalSession, status: outcome.executed ? 'ACTION_EXECUTED' : 'ACTION_UNAVAILABLE', text: `${addressing}, ${outcome.message}`, addressing, language, mode: 'ACTION', evidence: null, action: outcome.executed ? null : action, showEvidence: false, requiresConfirmation: false }
   }
 
@@ -285,9 +299,22 @@ export class JarvisService {
     return { session, status: 'SUPPRESSED', text, addressing: preferences.addressing, language, mode: 'TELL', evidence: null, action: null, showEvidence: false, requiresConfirmation: false }
   }
 
+  private async persistSession(session: JarvisSession): Promise<JarvisSession> {
+    try {
+      const saved = await this.repository.saveSession(session)
+      this.ephemeral.set(`${saved.storeId}:${saved.id}`, saved)
+      return saved
+    } catch {
+      this.ephemeral.set(`${session.storeId}:${session.id}`, session)
+      return session
+    }
+  }
+
   private async persistExchange(session: JarvisSession, query: string, response: JarvisResponse, now: number): Promise<void> {
-    await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'merchant', text: query, language: response.language, mode: response.mode, evidence: null, createdAt: now })
-    await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence: response.evidence, createdAt: now })
+    try {
+      await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'merchant', text: query, language: response.language, mode: response.mode, evidence: null, createdAt: now })
+      await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence: response.evidence, createdAt: now })
+    } catch { /* Chat still returns even if the message ledger is temporarily unavailable. */ }
   }
 }
 

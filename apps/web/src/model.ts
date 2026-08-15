@@ -27,8 +27,11 @@ export type CustomerCohortMetric = Readonly<{ storeId: string; cohortDay: string
 export type AnalyticsSnapshot = Readonly<{ revenue: readonly RevenueMetric[]; orders: readonly OrdersMetric[]; productSales: readonly ProductSalesMetric[]; customerCohorts: readonly CustomerCohortMetric[] }>
 export type CatalogProduct = Readonly<{ storeId: string; productId: string; payload: JsonObject; syncedAt: number }>
 export type AgentStatus = Readonly<{ id: string; label: string; promptVersion: string; enabled: boolean; execution: 'READY' | 'UNCONFIGURED' | 'RUNNING' | 'PAUSED'; languageOnly: true }>
-export type BillingPlan = Readonly<{ code: 'START' | 'GROWTH' | 'COMMANDER'; tier: 'start' | 'growth' | 'commander'; monthlyPrice: number; annualPrice: number; annualMonthsFree: number; limits: Readonly<Record<string, number | null>> }>
-export type BillingAccount = Readonly<{ subscription: Readonly<{ storeId?: string; plan: string; state: string; currentPeriodEnd: number | null; version: number }> | null; trial: Readonly<{ expiresAt: number; state: string }> | null; gift: Readonly<{ code: string; expiresAt: number }> | null }>
+export type BillingPlan = Readonly<{ code: 'START' | 'GROWTH' | 'COMMANDER'; tier: 'start' | 'growth' | 'commander'; monthlyPrice: number; annualPrice: number; annualMonthsFree: number; recommended?: boolean; headline?: string; storeLimit?: number | null; features?: readonly string[]; limits: Readonly<Record<string, number | null>> }>
+export type BillingAccount = Readonly<{ subscription: Readonly<{ storeId?: string; plan: string; state: string; currentPeriodEnd: number | null; version: number }> | null; trial: Readonly<{ expiresAt: number; state: string; startedAt?: number }> | null; gift: Readonly<{ code: string; expiresAt: number }> | null; trialDays?: number }>
+export type RevenuePoint = Readonly<{ day: string; value: number }>
+export type StoreHealthView = Readonly<{ score: number | null; grade: string; label: string; tone: 'healthy' | 'warning' | 'critical' | 'muted' }>
+export type ChartPeriod = '7d' | '30d' | '90d' | 'all'
 export type UsageMeter = Readonly<{ feature: string; used: number; limit: number | null }>
 export type RoiMetrics = Readonly<{ attributedRevenue: number; aiCostDollars: number; netReturn: number; multiple: number | null }>
 export type Recommendation = Readonly<{ id: string; storeId: string; agent: string; ruleId: string; title: string; reason: string; impactValue: number; impactLabel: string; currency: string; confidence: number; confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW'; actionType: string; actionRisk: 'SAFE' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY'; status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED'; evidencePack: JsonObject; explanation: string | null; explanationStatus: 'AI_GENERATED' | 'AI_UNAVAILABLE' | 'AI_REJECTED'; model: string | null; version: number; createdAt: string }>
@@ -79,7 +82,39 @@ export function averageOrderValue(snapshot: AnalyticsSnapshot | null): number | 
 }
 
 export function revenueSeries(snapshot: AnalyticsSnapshot | null): readonly number[] {
-  return snapshot ? [...snapshot.revenue].sort((left, right) => left.day.localeCompare(right.day)).map((row) => row.grossRevenue) : []
+  return revenuePoints(snapshot, 'all').map((point) => point.value)
+}
+
+export function revenuePoints(snapshot: AnalyticsSnapshot | null, period: ChartPeriod = 'all'): readonly RevenuePoint[] {
+  if (!snapshot) return []
+  const cutoff = periodCutoff(period)
+  return [...snapshot.revenue]
+    .filter((row) => !cutoff || row.day >= cutoff)
+    .sort((left, right) => left.day.localeCompare(right.day))
+    .map((row) => ({ day: row.day, value: row.grossRevenue }))
+}
+
+export function storeHealthView(snapshot: AnalyticsSnapshot | null, catalogCount = 0): StoreHealthView {
+  if (!snapshot || (snapshot.revenue.length === 0 && snapshot.orders.length === 0)) {
+    return { score: null, grade: '—', label: 'No data', tone: 'muted' }
+  }
+  const revenue = sumRevenue(snapshot) ?? 0
+  const orders = sumOrders(snapshot) ?? 0
+  let score = 35
+  if (revenue > 0) score += 25
+  if (orders > 0) score += 20
+  if (snapshot.productSales.length > 0 || catalogCount > 0) score += 10
+  if (snapshot.customerCohorts.length > 0) score += 10
+  score = Math.min(100, score)
+  const tone = score >= 75 ? 'healthy' : score >= 50 ? 'warning' : 'critical'
+  const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D'
+  return { score, grade, label: tone === 'healthy' ? 'Healthy' : tone === 'warning' ? 'Needs attention' : 'Critical', tone }
+}
+
+function periodCutoff(period: ChartPeriod): string | null {
+  if (period === 'all') return null
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
 }
 
 export function latestSyncLabel(snapshot: AnalyticsSnapshot | null): string {
