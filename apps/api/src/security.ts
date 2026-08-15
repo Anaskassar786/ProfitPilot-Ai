@@ -172,7 +172,7 @@ export function corsMiddleware(allowedOrigins: readonly string[]): RequestHandle
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Access-Control-Allow-Credentials', 'true')
     response.setHeader('Vary', 'Origin')
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Request-Id, X-Admin-Step-Up')
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Request-Id, X-Admin-Step-Up, X-Shopify-Session-Token')
     response.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS')
     if (request.method === 'OPTIONS') {
       response.status(204).end()

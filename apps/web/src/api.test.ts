@@ -28,6 +28,15 @@ describe('F3 relative API client', () => {
     await requestSync('store-1', 'products', fetcher({ ok: true, data: { records: 2 } }, 202, calls))
     expect(calls[0]).toBe('POST /sync')
   })
+  it('sends the embedded id_token only in the sync retry header', async () => {
+    let captured: Headers | undefined
+    const capturing: Fetcher = async (_input, init) => {
+      captured = new Headers(init?.headers)
+      return new Response(JSON.stringify({ ok: true, data: { records: 1 } }), { status: 202 })
+    }
+    await requestSync('store-1', 'products', capturing, 'signed-shopify-id-token')
+    expect(captured?.get('x-shopify-session-token')).toBe('signed-shopify-id-token')
+  })
   it('echoes the CSRF token on unsafe requests after it is fetched', async () => {
     let captured: Headers | undefined
     const capturing: Fetcher = async (input: string, init?: RequestInit) => {

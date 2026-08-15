@@ -1,11 +1,18 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from '@profitpilot/db'
 import type { StoreDirectory } from '@profitpilot/db'
-import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallService, TokenVault } from '@profitpilot/shopify'
+import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 
-export type F1Bootstrap = Readonly<{ shopify: ShopifyRouteDependencies; database: PostgresDatabase; storeDirectory: StoreDirectory; sessionToken: Readonly<{ apiKey: string; apiSecret: string }> }>
+export type F1Bootstrap = Readonly<{
+  shopify: ShopifyRouteDependencies
+  database: PostgresDatabase
+  storeDirectory: StoreDirectory
+  sessionToken: Readonly<{ apiKey: string; apiSecret: string }>
+  tokenVault: TokenVault
+  tokenExchange: ShopifyTokenExchangeService
+}>
 
 const REQUIRED_KEYS = ['DATABASE_URL', 'ENCRYPTION_KEY', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'SHOPIFY_REDIRECT_URI'] as const
 
@@ -25,12 +32,13 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // any replica topology, and can be consumed exactly once (replay-safe).
   // The store directory is what registers the tenant (stores row) during OAuth
   // and resolves shop <-> storeId for the session context endpoint.
-  const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
-  const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, requiredEnv(env, 'SHOPIFY_API_KEY'), requiredEnv(env, 'SHOPIFY_API_SECRET'))
-  // Same credentials the OAuth flow uses. The embedded-entry middleware needs
-  // them to verify Shopify's `id_token` session token and callback HMAC.
   const sessionToken = { apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET') }
-  return { database, shopify: { installer, exchange }, storeDirectory, sessionToken }
+  const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
+  const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, sessionToken.apiKey, sessionToken.apiSecret)
+  // Managed installation uses the same credentials to validate the id_token,
+  // exchange it for a non-expiring offline token, and persist via this vault.
+  const tokenExchange = new ShopifyTokenExchangeService(sessionToken, vault)
+  return { database, shopify: { installer, exchange }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {
