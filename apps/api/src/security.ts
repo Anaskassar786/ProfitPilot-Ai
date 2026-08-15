@@ -255,7 +255,7 @@ export function createSecurityRouter(dependencies: SecurityRouteDependencies): R
   const router = Router()
   router.get('/security/csrf', (request, response) => {
     const token = createCsrfToken(dependencies.csrfSecret)
-    setCsrfCookie(response, token, dependencies.environment)
+    setCsrfCookie(response, token)
     response.status(200).json(success({ csrfToken: token }, requestId(request.header('x-request-id') || randomUUID())))
   })
   return router

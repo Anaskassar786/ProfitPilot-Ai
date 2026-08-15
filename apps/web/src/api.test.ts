@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ApiClientError, fetchAnalytics, fetchCatalog, requestJson, requestSync } from './api.js'
+import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, requestJson, requestSync } from './api.js'
+import type { Fetcher } from './api.js'
 
 type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>
 
@@ -26,6 +27,17 @@ describe('F3 relative API client', () => {
     const calls: string[] = []
     await requestSync('store-1', 'products', fetcher({ ok: true, data: { records: 2 } }, 202, calls))
     expect(calls[0]).toBe('POST /sync')
+  })
+  it('echoes the CSRF token on unsafe requests after it is fetched', async () => {
+    let captured: Headers | undefined
+    const capturing: Fetcher = async (input: string, init?: RequestInit) => {
+      captured = new Headers(init?.headers)
+      if (input === '/security/csrf') return new Response(JSON.stringify({ ok: true, data: { csrfToken: 'tok-123' } }), { status: 200 })
+      return new Response(JSON.stringify({ ok: true, data: { records: 1 } }), { status: 202 })
+    }
+    await fetchCsrfToken(capturing)
+    await requestSync('store-1', 'products', capturing)
+    expect(captured?.get('x-csrf-token')).toBe('tok-123')
   })
   it('surfaces structured API failures', async () => {
     await expect(requestJson('/analytics', {}, fetcher({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'storeId required' } }, 400))).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
