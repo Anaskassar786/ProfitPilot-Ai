@@ -53,7 +53,7 @@ export type OpenRouterConfig = Readonly<{
   onFailure?: (failure: ProviderFailureTelemetry) => void
 }>
 
-export type AiRequestContext = Readonly<{ requestId?: string }>
+export type AiRequestContext = Readonly<{ requestId?: string; maxTokens?: number }>
 type ChatMessage = Readonly<{ role: 'system' | 'user'; content: string }>
 type ResolvedOpenRouterConfig = Readonly<{
   keys: readonly string[]
@@ -106,12 +106,50 @@ export class OpenRouterClient {
       for (let keyIndex = 0; keyIndex < this.config.keys.length; keyIndex += 1) {
         const key = this.config.keys[(keyIndex + modelIndex) % this.config.keys.length]
         if (!key) continue
-        const result = await this.tryCandidate(model, key, (keyIndex + modelIndex) % this.config.keys.length, system, user, attempts, requestId)
+        const result = await this.tryCandidate(model, key, (keyIndex + modelIndex) % this.config.keys.length, system, user, attempts, requestId, context)
         attempts = result.attempts
         if (result.generation) return result.generation
         lastError = result.error
       }
     }
+    throw new AiUnavailableError(lastError?.message ?? 'AI temporarily unavailable')
+  }
+
+  /**
+   * Streams a completion token-by-token. `onDelta` receives the FULL
+   * accumulated text on every chunk (not just the new piece), so callers can
+   * render it directly and mid-stream retries never duplicate text.
+   * Falls back to a single non-streamed call (emitted once through onDelta)
+   * when the upstream cannot stream, so callers always get an answer.
+   */
+  public async generateStream(system: string, user: string, context: AiRequestContext = {}, onDelta?: (fullText: string) => void): Promise<AiGeneration> {
+    if (!this.configured) throw new AiUnavailableError()
+    const requestId = context.requestId?.trim() || randomUUID()
+    let attempts = 0
+    let lastError: OpenRouterError | null = null
+    for (let modelIndex = 0; modelIndex < this.config.models.length; modelIndex += 1) {
+      const model = this.config.models[modelIndex]
+      if (!model) continue
+      for (let keyIndex = 0; keyIndex < this.config.keys.length; keyIndex += 1) {
+        const key = this.config.keys[(keyIndex + modelIndex) % this.config.keys.length]
+        if (!key) continue
+        const startedAt = Date.now()
+        attempts += 1
+        try {
+          const result = await this.requestStream(model, key, system, user, context, onDelta)
+          return { ...result, model, keyIndex, attempts }
+        } catch (error: unknown) {
+          const providerError = error instanceof OpenRouterError ? error : new OpenRouterError('network', 'OpenRouter network error', null, true)
+          this.config.onFailure({ model, statusCode: providerError.status, failureKind: providerError.kind, attemptNumber: attempts, durationMs: Math.max(0, Date.now() - startedAt), requestId })
+          lastError = providerError
+        }
+      }
+    }
+    try {
+      const fallback = await this.generate(system, user, context)
+      onDelta?.(fallback.text)
+      return fallback
+    } catch { /* fall through to the unavailable error */ }
     throw new AiUnavailableError(lastError?.message ?? 'AI temporarily unavailable')
   }
 
@@ -149,7 +187,7 @@ export class OpenRouterClient {
     }))
   }
 
-  private async tryCandidate(model: string, key: string, keyIndex: number, system: string, user: string, attemptsBefore: number, requestId: string): Promise<Readonly<{ generation: AiGeneration | null; error: OpenRouterError; attempts: number }>> {
+  private async tryCandidate(model: string, key: string, keyIndex: number, system: string, user: string, attemptsBefore: number, requestId: string, context: AiRequestContext): Promise<Readonly<{ generation: AiGeneration | null; error: OpenRouterError; attempts: number }>> {
     const retryLimit = this.config.maxRetries
     let attempts = attemptsBefore
     let lastFailure: OpenRouterError | null = null
@@ -157,7 +195,7 @@ export class OpenRouterClient {
       attempts += 1
       const startedAt = Date.now()
       try {
-        const response = await this.request(model, key, system, user)
+        const response = await this.request(model, key, system, user, context)
         return { generation: { ...response, model, keyIndex, attempts }, error: new OpenRouterError('bad_response', 'unused'), attempts }
       } catch (error: unknown) {
         const providerError = error instanceof OpenRouterError ? error : new OpenRouterError('network', 'OpenRouter network error', null, true)
@@ -172,11 +210,72 @@ export class OpenRouterClient {
     return { generation: null, error: lastFailure ?? new OpenRouterError('network', 'OpenRouter network error', null, true), attempts }
   }
 
-  private async request(model: string, key: string, system: string, user: string): Promise<Readonly<{ text: string; usage: AiUsage }>> {
+  private async requestStream(model: string, key: string, system: string, user: string, context: AiRequestContext, onDelta?: (fullText: string) => void): Promise<Readonly<{ text: string; usage: AiUsage }>> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs)
     try {
-      const response = await this.config.fetcher('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: controller.signal, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', 'http-referer': 'https://profitpilot.app', 'x-title': 'ProfitPilot' }, body: JSON.stringify({ model, temperature: this.config.temperature, max_tokens: this.config.maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] satisfies readonly ChatMessage[] }) })
+      const response = await this.config.fetcher('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: controller.signal, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', 'http-referer': 'https://profitpilot.app', 'x-title': 'ProfitPilot' }, body: JSON.stringify({ model, temperature: this.config.temperature, max_tokens: context.maxTokens ?? this.config.maxTokens, stream: true, stream_options: { include_usage: true }, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] satisfies readonly ChatMessage[] }) })
+      if (response.status === 429) throw new OpenRouterError('rate_limit', 'OpenRouter rate limit', response.status)
+      if (response.status >= 500) throw new OpenRouterError('server', `OpenRouter server error ${response.status}`, response.status)
+      if (!response.ok) throw new OpenRouterError('bad_response', `OpenRouter rejected the request with ${response.status}`, response.status)
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('text/event-stream') || !response.body) {
+        // Upstream answered without streaming: consume it as a plain completion.
+        const payload: unknown = await response.json()
+        const parsed = parseResponse(payload)
+        onDelta?.(parsed.text)
+        return parsed
+      }
+      return await this.consumeStream(response.body, onDelta)
+    } catch (error: unknown) {
+      if (error instanceof OpenRouterError) throw error
+      if (error instanceof Error && error.name === 'AbortError') throw new OpenRouterError('timeout', 'OpenRouter request timed out', null)
+      throw new OpenRouterError('network', error instanceof Error ? error.message : 'OpenRouter network error', null, true)
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  private async consumeStream(body: ReadableStream<Uint8Array>, onDelta?: (fullText: string) => void): Promise<Readonly<{ text: string; usage: AiUsage }>> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let full = ''
+    let usage: AiUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    for (;;) {
+      const step = await reader.read()
+      if (step.done) break
+      buffer += decoder.decode(step.value, { stream: true })
+      let boundary: number
+      while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        for (const line of frame.split('\n')) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') return { text: full, usage }
+          try {
+            const payload: unknown = JSON.parse(data)
+            const choice = isRecord(payload) && Array.isArray(payload.choices) ? payload.choices[0] : null
+            if (isRecord(choice) && isRecord(choice.delta)) {
+              const delta = typeof choice.delta.content === 'string' ? choice.delta.content : ''
+              if (delta) { full += delta; onDelta?.(full) }
+            }
+            const usagePayload = isRecord(payload) ? payload.usage : null
+            if (isRecord(usagePayload)) usage = usageFromPayload(usagePayload)
+          } catch { /* tolerate keep-alive or malformed frames */ }
+        }
+      }
+    }
+    if (!full.trim()) throw new OpenRouterError('bad_response', 'OpenRouter stream ended without content', null, true)
+    return { text: full, usage }
+  }
+
+  private async request(model: string, key: string, system: string, user: string, context: AiRequestContext = {}): Promise<Readonly<{ text: string; usage: AiUsage }>> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs)
+    try {
+      const response = await this.config.fetcher('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: controller.signal, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', 'http-referer': 'https://profitpilot.app', 'x-title': 'ProfitPilot' }, body: JSON.stringify({ model, temperature: this.config.temperature, max_tokens: context.maxTokens ?? this.config.maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] satisfies readonly ChatMessage[] }) })
       if (response.status === 429) throw new OpenRouterError('rate_limit', 'OpenRouter rate limit', response.status)
       if (response.status >= 500) throw new OpenRouterError('server', `OpenRouter server error ${response.status}`, response.status)
       if (!response.ok) throw new OpenRouterError('bad_response', `OpenRouter rejected the request with ${response.status}`, response.status)
@@ -196,11 +295,13 @@ function parseResponse(payload: unknown): Readonly<{ text: string; usage: AiUsag
   if (!isRecord(payload) || !Array.isArray(payload.choices)) throw new OpenRouterError('bad_response', 'OpenRouter response has no choices', null, true)
   const first = payload.choices[0]
   if (!isRecord(first) || !isRecord(first.message) || typeof first.message.content !== 'string' || first.message.content.trim().length === 0) throw new OpenRouterError('bad_response', 'OpenRouter response has no text content', null, true)
-  const usage = isRecord(payload.usage) ? payload.usage : {}
+  return { text: first.message.content, usage: usageFromPayload(isRecord(payload.usage) ? payload.usage : {}) }
+}
+function usageFromPayload(usage: Record<string, unknown>): AiUsage {
   const promptTokens = numberValue(usage.prompt_tokens)
   const completionTokens = numberValue(usage.completion_tokens)
   const totalTokens = numberValue(usage.total_tokens) || promptTokens + completionTokens
-  return { text: first.message.content, usage: { promptTokens, completionTokens, totalTokens } }
+  return { promptTokens, completionTokens, totalTokens }
 }
 
 function defaultFailureLogger(failure: ProviderFailureTelemetry): void {

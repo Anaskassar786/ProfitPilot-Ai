@@ -38,6 +38,8 @@ A `503 DEPENDENCY_ERROR` from `/sync` carries `details.reason`:
 
 Jarvis responses contain mode, language, evidence, confidence, and action-confirmation state. Risky voice actions require a repeat confirmation.
 
+`POST /jarvis/sessions/:id/message` accepts `{ storeId, text, page, voice?, stream? }`. With `"stream": true` (and `Accept: text/event-stream`) the endpoint streams the answer: `event: text` frames carry the full accumulated answer text, then a final `event: done` frame carries the validated response object. A missing `stream` flag returns the plain JSON envelope.
+
 ## Copilot and forecasting
 
 - `GET /copilot/threads?storeId=`
