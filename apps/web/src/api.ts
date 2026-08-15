@@ -178,6 +178,42 @@ export function fetchJarvisBriefing(storeId: string, page: string, plan: JarvisS
 export function fetchJarvisSession(storeId: string, sessionId: string, fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>(`/jarvis/sessions/${encodeURIComponent(sessionId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function fetchJarvisMessages(storeId: string, sessionId: string, fetcher: Fetcher = fetch): Promise<readonly JarvisMessage[]> { return requestJson<readonly JarvisMessage[]>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/messages?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function sendJarvisMessage(storeId: string, sessionId: string, text: string, page: string, voice = false, fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, text, page, voice }) }, fetcher) }
+
+/**
+ * Streams a Jarvis answer over server-sent events. `onDelta` receives the
+ * FULL accumulated answer text on every chunk, so the caller can render it
+ * directly. Resolves with the final validated response once the stream
+ * completes. Throws when the stream cannot be established or breaks — the
+ * caller should then fall back to sendJarvisMessage.
+ */
+export async function streamJarvisMessage(storeId: string, sessionId: string, text: string, page: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<JarvisResponse> {
+  const response = await fetcher(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId, text, page, stream: true }) })
+  if (!response.ok || !response.body) throw new ApiClientError('Jarvis streaming unavailable', response.status)
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const step = await reader.read()
+    if (step.done) break
+    buffer += decoder.decode(step.value, { stream: true })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      for (const line of frame.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        let payload: unknown = null
+        try { payload = JSON.parse(line.slice(6)) } catch { continue }
+        if (!isRecord(payload)) continue
+        if (typeof payload.text === 'string') onDelta(payload.text)
+        if (isRecord(payload.response)) return payload.response as unknown as JarvisResponse
+        if (isRecord(payload.error)) throw new ApiClientError(typeof payload.error.message === 'string' ? payload.error.message : 'Jarvis stream failed', response.status)
+      }
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+  throw new ApiClientError('Jarvis stream ended without a response', response.status)
+}
 export function confirmJarvisAction(storeId: string, sessionId: string, actionId: string, fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, actionId }) }, fetcher) }
 export function setJarvisState(storeId: string, sessionId: string, state: 'pause' | 'resume' | 'end', fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/${state}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher) }
 

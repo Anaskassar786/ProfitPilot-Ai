@@ -24,6 +24,26 @@ describe('F8 real data context adapter', () => {
     expect(billing.facts).toContainEqual(expect.objectContaining({ key: 'usage_ai' }))
   })
 
+  it('enriches Jarvis evidence with currency, AOV, health, and recent days', async () => {
+    const context = provider()
+    const evidence = await context.get('store-1' as never, 'dashboard')
+    expect(evidence.currency).toBe('USD')
+    const byKey = new Map(evidence.facts.map((fact) => [fact.key, fact]))
+    // 14 closed revenue days of 10..23 sum to 231, with 4 orders -> AOV 57.75.
+    expect(byKey.get('revenue_total')?.value).toBe(231)
+    expect(byKey.get('revenue_display')?.value).toBe('$231')
+    expect(byKey.get('orders_total')?.value).toBe(4)
+    expect(byKey.get('aov')?.value).toBe(57.75)
+    expect(byKey.get('aov_display')?.value).toBe('$58')
+    expect(byKey.get('catalog_count')?.value).toBe(1)
+    // Mirrors the dashboard health formula: 35 + 25 (revenue) + 20 (orders) + 10 (catalog).
+    expect(byKey.get('health_score')?.value).toBe(90)
+    expect(byKey.get('health_label')?.value).toBe('A+ · Healthy')
+    expect(byKey.get('pending_recommendations')?.value).toBe(1)
+    expect(String(byKey.get('recent_revenue_days')?.value)).toContain('05-14: $23')
+    expect(String(byKey.get('top_recommendation')?.value)).toContain('Win back')
+  })
+
   it('serves Copilot intent evidence and forecast calculations from catalog/analytics', async () => {
     const context = provider()
     const evidence = await context.factsForIntent('store-1' as never, 'TOP_PRODUCTS', 'products')

@@ -32,6 +32,21 @@ describe('F8 Postgres repositories', () => {
     expect(queries.every((query) => !query.includes('store-1'))).toBe(true)
   })
 
+  it('casts nullable epoch parameters so Postgres can infer their types', async () => {
+    // Regression: `CASE WHEN $5 IS NULL THEN NULL ELSE to_timestamp($5 / 1000.0) END`
+    // leaves $5 without an inferable type and Postgres rejects the query with
+    // "could not determine data type of parameter $5". The same pattern hit
+    // jarvis_sessions.ended_at ($13).
+    const { executor, queries } = makeExecutor()
+    const repository = new PostgresJarvisRepository(executor)
+    await repository.savePreferences({ storeId: 'store-1' as never, addressing: 'Sir', language: 'auto', engagementMode: 'balanced', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: 200 })
+    await repository.saveSession({ id: 'session-1', storeId: 'store-1' as never, plan: 'trial', active: true, paused: false, startedAt: 100, lastActivityAt: 100, lastPage: 'dashboard', memoryExpiresAt: 1000, undoWindowSeconds: 60, nonsenseCount: 0, pendingAction: null, endedAt: null })
+    const preferenceSql = queries.find((query) => query.includes('INSERT INTO jarvis_preferences')) ?? ''
+    const sessionSql = queries.find((query) => query.includes('INSERT INTO jarvis_sessions')) ?? ''
+    expect(preferenceSql).toContain('CASE WHEN $5::bigint IS NULL THEN NULL ELSE to_timestamp($5::bigint / 1000.0) END')
+    expect(sessionSql).toContain('CASE WHEN $13::bigint IS NULL THEN NULL ELSE to_timestamp($13::bigint / 1000.0) END')
+  })
+
   it('maps Copilot threads, answers, and report schedules/runs', async () => {
     const { executor } = makeExecutor()
     const copilot = new PostgresCopilotRepository(executor)

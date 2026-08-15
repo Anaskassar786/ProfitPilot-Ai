@@ -8,7 +8,7 @@ import { OpenRouterClient } from './provider.js'
 
 const facts = [{ key: 'revenue', label: 'Revenue', value: 189, source: 'analytics_revenue_daily' }, { key: 'orders', label: 'Orders', value: 4, source: 'analytics_orders_daily' }] as const
 const action = { id: 'action-1', recommendationId: 'r1', actionType: 'SEND_EMAIL', label: 'Send win-back email', risk: 'APPROVAL_REQUIRED' as const, undoWindowSeconds: 120, requiresVoiceConfirmation: true }
-const jarvisEvidence: JarvisEvidenceProvider = { async get() { return { page: 'dashboard', generatedAt: new Date(1_000).toISOString(), facts, confidence: .92, confidenceLevel: 'HIGH', suggestedAction: action } } }
+const jarvisEvidence: JarvisEvidenceProvider = { async get() { return { page: 'dashboard', generatedAt: new Date(1_000).toISOString(), currency: 'USD', facts, confidence: .92, confidenceLevel: 'HIGH', suggestedAction: action } } }
 const copilotEvidence: CopilotEvidenceProvider = { async get(_store, intent, page) { return { intent, page, facts, generatedAt: new Date(1_000).toISOString(), confidence: .92, confidenceLevel: 'HIGH' } } }
 function provider(text = 'The grounded evidence is available.'): OpenRouterClient { return new OpenRouterClient({ keys: ['key'], models: ['jarvis-model'], fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: text } }], usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 } }), { status: 200 }), sleep: async () => undefined }) }
 
@@ -164,5 +164,104 @@ describe('F8 closed Copilot grammar', () => {
     expect(answer.intent).toBeNull()
     expect(answer.clarification).toContain('supported')
     await expect(service.query({ storeId: 'store-1' as never, query: 'revenue', page: 'dashboard', threadId: 'missing' })).rejects.toThrow('not found')
+  })
+})
+
+describe('F8 Jarvis grounded-number guard and prompt', () => {
+  const storeFacts = [
+    { key: 'data_freshness', label: 'Data freshness', value: '2026-08-14', source: 'analytics_revenue_daily' },
+    { key: 'revenue_total', label: 'Revenue in available closed rows', value: 4579.9, source: 'analytics_revenue_daily' },
+    { key: 'revenue_display', label: 'Revenue shown on the dashboard', value: '$4,580', source: 'store_analytics' },
+    { key: 'orders_total', label: 'Orders in available closed rows', value: 2, source: 'analytics_orders_daily' },
+    { key: 'aov', label: 'Average order value', value: 2289.95, source: 'analytics_orders_daily' },
+    { key: 'aov_display', label: 'Average order value shown on the dashboard', value: '$2,290', source: 'store_analytics' },
+  ] as const
+  const storeEvidence: JarvisEvidenceProvider = { async get() { return { page: 'dashboard', generatedAt: new Date(1_000).toISOString(), currency: 'USD', facts: storeFacts, confidence: .92, confidenceLevel: 'HIGH', suggestedAction: null } } }
+
+  function capturingProvider(...texts: string[]): { client: OpenRouterClient; bodies: string[] } {
+    const bodies: string[] = []
+    let index = 0
+    const client = new OpenRouterClient({
+      keys: ['key'], models: ['jarvis-model'],
+      fetcher: async (_input: string, init?: RequestInit) => {
+        if (typeof init?.body === 'string') bodies.push(init.body)
+        const text = texts[Math.min(index, texts.length - 1)] ?? 'The grounded evidence is available.'
+        index += 1
+        return new Response(JSON.stringify({ choices: [{ message: { content: text } }], usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 } }), { status: 200 })
+      },
+      sleep: async () => undefined,
+    })
+    return { client, bodies }
+  }
+
+  function streamingProvider(text: string): OpenRouterClient {
+    return new OpenRouterClient({
+      keys: ['key'], models: ['jarvis-model'],
+      fetcher: async () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(`data: {"choices":[{"delta":{"content":${JSON.stringify(text)}}}]}\n\n`)); controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close() } }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      sleep: async () => undefined,
+    })
+  }
+
+  it('lets the model explain the dashboard rounding when the merchant challenges it', async () => {
+    const { client } = capturingProvider('Sir, aapka exact closed revenue $4,579.90 hai — dashboard rounds it to $4,580, isliye aapko 4580 dikha.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    const response = await service.message('store-1' as never, session.id, { text: 'per mera revenue 4580 hai or tune 4579.90 bata kyu', page: 'dashboard' })
+    expect(response.status).toBe('ANSWER')
+    expect(response.text).toContain('4580')
+  })
+
+  it('answers order counts and average order value naturally', async () => {
+    const { client } = capturingProvider('Sir, aapke store mein abhi 2 orders hain, aur average order value $2,290 hai.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    const response = await service.message('store-1' as never, session.id, { text: 'order ki value kitni hai', page: 'dashboard' })
+    expect(response.status).toBe('ANSWER')
+    expect(response.text).toContain('2,290')
+  })
+
+  it('recovers with one rewrite when the first draft fabricates a number', async () => {
+    const { client } = capturingProvider('Revenue is 999999.', 'Aapka closed revenue $4,580 hai.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    const response = await service.message('store-1' as never, session.id, { text: 'revenue kitna hai', page: 'dashboard' })
+    expect(response.status).toBe('ANSWER')
+    expect(response.text).toContain('4,580')
+  })
+
+  it('falls back to the honest refusal only when the rewrite keeps fabricating', async () => {
+    const { client } = capturingProvider('Revenue is 999999.', 'Revenue is 999998.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    const response = await service.message('store-1' as never, session.id, { text: 'revenue kitna hai', page: 'dashboard' })
+    expect(response.text).toContain('unsupported number')
+  })
+
+  it('builds a warm, currency-aware prompt with the full evidence payload', async () => {
+    const { client, bodies } = capturingProvider('Aapka closed revenue $4,580 hai.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    await service.message('store-1' as never, session.id, { text: 'revenue kitna hai', page: 'dashboard' })
+    const request = JSON.parse(bodies[0] ?? '{}') as { messages?: readonly { role: string; content: string }[] }
+    const system = request.messages?.find((message) => message.role === 'system')?.content ?? ''
+    const user = request.messages?.find((message) => message.role === 'user')?.content ?? ''
+    expect(system).toContain('helpful AI assistant for Shopify merchants')
+    expect(system).toContain('like a human friend')
+    expect(system).toContain('currency is USD')
+    expect(system).toContain('Current page: dashboard')
+    expect(user).toContain('Merchant says: revenue kitna hai')
+    expect(user).toContain('Revenue shown on the dashboard: $4,580')
+    expect(user).toContain('Average order value shown on the dashboard: $2,290')
+  })
+
+  it('streams Jarvis answers through the provider and the service', async () => {
+    const client = streamingProvider('Revenue $4,580 hai.')
+    const service = new JarvisService(client, storeEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-1' as never, 'dashboard', 'trial')
+    const deltas: string[] = []
+    const response = await service.message('store-1' as never, session.id, { text: 'revenue dikhao', page: 'dashboard' }, (fullText) => deltas.push(fullText))
+    expect(response.status).toBe('ANSWER')
+    expect(response.text).toContain('4,580')
+    expect(deltas.at(-1)).toBe('Revenue $4,580 hai.')
   })
 })
