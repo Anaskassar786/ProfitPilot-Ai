@@ -24,6 +24,7 @@ const API_PATH_PREFIXES = [
   '/recommendations',
   '/reports',
   '/security',
+  '/session',
   '/settings',
   '/shopify',
   '/support',

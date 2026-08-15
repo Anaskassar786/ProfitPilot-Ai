@@ -6,6 +6,7 @@ import type { Logger } from '@profitpilot/logger'
 import { installStepFromError } from '@profitpilot/shopify'
 import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookProcessor } from '@profitpilot/shopify'
 import { rawBodyFor } from './security.js'
+import { setSessionCookie } from './cookies.js'
 
 export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void> }>
 export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies }>
@@ -44,8 +45,11 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
     })
     try {
       const result = await dependencies.installer.complete(callback, dependencies.exchange, rawQuery)
-      const location = dependencies.installer.postInstallRedirect(callback, result.shop)
-      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, matchedHmacMethod: diagnostics.matchedMethod, requestId: String(response.getHeader('x-request-id') ?? '') })
+      const location = dependencies.installer.postInstallRedirect(callback, result.shop, result.storeId)
+      // Persist the tenant context so refreshes of the embedded app keep the
+      // workspace attached even when the redirect query string is absent.
+      setSessionCookie(response, result.storeId)
+      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, storeId: result.storeId, matchedHmacMethod: diagnostics.matchedMethod, requestId: String(response.getHeader('x-request-id') ?? '') })
       // OAuth completes in the merchant's browser; send them into the embedded
       // app inside Shopify admin rather than returning a bare JSON body.
       response.redirect(302, location)

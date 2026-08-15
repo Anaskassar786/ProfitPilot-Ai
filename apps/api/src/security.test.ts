@@ -68,9 +68,9 @@ describe('F7 security primitives', () => {
     expect(verifyCsrfToken('wrong', token)).toBe(false)
     expect(verifyCsrfToken('csrf-secret', 'bad')).toBe(false)
     expect(parseCookies('a=1; profitpilot_csrf=hello%20world')).toEqual({ a: '1', profitpilot_csrf: 'hello world' })
-    expect(serializeCookie('session', 'value', sessionCookieOptions('production'))).toContain('HttpOnly')
-    expect(serializeCookie('session', 'value', sessionCookieOptions('production'))).toContain('Secure')
-    expect(serializeCookie('session', 'value', sessionCookieOptions('production'))).toContain('SameSite=Lax')
+    expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('HttpOnly')
+    expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('Secure')
+    expect(serializeCookie('session', 'value', sessionCookieOptions())).toContain('SameSite=None')
     expect(serializeCookie('csrf', 'value', csrfCookieOptions('development'))).not.toContain('HttpOnly')
   })
 

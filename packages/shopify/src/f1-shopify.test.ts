@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { InMemoryTokenRecordStore, InMemoryWebhookReceiptStore, OAuthStateStore, ShopifyInstallService, TokenVault, WebhookVerifier, inspectOAuthHmac, installStepFromError, shopifyHmacMessage, shopifyHmacSelfTest, verifyOAuthHmac } from './index.js'
+import { InMemoryStoreDirectory } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 
 const key = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -50,7 +51,7 @@ describe('Shopify token vault', () => {
 describe('Shopify OAuth install flow', () => {
   it('creates an authorization URL with a fresh state', async () => {
     const vault = new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore())
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: ['read_products', 'read_orders'], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), vault)
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: ['read_products', 'read_orders'], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), vault, new InMemoryStoreDirectory())
     const start = await service.start('Demo.myshopify.com')
     expect(start.authorizationUrl).toContain('client_id=key')
     expect(start.authorizationUrl).toContain('state=')
@@ -60,7 +61,7 @@ describe('Shopify OAuth install flow', () => {
     const store = new InMemoryTokenRecordStore()
     const vault = new TokenVault(AesGcmCipher.fromHex(key), store)
     const states = new OAuthStateStore(() => 100)
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: ['read_products'], redirectUri: 'https://app.example/callback' }, states, vault)
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: ['read_products'], redirectUri: 'https://app.example/callback' }, states, vault, new InMemoryStoreDirectory())
     const start = await service.start('demo.myshopify.com')
     const callback = signedCallback({ shop: 'demo.myshopify.com', state: start.state, code: 'oauth-code', timestamp: '100' }, 'secret')
     const exchange = async (shop: string, code: string): Promise<string> => `${shop}:${code}:access`
@@ -69,7 +70,7 @@ describe('Shopify OAuth install flow', () => {
   })
   it('rejects replayed OAuth callbacks with a state-verification step', async () => {
     const states = new OAuthStateStore(() => 100)
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const start = await service.start('demo.myshopify.com')
     const callback = signedCallback({ shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100' }, 'secret')
     await service.complete(callback, async () => 'token')
@@ -79,7 +80,7 @@ describe('Shopify OAuth install flow', () => {
     expect((replay as AppError).details.step).toBe('state-verification')
   })
   it('rejects bad callback signatures before exchanging with an hmac-verification step', async () => {
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const failure = await service.complete({ shop: 'demo.myshopify.com', state: 'bad', code: 'code', hmac: 'bad' }, async () => 'token').catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(AppError)
     expect((failure as AppError).message).toContain('signature')
@@ -95,7 +96,7 @@ describe('Shopify OAuth install flow', () => {
 
   it('verifies callbacks whose values require URL encoding (base64 host padding, +, /)', async () => {
     const states = new OAuthStateStore(() => 100)
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     for (const host of ['YWRtaW4uc2hvcGlmeS5jb20vc3RvcK8=', 'YWR+/taW4uc2hvcGlmeS5jb20=', 'abc+def/ghi=']) {
       const start = await service.start('demo.myshopify.com')
       const callback = signedCallback({ shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100', host }, 'secret')
@@ -111,7 +112,7 @@ describe('Shopify OAuth install flow', () => {
     // than rejecting one as a forgery — otherwise a correctly-signed callback
     // from Shopify fails and looks like a secret bug.
     const states = new OAuthStateStore(() => 100)
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100', host: 'YWRtaW4uLi4=' }
     const decodedJoin = Object.entries(fields).sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('&')
@@ -125,7 +126,7 @@ describe('Shopify OAuth install flow', () => {
 
   it('verifies a callback signed from the raw query string (ground-truth method)', async () => {
     const states = new OAuthStateStore(() => 100)
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, states, new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100', host: 'YWRtaW4uLi4=' }
     // Sign the literal wire bytes (host's '=' stays %3D), exactly as Shopify emits.
@@ -175,7 +176,7 @@ describe('Shopify OAuth install flow', () => {
     expect(verifyOAuthHmac(signedCallback(fields, 'my_client_secret'), 'another_secret')).toBe(false)
   })
   it('labels a token-exchange failure and keeps the underlying cause', async () => {
-    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+    const service = new ShopifyInstallService({ apiKey: 'key', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const start = await service.start('demo.myshopify.com')
     const callback = signedCallback({ shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '100' }, 'secret')
     const failure = await service.complete(callback, async () => { throw new Error('Shopify OAuth token exchange failed with HTTP 404') }).catch((error: unknown) => error)
@@ -185,12 +186,25 @@ describe('Shopify OAuth install flow', () => {
     expect(installStepFromError(failure)).toBe('token-exchange')
     expect(((failure as AppError).cause as Error).message).toContain('404')
   })
-  it('builds the embedded post-install URL from the host parameter', async () => {
-    const service = new ShopifyInstallService({ apiKey: 'client-id', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+  it('builds the embedded post-install URL from the host parameter with tenant context', async () => {
+    const service = new ShopifyInstallService({ apiKey: 'client-id', apiSecret: 'secret', scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(() => 100), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), new InMemoryStoreDirectory())
     const host = Buffer.from('admin.shopify.com/store/commander-pilot', 'utf8').toString('base64')
-    expect(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com', host }, 'commander-pilot.myshopify.com')).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
-    expect(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com' }, 'commander-pilot.myshopify.com')).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
-    expect(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com', host: 'aGVsbG8' }, 'commander-pilot.myshopify.com')).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
+    const withHost = new URL(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com', host }, 'commander-pilot.myshopify.com', storeId('store-123')))
+    expect(withHost.origin + withHost.pathname).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
+    expect(withHost.searchParams.get('storeId')).toBe('store-123')
+    expect(withHost.searchParams.get('shop')).toBe('commander-pilot.myshopify.com')
+    expect(withHost.searchParams.get('host')).toBe(host)
+
+    const withoutHost = new URL(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com' }, 'commander-pilot.myshopify.com', storeId('store-123')))
+    expect(withoutHost.origin + withoutHost.pathname).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
+    expect(withoutHost.searchParams.get('storeId')).toBe('store-123')
+    expect(withoutHost.searchParams.get('shop')).toBe('commander-pilot.myshopify.com')
+    expect(withoutHost.searchParams.has('host')).toBe(false)
+
+    // An undecodable host falls back to the myshopify-derived admin path.
+    const invalidHost = new URL(service.postInstallRedirect({ shop: 'commander-pilot.myshopify.com', host: 'aGVsbG8' }, 'commander-pilot.myshopify.com', storeId('store-123')))
+    expect(invalidHost.origin + invalidHost.pathname).toBe('https://admin.shopify.com/store/commander-pilot/apps/client-id')
+    expect(invalidHost.searchParams.get('storeId')).toBe('store-123')
   })
 })
 

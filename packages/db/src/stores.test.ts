@@ -20,4 +20,16 @@ describe('tenant Shopify store directory', () => {
     expect(queries[0]).not.toContain('DEMO.MYSHOPIFY.COM')
     await expect(new PostgresStoreDirectory(executor).getByShopDomain('')).resolves.toBeNull()
   })
+  it('idempotently upserts a shop domain with ON CONFLICT and returns the tenant id', async () => {
+    const queries: string[] = []
+    const values: unknown[][] = []
+    const executor: SqlExecutor = { async query<Row extends QueryResultRow>(text: string, params?: readonly unknown[]): Promise<DatabaseResult<Row>> { queries.push(text); values.push([...(params ?? [])]); return { rows: [{ id: 'store-1', shop_domain: 'demo.myshopify.com' } as unknown as Row], rowCount: 1 } } }
+    const directory = new PostgresStoreDirectory(executor)
+    const connection = await directory.upsertByShopDomain(' DEMO.MYSHOPIFY.COM ')
+    expect(connection).toEqual({ storeId: 'store-1', shopDomain: 'demo.myshopify.com' })
+    expect(queries[0]).toContain('INSERT INTO stores')
+    expect(queries[0]).toContain('ON CONFLICT (shop_domain)')
+    expect(values[0]).toEqual(['demo.myshopify.com'])
+    await expect(directory.upsertByShopDomain('')).rejects.toThrow('shop domain')
+  })
 })

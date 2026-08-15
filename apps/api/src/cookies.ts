@@ -7,8 +7,15 @@ export type CookieOptions = Readonly<{ httpOnly: boolean; secure: boolean; sameS
 export const SESSION_COOKIE_NAME = 'profitpilot_session'
 export const CSRF_COOKIE_NAME = 'profitpilot_csrf'
 
-export function sessionCookieOptions(environment: string): CookieOptions {
-  return { httpOnly: true, secure: environment === 'production', sameSite: 'Lax', path: '/', maxAgeSeconds: 7 * 24 * 60 * 60 }
+/**
+ * The session cookie carries the tenant (storeId) context between the OAuth
+ * callback and the embedded dashboard. Because the app renders inside Shopify
+ * admin (admin.shopify.com), the cookie must be sent across a cross-site frame:
+ * `SameSite=None` is required and browsers only honor it together with
+ * `Secure`, so both are always set regardless of environment.
+ */
+export function sessionCookieOptions(): CookieOptions {
+  return { httpOnly: true, secure: true, sameSite: 'None', path: '/', maxAgeSeconds: 7 * 24 * 60 * 60 }
 }
 
 export function csrfCookieOptions(environment: string): CookieOptions {
@@ -23,16 +30,16 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   return parts.join('; ')
 }
 
-export function setSessionCookie(response: Response, sessionValue: string, environment: string): void {
-  response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, sessionValue, sessionCookieOptions(environment)))
+export function setSessionCookie(response: Response, sessionValue: string): void {
+  response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, sessionValue, sessionCookieOptions()))
 }
 
 export function setCsrfCookie(response: Response, token: string, environment: string): void {
   response.append('Set-Cookie', serializeCookie(CSRF_COOKIE_NAME, token, csrfCookieOptions(environment)))
 }
 
-export function clearSessionCookie(response: Response, environment: string): void {
-  response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, '', { ...sessionCookieOptions(environment), maxAgeSeconds: 0 }))
+export function clearSessionCookie(response: Response): void {
+  response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, '', { ...sessionCookieOptions(), maxAgeSeconds: 0 }))
 }
 
 export function parseCookies(header: string | undefined): Readonly<Record<string, string>> {

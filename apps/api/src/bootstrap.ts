@@ -1,10 +1,11 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { databaseConfigFromEnv, PostgresDatabase } from '@profitpilot/db'
+import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from '@profitpilot/db'
+import type { StoreDirectory } from '@profitpilot/db'
 import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallService, TokenVault } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 
-export type F1Bootstrap = Readonly<{ shopify: ShopifyRouteDependencies; database: PostgresDatabase }>
+export type F1Bootstrap = Readonly<{ shopify: ShopifyRouteDependencies; database: PostgresDatabase; storeDirectory: StoreDirectory }>
 
 const REQUIRED_KEYS = ['DATABASE_URL', 'ENCRYPTION_KEY', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'SHOPIFY_REDIRECT_URI'] as const
 
@@ -19,11 +20,14 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   const database = new PostgresDatabase(databaseConfigFromEnv(env))
   const tokenStore = new PostgresTokenRecordStore(database)
   const vault = new TokenVault(AesGcmCipher.fromHex(encryptionKey), tokenStore)
+  const storeDirectory = new PostgresStoreDirectory(database)
   // OAuth state lives in Postgres so the callback survives process restarts and
   // any replica topology, and can be consumed exactly once (replay-safe).
-  const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault)
+  // The store directory is what registers the tenant (stores row) during OAuth
+  // and resolves shop <-> storeId for the session context endpoint.
+  const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, requiredEnv(env, 'SHOPIFY_API_KEY'), requiredEnv(env, 'SHOPIFY_API_SECRET'))
-  return { database, shopify: { installer, exchange } }
+  return { database, shopify: { installer, exchange }, storeDirectory }
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {
