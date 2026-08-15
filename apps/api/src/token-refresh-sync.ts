@@ -1,6 +1,6 @@
 import type { Logger } from '@profitpilot/logger'
 import type { StoreDirectory } from '@profitpilot/db'
-import { ShopifyApiError } from '@profitpilot/shopify'
+import { isShopifyApiError, isShopifyAuthError, ShopifyApiError } from '@profitpilot/shopify'
 import type { OfflineTokenResult } from '@profitpilot/shopify'
 import { AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
@@ -114,7 +114,13 @@ export class TokenRefreshingSync {
 type RecoveryReason = 'missing-token' | 'shopify-401' | 'circuit-open'
 
 function refreshReason(error: unknown): 'missing-token' | 'shopify-401' | null {
-  if (error instanceof ShopifyApiError && error.status === 401) return 'shopify-401'
+  if (isShopifyAuthError(error)) return 'shopify-401'
+  if (isShopifyApiError(error) && error.status === 401) return 'shopify-401'
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { status?: unknown; name?: unknown }
+    if (candidate.status === 401 && (candidate.name === 'ShopifyApiError' || error instanceof Error)) return 'shopify-401'
+    if (candidate.status === 401) return 'shopify-401'
+  }
   if (error instanceof AppError && error.details.reason === 'SHOPIFY_TOKEN_MISSING') return 'missing-token'
   return null
 }

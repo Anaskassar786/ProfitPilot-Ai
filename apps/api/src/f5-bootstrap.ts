@@ -1,6 +1,7 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresStoreDirectory } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
+import { Logger } from '@profitpilot/logger'
 import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, ShopifyBillingClient, TrialAndGiftLedger } from '@profitpilot/billing'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
@@ -23,6 +24,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   const trials = new TrialAndGiftLedger(giftCodesFromEnv(env))
   const funnel = new FunnelLedger()
   const stepUp = new AdminStepUpSessions(15)
+  const logger = new Logger()
   const billingClient = async (shopId: string): Promise<ShopifyBillingClient> => {
     const connection = await directory.get(storeId(shopId))
     if (!connection) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404, { storeId: shopId })
@@ -30,7 +32,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
     // Same reconnect path as /sync: an absent offline token is a 503 the
     // merchant can act on, not an opaque 500.
     if (!token) throw new AppError('DEPENDENCY_ERROR', 'Shopify access token is missing. Hard refresh the embedded app to reconnect this store, then retry.', 503, { storeId: shopId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' })
-    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', testMode: billingTestMode(env) })
+    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', testMode: billingTestMode(env), logger })
   }
   return {
     ...f4,

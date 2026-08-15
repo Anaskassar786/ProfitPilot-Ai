@@ -16,6 +16,7 @@ export function createF2Bootstrap(env: Readonly<Record<string, string | undefine
   if (!f1) return null
   const analytics = new PostgresAnalyticsRepository(f1.database)
   const directory = new PostgresStoreDirectory(f1.database)
+  const logger = new Logger()
   const source = new ShopifyRestSyncSource(async (storeId) => {
     const connection = await directory.get(storeId)
     if (!connection) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404, { storeId })
@@ -28,14 +29,13 @@ export function createF2Bootstrap(env: Readonly<Record<string, string | undefine
         { storeId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' },
       )
     }
-    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION?.trim() || '2025-10')
+    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION?.trim() || '2025-10', logger)
   })
   const cache = createCache(env)
   // A store circuit now auto-closes after this cooldown, and /sync closes it
   // early whenever a token exchange repairs the underlying cause.
   const circuits = new StoreCircuitRegistry({ failureThreshold: circuitThreshold(env), cooldownMs: circuitCooldownMs(env) })
   const policy = new StoreRequestPolicy(new AdaptiveRateController(), circuits)
-  const logger = new Logger()
   const engine = new SyncEngine(source, new PostgresSyncSink(f1.database, analytics), new PostgresCheckpointStore(f1.database), policy, logger, () => Date.now(), cache)
   const sync = new TokenRefreshingSync(engine, directory, f1.tokenExchange, logger, circuits)
   return { ...f1, dataPlane: { sync, analytics, circuits, tokenVault: f1.tokenVault, directory } }

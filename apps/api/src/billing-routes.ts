@@ -34,6 +34,21 @@ async function createChargeOrExplain(dependencies: BillingRouteDependencies, sho
     return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS)
   } catch (error: unknown) {
     if (!(error instanceof ShopifyBillingError)) throw error
+    const rawBody = error.upstreamBody || ''
+    const validationText = describeValidation(error.validationErrors)
+    const isCustomAppRejection = /owned by a Shop/i.test(rawBody) || /owned by a Shop/i.test(validationText) || /partners area/i.test(rawBody) || /partners area/i.test(validationText)
+
+    if (isCustomAppRejection) {
+      const appError = new AppError(
+        'VALIDATION_ERROR',
+        'This app was created as a Custom App owned by a shop. To accept subscription charges (including test charges), create or migrate the app in the Shopify Partner Dashboard (partners.shopify.com).',
+        422,
+        { shopId, plan, interval, upstreamStatus: 422, reason: 'CUSTOM_APP_NOT_PARTNER_APP' },
+      )
+      appError.cause = error
+      throw appError
+    }
+
     const fields = Object.keys(error.validationErrors).join(',')
     const status = error.status === 422 ? 422 : error.status === 401 || error.status === 403 ? 502 : error.status >= 500 ? 502 : error.status
     const appError = new AppError(

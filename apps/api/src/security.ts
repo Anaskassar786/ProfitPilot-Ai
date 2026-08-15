@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
+import { isShopifyApiError } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
 import type { SessionRecord, SessionRepository } from '@profitpilot/db'
@@ -292,6 +293,15 @@ export function getAuthContext(request: Request): AuthContext | null {
 export function normalizeRequestError(error: unknown): AppError {
   if (isRecord(error) && error.type === 'entity.too.large') return new AppError('VALIDATION_ERROR', 'Request payload is too large', 413)
   if (isRecord(error) && error.type === 'entity.parse.failed') return new AppError('VALIDATION_ERROR', 'Malformed JSON payload', 400)
+  if (isShopifyApiError(error) || (isRecord(error) && error.name === 'ShopifyApiError')) {
+    const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 502
+    const message = error instanceof Error ? error.message : 'Shopify API error'
+    const code = status === 401 ? 'UNAUTHORIZED' : status === 429 ? 'RATE_LIMITED' : 'DEPENDENCY_ERROR'
+    const appError = new AppError(code, message, status, { upstreamStatus: status }, true)
+    if (error instanceof Error && error.stack) appError.stack = error.stack
+    appError.cause = error
+    return appError
+  }
   return toAppError(error)
 }
 

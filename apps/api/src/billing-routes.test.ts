@@ -55,6 +55,25 @@ describe('billing charge failure translation', () => {
     })
   })
 
+  it('translates a Custom App "owned by a Shop" rejection into an actionable Partner Dashboard message', async () => {
+    const customAppError = new ShopifyBillingError(
+      422,
+      'Shopify Billing API failed with 422 on /recurring_application_charges.json',
+      { base: ['It appears that this application is currently owned by a Shop. It must be migrated to the Shopify partners area before it can create charges with the API.'] },
+      '{"errors":{"base":"It appears that this application is currently owned by a Shop. It must be migrated to the Shopify partners area before it can create charges with the API."}}',
+    )
+    const createCharge = async () => { throw customAppError }
+    await withCharge(createCharge, async (base) => {
+      const response = await fetch(`${base}/billing/charge?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: chargeBody })
+      expect(response.status).toBe(422)
+      const payload = await response.json()
+      expect(payload.error.code).toBe('VALIDATION_ERROR')
+      expect(payload.error.message).toContain('Custom App owned by a shop')
+      expect(payload.error.message).toContain('Shopify Partner Dashboard (partners.shopify.com)')
+      expect(payload.error.details).toMatchObject({ upstreamStatus: 422, reason: 'CUSTOM_APP_NOT_PARTNER_APP' })
+    })
+  })
+
   it('maps a Shopify 5xx to a retryable dependency error rather than a 500', async () => {
     const createCharge = async () => { throw new ShopifyBillingError(503, 'Shopify Billing API failed with 503') }
     await withCharge(createCharge, async (base) => {
