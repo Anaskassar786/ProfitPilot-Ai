@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AppError, storeId } from '@profitpilot/types'
-import { AdaptiveRateController, StoreCircuitRegistry, StoreRequestPolicy } from './rate.js'
+import { AdaptiveRateController, CIRCUIT_OPEN_REASON, isCircuitTrippingFailure, StoreCircuitRegistry, StoreRequestPolicy } from './rate.js'
 
 describe('adaptive Shopify rate policy', () => {
   it('starts each store at the configured concurrency', () => expect(new AdaptiveRateController({ maxConcurrency: 3 }).state(storeId('s')).concurrency).toBe(3))
@@ -73,5 +73,66 @@ describe('store circuit isolation', () => {
     await expect(policy.execute(storeId('s'), async () => { throw { status: 429, retryAfterMs: 1 } })).rejects.toMatchObject({ status: 429 })
     await expect(policy.execute(storeId('s'), async () => { throw new Error('second') })).rejects.toThrow('second')
     expect(() => circuits.assertAvailable(storeId('s'))).toThrow('circuit is open')
+  })
+})
+
+describe('circuit trip classification', () => {
+  it('ignores a missing offline access token', () => {
+    expect(isCircuitTrippingFailure(new AppError('DEPENDENCY_ERROR', 'missing', 503, { reason: 'SHOPIFY_TOKEN_MISSING' }))).toBe(false)
+  })
+  it('ignores a Shopify 401 so the token exchange can repair it', () => {
+    expect(isCircuitTrippingFailure({ name: 'ShopifyApiError', status: 401 })).toBe(false)
+  })
+  it('ignores validation and conflict failures', () => {
+    expect(isCircuitTrippingFailure(new AppError('VALIDATION_ERROR', 'bad', 400))).toBe(false)
+    expect(isCircuitTrippingFailure(new AppError('CONFLICT', 'checkpoint', 409))).toBe(false)
+  })
+  it('never lets an open-circuit rejection count against itself', () => {
+    expect(isCircuitTrippingFailure(new AppError('DEPENDENCY_ERROR', 'open', 503, { reason: CIRCUIT_OPEN_REASON }))).toBe(false)
+  })
+  it('trips on Shopify 5xx, 429, and transport errors', () => {
+    expect(isCircuitTrippingFailure({ status: 500 })).toBe(true)
+    expect(isCircuitTrippingFailure({ status: 429 })).toBe(true)
+    expect(isCircuitTrippingFailure(new Error('ECONNRESET'))).toBe(true)
+  })
+})
+
+describe('circuit recovery controls', () => {
+  it('does not open on repeated token failures', async () => {
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 2 })
+    const policy = new StoreRequestPolicy(new AdaptiveRateController({ sleep: async () => undefined }), circuits)
+    const missing = () => { throw new AppError('DEPENDENCY_ERROR', 'missing', 503, { reason: 'SHOPIFY_TOKEN_MISSING' }) }
+    await expect(policy.execute(storeId('s'), async () => missing())).rejects.toThrow('missing')
+    await expect(policy.execute(storeId('s'), async () => missing())).rejects.toThrow('missing')
+    await expect(policy.execute(storeId('s'), async () => missing())).rejects.toThrow('missing')
+    expect(circuits.state(storeId('s')).open).toBe(false)
+  })
+  it('carries a machine-readable reason and retry hint when open', () => {
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1, cooldownMs: 5_000 })
+    circuits.recordFailure(storeId('s'), 1_000)
+    const failure = (() => { try { circuits.assertAvailable(storeId('s'), 2_000); return null } catch (error: unknown) { return error as AppError } })()
+    expect(failure?.details.reason).toBe(CIRCUIT_OPEN_REASON)
+    expect(failure?.details.retryAfterMs).toBe(4_000)
+  })
+  it('closes immediately on an explicit reset', () => {
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1, cooldownMs: 60_000 })
+    circuits.recordFailure(storeId('s'), 0)
+    expect(() => circuits.assertAvailable(storeId('s'), 10)).toThrow('circuit is open')
+    circuits.reset(storeId('s'))
+    expect(() => circuits.assertAvailable(storeId('s'), 20)).not.toThrow()
+  })
+  it('reports a snapshot with the remaining cooldown', () => {
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1, cooldownMs: 1_000 })
+    circuits.recordFailure(storeId('s'), 0)
+    expect(circuits.snapshot(storeId('s'), 400)).toMatchObject({ open: true, failures: 1, retryAfterMs: 600, cooldownMs: 1_000 })
+    expect(circuits.snapshot(storeId('s'), 1_500)).toMatchObject({ open: false, retryAfterMs: null })
+  })
+  it('clears every store with resetAll', () => {
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1 })
+    circuits.recordFailure(storeId('a'))
+    circuits.recordFailure(storeId('b'))
+    circuits.resetAll()
+    expect(circuits.state(storeId('a')).open).toBe(false)
+    expect(circuits.state(storeId('b')).open).toBe(false)
   })
 })

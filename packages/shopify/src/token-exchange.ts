@@ -1,5 +1,5 @@
 import { parseShopDomain } from './oauth.js'
-import { verifyShopifySessionToken } from './session-token.js'
+import { describeSessionTokenRejection, verifyShopifySessionToken } from './session-token.js'
 import type { SessionTokenConfig } from './session-token.js'
 import type { TokenVault } from './token-vault.js'
 
@@ -60,8 +60,14 @@ export class ShopifyTokenExchangeService {
 
   private async performExchange(shop: string, idToken: string): Promise<OfflineTokenResult> {
     const subjectToken = idToken.trim()
-    const claims = subjectToken ? verifyShopifySessionToken(subjectToken, this.config) : null
-    if (!claims) throw new ShopifyTokenExchangeError('Shopify session token is invalid or expired')
+    if (!subjectToken) throw new ShopifyTokenExchangeError('Shopify session token is missing', null, undefined, 'missing_subject_token')
+    const claims = verifyShopifySessionToken(subjectToken, this.config)
+    if (!claims) {
+      // Name the exact rejection reason: a wrong SHOPIFY_API_SECRET and a
+      // merely expired id_token are indistinguishable without it.
+      const rejection = describeSessionTokenRejection(subjectToken, this.config)
+      throw new ShopifyTokenExchangeError(`Shopify session token is invalid or expired (${rejection})`, null, undefined, rejection)
+    }
     if (claims.shop !== shop) throw new ShopifyTokenExchangeError('Shopify session token does not belong to this store')
 
     const body = new URLSearchParams({
@@ -87,10 +93,18 @@ export class ShopifyTokenExchangeService {
     }
 
     if (!response.ok) {
-      // Never include the subject token or app secret in diagnostics. Shopify's
-      // status is enough to distinguish an expired id_token (400) from an
-      // upstream outage, while the response body can contain provider details.
-      throw new ShopifyTokenExchangeError(`Shopify token exchange failed with HTTP ${response.status}`, response.status)
+      // Shopify explains WHY the exchange was refused in the response body
+      // (`invalid_subject_token`, `invalid_client`, ...). Without it every
+      // failure looked identical in production logs. The body is echoed back
+      // only after redaction, and the request never contained anything from
+      // the merchant other than the already-verified id_token.
+      const detail = await readErrorDetail(response)
+      throw new ShopifyTokenExchangeError(
+        `Shopify token exchange failed with HTTP ${response.status}${detail.summary ? ` (${detail.summary})` : ''}`,
+        response.status,
+        undefined,
+        detail.errorCode,
+      )
     }
 
     let payload: unknown
@@ -110,12 +124,55 @@ export class ShopifyTokenExchangeService {
 
 export class ShopifyTokenExchangeError extends Error {
   public readonly upstreamStatus: number | null
+  /** Shopify's OAuth `error` code when the response carried one. */
+  public readonly upstreamCode: string | null
 
-  public constructor(message: string, upstreamStatus: number | null = null, cause?: unknown) {
+  public constructor(message: string, upstreamStatus: number | null = null, cause?: unknown, upstreamCode: string | null = null) {
     super(message, cause === undefined ? undefined : { cause })
     this.name = 'ShopifyTokenExchangeError'
     this.upstreamStatus = upstreamStatus
+    this.upstreamCode = upstreamCode
   }
+}
+
+/**
+ * Reads a failed token-exchange response body and reduces it to a
+ * secret-safe one-line summary. Shopify returns small JSON payloads such as
+ * `{"error":"invalid_subject_token","error_description":"..."}`; anything else
+ * is truncated. Values that look like credentials are never echoed.
+ */
+async function readErrorDetail(response: Response): Promise<Readonly<{ summary: string; errorCode: string | null }>> {
+  let raw: string
+  try {
+    raw = await response.text()
+  } catch {
+    return { summary: '', errorCode: null }
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) return { summary: '', errorCode: null }
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (isRecord(parsed)) {
+      const code = typeof parsed.error === 'string' ? parsed.error : null
+      const description = typeof parsed.error_description === 'string' ? parsed.error_description : ''
+      const summary = [code, description].filter((part) => Boolean(part)).join(': ')
+      return { summary: redact(summary || condense(trimmed)), errorCode: code }
+    }
+  } catch {
+    // Fall through to the raw (condensed) form for HTML/plain-text bodies.
+  }
+  return { summary: redact(condense(trimmed)), errorCode: null }
+}
+
+function condense(value: string): string {
+  return value.replace(/\s+/g, ' ').slice(0, 300)
+}
+
+/** Strip anything token-shaped so a body echo can never leak a credential. */
+function redact(value: string): string {
+  return value
+    .replace(/sh[pP][a-z]{0,3}_[A-Za-z0-9]+/g, '[redacted-token]')
+    .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b/g, '[redacted-jwt]')
 }
 
 function parseScopes(value: unknown): readonly string[] {

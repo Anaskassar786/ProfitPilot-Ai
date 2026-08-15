@@ -3,13 +3,23 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { requestId, storeId, success, AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
-import type { AnalyticsRepository } from '@profitpilot/db'
+import type { AnalyticsRepository, StoreDirectory } from '@profitpilot/db'
 import { SYNC_MODULES } from '@profitpilot/sync'
-import type { SyncModule, SyncRunResult } from '@profitpilot/sync'
+import type { CircuitSnapshot, SyncModule, SyncRunResult } from '@profitpilot/sync'
+
+export type SyncCircuits = Readonly<{
+  snapshot(store: StoreId, now?: number): CircuitSnapshot
+  reset(store: StoreId): void
+}>
+
+export type SyncTokenVault = Readonly<{ get(shop: string): Promise<string | null> }>
 
 export type DataPlaneDependencies = Readonly<{
   sync: Readonly<{ runModule(store: StoreId, module: SyncModule, idToken?: string): Promise<SyncRunResult> }>
   analytics: Pick<AnalyticsRepository, 'read' | 'readCatalog'>
+  circuits?: SyncCircuits
+  tokenVault?: SyncTokenVault
+  directory?: Pick<StoreDirectory, 'get'>
 }>
 
 export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Router {
@@ -22,6 +32,50 @@ export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Rout
       const idToken = shopifySessionToken(request)
       const result = await dependencies.sync.runModule(storeId(body.storeId), body.module, idToken ?? undefined)
       response.status(202).json(success(result, requestIdFrom(request)))
+    } catch (error: unknown) {
+      next(error)
+    }
+  })
+
+  /**
+   * Read-only health of the store's Shopify connection: whether an offline
+   * access token exists, and whether the circuit breaker is currently open.
+   * This is what answers "did token exchange actually succeed?" without a
+   * database shell, and it never returns the token itself.
+   */
+  router.get('/sync/status', async (request, response, next) => {
+    try {
+      const tenant = queryStoreId(request)
+      const circuit = dependencies.circuits?.snapshot(tenant) ?? null
+      const connection = await dependencies.directory?.get(tenant) ?? null
+      const hasAccessToken = connection && dependencies.tokenVault ? (await dependencies.tokenVault.get(connection.shopDomain)) !== null : null
+      response.status(200).json(success({
+        storeId: tenant,
+        shopDomain: connection?.shopDomain ?? null,
+        registered: connection !== null,
+        hasAccessToken,
+        circuit,
+        canSync: connection !== null && hasAccessToken === true && circuit?.open !== true,
+      }, requestIdFrom(request)))
+    } catch (error: unknown) {
+      next(error)
+    }
+  })
+
+  /**
+   * Manual circuit reset. The breaker also self-heals after its cooldown and is
+   * closed automatically when a token exchange repairs the cause, but an
+   * operator (or the dashboard's "Retry now" action) can close it immediately.
+   */
+  router.post('/sync/circuit/reset', (request, response, next) => {
+    try {
+      const body = request.body as unknown
+      const tenantValue = isRecord(body) && typeof body.storeId === 'string' ? body.storeId : typeof request.query.storeId === 'string' ? request.query.storeId : ''
+      if (!tenantValue.trim()) throw new AppError('VALIDATION_ERROR', 'storeId is required', 400)
+      if (!dependencies.circuits) throw new AppError('DEPENDENCY_ERROR', 'Sync circuit control is not configured', 503)
+      const tenant = storeId(tenantValue)
+      dependencies.circuits.reset(tenant)
+      response.status(200).json(success({ storeId: tenant, circuit: dependencies.circuits.snapshot(tenant) }, requestIdFrom(request)))
     } catch (error: unknown) {
       next(error)
     }

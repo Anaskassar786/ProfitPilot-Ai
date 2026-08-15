@@ -81,7 +81,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { activateWorkflow, createBillingCharge, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchCsrfToken, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { activateWorkflow, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchCsrfToken, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, JsonValue, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
@@ -235,7 +235,21 @@ export default function App() {
       await requestSync(context.storeId, module)
       showToast(`${module} sync queued through the F2 data plane.`, 'success')
       void loadData()
-    } catch (error: unknown) { showToast(errorMessage(error), 'error') }
+    } catch (error: unknown) {
+      // A 503 with an open Shopify circuit is recoverable: close the breaker
+      // and retry once so a burst of earlier failures does not keep the store
+      // locked out for the whole cooldown window.
+      if (isCircuitOpen(error)) {
+        try {
+          await resetSyncCircuit(context.storeId)
+          await requestSync(context.storeId, module)
+          showToast(`${module} sync queued after clearing the Shopify circuit.`, 'success')
+          void loadData()
+          return
+        } catch (retryError: unknown) { showToast(errorMessage(retryError), 'error'); return }
+      }
+      showToast(errorMessage(error), 'error')
+    }
   }
   const decide = async (id: string, decision: 'approve' | 'reject', expectedVersion: number) => {
     if (!context.storeId) { setOnboardingOpen(true); return }
@@ -465,5 +479,7 @@ function Shortcut({ keys, label }: { keys: string; label: string }) { return <di
 function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) { const Icon = toast.kind === 'success' ? CheckCircle2 : toast.kind === 'error' ? AlertCircle : Info; return <div className={`toast ${toast.kind}`}><span className="toast-icon"><Icon size={16} /></span><span>{toast.message}</span><button onClick={onClose} aria-label="Close notification"><X size={15} /></button></div> }
 function stringValue(value: JsonValue | undefined): string | null { return typeof value === 'string' ? value : null }
 function numberValue(value: JsonValue | undefined): number | null { return typeof value === 'number' && Number.isFinite(value) ? value : null }
+/** True for the 503 the API returns while a store's Shopify circuit is open. */
+function isCircuitOpen(error: unknown): boolean { return error instanceof ApiClientError && error.status === 503 && /circuit is open/i.test(error.message) }
 function errorMessage(error: unknown): string { if (error instanceof ApiClientError) return error.message; if (error instanceof Error) return error.message; return 'The F2 API could not be reached.' }
 function isTypingTarget(target: EventTarget | null): boolean { return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement }

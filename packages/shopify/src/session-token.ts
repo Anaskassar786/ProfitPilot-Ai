@@ -77,6 +77,49 @@ export function verifyShopifySessionToken(token: string, config: SessionTokenCon
   }
 }
 
+export type SessionTokenRejection =
+  | 'malformed'
+  | 'unsupported-algorithm'
+  | 'signature-mismatch'
+  | 'audience-mismatch'
+  | 'expired'
+  | 'not-yet-valid'
+  | 'missing-shop'
+  | 'valid'
+
+/**
+ * Explains why `verifyShopifySessionToken` returned null, WITHOUT revealing the
+ * token or the secret. This is the difference between "SHOPIFY_API_SECRET is
+ * wrong" (signature-mismatch), "SHOPIFY_API_KEY belongs to another app"
+ * (audience-mismatch) and "the merchant sat on the page for two minutes"
+ * (expired) — three causes that previously produced one identical log line.
+ */
+export function describeSessionTokenRejection(token: string, config: SessionTokenConfig, now: number = Date.now()): SessionTokenRejection {
+  const parts = token.trim().split('.')
+  if (parts.length !== 3) return 'malformed'
+  const [encodedHeader, encodedPayload, signature] = parts
+  if (!encodedHeader || !encodedPayload || !signature) return 'malformed'
+
+  const header = decodeJsonSegment(encodedHeader)
+  if (!header) return 'malformed'
+  if (header.alg !== 'HS256' || (header.typ !== undefined && header.typ !== 'JWT')) return 'unsupported-algorithm'
+
+  const expected = createHmac('sha256', config.apiSecret).update(`${encodedHeader}.${encodedPayload}`, 'utf8').digest('base64url')
+  if (!safeEqualString(signature, expected)) return 'signature-mismatch'
+
+  const payload = decodeJsonSegment(encodedPayload)
+  if (!payload) return 'malformed'
+  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) return 'audience-mismatch'
+
+  const seconds = Math.floor(now / 1000)
+  const exp = numberClaim(payload.exp)
+  const nbf = numberClaim(payload.nbf)
+  if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return 'expired'
+  if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return 'not-yet-valid'
+  if (!shopFromDest(payload.dest)) return 'missing-shop'
+  return 'valid'
+}
+
 /**
  * Establish the authenticated shop for an embedded app request.
  *

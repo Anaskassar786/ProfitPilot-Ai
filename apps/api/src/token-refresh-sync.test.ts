@@ -3,6 +3,7 @@ import { InMemoryStoreDirectory } from '@profitpilot/db'
 import { Logger, createMemorySink } from '@profitpilot/logger'
 import { ShopifyApiError } from '@profitpilot/shopify'
 import { AppError } from '@profitpilot/types'
+import { CIRCUIT_OPEN_REASON, StoreCircuitRegistry } from '@profitpilot/sync'
 import type { SyncRunResult } from '@profitpilot/sync'
 import { TokenRefreshingSync } from './token-refresh-sync.js'
 
@@ -85,5 +86,45 @@ describe('sync token refresh retry', () => {
     await expect(sync.runModule(tenant.storeId, 'products', 'id-token')).rejects.toBe(unavailable)
     expect(runModule).toHaveBeenCalledTimes(1)
     expect(exchangeOfflineAccessToken).not.toHaveBeenCalled()
+  })
+})
+
+describe('sync circuit recovery', () => {
+  it('closes an open circuit after the token exchange succeeds', async () => {
+    const { directory, tenant, result, logger, sink } = await fixture()
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1, cooldownMs: 60_000 })
+    circuits.recordFailure(tenant.storeId, 0)
+    const runModule = vi.fn(async (store: typeof tenant.storeId, module: 'products') => {
+      circuits.assertAvailable(store, 10)
+      return { ...result, module }
+    })
+    const exchangeOfflineAccessToken = vi.fn(async () => ({ shop: SHOP, scopes: ['read_orders'], source: 'exchanged' as const }))
+    const sync = new TokenRefreshingSync({ runModule }, directory, { exchangeOfflineAccessToken }, logger, circuits)
+
+    await expect(sync.runModule(tenant.storeId, 'products', 'fresh-id-token')).resolves.toEqual(result)
+    expect(exchangeOfflineAccessToken).toHaveBeenCalledTimes(1)
+    expect(circuits.state(tenant.storeId).open).toBe(false)
+    expect(sink.records.some((record) => record.context.reason === 'circuit-open' && record.context.circuitReset === true)).toBe(true)
+  })
+
+  it('keeps returning the circuit error when no id_token is available to repair it', async () => {
+    const { directory, tenant, logger } = await fixture()
+    const open = new AppError('DEPENDENCY_ERROR', 'Shopify circuit is open for this store', 503, { reason: CIRCUIT_OPEN_REASON })
+    const runModule = vi.fn(async () => { throw open })
+    const exchangeOfflineAccessToken = vi.fn()
+    const sync = new TokenRefreshingSync({ runModule }, directory, { exchangeOfflineAccessToken }, logger, new StoreCircuitRegistry())
+    await expect(sync.runModule(tenant.storeId, 'products')).rejects.toBe(open)
+    expect(exchangeOfflineAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('leaves the circuit untouched when the exchange itself fails', async () => {
+    const { directory, tenant, logger, sink } = await fixture()
+    const circuits = new StoreCircuitRegistry({ failureThreshold: 1, cooldownMs: 60_000 })
+    circuits.recordFailure(tenant.storeId, 0)
+    const runModule = vi.fn(async () => { throw new AppError('DEPENDENCY_ERROR', 'open', 503, { reason: CIRCUIT_OPEN_REASON }) })
+    const sync = new TokenRefreshingSync({ runModule }, directory, { exchangeOfflineAccessToken: async () => { throw new Error('HTTP 400 (invalid_subject_token)') } }, logger, circuits)
+    await expect(sync.runModule(tenant.storeId, 'products', 'stale-id-token')).rejects.toThrow('Hard refresh')
+    expect(circuits.state(tenant.storeId).open).toBe(true)
+    expect(sink.records.some((record) => record.message === 'Shopify offline access token refresh failed during sync')).toBe(true)
   })
 })
