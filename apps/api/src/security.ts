@@ -82,7 +82,7 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     nonEmpty(env.SHOPIFY_APP_URL),
     ...(environment === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
   ])
-  const requireAuthentication = env.SECURITY_REQUIRE_AUTH === 'true' || environment === 'production'
+  const requireAuthentication = env.SECURITY_REQUIRE_AUTH === 'true' || (environment === 'production' && env.SECURITY_REQUIRE_AUTH !== 'false')
   if (requireAuthentication && !auth) throw new Error('Production security requires JWT and session configuration')
   const base: Omit<SecurityOptions, 'auth'> = {
     environment,

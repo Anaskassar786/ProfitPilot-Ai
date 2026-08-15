@@ -25,6 +25,7 @@ export default defineConfig({
       '/support': 'http://127.0.0.1:3000',
       '/settings': 'http://127.0.0.1:3000',
       '/security': 'http://127.0.0.1:3000',
+      '/session': 'http://127.0.0.1:3000',
       '/legal': 'http://127.0.0.1:3000',
       '/jarvis': 'http://127.0.0.1:3000',
       '/copilot': 'http://127.0.0.1:3000',

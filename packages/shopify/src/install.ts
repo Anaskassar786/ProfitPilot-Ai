@@ -1,5 +1,6 @@
 import { AppError } from '@profitpilot/types'
-import type { ErrorCode } from '@profitpilot/types'
+import type { ErrorCode, StoreId } from '@profitpilot/types'
+import type { StoreDirectory } from '@profitpilot/db'
 import { inspectOAuthHmac, parseShopDomain, verifyOAuthHmac } from './oauth.js'
 import type { OAuthHmacDiagnostics, OAuthStates } from './oauth.js'
 import type { TokenVault } from './token-vault.js'
@@ -14,18 +15,20 @@ export type AccessTokenExchange = (shop: string, code: string) => Promise<string
  * its step in AppError.details.step so logs and alerts point at the exact stage
  * instead of a sanitized INTERNAL_ERROR.
  */
-export type InstallStep = 'validation' | 'hmac-verification' | 'state-verification' | 'token-exchange' | 'token-storage'
+export type InstallStep = 'validation' | 'hmac-verification' | 'state-verification' | 'token-exchange' | 'token-storage' | 'tenant-registration'
 
 export class ShopifyInstallService {
   private readonly config: ShopifyInstallConfig
   private readonly states: OAuthStates
   private readonly vault: TokenVault
+  private readonly directory: StoreDirectory
 
-  public constructor(config: ShopifyInstallConfig, states: OAuthStates, vault: TokenVault) {
+  public constructor(config: ShopifyInstallConfig, states: OAuthStates, vault: TokenVault, directory: StoreDirectory) {
     if (!config.apiKey.trim() || !config.apiSecret.trim() || !config.redirectUri.trim()) throw new TypeError('Shopify OAuth configuration is incomplete')
     this.config = config
     this.states = states
     this.vault = vault
+    this.directory = directory
   }
 
   public async start(shop: string): Promise<InstallStart> {
@@ -35,7 +38,7 @@ export class ShopifyInstallService {
     return { shop: normalizedShop, state: state.token, authorizationUrl: `https://${normalizedShop}/admin/oauth/authorize?${params.toString()}` }
   }
 
-  public async complete(callback: OAuthCallback, exchange: AccessTokenExchange, rawQuery?: string): Promise<Readonly<{ shop: string; tokenStored: true }>> {
+  public async complete(callback: OAuthCallback, exchange: AccessTokenExchange, rawQuery?: string): Promise<Readonly<{ shop: string; storeId: StoreId; tokenStored: true }>> {
     const shop = requireShopDomain(callback.shop ?? '')
     if (!verifyOAuthHmac(callback, this.config.apiSecret, rawQuery)) {
       throw installError('UNAUTHORIZED', 'hmac-verification', 'Shopify OAuth callback signature verification failed', 401)
@@ -57,7 +60,16 @@ export class ShopifyInstallService {
     } catch (error: unknown) {
       throw installError('INTERNAL_ERROR', 'token-storage', 'Failed to store the Shopify access token', 500, error, false)
     }
-    return { shop, tokenStored: true }
+    let tenant: { storeId: StoreId; shopDomain: string }
+    try {
+      // Register (or re-find) the tenant row so the dashboard has a storeId to
+      // attach the Shopify token to. This is what connects the stored token to
+      // the workspace context the web app renders from.
+      tenant = await this.directory.upsertByShopDomain(shop)
+    } catch (error: unknown) {
+      throw installError('INTERNAL_ERROR', 'tenant-registration', 'Failed to register the Shopify store tenant', 500, error, false)
+    }
+    return { shop, storeId: tenant.storeId, tokenStored: true }
   }
 
   /**
@@ -75,12 +87,21 @@ export class ShopifyInstallService {
    * Embedded apps belong inside Shopify admin; the `host` callback parameter
    * encodes the admin origin (e.g. admin.shopify.com/store/<store>) so it is
    * authoritative when present, with a myshopify-derived fallback otherwise.
+   *
+   * The tenant context (storeId, shop, and the original `host`) is carried as
+   * query parameters so the web app can render the correct workspace without a
+   * second resolution step. The session cookie set by the caller provides the
+   * same context on later refreshes.
    */
-  public postInstallRedirect(callback: OAuthCallback, shop: string): string {
-    const adminOrigin = decodeAdminHost(callback.host ?? '')
-    if (adminOrigin) return `https://${adminOrigin}/apps/${this.config.apiKey}`
-    const handle = normalizeShopDomainFallback(shop).replace(/\.myshopify\.com$/, '')
-    return `https://admin.shopify.com/store/${handle}/apps/${this.config.apiKey}`
+  public postInstallRedirect(callback: OAuthCallback, shop: string, storeId: StoreId): string {
+    const query = new URLSearchParams({ storeId, shop })
+    const host = callback.host ?? ''
+    if (host) query.set('host', host)
+    const adminOrigin = decodeAdminHost(host)
+    const base = adminOrigin
+      ? `https://${adminOrigin}/apps/${this.config.apiKey}`
+      : `https://admin.shopify.com/store/${normalizeShopDomainFallback(shop).replace(/\.myshopify\.com$/, '')}/apps/${this.config.apiKey}`
+    return `${base}?${query.toString()}`
   }
 }
 

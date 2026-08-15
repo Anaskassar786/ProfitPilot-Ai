@@ -81,7 +81,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { activateWorkflow, createBillingCharge, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchRecommendations, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { activateWorkflow, createBillingCharge, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, JsonValue, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
@@ -175,7 +175,20 @@ export default function App() {
   const [lightMode, setLightMode] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [data, setData] = useState<WorkspaceData>({ analytics: null, catalog: [], agents: [], recommendations: [], loadState: 'idle', error: null })
-  const context = useMemo(() => workspaceContext(window.location.search), [])
+  // Tenant context comes first from the URL (the post-OAuth redirect carries
+  // storeId/shop/host), then from the session cookie via /session/context so a
+  // refresh inside Shopify admin keeps the workspace attached.
+  const urlContext = useMemo(() => workspaceContext(window.location.search), [])
+  const [resolvedContext, setResolvedContext] = useState<WorkspaceContext>({ storeId: null, shop: null })
+  const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
+
+  useEffect(() => {
+    if (urlContext.storeId) return
+    const query = urlContext.shop ? `?shop=${encodeURIComponent(urlContext.shop)}` : ''
+    void fetchSessionContext(query)
+      .then((result) => setResolvedContext(result))
+      .catch(() => setResolvedContext({ storeId: null, shop: null }))
+  }, [urlContext.storeId, urlContext.shop])
 
   const showToast = (message: string, kind: ToastKind = 'success') => {
     setToast({ message, kind })

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { createMemorySink, Logger } from '@profitpilot/logger'
 import { InMemoryTokenRecordStore, InMemoryWebhookProcessingLedger, OAuthStateStore, ShopifyInstallService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
+import { InMemoryStoreDirectory } from '@profitpilot/db'
+import type { StoreDirectory } from '@profitpilot/db'
 import { createApi } from './app.js'
 import { storeId } from '@profitpilot/types'
 import type { Express } from 'express'
@@ -23,8 +25,8 @@ async function withServer<T>(app: Express, handler: (baseUrl: string) => Promise
   }
 }
 
-function installer(): ShopifyInstallService {
-  return new ShopifyInstallService({ apiKey: 'api-key', apiSecret: secret, scopes: ['read_products'], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()))
+function installer(directory: StoreDirectory = new InMemoryStoreDirectory()): ShopifyInstallService {
+  return new ShopifyInstallService({ apiKey: 'api-key', apiSecret: secret, scopes: ['read_products'], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), directory)
 }
 
 /** Signs exactly like Shopify's backend: sorted keys, URL-encoded values (the raw query minus hmac). */
@@ -58,8 +60,9 @@ describe('Shopify install API routes', () => {
     expect(response.headers.get('location')).toContain('demo.myshopify.com/admin/oauth/authorize')
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
-  it('completes the callback route with HMAC and state, then redirects into the embedded app', async () => {
-    const service = installer()
+  it('completes the callback route with HMAC and state, then redirects into the embedded app with tenant context', async () => {
+    const directory = new InMemoryStoreDirectory()
+    const service = installer(directory)
     const start = await service.start('demo.myshopify.com')
     const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1', host: Buffer.from('admin.shopify.com/store/demo', 'utf8').toString('base64') }
     const message = shopifyMessage(fields)
@@ -67,7 +70,13 @@ describe('Shopify install API routes', () => {
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
       expect(response.status).toBe(302)
-      expect(response.headers.get('location')).toBe('https://admin.shopify.com/store/demo/apps/api-key')
+      const location = new URL(response.headers.get('location') ?? '')
+      expect(location.origin + location.pathname).toBe('https://admin.shopify.com/store/demo/apps/api-key')
+      expect(location.searchParams.get('shop')).toBe('demo.myshopify.com')
+      expect(location.searchParams.get('host')).toBe(fields.host)
+      const tenant = await directory.getByShopDomain('demo.myshopify.com')
+      expect(tenant?.storeId).toBeTruthy()
+      expect(location.searchParams.get('storeId')).toBe(tenant?.storeId)
     })
   })
 
@@ -85,7 +94,47 @@ describe('Shopify install API routes', () => {
     await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/shopify/callback?${rawQuery}`, { redirect: 'manual' })
       expect(response.status).toBe(302)
-      expect(response.headers.get('location')).toBe('https://admin.shopify.com/store/my-demo-shop1/apps/api-key')
+      const location = new URL(response.headers.get('location') ?? '')
+      expect(location.origin + location.pathname).toBe('https://admin.shopify.com/store/my-demo-shop1/apps/api-key')
+      expect(location.searchParams.get('shop')).toBe('my-demo-shop1.myshopify.com')
+      expect(location.searchParams.get('storeId')).toBeTruthy()
+    })
+  })
+
+  it('registers the store tenant during a successful callback', async () => {
+    const directory = new InMemoryStoreDirectory()
+    const service = installer(directory)
+    const start = await service.start('commander-pilot.myshopify.com')
+    const fields = { shop: 'commander-pilot.myshopify.com', state: start.state, code: 'code', timestamp: '1' }
+    const message = shopifyMessage(fields)
+    const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
+    await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+    })
+    const tenant = await directory.getByShopDomain('commander-pilot.myshopify.com')
+    expect(tenant).not.toBeNull()
+    expect(tenant?.shopDomain).toBe('commander-pilot.myshopify.com')
+    expect(tenant?.storeId).toBeTruthy()
+  })
+
+  it('sets a SameSite=None Secure HttpOnly session cookie with the storeId after a successful callback', async () => {
+    const directory = new InMemoryStoreDirectory()
+    const service = installer(directory)
+    const start = await service.start('demo.myshopify.com')
+    const fields = { shop: 'demo.myshopify.com', state: start.state, code: 'code', timestamp: '1' }
+    const message = shopifyMessage(fields)
+    const callback = new URLSearchParams({ ...fields, hmac: createHmac('sha256', secret).update(message).digest('hex') })
+    await withServer(createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer: service, exchange: async () => 'token' } }), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/shopify/callback?${callback.toString()}`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      const setCookie = response.headers.get('set-cookie') ?? ''
+      const tenant = await directory.getByShopDomain('demo.myshopify.com')
+      expect(setCookie).toContain('profitpilot_session=')
+      expect(setCookie).toContain(`profitpilot_session=${encodeURIComponent(tenant?.storeId ?? '')}`)
+      expect(setCookie).toContain('SameSite=None')
+      expect(setCookie).toContain('Secure')
+      expect(setCookie).toContain('HttpOnly')
     })
   })
 

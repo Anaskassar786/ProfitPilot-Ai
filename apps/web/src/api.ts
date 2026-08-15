@@ -1,4 +1,4 @@
-import type { AgentStatus, AnalyticsSnapshot, BillingAccount, BillingPlan, CatalogProduct, Recommendation, RoiMetrics, SectionId, UsageMeter } from './model.js'
+import type { AgentStatus, AnalyticsSnapshot, BillingAccount, BillingPlan, CatalogProduct, Recommendation, RoiMetrics, SectionId, UsageMeter, WorkspaceContext } from './model.js'
 import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, ReportRun } from './f8-model.js'
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
 
@@ -38,6 +38,10 @@ export async function requestJson<Value>(path: string, init: RequestInit = {}, f
     throw new ApiClientError('API returned an invalid envelope', response.status, 'INVALID_ENVELOPE')
   }
   return payload.data as Value
+}
+
+export function fetchSessionContext(query = '', fetcher: Fetcher = fetch): Promise<WorkspaceContext> {
+  return requestJson<WorkspaceContext>(`/session/context${query}`, {}, fetcher)
 }
 
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {
