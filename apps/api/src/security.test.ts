@@ -80,6 +80,14 @@ describe('F7 security primitives', () => {
     expect(options.allowedOrigins).toContain('https://app.example')
     expect(() => securityOptionsFromEnv({ NODE_ENV: 'production' })).toThrow('JWT')
   })
+
+  it('allows an explicit SECURITY_REQUIRE_AUTH=false opt-out in production while defaulting to auth otherwise', () => {
+    const auth = { jwt: new JwtService({ secret: jwtSecret, issuer: 'p', accessTtlSeconds: 60, refreshTtlSeconds: 60 }), sessions: new InMemorySessionRepository() }
+    expect(securityOptionsFromEnv({ NODE_ENV: 'production', APP_URL: 'https://app.example', JWT_SECRET: jwtSecret, SECURITY_REQUIRE_AUTH: 'false' }, auth).requireAuthentication).toBe(false)
+    expect(securityOptionsFromEnv({ NODE_ENV: 'production', APP_URL: 'https://app.example', JWT_SECRET: jwtSecret }, auth).requireAuthentication).toBe(true)
+    expect(securityOptionsFromEnv({ NODE_ENV: 'production', APP_URL: 'https://app.example', JWT_SECRET: jwtSecret, SECURITY_REQUIRE_AUTH: 'true' }, auth).requireAuthentication).toBe(true)
+    expect(securityOptionsFromEnv({ NODE_ENV: 'development', APP_URL: 'http://localhost:3000', JWT_SECRET: jwtSecret, SECURITY_REQUIRE_AUTH: 'false' }, auth).requireAuthentication).toBe(false)
+  })
 })
 
 describe('F7 API security suite', () => {
