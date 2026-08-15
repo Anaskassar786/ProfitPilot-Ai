@@ -1,51 +1,173 @@
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
+import { withTenantContext } from '@profitpilot/db'
+import { AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import type { CopilotAnswer, CopilotRepository, CopilotThread, JarvisMessage, JarvisPreference, JarvisRepository, JarvisSession } from '@profitpilot/ai'
 import type { ReportRepository, ReportRun, ReportSchedule } from '@profitpilot/reporting'
 import type { JarvisAddressing, JarvisEngagementMode, JarvisLanguage, JarvisPage, JarvisResponseMode, JarvisActionPlan } from '@profitpilot/ai'
 import type { CopilotIntent, CopilotNumberSlot, CopilotEvidence } from '@profitpilot/ai'
-import type { ClosedPeriod, ReportFrequency } from '@profitpilot/reporting'
+import type { ReportFrequency } from '@profitpilot/reporting'
 
 type PreferenceRow = QueryResultRow & { store_id: string; addressing: JarvisAddressing; language: JarvisLanguage | 'auto'; engagement_mode: JarvisEngagementMode; silence_until: Date | null; navigation_suggestions: boolean; only_answer_when_asked: boolean; updated_at: Date }
 type SessionRow = QueryResultRow & { id: string; store_id: string; plan: JarvisSession['plan']; active: boolean; paused: boolean; started_at: Date; last_activity_at: Date; last_page: string; memory_expires_at: Date; undo_window_seconds: number; nonsense_count: number; pending_action: unknown; ended_at: Date | null }
 type MessageRow = QueryResultRow & { id: string; session_id: string; store_id: string; role: JarvisMessage['role']; text: string; language: JarvisLanguage; mode: JarvisResponseMode; evidence: unknown; created_at: Date }
 type ThreadRow = QueryResultRow & { id: string; store_id: string; title: string; created_at: Date; updated_at: Date }
 type AnswerRow = QueryResultRow & { id: string; thread_id: string; store_id: string; query: string; intent: CopilotIntent | null; answer: string; clarification: string | null; evidence: unknown; slots: unknown; created_at: Date }
-type RunRow = QueryResultRow & { id: string; store_id: string; frequency: ReportFrequency; period_start: string; period_end: string; idempotency_key: string; filename: string; object_key: string; content_sha256: string | null; status: ReportRun['status']; email_status: ReportRun['emailStatus']; created_at: Date; completed_at: Date | null }
+type RunRow = QueryResultRow & { id: string; store_id: string; frequency: ReportFrequency; period_start: string | Date; period_end: string | Date; idempotency_key: string; filename: string; object_key: string; content_sha256: string | null; status: ReportRun['status']; email_status: ReportRun['emailStatus']; created_at: Date; completed_at: Date | null; content_base64?: string | null }
 type ScheduleRow = QueryResultRow & { id: string; store_id: string; frequency: ReportFrequency; enabled: boolean; next_run_at: Date; version: number }
 
 export class PostgresJarvisRepository implements JarvisRepository {
   private readonly executor: SqlExecutor
   public constructor(executor: SqlExecutor) { this.executor = executor }
-  public async getPreferences(storeId: StoreId): Promise<JarvisPreference | null> { const result = await this.executor.query<PreferenceRow>('SELECT store_id, addressing, language, engagement_mode, silence_until, navigation_suggestions, only_answer_when_asked, updated_at FROM jarvis_preferences WHERE store_id = $1 LIMIT 1', [storeId]); const row = result.rows[0]; return row ? toPreference(row) : null }
-  public async savePreferences(preferences: JarvisPreference): Promise<JarvisPreference> { await this.executor.query('INSERT INTO jarvis_preferences (store_id, addressing, language, engagement_mode, silence_until, navigation_suggestions, only_answer_when_asked, updated_at) VALUES ($1, $2, $3, $4, CASE WHEN $5 IS NULL THEN NULL ELSE to_timestamp($5 / 1000.0) END, $6, $7, to_timestamp($8 / 1000.0)) ON CONFLICT (store_id) DO UPDATE SET addressing = EXCLUDED.addressing, language = EXCLUDED.language, engagement_mode = EXCLUDED.engagement_mode, silence_until = EXCLUDED.silence_until, navigation_suggestions = EXCLUDED.navigation_suggestions, only_answer_when_asked = EXCLUDED.only_answer_when_asked, updated_at = EXCLUDED.updated_at', [preferences.storeId, preferences.addressing, preferences.language, preferences.engagementMode, preferences.silenceUntil, preferences.navigationSuggestions, preferences.onlyAnswerWhenAsked, preferences.updatedAt]); return preferences }
-  public async getActiveSession(storeId: StoreId): Promise<JarvisSession | null> { const result = await this.executor.query<SessionRow>('SELECT * FROM jarvis_sessions WHERE store_id = $1 AND active = true AND ended_at IS NULL ORDER BY last_activity_at DESC LIMIT 1', [storeId]); const row = result.rows[0]; return row ? toSession(row) : null }
-  public async getSession(storeId: StoreId, sessionId: string): Promise<JarvisSession | null> { const result = await this.executor.query<SessionRow>('SELECT * FROM jarvis_sessions WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, sessionId]); const row = result.rows[0]; return row ? toSession(row) : null }
-  public async saveSession(session: JarvisSession): Promise<JarvisSession> { await this.executor.query('INSERT INTO jarvis_sessions (id, store_id, plan, active, paused, started_at, last_activity_at, last_page, memory_expires_at, undo_window_seconds, nonsense_count, pending_action, ended_at) VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0), to_timestamp($7 / 1000.0), $8, to_timestamp($9 / 1000.0), $10, $11, $12::jsonb, CASE WHEN $13 IS NULL THEN NULL ELSE to_timestamp($13 / 1000.0) END) ON CONFLICT (id) DO UPDATE SET active = EXCLUDED.active, paused = EXCLUDED.paused, last_activity_at = EXCLUDED.last_activity_at, last_page = EXCLUDED.last_page, memory_expires_at = EXCLUDED.memory_expires_at, undo_window_seconds = EXCLUDED.undo_window_seconds, nonsense_count = EXCLUDED.nonsense_count, pending_action = EXCLUDED.pending_action, ended_at = EXCLUDED.ended_at', [session.id, session.storeId, session.plan, session.active, session.paused, session.startedAt, session.lastActivityAt, session.lastPage, session.memoryExpiresAt, session.undoWindowSeconds, session.nonsenseCount, JSON.stringify(session.pendingAction), session.endedAt]); return session }
-  public async appendMessage(message: JarvisMessage): Promise<void> { await this.executor.query('INSERT INTO jarvis_messages (id, session_id, store_id, role, text, language, mode, evidence, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, to_timestamp($9 / 1000.0))', [message.id, message.sessionId, message.storeId, message.role, message.text, message.language, message.mode, JSON.stringify(message.evidence), message.createdAt]) }
-  public async listMessages(storeId: StoreId, sessionId: string): Promise<readonly JarvisMessage[]> { const result = await this.executor.query<MessageRow>('SELECT * FROM jarvis_messages WHERE store_id = $1 AND session_id = $2 ORDER BY created_at, id', [storeId, sessionId]); return result.rows.map(toMessage) }
+  public async getPreferences(storeId: StoreId): Promise<JarvisPreference | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<PreferenceRow>('SELECT store_id, addressing, language, engagement_mode, silence_until, navigation_suggestions, only_answer_when_asked, updated_at FROM jarvis_preferences WHERE store_id = $1 LIMIT 1', [storeId])
+      const row = result.rows[0]
+      return row ? toPreference(row) : null
+    })
+  }
+  public async savePreferences(preferences: JarvisPreference): Promise<JarvisPreference> {
+    return this.scoped(preferences.storeId, async (client) => {
+      await client.query('INSERT INTO jarvis_preferences (store_id, addressing, language, engagement_mode, silence_until, navigation_suggestions, only_answer_when_asked, updated_at) VALUES ($1, $2, $3, $4, CASE WHEN $5 IS NULL THEN NULL ELSE to_timestamp($5 / 1000.0) END, $6, $7, to_timestamp($8 / 1000.0)) ON CONFLICT (store_id) DO UPDATE SET addressing = EXCLUDED.addressing, language = EXCLUDED.language, engagement_mode = EXCLUDED.engagement_mode, silence_until = EXCLUDED.silence_until, navigation_suggestions = EXCLUDED.navigation_suggestions, only_answer_when_asked = EXCLUDED.only_answer_when_asked, updated_at = EXCLUDED.updated_at', [preferences.storeId, preferences.addressing, preferences.language, preferences.engagementMode, preferences.silenceUntil, preferences.navigationSuggestions, preferences.onlyAnswerWhenAsked, preferences.updatedAt])
+      return preferences
+    })
+  }
+  public async getActiveSession(storeId: StoreId): Promise<JarvisSession | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<SessionRow>('SELECT * FROM jarvis_sessions WHERE store_id = $1 AND active = true AND ended_at IS NULL ORDER BY last_activity_at DESC LIMIT 1', [storeId])
+      const row = result.rows[0]
+      return row ? toSession(row) : null
+    })
+  }
+  public async getSession(storeId: StoreId, sessionId: string): Promise<JarvisSession | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<SessionRow>('SELECT * FROM jarvis_sessions WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, sessionId])
+      const row = result.rows[0]
+      return row ? toSession(row) : null
+    })
+  }
+  public async saveSession(session: JarvisSession): Promise<JarvisSession> {
+    return this.scoped(session.storeId, async (client) => {
+      await client.query('INSERT INTO jarvis_sessions (id, store_id, plan, active, paused, started_at, last_activity_at, last_page, memory_expires_at, undo_window_seconds, nonsense_count, pending_action, ended_at) VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0), to_timestamp($7 / 1000.0), $8, to_timestamp($9 / 1000.0), $10, $11, $12::jsonb, CASE WHEN $13 IS NULL THEN NULL ELSE to_timestamp($13 / 1000.0) END) ON CONFLICT (id) DO UPDATE SET active = EXCLUDED.active, paused = EXCLUDED.paused, last_activity_at = EXCLUDED.last_activity_at, last_page = EXCLUDED.last_page, memory_expires_at = EXCLUDED.memory_expires_at, undo_window_seconds = EXCLUDED.undo_window_seconds, nonsense_count = EXCLUDED.nonsense_count, pending_action = EXCLUDED.pending_action, ended_at = EXCLUDED.ended_at', [session.id, session.storeId, session.plan, session.active, session.paused, session.startedAt, session.lastActivityAt, session.lastPage, session.memoryExpiresAt, session.undoWindowSeconds, session.nonsenseCount, JSON.stringify(session.pendingAction), session.endedAt])
+      return session
+    })
+  }
+  public async appendMessage(message: JarvisMessage): Promise<void> {
+    await this.scoped(message.storeId, async (client) => {
+      await client.query('INSERT INTO jarvis_messages (id, session_id, store_id, role, text, language, mode, evidence, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, to_timestamp($9 / 1000.0))', [message.id, message.sessionId, message.storeId, message.role, message.text, message.language, message.mode, JSON.stringify(message.evidence), message.createdAt])
+    })
+  }
+  public async listMessages(storeId: StoreId, sessionId: string): Promise<readonly JarvisMessage[]> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<MessageRow>('SELECT * FROM jarvis_messages WHERE store_id = $1 AND session_id = $2 ORDER BY created_at, id', [storeId, sessionId])
+      return result.rows.map(toMessage)
+    })
+  }
+  private scoped<Value>(storeId: StoreId, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
+    return withTenantOrDirect(this.executor, storeId, operation, 'Jarvis')
+  }
 }
 
 export class PostgresCopilotRepository implements CopilotRepository {
   private readonly executor: SqlExecutor
   public constructor(executor: SqlExecutor) { this.executor = executor }
-  public async createThread(thread: CopilotThread): Promise<CopilotThread> { await this.executor.query('INSERT INTO copilot_threads (id, store_id, title, created_at, updated_at) VALUES ($1, $2, $3, to_timestamp($4 / 1000.0), to_timestamp($4 / 1000.0))', [thread.id, thread.storeId, thread.title, thread.createdAt]); return thread }
-  public async getThread(storeId: StoreId, threadId: string): Promise<CopilotThread | null> { const result = await this.executor.query<ThreadRow>('SELECT * FROM copilot_threads WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, threadId]); const row = result.rows[0]; return row ? toThread(row) : null }
-  public async listThreads(storeId: StoreId): Promise<readonly CopilotThread[]> { const result = await this.executor.query<ThreadRow>('SELECT * FROM copilot_threads WHERE store_id = $1 ORDER BY updated_at DESC', [storeId]); return result.rows.map(toThread) }
-  public async appendAnswer(answer: CopilotAnswer): Promise<void> { await this.executor.query('INSERT INTO copilot_answers (id, thread_id, store_id, query, intent, answer, clarification, evidence, slots, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, to_timestamp($10 / 1000.0))', [answer.id, answer.threadId, answer.storeId, answer.query, answer.intent, answer.answer, answer.clarification, JSON.stringify(answer.evidence), JSON.stringify(answer.slots), answer.createdAt]); await this.executor.query('UPDATE copilot_threads SET updated_at = to_timestamp($2 / 1000.0) WHERE id = $1 AND store_id = $3', [answer.threadId, answer.createdAt, answer.storeId]) }
-  public async listAnswers(storeId: StoreId, threadId: string): Promise<readonly CopilotAnswer[]> { const result = await this.executor.query<AnswerRow>('SELECT * FROM copilot_answers WHERE store_id = $1 AND thread_id = $2 ORDER BY created_at, id', [storeId, threadId]); return result.rows.map(toAnswer) }
+  public async createThread(thread: CopilotThread): Promise<CopilotThread> {
+    return this.scoped(thread.storeId, async (client) => {
+      await client.query('INSERT INTO copilot_threads (id, store_id, title, created_at, updated_at) VALUES ($1, $2, $3, to_timestamp($4 / 1000.0), to_timestamp($4 / 1000.0))', [thread.id, thread.storeId, thread.title, thread.createdAt])
+      return thread
+    })
+  }
+  public async getThread(storeId: StoreId, threadId: string): Promise<CopilotThread | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ThreadRow>('SELECT * FROM copilot_threads WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, threadId])
+      const row = result.rows[0]
+      return row ? toThread(row) : null
+    })
+  }
+  public async listThreads(storeId: StoreId): Promise<readonly CopilotThread[]> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ThreadRow>('SELECT * FROM copilot_threads WHERE store_id = $1 ORDER BY updated_at DESC', [storeId])
+      return result.rows.map(toThread)
+    })
+  }
+  public async appendAnswer(answer: CopilotAnswer): Promise<void> {
+    await this.scoped(answer.storeId, async (client) => {
+      await client.query('INSERT INTO copilot_answers (id, thread_id, store_id, query, intent, answer, clarification, evidence, slots, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, to_timestamp($10 / 1000.0))', [answer.id, answer.threadId, answer.storeId, answer.query, answer.intent, answer.answer, answer.clarification, JSON.stringify(answer.evidence), JSON.stringify(answer.slots), answer.createdAt])
+      await client.query('UPDATE copilot_threads SET updated_at = to_timestamp($2 / 1000.0) WHERE id = $1 AND store_id = $3', [answer.threadId, answer.createdAt, answer.storeId])
+    })
+  }
+  public async listAnswers(storeId: StoreId, threadId: string): Promise<readonly CopilotAnswer[]> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<AnswerRow>('SELECT * FROM copilot_answers WHERE store_id = $1 AND thread_id = $2 ORDER BY created_at, id', [storeId, threadId])
+      return result.rows.map(toAnswer)
+    })
+  }
+  private scoped<Value>(storeId: StoreId, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
+    return withTenantOrDirect(this.executor, storeId, operation, 'Copilot')
+  }
 }
 
 export class PostgresReportRepository implements ReportRepository {
   private readonly executor: SqlExecutor
   public constructor(executor: SqlExecutor) { this.executor = executor }
-  public async listRuns(storeId: string): Promise<readonly ReportRun[]> { const result = await this.executor.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 ORDER BY created_at DESC', [storeId]); return result.rows.map(toRun) }
-  public async getRun(storeId: string, id: string): Promise<ReportRun | null> { const result = await this.executor.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, id]); const row = result.rows[0]; return row ? toRun(row) : null }
-  public async getByIdempotency(storeId: string, idempotencyKey: string): Promise<ReportRun | null> { const result = await this.executor.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 AND idempotency_key = $2 LIMIT 1', [storeId, idempotencyKey]); const row = result.rows[0]; return row ? toRun(row) : null }
-  public async createRunIfAbsent(run: ReportRun): Promise<boolean> { const result = await this.executor.query('INSERT INTO report_runs (id, store_id, frequency, period_start, period_end, idempotency_key, filename, object_key, content_sha256, status, email_status, created_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, to_timestamp($12 / 1000.0), NULL) ON CONFLICT (store_id, idempotency_key) DO NOTHING RETURNING id', [run.id, run.storeId, run.frequency, run.period.start, run.period.end, run.idempotencyKey, run.filename, run.objectKey, run.contentSha256, run.status, run.emailStatus, run.createdAt]); return result.rowCount === 1 }
-  public async updateRun(run: ReportRun): Promise<void> { await this.executor.query('UPDATE report_runs SET content_sha256 = $3, status = $4, email_status = $5, completed_at = CASE WHEN $6 IS NULL THEN NULL ELSE to_timestamp($6 / 1000.0) END WHERE store_id = $1 AND id = $2', [run.storeId, run.id, run.contentSha256, run.status, run.emailStatus, run.completedAt]) }
-  public async listSchedules(storeId: string): Promise<readonly ReportSchedule[]> { const result = await this.executor.query<ScheduleRow>('SELECT * FROM report_schedules WHERE store_id = $1 ORDER BY next_run_at', [storeId]); return result.rows.map(toSchedule) }
-  public async saveSchedule(schedule: ReportSchedule): Promise<ReportSchedule> { await this.executor.query('INSERT INTO report_schedules (id, store_id, frequency, enabled, next_run_at, version) VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), $6) ON CONFLICT (id) DO UPDATE SET frequency = EXCLUDED.frequency, enabled = EXCLUDED.enabled, next_run_at = EXCLUDED.next_run_at, version = EXCLUDED.version', [schedule.id, schedule.storeId, schedule.frequency, schedule.enabled, schedule.nextRunAt, schedule.version]); return schedule }
+  public async listRuns(storeId: string): Promise<readonly ReportRun[]> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 ORDER BY created_at DESC', [storeId])
+      return result.rows.map(toRun)
+    })
+  }
+  public async getRun(storeId: string, id: string): Promise<ReportRun | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, id])
+      const row = result.rows[0]
+      return row ? toRun(row) : null
+    })
+  }
+  public async getByIdempotency(storeId: string, idempotencyKey: string): Promise<ReportRun | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<RunRow>('SELECT * FROM report_runs WHERE store_id = $1 AND idempotency_key = $2 LIMIT 1', [storeId, idempotencyKey])
+      const row = result.rows[0]
+      return row ? toRun(row) : null
+    })
+  }
+  public async createRunIfAbsent(run: ReportRun): Promise<boolean> {
+    return this.scoped(run.storeId, async (client) => {
+      const result = await client.query('INSERT INTO report_runs (id, store_id, frequency, period_start, period_end, idempotency_key, filename, object_key, content_sha256, status, email_status, created_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, to_timestamp($12 / 1000.0), NULL) ON CONFLICT (store_id, idempotency_key) DO NOTHING RETURNING id', [run.id, run.storeId, run.frequency, run.period.start, run.period.end, run.idempotencyKey, run.filename, run.objectKey, run.contentSha256, run.status, run.emailStatus, run.createdAt])
+      return result.rowCount === 1
+    })
+  }
+  public async updateRun(run: ReportRun): Promise<void> {
+    await this.scoped(run.storeId, async (client) => {
+      await client.query('UPDATE report_runs SET content_sha256 = $3, status = $4, email_status = $5, completed_at = CASE WHEN $6 IS NULL THEN NULL ELSE to_timestamp($6 / 1000.0) END WHERE store_id = $1 AND id = $2', [run.storeId, run.id, run.contentSha256, run.status, run.emailStatus, run.completedAt])
+    })
+  }
+  public async listSchedules(storeId: string): Promise<readonly ReportSchedule[]> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ScheduleRow>('SELECT * FROM report_schedules WHERE store_id = $1 ORDER BY next_run_at', [storeId])
+      return result.rows.map(toSchedule)
+    })
+  }
+  public async saveSchedule(schedule: ReportSchedule): Promise<ReportSchedule> {
+    return this.scoped(schedule.storeId, async (client) => {
+      await client.query('INSERT INTO report_schedules (id, store_id, frequency, enabled, next_run_at, version) VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), $6) ON CONFLICT (id) DO UPDATE SET frequency = EXCLUDED.frequency, enabled = EXCLUDED.enabled, next_run_at = EXCLUDED.next_run_at, version = EXCLUDED.version', [schedule.id, schedule.storeId, schedule.frequency, schedule.enabled, schedule.nextRunAt, schedule.version])
+      return schedule
+    })
+  }
+  public async saveBody(storeId: string, id: string, body: Buffer): Promise<void> {
+    await this.scoped(storeId, async (client) => {
+      await client.query('UPDATE report_runs SET content_base64 = $3 WHERE store_id = $1 AND id = $2', [storeId, id, body.toString('base64')])
+    })
+  }
+  public async getBody(storeId: string, id: string): Promise<Buffer | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<QueryResultRow & { content_base64: string | null }>('SELECT content_base64 FROM report_runs WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, id])
+      const value = result.rows[0]?.content_base64
+      return typeof value === 'string' && value.length > 0 ? Buffer.from(value, 'base64') : null
+    })
+  }
+  private scoped<Value>(storeId: string, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
+    return withTenantOrDirect(this.executor, storeId, operation, 'Report')
+  }
 }
 
 function toPreference(row: PreferenceRow): JarvisPreference { return { storeId: row.store_id as StoreId, addressing: row.addressing, language: row.language, engagementMode: row.engagement_mode, silenceUntil: row.silence_until?.valueOf() ?? null, navigationSuggestions: row.navigation_suggestions, onlyAnswerWhenAsked: row.only_answer_when_asked, updatedAt: row.updated_at.valueOf() } }
@@ -53,7 +175,25 @@ function toSession(row: SessionRow): JarvisSession { return { id: row.id, storeI
 function toMessage(row: MessageRow): JarvisMessage { return { id: row.id, sessionId: row.session_id, storeId: row.store_id as StoreId, role: row.role, text: row.text, language: row.language, mode: row.mode, evidence: isRecord(row.evidence) ? row.evidence as unknown as JarvisMessage['evidence'] : null, createdAt: row.created_at.valueOf() } }
 function toThread(row: ThreadRow): CopilotThread { return { id: row.id, storeId: row.store_id as StoreId, title: row.title, createdAt: row.created_at.valueOf(), updatedAt: row.updated_at.valueOf() } }
 function toAnswer(row: AnswerRow): CopilotAnswer { return { id: row.id, threadId: row.thread_id, storeId: row.store_id as StoreId, query: row.query, intent: row.intent, answer: row.answer, clarification: row.clarification, evidence: isRecord(row.evidence) ? row.evidence as unknown as CopilotEvidence : null, slots: Array.isArray(row.slots) ? row.slots as CopilotNumberSlot[] : [], createdAt: row.created_at.valueOf() } }
-function toRun(row: RunRow): ReportRun { return { id: row.id, storeId: row.store_id, frequency: row.frequency, period: { start: row.period_start, end: row.period_end }, idempotencyKey: row.idempotency_key, filename: row.filename, objectKey: row.object_key, contentSha256: row.content_sha256, status: row.status, emailStatus: row.email_status, createdAt: row.created_at.valueOf(), completedAt: row.completed_at?.valueOf() ?? null } }
+function toRun(row: RunRow): ReportRun { return { id: row.id, storeId: row.store_id, frequency: row.frequency, period: { start: dateText(row.period_start), end: dateText(row.period_end) }, idempotencyKey: row.idempotency_key, filename: row.filename, objectKey: row.object_key, contentSha256: row.content_sha256, status: row.status, emailStatus: row.email_status, createdAt: row.created_at.valueOf(), completedAt: row.completed_at?.valueOf() ?? null } }
 function toSchedule(row: ScheduleRow): ReportSchedule { return { id: row.id, storeId: row.store_id, frequency: row.frequency, enabled: row.enabled, nextRunAt: row.next_run_at.valueOf(), version: row.version } }
+function dateText(value: string | Date): string { return value instanceof Date ? value.toISOString() : String(value) }
 function isAction(value: unknown): value is JarvisActionPlan { return isRecord(value) && typeof value.id === 'string' && typeof value.actionType === 'string' && typeof value.label === 'string' && typeof value.undoWindowSeconds === 'number' && (value.risk === 'SAFE' || value.risk === 'APPROVAL_REQUIRED' || value.risk === 'MANUAL_ONLY') && typeof value.requiresVoiceConfirmation === 'boolean' && (value.recommendationId === null || typeof value.recommendationId === 'string') }
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+async function withTenantOrDirect<Value>(executor: SqlExecutor, storeId: string, operation: (client: SqlExecutor) => Promise<Value>, surface: string): Promise<Value> {
+  try {
+    return await withTenantContext(executor, storeId, operation)
+  } catch (scopedError: unknown) {
+    try {
+      return await operation(executor)
+    } catch (directError: unknown) {
+      throw asDatabaseError(surface, scopedError instanceof Error && scopedError.message ? scopedError : directError)
+    }
+  }
+}
+
+function asDatabaseError(surface: string, error: unknown): Error {
+  if (error instanceof AppError) return error
+  const message = error instanceof Error ? error.message : String(error)
+  return new AppError('DEPENDENCY_ERROR', `${surface} storage is unavailable: ${message}`, 503)
+}

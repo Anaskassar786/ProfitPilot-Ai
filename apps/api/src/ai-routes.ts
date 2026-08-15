@@ -5,7 +5,7 @@ import { AppError, requestId, storeId, success } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import type { CostMeter, DecisionEngine, RecommendationRepository } from '@profitpilot/ai'
 
-export type AiRouteDependencies = Readonly<{ engine: Pick<DecisionEngine, 'statuses'>; recommendations: RecommendationRepository; costs: Pick<CostMeter, 'summary' | 'record'> }>
+export type AiRouteDependencies = Readonly<{ engine: Pick<DecisionEngine, 'statuses'> & Partial<Pick<DecisionEngine, 'run'>>; recommendations: RecommendationRepository; costs: Pick<CostMeter, 'summary' | 'record'>; snapshot?: (storeId: StoreId) => Promise<import('@profitpilot/ai').StoreSnapshot> }>
 
 export function createAiRouter(dependencies: AiRouteDependencies): Router {
   const router = Router()
@@ -18,6 +18,16 @@ export function createAiRouter(dependencies: AiRouteDependencies): Router {
     try {
       const tenant = queryStoreId(request)
       response.status(200).json(success(await dependencies.recommendations.list(tenant), requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.post('/recommendations/analyze', async (request, response, next) => {
+    try {
+      if (!('run' in dependencies.engine) || !dependencies.snapshot) throw new AppError('DEPENDENCY_ERROR', 'Recommendation analysis is not configured', 503)
+      const tenant = queryStoreId(request)
+      const snapshot = await dependencies.snapshot(tenant)
+      const result = await dependencies.engine.run(snapshot)
+      response.status(200).json(success(result, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
 

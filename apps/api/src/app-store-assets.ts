@@ -20,7 +20,7 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
   const applicationUrl = required(env, 'SHOPIFY_APP_URL', 'APP_URL')
   const clientId = required(env, 'SHOPIFY_API_KEY')
   const callback = env.SHOPIFY_REDIRECT_URI?.trim() || `${applicationUrl.replace(/\/$/, '')}/shopify/callback`
-  const scopes = (env.SHOPIFY_SCOPES ?? 'read_products,read_orders,read_customers').split(',').map((scope) => scope.trim()).filter((scope) => scope.length > 0)
+  const scopes = (env.SHOPIFY_SCOPES ?? 'read_products,read_orders,read_customers,read_inventory,read_locations,read_checkouts,read_price_rules').split(',').map((scope) => scope.trim()).filter((scope) => scope.length > 0)
   if (scopes.length === 0) throw new Error('SHOPIFY_SCOPES must contain at least one scope')
   return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10' }
 }

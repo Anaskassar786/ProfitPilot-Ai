@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenueSeries, sumOrders, sumRevenue, workspaceContext } from './model.js'
+import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenuePoints, revenueSeries, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
 import type { AnalyticsSnapshot } from './model.js'
 
 const snapshot: AnalyticsSnapshot = {
@@ -42,4 +42,14 @@ describe('F3 workspace model', () => {
     expect(catalogProductTitle(product)).toBe('Commander Mug')
   })
   it('falls back to the stable product id when Shopify has no usable title', () => expect(catalogProductTitle({ storeId: 's', productId: 'p1', payload: {}, syncedAt: 100 })).toBe('p1'))
+  it('scores store health from real analytics coverage', () => {
+    const health = storeHealthView(snapshot, 2)
+    expect(health.score).toBeGreaterThan(70)
+    expect(health.tone).toBe('healthy')
+    expect(storeHealthView(null).score).toBeNull()
+  })
+  it('filters revenue points by closed period', () => {
+    expect(revenuePoints(snapshot, 'all')).toHaveLength(2)
+    expect(revenuePoints(snapshot, '7d')).toEqual([])
+  })
 })

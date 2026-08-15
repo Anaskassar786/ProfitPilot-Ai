@@ -3,7 +3,7 @@ import type { PlanTier } from '@profitpilot/types'
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED'
 export type TicketPriority = 'NORMAL' | 'HIGH' | 'URGENT'
-export type Ticket = Readonly<{ id: string; shopId: string; subject: string; priority: TicketPriority; status: TicketStatus; createdAt: number; updatedAt: number; version: number }>
+export type Ticket = Readonly<{ id: string; shopId: string; subject: string; description?: string; priority: TicketPriority; status: TicketStatus; createdAt: number; updatedAt: number; version: number }>
 export type TicketMessage = Readonly<{ id: string; ticketId: string; author: 'MERCHANT' | 'OPERATOR'; body: string; createdAt: number }>
 
 export function priorityForPlan(plan: PlanTier): TicketPriority { return plan === 'commander' ? 'URGENT' : plan === 'growth' ? 'HIGH' : 'NORMAL' }

@@ -2,6 +2,7 @@ import { CalibrationLedger, CostMeter, DecisionEngine, OpenRouterClient, Postgre
 import { createF2Bootstrap } from './f2-bootstrap.js'
 import type { F2Bootstrap } from './f2-bootstrap.js'
 import type { AiRouteDependencies } from './ai-routes.js'
+import { buildStoreSnapshot } from './store-snapshot.js'
 
 export type F4Bootstrap = Readonly<F2Bootstrap & { ai: AiRouteDependencies }>
 

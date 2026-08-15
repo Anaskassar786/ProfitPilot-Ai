@@ -64,3 +64,18 @@ export async function withStoreContext<Value>(executor: SqlExecutor, storeId: St
   await executor.query('SELECT set_config($1, $2, true)', ['app.store_id', storeId])
   return operation()
 }
+
+/**
+ * Sets `app.store_id` on the same connection that runs `operation`.
+ * `set_config(..., true)` is transaction-local, so this opens a transaction
+ * when the executor is a real pool. Test doubles run the callback directly.
+ */
+export async function withTenantContext<Value>(executor: SqlExecutor, storeId: string, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
+  if (executor instanceof PostgresDatabase) {
+    return executor.withTransaction(async (client) => {
+      await client.query('SELECT set_config($1, $2, true)', ['app.store_id', storeId])
+      return operation(client)
+    })
+  }
+  return operation(executor)
+}

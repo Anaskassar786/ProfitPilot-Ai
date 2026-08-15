@@ -16,6 +16,18 @@ function source(data: Record<string, unknown>, link?: string): ShopifyRestSyncSo
   return new ShopifyRestSyncSource(async () => client, 2)
 }
 
+function routingSource(routes: Readonly<Record<string, Record<string, unknown>>>, links: Readonly<Record<string, string>> = {}): ShopifyRestSyncSource {
+  const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+    const parsed = new URL(url)
+    const key = Object.keys(routes).find((candidate) => parsed.pathname.endsWith(candidate) || parsed.pathname.includes(candidate))
+    if (!key || !routes[key]) return new Response(JSON.stringify({ errors: 'Not Found' }), { status: 404 })
+    const responseInit: ResponseInit = { status: 200 }
+    if (links[key]) responseInit.headers = { link: links[key] }
+    return new Response(JSON.stringify(routes[key]), responseInit)
+  })
+  return new ShopifyRestSyncSource(async () => client, 2)
+}
+
 describe('Shopify REST sync source', () => {
   it('fetches products and extracts a next cursor', async () => {
     const result = await source({ products: [{ id: 1, title: 'Product' }] }, '<https://demo.myshopify.com/admin/api/2025-10/products.json?page_info=next-token>; rel="next"').fetchPage(storeId('s'), 'products', null)
@@ -61,9 +73,47 @@ describe('Shopify REST sync source', () => {
     expect(requested).toContain('page_info=resume')
     expect(requested).toContain('limit=50')
   })
-  it('maps the inventory endpoint key', async () => expect((await source({ inventory_levels: [{ id: 1 }] }).fetchPage(storeId('s'), 'inventory', null)).records[0]?.id).toBe('1'))
-  it('maps all supported resource modules', async () => {
-    for (const module of ['customers', 'checkouts', 'collections', 'discounts', 'transactions'] as const) {
+  it('loads inventory levels through locations first', async () => {
+    const requested: string[] = []
+    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+      requested.push(url)
+      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations: [{ id: 11, name: 'HQ' }] }), { status: 200 })
+      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 99, location_id: 11, available: 6, admin_graphql_api_id: 'gid://shopify/InventoryLevel/11?inventory_item_id=99' }] }), { status: 200 })
+      return new Response(JSON.stringify({}), { status: 404 })
+    })
+    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
+    expect(requested.some((url) => url.includes('/locations.json'))).toBe(true)
+    expect(requested.some((url) => url.includes('location_ids=11'))).toBe(true)
+    expect(page.records[0]?.id).toBe('11:99')
+  })
+  it('returns an empty inventory page when the shop has no locations', async () => {
+    const page = await routingSource({ '/locations.json': { locations: [] } }).fetchPage(storeId('s'), 'inventory', null)
+    expect(page.records).toEqual([])
+    expect(page.nextCursor).toBeNull()
+  })
+  it('pages custom collections then smart collections', async () => {
+    const sourceClient = routingSource({
+      '/custom_collections.json': { custom_collections: [{ id: 1, title: 'Summer' }] },
+      '/smart_collections.json': { smart_collections: [{ id: 2, title: 'Auto' }] },
+    })
+    const custom = await sourceClient.fetchPage(storeId('s'), 'collections', null)
+    expect(custom.records[0]).toMatchObject({ id: '1', collection_kind: 'custom' })
+    expect(custom.nextCursor).toBe('smart:')
+    const smart = await sourceClient.fetchPage(storeId('s'), 'collections', 'smart:')
+    expect(smart.records[0]).toMatchObject({ id: '2', collection_kind: 'smart' })
+    expect(smart.nextCursor).toBeNull()
+  })
+  it('loads transactions from each order on the page', async () => {
+    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+      if (url.includes('/orders.json')) return new Response(JSON.stringify({ orders: [{ id: 77 }] }), { status: 200 })
+      if (url.includes('/orders/77/transactions.json')) return new Response(JSON.stringify({ transactions: [{ id: 501, amount: '19.00', kind: 'sale' }] }), { status: 200 })
+      return new Response(JSON.stringify({}), { status: 404 })
+    })
+    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'transactions', null)
+    expect(page.records[0]).toMatchObject({ id: '501', order_id: '77', kind: 'sale' })
+  })
+  it('maps remaining simple resource modules', async () => {
+    for (const module of ['customers', 'checkouts', 'discounts'] as const) {
       const key = module === 'discounts' ? 'price_rules' : module
       const result = await source({ [key]: [{ id: 1 }] }).fetchPage(storeId('s'), module, null)
       expect(result.records).toHaveLength(1)

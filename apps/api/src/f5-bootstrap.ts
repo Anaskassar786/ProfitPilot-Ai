@@ -3,6 +3,8 @@ import { PostgresStoreDirectory } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 import { Logger } from '@profitpilot/logger'
 import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, ShopifyBillingClient, TrialAndGiftLedger } from '@profitpilot/billing'
+import type { TrialRecord } from '@profitpilot/billing'
+import { withTenantContext } from '@profitpilot/db'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
 import { createF4Bootstrap } from './f4-bootstrap.js'
@@ -60,6 +62,31 @@ async function roi(database: { query<Row extends QueryResultRow>(text: string, v
   const result = await database.query<RevenueRow>('SELECT COALESCE(SUM(revenue), 0) AS revenue FROM ai_attribution_events WHERE store_id = $1', [shopId])
   const revenue = Number(result.rows[0]?.revenue ?? 0)
   return calculateRoi(revenue, ai.costs.summary(storeId(shopId)).microDollars)
+}
+
+type TrialRow = QueryResultRow & { shop_id: string; started_at: Date; expires_at: Date; consumed: boolean; state: TrialRecord['state'] }
+
+async function ensureTrial(database: F4Bootstrap['database'], ledger: TrialAndGiftLedger, shopId: string): Promise<TrialRecord> {
+  const existing = ledger.trial(shopId)
+  if (existing) return existing
+  try {
+    const loaded = await withTenantContext(database, shopId, async (client) => {
+      const result = await client.query<TrialRow>('SELECT shop_id, started_at, expires_at, consumed, state FROM trials WHERE shop_id = $1 LIMIT 1', [shopId])
+      return result.rows[0] ?? null
+    })
+    if (loaded) {
+      const trial: TrialRecord = { shopId: loaded.shop_id, startedAt: loaded.started_at.valueOf(), expiresAt: loaded.expires_at.valueOf(), consumed: loaded.consumed, state: loaded.state }
+      ledger.hydrate(trial)
+      return ledger.trial(shopId) ?? trial
+    }
+  } catch { /* fall through and start a fresh limited trial */ }
+  const created = ledger.startTrial(shopId)
+  try {
+    await withTenantContext(database, shopId, async (client) => {
+      await client.query('INSERT INTO trials (shop_id, started_at, expires_at, consumed, state) VALUES ($1, to_timestamp($2 / 1000.0), to_timestamp($3 / 1000.0), $4, $5) ON CONFLICT (shop_id) DO NOTHING', [created.shopId, created.startedAt, created.expiresAt, created.consumed, created.state])
+    })
+  } catch { /* in-memory trial still applies for this process */ }
+  return created
 }
 
 function featureLimit(plan: 'trial' | 'start' | 'growth' | 'commander', feature: string): number | null {
