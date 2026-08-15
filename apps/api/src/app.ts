@@ -27,8 +27,10 @@ import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
 import { isApiPath, mountWebApp } from './web-app.js'
+import { embeddedEntryMiddleware } from './embedded-entry.js'
+import type { EmbeddedEntryDependencies } from './embedded-entry.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -84,6 +86,11 @@ export function createApi(dependencies: ApiDependencies): Express {
     const readiness = await evaluateReadiness(dependencies.readinessChecks)
     response.status(readiness.ok ? 200 : 503).json(success(readiness, requestId(String(response.getHeader('x-request-id') ?? 'ready'))))
   })
+
+  // Shopify managed installation never calls /shopify/callback: the embedded
+  // app load IS the install signal. This runs before the SPA is served so the
+  // stores row exists and the session cookie is set on the very first frame.
+  if (dependencies.embeddedEntry) app.use(embeddedEntryMiddleware({ ...dependencies.embeddedEntry, logger: dependencies.logger }))
 
   // Express 5 no longer accepts app.get('*'). A terminal app.use handler is the
   // equivalent safe SPA fallback and mountWebApp restricts it to GET/HEAD web

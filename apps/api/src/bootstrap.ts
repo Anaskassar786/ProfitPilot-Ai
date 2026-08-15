@@ -5,7 +5,7 @@ import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallServic
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 
-export type F1Bootstrap = Readonly<{ shopify: ShopifyRouteDependencies; database: PostgresDatabase; storeDirectory: StoreDirectory }>
+export type F1Bootstrap = Readonly<{ shopify: ShopifyRouteDependencies; database: PostgresDatabase; storeDirectory: StoreDirectory; sessionToken: Readonly<{ apiKey: string; apiSecret: string }> }>
 
 const REQUIRED_KEYS = ['DATABASE_URL', 'ENCRYPTION_KEY', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'SHOPIFY_REDIRECT_URI'] as const
 
@@ -27,7 +27,10 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // and resolves shop <-> storeId for the session context endpoint.
   const installer = new ShopifyInstallService({ apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET'), scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, requiredEnv(env, 'SHOPIFY_API_KEY'), requiredEnv(env, 'SHOPIFY_API_SECRET'))
-  return { database, shopify: { installer, exchange }, storeDirectory }
+  // Same credentials the OAuth flow uses. The embedded-entry middleware needs
+  // them to verify Shopify's `id_token` session token and callback HMAC.
+  const sessionToken = { apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET') }
+  return { database, shopify: { installer, exchange }, storeDirectory, sessionToken }
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {
