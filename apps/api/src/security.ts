@@ -121,12 +121,36 @@ export function requestIdMiddleware(): RequestHandler {
   }
 }
 
+/**
+ * Frame policy for responses that may be consumed inside the Shopify admin
+ * iframe. `X-Frame-Options` has no syntax for an origin allowlist (the old
+ * ALLOW-FROM was dropped by every modern browser), so embedded surfaces must
+ * rely on CSP `frame-ancestors` instead and omit XFO entirely — a stray
+ * `X-Frame-Options: DENY` would override the allowlist in some browsers.
+ */
+export const SHOPIFY_FRAME_ANCESTORS = 'https://admin.shopify.com https://*.myshopify.com'
+
+/** Paths that never render in a frame and keep the strict deny-everything policy. */
+const NON_EMBEDDED_PREFIXES = ['/live', '/ready', '/health'] as const
+
+function isEmbeddableApiPath(requestPath: string): boolean {
+  return !NON_EMBEDDED_PREFIXES.some((prefix) => requestPath === prefix || requestPath.startsWith(`${prefix}/`))
+}
+
 export function securityHeadersMiddleware(environment = 'development'): RequestHandler {
-  return (_request, response, next): void => {
-    response.setHeader('Content-Security-Policy', "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; script-src 'none'; style-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none';")
+  return (request, response, next): void => {
+    // API responses are JSON and are never themselves framed, but they are read
+    // by the dashboard running inside the Shopify admin iframe. Advertising a
+    // frame policy consistent with the embedded app avoids the misleading
+    // `x-frame-options: DENY` that shows up on every XHR in DevTools while
+    // keeping a hard deny on the infrastructure endpoints.
+    const embeddable = isEmbeddableApiPath(request.path)
+    const frameAncestors = embeddable ? SHOPIFY_FRAME_ANCESTORS : "'none'"
+    response.setHeader('Content-Security-Policy', `default-src 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}; form-action 'self'; img-src 'self' data:; script-src 'none'; style-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none';`)
     response.setHeader('Referrer-Policy', 'no-referrer')
     response.setHeader('X-Content-Type-Options', 'nosniff')
-    response.setHeader('X-Frame-Options', 'DENY')
+    if (embeddable) response.removeHeader('X-Frame-Options')
+    else response.setHeader('X-Frame-Options', 'DENY')
     response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
     if (environment === 'production') response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     next()

@@ -4,7 +4,7 @@ import { requestId, storeId, success } from '@profitpilot/types'
 import type { StoreDirectory } from '@profitpilot/db'
 import { SESSION_COOKIE_NAME, parseCookies } from './cookies.js'
 
-export type SessionRouteDependencies = Readonly<{ directory: StoreDirectory }>
+export type SessionRouteDependencies = Readonly<{ directory: StoreDirectory; logger?: import('@profitpilot/logger').Logger }>
 
 export type SessionContext = Readonly<{ storeId: string | null; shop: string | null }>
 
@@ -21,6 +21,17 @@ export function createSessionRouter(dependencies: SessionRouteDependencies): Rou
   router.get('/session/context', async (request, response, next) => {
     try {
       const context = await resolveContext(dependencies.directory, request)
+      // A null context is the symptom merchants report as "No Shopify store
+      // context detected". Log which inputs were available so the cause
+      // (missing cookie vs. missing stores row) is visible in production logs.
+      if (context.storeId === null) {
+        const cookies = parseCookies(request.header('cookie'))
+        dependencies.logger?.warn('Session context resolved to no tenant', {
+          hasSessionCookie: Boolean(cookies[SESSION_COOKIE_NAME]?.trim()),
+          shopQuery: queryString(request.query.shop) ?? '',
+          requestId: String(response.getHeader('x-request-id') ?? ''),
+        })
+      }
       response.status(200).json(success(context, requestId(String(response.getHeader('x-request-id') ?? 'session'))))
     } catch (error: unknown) {
       next(error)
