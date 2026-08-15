@@ -32,6 +32,35 @@ describe('sync token refresh retry', () => {
     expect(sink.records.some((record) => record.message === 'Shopify offline access token refreshed for sync retry' && record.context.reason === 'shopify-401')).toBe(true)
   })
 
+  it('exchanges the session token and retries once after a duck-typed Shopify 401 across package boundaries', async () => {
+    const { directory, tenant, result, logger, sink } = await fixture()
+    const duckTyped401 = Object.assign(new Error('Shopify API request failed with 401'), { name: 'ShopifyApiError', status: 401 })
+    const runModule = vi.fn()
+      .mockRejectedValueOnce(duckTyped401)
+      .mockResolvedValueOnce(result)
+    const exchangeOfflineAccessToken = vi.fn(async () => ({ shop: SHOP, scopes: ['read_products'], source: 'exchanged' as const }))
+    const sync = new TokenRefreshingSync({ runModule }, directory, { exchangeOfflineAccessToken }, logger)
+
+    await expect(sync.runModule(tenant.storeId, 'products', 'fresh-id-token')).resolves.toEqual(result)
+    expect(runModule).toHaveBeenCalledTimes(2)
+    expect(exchangeOfflineAccessToken).toHaveBeenCalledWith(SHOP, 'fresh-id-token')
+    expect(sink.records.some((record) => record.message === 'Shopify offline access token refreshed for sync retry' && record.context.reason === 'shopify-401')).toBe(true)
+  })
+
+  it('returns a 503 HARD_REFRESH diagnostic instead of 500 when Shopify returns 401 and no id_token is provided', async () => {
+    const { directory, tenant, logger } = await fixture()
+    const duckTyped401 = Object.assign(new Error('Shopify API request failed with 401'), { name: 'ShopifyApiError', status: 401 })
+    const runModule = vi.fn(async () => { throw duckTyped401 })
+    const exchangeOfflineAccessToken = vi.fn()
+    const sync = new TokenRefreshingSync({ runModule }, directory, { exchangeOfflineAccessToken }, logger)
+    const failure = await sync.runModule(tenant.storeId, 'products').catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(AppError)
+    expect((failure as AppError).status).toBe(503)
+    expect((failure as AppError).message).toContain('Hard refresh the embedded app')
+    expect((failure as AppError).details.action).toBe('HARD_REFRESH')
+    expect(exchangeOfflineAccessToken).not.toHaveBeenCalled()
+  })
+
   it('recovers a missing vault token with the same bounded exchange path', async () => {
     const { directory, tenant, result, logger } = await fixture()
     const missing = new AppError('DEPENDENCY_ERROR', 'missing', 503, { reason: 'SHOPIFY_TOKEN_MISSING' })

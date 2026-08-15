@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ShopifyBillingClient, ShopifyBillingError } from './shopify-billing.js'
 
 const charge = { recurring_application_charge: { id: 1, name: 'GROWTH MONTHLY', price: '149.0', status: 'active', confirmation_url: 'https://shopify/confirm', billing_on: '2024-06-12', trial_days: 14, test: true, created_at: '2024-01-01' } }
@@ -6,10 +6,19 @@ const charge = { recurring_application_charge: { id: 1, name: 'GROWTH MONTHLY', 
 describe('Shopify Recurring Application Charges', () => {
   it('creates a recurring charge with test mode and trial', async () => {
     let request: RequestInit | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: true, transport: async (_url, init) => { request = init; return new Response(JSON.stringify(charge), { status: 201 }) } })
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'shpat_my_secret_token_456', testMode: true, logger, transport: async (_url, init) => { request = init; return new Response(JSON.stringify(charge), { status: 201 }) } })
     const result = await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
     expect(result.id).toBe('1')
     expect(JSON.parse(String(request?.body))).toMatchObject({ recurring_application_charge: { price: '149.00', test: true, trial_days: 14 } })
+    expect(logger.info).toHaveBeenCalledWith('Shopify Billing API charge request', expect.objectContaining({
+      shop: 'demo.myshopify.com',
+      endpoint: '/recurring_application_charges.json',
+      plan: 'GROWTH',
+      interval: 'MONTHLY',
+      test: true,
+      tokenMasked: 'shpat_..._456',
+    }))
   })
   it('verifies live charge status, name, and price', async () => {
     const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async () => new Response(JSON.stringify(charge), { status: 200 }) })

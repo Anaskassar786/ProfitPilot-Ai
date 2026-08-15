@@ -1,6 +1,6 @@
 /* F8 Jarvis, Copilot, and Reports surfaces. The orb is an animated identity mark, never a microphone icon. */
 .jarvis-orb-wrap { position: fixed; right: 24px; bottom: 22px; z-index: 44; width: 84px; height: 84px; display: grid; place-items: center; padding: 0; color: var(--text-secondary); background: transparent; }
-.jarvis-orb-label { position: absolute; bottom: -1px; color: var(--blue-bright); font-family: "JetBrains Mono", monospace; font-size: 8px; font-weight: 700; letter-spacing: .03em; }
+.jarvis-orb-label { position: absolute; bottom: -1px; color: var(--blue-bright); font-family: var(--font-mono); font-size: 8px; font-weight: 700; letter-spacing: .03em; }
 .jarvis-orb, .jarvis-live-orb, .jarvis-mini-orb, .jarvis-hero-orb { position: relative; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 33% 28%, #C8DCFF 0 3%, #72A7FF 8%, #3B82F6 30%, #213C9A 61%, #151D4A 100%); box-shadow: 0 0 18px rgba(59,130,246,.62), inset 0 0 18px rgba(255,255,255,.28); }
 .jarvis-orb { width: 48px; height: 48px; animation: f8-orb-idle 3.8s ease-in-out infinite; }
 .jarvis-orb-ring { position: absolute; width: 62px; height: 62px; border: 1px solid rgba(114,167,255,.5); border-radius: 50%; animation: f8-ring 3.8s ease-out infinite; }
@@ -47,13 +47,13 @@
 .f8-copilot-form { position: relative; margin: 0; }
 .f8-copilot-form .send-button { position: absolute; right: 8px; bottom: 8px; }
 .f8-answer { padding: 13px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(59,130,246,.045); }
-.f8-answer-head { display: flex; justify-content: space-between; gap: 8px; color: var(--text-tertiary); font-family: "JetBrains Mono", monospace; font-size: 8px; }
+.f8-answer-head { display: flex; justify-content: space-between; gap: 8px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 8px; }
 .f8-answer p { margin: 10px 0; color: var(--text); font-size: 11px; line-height: 1.5; }
 .f8-answer > small { color: var(--amber); font-size: 9px; }
 .f8-evidence-table { display: grid; gap: 4px; }
 .f8-evidence-table > div { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 6px 0; border-top: 1px solid var(--border-soft); }
 .f8-evidence-table span { color: var(--text-secondary); font-size: 9px; }
-.f8-evidence-table strong { color: var(--text); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+.f8-evidence-table strong { color: var(--text); font-family: var(--font-mono); font-size: 9px; }
 .f8-evidence-table small { grid-column: 1 / -1; color: var(--text-tertiary); font-size: 7px; }
 .f8-thread { width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 10px; color: var(--text-secondary); border-radius: 7px; background: transparent; font-size: 9px; text-align: left; }
 .f8-thread:hover, .f8-thread.active { color: var(--text); background: var(--card-hover); }
@@ -62,14 +62,14 @@
 .report-generate-controls { display: flex; align-items: center; gap: 7px; }
 .report-generate-controls select { min-height: 32px; padding: 0 8px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 7px; background: var(--card); font-size: 9px; }
 .forecast-card { display: flex; flex-direction: column; gap: 5px; padding: 15px; margin-bottom: 12px; border: 1px solid rgba(16,185,129,.25); border-radius: 10px; background: rgba(16,185,129,.07); }
-.forecast-card strong { color: var(--green); font-family: "JetBrains Mono", monospace; font-size: 28px; }
+.forecast-card strong { color: var(--green); font-family: var(--font-mono); font-size: 28px; }
 .forecast-card span { color: var(--text); font-size: 10px; }
 .forecast-card small { color: var(--text-tertiary); font-size: 8px; line-height: 1.4; }
-.method-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border-soft); color: var(--text-secondary); font-family: "JetBrains Mono", monospace; font-size: 8px; }
+.method-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border-soft); color: var(--text-secondary); font-family: var(--font-mono); font-size: 8px; }
 .method-row small { color: var(--purple); }
 .report-run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid var(--border-soft); }
 .report-run > span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.report-run strong { overflow: hidden; color: var(--text); font-family: "JetBrains Mono", monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.report-run strong { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .report-run small { color: var(--text-tertiary); font-size: 8px; }
 .spin { animation: f8-spin .9s linear infinite; }
 @keyframes f8-orb-idle { 0%,100% { transform: scale(.97); } 50% { transform: scale(1.06); } }

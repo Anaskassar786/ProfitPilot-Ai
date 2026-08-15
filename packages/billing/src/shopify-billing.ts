@@ -16,7 +16,13 @@ export type BillingTransport = (url: string, init: RequestInit) => Promise<Respo
  */
 export type BillingTestMode = boolean | 'auto'
 
-export type BillingClientConfig = Readonly<{ shop: string; accessToken: string; apiVersion?: string; testMode?: BillingTestMode; transport?: BillingTransport }>
+export type BillingLogger = Readonly<{
+  info(message: string, context?: Readonly<Record<string, unknown>>): void
+  warn(message: string, context?: Readonly<Record<string, unknown>>): void
+  error(message: string, context?: Readonly<Record<string, unknown>>): void
+}>
+
+export type BillingClientConfig = Readonly<{ shop: string; accessToken: string; apiVersion?: string; testMode?: BillingTestMode; transport?: BillingTransport; logger?: BillingLogger | null }>
 
 /** Shop plans that cannot be billed for real money. */
 export const NON_BILLABLE_SHOPIFY_PLANS: readonly string[] = ['affiliate', 'partner_test', 'plus_partner_sandbox', 'staff', 'staff_business', 'dev_preview', 'development', 'trial', 'frozen', 'cancelled', 'paused']
@@ -37,14 +43,14 @@ export class ShopifyBillingError extends Error {
   }
 }
 
-type ResolvedBillingConfig = Readonly<{ shop: string; accessToken: string; apiVersion: string; testMode: BillingTestMode; transport: BillingTransport }>
+type ResolvedBillingConfig = Readonly<{ shop: string; accessToken: string; apiVersion: string; testMode: BillingTestMode; transport: BillingTransport; logger: BillingLogger | null }>
 
 export class ShopifyBillingClient {
   private readonly config: ResolvedBillingConfig
   private resolvedTestMode: boolean | null
 
   public constructor(config: BillingClientConfig) {
-    this.config = { shop: config.shop, accessToken: config.accessToken, apiVersion: config.apiVersion ?? '2025-10', testMode: config.testMode ?? 'auto', transport: config.transport ?? fetch }
+    this.config = { shop: config.shop, accessToken: config.accessToken, apiVersion: config.apiVersion ?? '2025-10', testMode: config.testMode ?? 'auto', transport: config.transport ?? fetch, logger: config.logger ?? null }
     if (!this.config.shop.endsWith('.myshopify.com') || !this.config.accessToken.trim()) throw new TypeError('Shopify billing credentials are incomplete')
     this.resolvedTestMode = typeof this.config.testMode === 'boolean' ? this.config.testMode : null
   }
@@ -65,6 +71,18 @@ export class ShopifyBillingClient {
     }
     // trial_days must be a non-negative integer; omit it rather than send 0.
     if (Number.isFinite(trialDays) && trialDays > 0) charge.trial_days = Math.floor(trialDays)
+
+    this.config.logger?.info('Shopify Billing API charge request', {
+      shop: this.config.shop,
+      endpoint: '/recurring_application_charges.json',
+      plan,
+      interval,
+      price: price.toFixed(2),
+      test,
+      trialDays,
+      tokenMasked: maskToken(this.config.accessToken),
+    })
+
     const response = await this.request('/recurring_application_charges.json', { method: 'POST', body: JSON.stringify({ recurring_application_charge: charge }) })
     return chargeFromPayload(response, test)
   }
@@ -105,10 +123,62 @@ export class ShopifyBillingClient {
   }
 
   private async request(path: string, init: Readonly<RequestInit> = {}): Promise<unknown> {
-    const response = await this.config.transport(`https://${this.config.shop}/admin/api/${this.config.apiVersion}${path}`, { ...init, headers: { accept: 'application/json', 'content-type': 'application/json', 'x-shopify-access-token': this.config.accessToken, ...(init.headers ?? {}) } })
-    if (!response.ok) throw await billingErrorFrom(response, path)
+    const method = (init.method ?? 'GET').toUpperCase()
+    const fullUrl = `https://${this.config.shop}/admin/api/${this.config.apiVersion}${path}`
+    const tokenMasked = maskToken(this.config.accessToken)
+
+    this.config.logger?.info('Shopify Billing API outbound request', {
+      shop: this.config.shop,
+      method,
+      endpoint: path,
+      tokenMasked,
+    })
+
+    const startedAt = Date.now()
+    let response: Response
+    try {
+      response = await this.config.transport(fullUrl, { ...init, headers: { accept: 'application/json', 'content-type': 'application/json', 'x-shopify-access-token': this.config.accessToken, ...(init.headers ?? {}) } })
+    } catch (transportError: unknown) {
+      this.config.logger?.error('Shopify Billing API network failure', {
+        shop: this.config.shop,
+        method,
+        endpoint: path,
+        durationMs: Date.now() - startedAt,
+        error: transportError instanceof Error ? transportError.message : String(transportError),
+      })
+      throw transportError
+    }
+
+    const durationMs = Date.now() - startedAt
+    if (!response.ok) {
+      this.config.logger?.error('Shopify Billing API request failed', {
+        shop: this.config.shop,
+        method,
+        endpoint: path,
+        status: response.status,
+        durationMs,
+        tokenMasked,
+      })
+      throw await billingErrorFrom(response, path)
+    }
+
+    this.config.logger?.info('Shopify Billing API request succeeded', {
+      shop: this.config.shop,
+      method,
+      endpoint: path,
+      status: response.status,
+      durationMs,
+    })
+
     return response.status === 204 ? {} : await response.json()
   }
+}
+
+function maskToken(token: string): string {
+  const trimmed = token.trim()
+  if (!trimmed) return '[empty]'
+  if (trimmed.length < 10) return '[masked]'
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`
 }
 
 /**

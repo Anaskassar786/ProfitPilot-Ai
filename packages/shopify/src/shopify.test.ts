@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { InMemoryTokenRecordStore, InMemoryWebhookReceiptStore, OAuthStateStore, ShopifyApiError, ShopifyClient, ShopifyInstallService, TokenVault, WebhookVerifier, parseShopDomain, verifyOAuthHmac, verifyWebhookHmac } from './index.js'
+import { InMemoryTokenRecordStore, InMemoryWebhookReceiptStore, OAuthStateStore, ShopifyApiError, ShopifyClient, ShopifyInstallService, TokenVault, WebhookVerifier, isShopifyApiError, isShopifyAuthError, parseShopDomain, verifyOAuthHmac, verifyWebhookHmac } from './index.js'
 import { createHmac } from 'node:crypto'
 
 describe('Shopify domain and OAuth primitives', () => {
@@ -42,12 +42,23 @@ describe('Shopify API client', () => {
   it('sends an authenticated request and returns typed JSON', async () => {
     const transport = async (url: string, init: RequestInit): Promise<Response> => {
       expect(url).toContain('/admin/api/2025-10/products.json')
-      expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'token' })
+      expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'shpat_test_secret_token_123' })
       return new Response(JSON.stringify({ products: [{ id: 1 }] }), { status: 200, headers: { 'x-request-id': 'req' } })
     }
-    const response = await new ShopifyClient('demo.myshopify.com', 'token', transport).request<{ products: { id: number }[] }>({ path: '/products.json' })
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const response = await new ShopifyClient('demo.myshopify.com', 'shpat_test_secret_token_123', transport, '2025-10', logger).request<{ products: { id: number }[] }>({ path: '/products.json' })
     expect(response.data.products[0]?.id).toBe(1)
     expect(response.requestId).toBe('req')
+    expect(logger.info).toHaveBeenCalledWith('Shopify Admin API outbound request', expect.objectContaining({
+      shopDomain: 'demo.myshopify.com',
+      endpoint: '/products.json',
+      tokenPresent: true,
+      tokenMasked: 'shpat_..._123',
+    }))
+    expect(logger.info).toHaveBeenCalledWith('Shopify Admin API request succeeded', expect.objectContaining({
+      status: 200,
+      requestId: 'req',
+    }))
   })
   it('surfaces rate-limit metadata', async () => {
     const transport = async (): Promise<Response> => new Response('', { status: 429, headers: { 'retry-after': '2' } })
@@ -55,4 +66,20 @@ describe('Shopify API client', () => {
   })
   it('rejects invalid client credentials', () => expect(() => new ShopifyClient('demo.example.com', 'token')).toThrow('validated'))
   it('exposes a typed API error', () => expect(new ShopifyApiError(500, 'nope').status).toBe(500))
+  it('duck-types ShopifyApiError and 401 auth errors across package boundaries', () => {
+    const realError = new ShopifyApiError(401, 'unauthorized')
+    const duckError = Object.assign(new Error('unauthorized'), { name: 'ShopifyApiError', status: 401 })
+    const duck500 = { name: 'ShopifyApiError', status: 500 }
+    const statusOnly401 = { status: 401, message: 'Shopify API request failed with 401' }
+
+    expect(isShopifyApiError(realError)).toBe(true)
+    expect(isShopifyApiError(duckError)).toBe(true)
+    expect(isShopifyApiError(duck500)).toBe(true)
+    expect(isShopifyApiError(new Error('other'))).toBe(false)
+
+    expect(isShopifyAuthError(realError)).toBe(true)
+    expect(isShopifyAuthError(duckError)).toBe(true)
+    expect(isShopifyAuthError(statusOnly401)).toBe(true)
+    expect(isShopifyAuthError(duck500)).toBe(false)
+  })
 })
