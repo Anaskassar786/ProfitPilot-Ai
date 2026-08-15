@@ -31,7 +31,7 @@ export class PostgresTokenRecordStore implements TokenRecordStore {
   public async put(record: EncryptedTokenRecord): Promise<void> {
     const normalizedShop = parseShopDomain(record.shop)
     await this.withShopContext(normalizedShop, (executor) => executor.query(
-      `INSERT INTO shopify_tokens (shop_domain, encrypted_access_token, created_at, rotated_at) VALUES ($1, $2, to_timestamp($3 / 1000.0), CASE WHEN $4 IS NULL THEN NULL ELSE to_timestamp($4 / 1000.0) END) ON CONFLICT (shop_domain) DO UPDATE SET encrypted_access_token = EXCLUDED.encrypted_access_token, rotated_at = EXCLUDED.rotated_at`,
+      `INSERT INTO shopify_tokens (shop_domain, encrypted_access_token, created_at, rotated_at) VALUES ($1, $2, to_timestamp($3 / 1000.0), CASE WHEN $4::double precision IS NULL THEN NULL ELSE to_timestamp($4::double precision / 1000.0) END) ON CONFLICT (shop_domain) DO UPDATE SET encrypted_access_token = EXCLUDED.encrypted_access_token, rotated_at = EXCLUDED.rotated_at`,
       [normalizedShop, record.ciphertext, record.createdAt, record.rotatedAt],
     ))
   }
