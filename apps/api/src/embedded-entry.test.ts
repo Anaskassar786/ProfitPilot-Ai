@@ -8,6 +8,7 @@ import { InMemoryStoreDirectory } from '@profitpilot/db'
 import type { StoreDirectory } from '@profitpilot/db'
 import { Logger, createMemorySink } from '@profitpilot/logger'
 import { createApi } from './app.js'
+import type { EmbeddedTokenExchange } from './embedded-entry.js'
 import type { Express } from 'express'
 
 const API_KEY = 'test-client-id'
@@ -35,12 +36,12 @@ function webDist(): string {
   return path
 }
 
-function appWith(directory: StoreDirectory, sink = createMemorySink()): Express {
+function appWith(directory: StoreDirectory, sink = createMemorySink(), tokenExchange?: EmbeddedTokenExchange): Express {
   return createApi({
     logger: new Logger(sink.sink),
     readinessChecks: [],
     session: { directory },
-    embeddedEntry: { directory, sessionToken: { apiKey: API_KEY, apiSecret: API_SECRET } },
+    embeddedEntry: { directory, sessionToken: { apiKey: API_KEY, apiSecret: API_SECRET }, ...(tokenExchange ? { tokenExchange } : {}) },
     webDistPath: webDist(),
   })
 }
@@ -75,6 +76,54 @@ describe('Shopify managed-installation app load', () => {
       expect(setCookie).toContain('Secure')
       expect(setCookie).toContain('HttpOnly')
       expect(setCookie).toContain('Path=/')
+    })
+  })
+
+  it('exchanges the verified id_token when the offline token vault is empty', async () => {
+    const directory = new InMemoryStoreDirectory()
+    const sink = createMemorySink()
+    const exchanged: { shop: string; idToken: string }[] = []
+    const tokenExchange: EmbeddedTokenExchange = {
+      hasAccessToken: async () => false,
+      ensureOfflineAccessToken: async (shop, idToken) => {
+        exchanged.push({ shop, idToken })
+        return { shop, scopes: ['read_products', 'read_orders'], source: 'exchanged' }
+      },
+    }
+    const token = sessionToken()
+    await withServer(appWith(directory, sink, tokenExchange), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/?shop=${SHOP}&id_token=${token}`)
+      expect(response.status).toBe(200)
+      expect(exchanged).toEqual([{ shop: SHOP, idToken: token }])
+      expect(sink.records.some((record) => record.message === 'Shopify offline access token exchange succeeded' && record.context.shopDomain === SHOP && record.context.accessMode === 'offline')).toBe(true)
+    })
+  })
+
+  it('does not exchange again when an offline token already exists', async () => {
+    const directory = new InMemoryStoreDirectory()
+    let exchanges = 0
+    const tokenExchange: EmbeddedTokenExchange = {
+      hasAccessToken: async () => true,
+      ensureOfflineAccessToken: async () => { exchanges += 1; return { shop: SHOP, scopes: [], source: 'exchanged' } },
+    }
+    await withServer(appWith(directory, createMemorySink(), tokenExchange), async (baseUrl) => {
+      expect((await fetch(`${baseUrl}/?shop=${SHOP}&id_token=${sessionToken()}`)).status).toBe(200)
+      expect(exchanges).toBe(0)
+    })
+  })
+
+  it('keeps the dashboard available and logs an actionable token exchange failure', async () => {
+    const directory = new InMemoryStoreDirectory()
+    const sink = createMemorySink()
+    const tokenExchange: EmbeddedTokenExchange = {
+      hasAccessToken: async () => false,
+      ensureOfflineAccessToken: async () => { throw new Error('Shopify token exchange failed with HTTP 400') },
+    }
+    await withServer(appWith(directory, sink, tokenExchange), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/?shop=${SHOP}&id_token=${sessionToken()}`)
+      expect(response.status).toBe(200)
+      expect(response.headers.get('set-cookie')).toContain('profitpilot_session=')
+      expect(sink.records.some((record) => record.message === 'Shopify offline access token exchange failed' && String(record.context.error).includes('HTTP 400'))).toBe(true)
     })
   })
 

@@ -1,42 +1,39 @@
-import type { Request, RequestHandler } from 'express'
+import type { Request, RequestHandler, Response } from 'express'
 import type { Logger } from '@profitpilot/logger'
-import type { StoreDirectory } from '@profitpilot/db'
+import type { StoreConnection, StoreDirectory } from '@profitpilot/db'
 import { verifyEmbeddedRequest } from '@profitpilot/shopify'
-import type { SessionTokenConfig } from '@profitpilot/shopify'
+import type { OfflineTokenResult, SessionTokenConfig } from '@profitpilot/shopify'
 import { setSessionCookie } from './cookies.js'
 import { isApiPath } from './web-app.js'
+
+export type EmbeddedTokenExchange = Readonly<{
+  hasAccessToken(shop: string): Promise<boolean>
+  ensureOfflineAccessToken(shop: string, idToken: string): Promise<OfflineTokenResult>
+}>
 
 export type EmbeddedEntryDependencies = Readonly<{
   directory: StoreDirectory
   sessionToken: SessionTokenConfig
+  tokenExchange?: EmbeddedTokenExchange
   logger?: Logger
 }>
 
 /**
- * Registers the tenant when Shopify loads the embedded app.
+ * Registers the tenant and provisions its offline Admin API token when Shopify
+ * loads the embedded app.
  *
  * Under Shopify managed installation — the default for embedded apps, and what
  * this app uses (`embedded = true`, no `use_legacy_install_flow`) — Shopify
  * installs the app and grants scopes WITHOUT ever calling the app's OAuth
- * callback. The first and only time the app hears about the install is when
- * Shopify loads the app URL inside the admin iframe with `shop`, `host`,
- * `hmac`, and a signed `id_token` session token.
+ * callback. The first app load therefore performs both managed-install steps:
  *
- * That made the previous design fail silently in production: `stores` rows were
- * only ever written by `/shopify/callback`, which Shopify no longer invokes, so
- * `upsertByShopDomain()` never ran, no session cookie was ever set, and
- * `/session/context` correctly reported `{storeId: null, shop: null}` forever.
+ *   1. verify the signed `id_token` (or signed query HMAC),
+ *   2. upsert the store and set the tenant session cookie, and
+ *   3. when the token vault is empty, exchange that `id_token` for a
+ *      non-expiring offline access token and persist it through TokenVault.
  *
- * This middleware moves tenant registration onto the app-load request itself:
- *   1. verify the request really came from Shopify (session token or HMAC —
- *      both require the app secret; the bare `shop` param is never trusted),
- *   2. upsert the `stores` row so the tenant exists, and
- *   3. set the session cookie so later same-site XHRs resolve the tenant even
- *      when the query string is gone (e.g. after an in-app navigation).
- *
- * Failures are logged and swallowed: a registration problem must not turn the
- * merchant's app load into a blank error page. The dashboard degrades to the
- * "no store context" banner exactly as it does today.
+ * Failures are logged and swallowed so the merchant never gets a blank iframe.
+ * `/sync` still returns an explicit reconnect message if provisioning failed.
  */
 export function embeddedEntryMiddleware(dependencies: EmbeddedEntryDependencies): RequestHandler {
   return (request, response, next): void => {
@@ -50,39 +47,89 @@ export function embeddedEntryMiddleware(dependencies: EmbeddedEntryDependencies)
       next()
       return
     }
-    void dependencies.directory
-      .upsertByShopDomain(identity.shop)
-      .then((tenant) => {
-        setSessionCookie(response, tenant.storeId)
-        dependencies.logger?.info('Embedded app load registered tenant', {
-          shopDomain: tenant.shopDomain,
-          storeId: tenant.storeId,
-          verification: identity.method,
-          path: request.path,
-          requestId: String(response.getHeader('x-request-id') ?? ''),
-        })
-      })
-      .catch((error: unknown) => {
-        // Previously an upsert failure here would have been invisible. Log the
-        // real error so a broken migration or permission issue is diagnosable
-        // from the logs instead of presenting as a silent null context.
-        dependencies.logger?.error('Embedded app load failed to register tenant', {
-          shopDomain: identity.shop,
-          verification: identity.method,
-          path: request.path,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? (error.stack ?? '') : '',
-          requestId: String(response.getHeader('x-request-id') ?? ''),
-        })
-      })
+
+    void registerTenant(dependencies, response, request, identity.shop, identity.method, query.id_token)
       .finally(() => next())
   }
 }
 
-/**
- * True for the browser navigations Shopify uses to load the embedded app: a
- * GET/HEAD for an SPA document (no file extension, not an API path).
- */
+async function registerTenant(
+  dependencies: EmbeddedEntryDependencies,
+  response: Response,
+  request: Request,
+  shop: string,
+  verification: 'session-token' | 'query-hmac',
+  idToken: string | undefined,
+): Promise<void> {
+  let tenant: StoreConnection
+  try {
+    tenant = await dependencies.directory.upsertByShopDomain(shop)
+    setSessionCookie(response, tenant.storeId)
+    dependencies.logger?.info('Embedded app load registered tenant', {
+      shopDomain: tenant.shopDomain,
+      storeId: tenant.storeId,
+      verification,
+      path: request.path,
+      requestId: requestIdFrom(response),
+    })
+  } catch (error: unknown) {
+    dependencies.logger?.error('Embedded app load failed to register tenant', {
+      shopDomain: shop,
+      verification,
+      path: request.path,
+      error: errorMessage(error),
+      stack: error instanceof Error ? (error.stack ?? '') : '',
+      requestId: requestIdFrom(response),
+    })
+    return
+  }
+
+  if (!dependencies.tokenExchange) return
+  try {
+    const existing = await dependencies.tokenExchange.hasAccessToken(tenant.shopDomain)
+    if (existing) {
+      dependencies.logger?.info('Shopify offline access token ready', {
+        shopDomain: tenant.shopDomain,
+        storeId: tenant.storeId,
+        source: 'vault',
+        requestId: requestIdFrom(response),
+      })
+      return
+    }
+
+    // A query-HMAC proves the shop identity but cannot be used as the RFC 8693
+    // subject token. Only the already-verified id_token can be exchanged.
+    if (verification !== 'session-token' || !idToken?.trim()) {
+      dependencies.logger?.warn('Shopify offline access token is missing and app load has no exchangeable id_token', {
+        shopDomain: tenant.shopDomain,
+        storeId: tenant.storeId,
+        verification,
+        requestId: requestIdFrom(response),
+      })
+      return
+    }
+
+    const result = await dependencies.tokenExchange.ensureOfflineAccessToken(tenant.shopDomain, idToken)
+    dependencies.logger?.info('Shopify offline access token exchange succeeded', {
+      shopDomain: tenant.shopDomain,
+      storeId: tenant.storeId,
+      accessMode: 'offline',
+      source: result.source,
+      scopes: result.scopes.join(','),
+      requestId: requestIdFrom(response),
+    })
+  } catch (error: unknown) {
+    dependencies.logger?.error('Shopify offline access token exchange failed', {
+      shopDomain: tenant.shopDomain,
+      storeId: tenant.storeId,
+      error: errorMessage(error),
+      stack: error instanceof Error ? (error.stack ?? '') : '',
+      requestId: requestIdFrom(response),
+    })
+  }
+}
+
+/** Shopify app-load browser navigations only: never assets or API routes. */
 function isEmbeddedNavigation(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false
   if (isApiPath(request.path)) return false
@@ -102,4 +149,12 @@ function rawQueryString(request: Request): string | undefined {
   const url = request.originalUrl ?? request.url ?? ''
   const index = url.indexOf('?')
   return index < 0 ? undefined : url.slice(index + 1)
+}
+
+function requestIdFrom(response: Response): string {
+  return String(response.getHeader('x-request-id') ?? '')
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

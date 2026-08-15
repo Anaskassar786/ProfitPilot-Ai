@@ -70,8 +70,13 @@ export function fetchCatalog(storeId: string, fetcher: Fetcher = fetch): Promise
   return requestJson<readonly CatalogProduct[]>(`/catalog?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
 
-export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch): Promise<SyncResult> {
-  return requestJson<SyncResult>('/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, module }) }, fetcher)
+export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  // Keep the short-lived Shopify id_token out of the JSON body. The API uses
+  // it only if a stored offline token is missing or Shopify rejects it with
+  // 401, then performs one token-exchange retry.
+  if (idToken) headers.set('x-shopify-session-token', idToken)
+  return requestJson<SyncResult>('/sync', { method: 'POST', headers, body: JSON.stringify({ storeId, module }) }, fetcher)
 }
 
 export function fetchAgentStatuses(fetcher: Fetcher = fetch): Promise<readonly AgentStatus[]> {
@@ -136,6 +141,12 @@ export function setMerchantFlags(stepUpToken: string, flags: MerchantFlags, fetc
 export function fetchOpsQueue(stepUpToken: string, fetcher: Fetcher = fetch): Promise<QueueSnapshot> { return requestJson('/admin/ops/queue', { headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 export function fetchOpsMetrics(stepUpToken: string, fetcher: Fetcher = fetch): Promise<OpsMetrics> { return requestJson('/admin/ops/metrics', { headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 export function retryOpsJob(stepUpToken: string, jobId: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson(`/admin/ops/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
+
+function embeddedSessionToken(): string | null {
+  if (typeof window === 'undefined') return null
+  const value = new URLSearchParams(window.location.search).get('id_token')?.trim()
+  return value || null
+}
 
 function failureFromPayload(payload: unknown, status: number): ApiClientError {
   if (isRecord(payload) && isRecord(payload.error)) {

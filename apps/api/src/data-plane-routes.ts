@@ -7,7 +7,10 @@ import type { AnalyticsRepository } from '@profitpilot/db'
 import { SYNC_MODULES } from '@profitpilot/sync'
 import type { SyncModule, SyncRunResult } from '@profitpilot/sync'
 
-export type DataPlaneDependencies = Readonly<{ sync: Readonly<{ runModule(store: StoreId, module: SyncModule): Promise<SyncRunResult> }>; analytics: Pick<AnalyticsRepository, 'read' | 'readCatalog'> }>
+export type DataPlaneDependencies = Readonly<{
+  sync: Readonly<{ runModule(store: StoreId, module: SyncModule, idToken?: string): Promise<SyncRunResult> }>
+  analytics: Pick<AnalyticsRepository, 'read' | 'readCatalog'>
+}>
 
 export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Router {
   const router = Router()
@@ -16,7 +19,8 @@ export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Rout
     try {
       const body = request.body as unknown
       if (!isRecord(body) || typeof body.storeId !== 'string' || typeof body.module !== 'string' || !isSyncModule(body.module)) throw new AppError('VALIDATION_ERROR', 'storeId and a valid sync module are required', 400)
-      const result = await dependencies.sync.runModule(storeId(body.storeId), body.module)
+      const idToken = shopifySessionToken(request)
+      const result = await dependencies.sync.runModule(storeId(body.storeId), body.module, idToken ?? undefined)
       response.status(202).json(success(result, requestIdFrom(request)))
     } catch (error: unknown) {
       next(error)
@@ -63,6 +67,14 @@ function cryptoRandomId(): string {
 
 function isSyncModule(value: string): value is SyncModule {
   return (SYNC_MODULES as readonly string[]).includes(value)
+}
+
+function shopifySessionToken(request: Request): string | null {
+  const value = request.header('x-shopify-session-token')?.trim()
+  // Shopify session JWTs are short lived and comfortably below this bound.
+  // Reject an oversized header instead of forwarding attacker-controlled data.
+  if (!value || value.length > 8_192) return null
+  return value
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

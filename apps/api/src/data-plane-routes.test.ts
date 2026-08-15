@@ -6,9 +6,9 @@ import type { DataPlaneDependencies } from './data-plane-routes.js'
 
 const analytics = { revenue: [], orders: [], productSales: [], customerCohorts: [] }
 
-async function request(path: string, init?: RequestInit): Promise<Response> {
+async function request(path: string, init?: RequestInit, sync: DataPlaneDependencies['sync'] = { runModule: async (store, module) => ({ storeId: store, module, pages: 1, records: 0, cursor: null, resumedFrom: null }) }): Promise<Response> {
   const dataPlane: DataPlaneDependencies = {
-    sync: { runModule: async (store, module) => ({ storeId: store, module, pages: 1, records: 0, cursor: null, resumedFrom: null }) },
+    sync,
     analytics: { read: async () => analytics, readCatalog: async () => [] },
   }
   const server = createServer(createApi({ logger: new Logger(), readinessChecks: [], dataPlane }))
@@ -24,6 +24,19 @@ describe('F2 data plane API', () => {
     expect(response.status).toBe(202)
     expect((await response.json()).data.module).toBe('products')
   })
+  it('passes the Shopify session token to the sync retry boundary', async () => {
+    let receivedToken: string | undefined
+    const sync: DataPlaneDependencies['sync'] = {
+      runModule: async (store, module, idToken) => {
+        receivedToken = idToken
+        return { storeId: store, module, pages: 1, records: 0, cursor: null, resumedFrom: null }
+      },
+    }
+    const response = await request('/sync', { method: 'POST', headers: { 'content-type': 'application/json', 'x-shopify-session-token': 'signed-id-token' }, body: JSON.stringify({ storeId: 'store-1', module: 'products' }) }, sync)
+    expect(response.status).toBe(202)
+    expect(receivedToken).toBe('signed-id-token')
+  })
+
   it('rejects an invalid sync module', async () => {
     const response = await request('/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', module: 'unknown' }) })
     expect(response.status).toBe(400)
