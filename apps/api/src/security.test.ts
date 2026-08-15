@@ -100,6 +100,7 @@ describe('F7 API security suite', () => {
       expect(live.headers.get('content-security-policy')).toContain("default-src 'none'")
       expect(live.headers.get('x-content-type-options')).toBe('nosniff')
       expect(live.headers.get('permissions-policy')).toContain('microphone=()')
+      expect(live.headers.get('permissions-policy')).not.toContain('camera=')
       const cors = await fetch(`${base}/live`, { headers: { origin: 'https://evil.example' } })
       expect(cors.status).toBe(403)
       const sqlInjection = await fetch(`${base}/analytics?storeId=${encodeURIComponent("1 OR 1=1")}`)

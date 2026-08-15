@@ -11,8 +11,8 @@ export async function evaluateReadiness(checks: readonly DependencyCheck[]): Pro
 }
 
 export function readinessChecksFromEnv(env: Readonly<Record<string, string | undefined>>): readonly DependencyCheck[] {
-  const configured = (name: DependencyName, key: string): DependencyCheck => ({ name, check: async () => Boolean(env[key]?.trim()) })
-  return [configured('database', 'DATABASE_URL'), configured('redis', 'REDIS_URL'), configured('ai', 'OPENROUTER_API_KEY_1'), configured('shopify', 'SHOPIFY_API_KEY')]
+  const configured = (name: DependencyName, ...keys: readonly string[]): DependencyCheck => ({ name, check: async () => keys.some((key) => Boolean(env[key]?.trim())) })
+  return [configured('database', 'DATABASE_URL'), configured('redis', 'REDIS_URL'), configured('ai', 'OPENROUTER_API_KEY_1', 'OPENROUTER_API_KEY'), configured('shopify', 'SHOPIFY_API_KEY')]
 }
 
 export type ReadinessAdapters = Readonly<{ database: () => Promise<boolean>; redis: () => Promise<boolean>; ai: () => Promise<boolean>; shopify: () => Promise<boolean> }>

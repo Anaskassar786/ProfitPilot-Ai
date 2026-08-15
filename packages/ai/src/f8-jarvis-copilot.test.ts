@@ -107,6 +107,14 @@ describe('F8 Jarvis identity and session behavior', () => {
     await expect(service.message('store-1' as never, session.id, { text: 'hello', page: 'dashboard' })).rejects.toThrow('ended')
   })
 
+  it('marks the deterministic fallback as DEGRADED when OpenRouter is unavailable', async () => {
+    const service = new JarvisService(new OpenRouterClient({ keys: [] }), jarvisEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const session = await service.startSession('store-degraded' as never, 'dashboard', 'trial')
+    const response = await service.message('store-degraded' as never, session.id, { text: 'Hello', page: 'dashboard' })
+    expect(response.status).toBe('DEGRADED')
+    expect(response.text).toContain('language service')
+  })
+
   it('validates preferences, PII redaction, missing sessions, and AI number safety', async () => {
     const repository = new InMemoryJarvisRepository()
     const service = new JarvisService(provider('The result is 999999.'), jarvisEvidence, repository, null, () => 1_000)

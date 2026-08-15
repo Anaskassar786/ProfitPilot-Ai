@@ -74,7 +74,7 @@ export type JarvisMessage = Readonly<{
   createdAt: number
 }>
 
-export type JarvisResponseStatus = 'ANSWER' | 'DEFLECTION' | 'SUPPRESSED' | 'CLARIFY' | 'ACTION_PENDING' | 'ACTION_EXECUTED' | 'ACTION_UNAVAILABLE'
+export type JarvisResponseStatus = 'ANSWER' | 'DEGRADED' | 'DEFLECTION' | 'SUPPRESSED' | 'CLARIFY' | 'ACTION_PENDING' | 'ACTION_EXECUTED' | 'ACTION_UNAVAILABLE'
 export type JarvisResponse = Readonly<{
   session: JarvisSession
   status: JarvisResponseStatus
@@ -200,7 +200,7 @@ export class JarvisService {
     return this.persistSession({ ...session, active: true, paused: state === 'pause', lastActivityAt: now })
   }
 
-  public async message(storeId: StoreId, sessionId: string, input: Readonly<{ text: string; page: JarvisPage; voice?: boolean }>): Promise<JarvisResponse> {
+  public async message(storeId: StoreId, sessionId: string, input: Readonly<{ text: string; page: JarvisPage; voice?: boolean; requestId?: string }>): Promise<JarvisResponse> {
     const session = await this.getSession(storeId, sessionId)
     if (!session.active || session.endedAt !== null) throw new AppError('CONFLICT', 'Jarvis session has ended', 409)
     const preferences = await this.preferences(storeId)
@@ -249,7 +249,7 @@ export class JarvisService {
       return this.confirmPendingAction(nextBase, query, language, addressing, session.pendingAction)
     }
     const action = evidence.suggestedAction
-    const response = await this.generateResponse(nextBase, query, input.page, language, addressing, evidence, action)
+    const response = await this.generateResponse(nextBase, query, input.page, language, addressing, evidence, action, input.requestId)
     await this.persistExchange(response.session, query, response, now)
     return response
   }
@@ -269,10 +269,10 @@ export class JarvisService {
     return { session: saved, status: outcome.executed ? 'ACTION_EXECUTED' : 'ACTION_UNAVAILABLE', text: `${preferences.addressing}, ${outcome.message}`, addressing: preferences.addressing, language, mode: 'ACTION', evidence: null, action: outcome.executed ? null : action, showEvidence: false, requiresConfirmation: false }
   }
 
-  private async generateResponse(session: JarvisSession, query: string, page: JarvisPage, language: JarvisLanguage, addressing: JarvisAddressing, evidence: JarvisEvidence, action: JarvisActionPlan | null): Promise<JarvisResponse> {
+  private async generateResponse(session: JarvisSession, query: string, page: JarvisPage, language: JarvisLanguage, addressing: JarvisAddressing, evidence: JarvisEvidence, action: JarvisActionPlan | null, requestId?: string): Promise<JarvisResponse> {
     const prompt = jarvisPrompt(query, page, language, addressing, evidence)
     try {
-      const generated = await this.provider.generate(prompt.system, prompt.user)
+      const generated = await this.provider.generate(prompt.system, prompt.user, requestId ? { requestId } : {})
       validateJarvisNumbers(generated.text, evidence.facts)
       this.recordCost?.(session.storeId, generated)
       const pendingSession = action ? { ...session, pendingAction: action, nonsenseCount: 0 } : { ...session, nonsenseCount: 0 }
@@ -282,7 +282,7 @@ export class JarvisService {
       const saved = await this.persistSession({ ...session, pendingAction: action, nonsenseCount: 0 })
       if (error instanceof AppError && error.code === 'VALIDATION_ERROR') return { session: saved, status: 'ANSWER', text: `${addressing}, I can show the grounded evidence, but I won\'t repeat an unsupported number.`, addressing, language, mode: 'ASK', evidence, action, showEvidence: true, requiresConfirmation: false }
       if (!(error instanceof AiUnavailableError) && !(error instanceof AppError)) throw error
-      return { session: saved, status: 'ANSWER', text: `${addressing}, the language service is temporarily unavailable. I can still show the deterministic evidence and safe next steps.`, addressing, language, mode: responseMode(query, action), evidence, action, showEvidence: Boolean(action), requiresConfirmation: false }
+      return { session: saved, status: 'DEGRADED', text: `${addressing}, the language service is temporarily unavailable. I can still show the deterministic evidence and safe next steps.`, addressing, language, mode: responseMode(query, action), evidence, action, showEvidence: Boolean(action), requiresConfirmation: false }
     }
   }
 
@@ -313,7 +313,7 @@ export class JarvisService {
   private async persistExchange(session: JarvisSession, query: string, response: JarvisResponse, now: number): Promise<void> {
     try {
       await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'merchant', text: query, language: response.language, mode: response.mode, evidence: null, createdAt: now })
-      await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence: response.evidence, createdAt: now })
+      await this.repository.appendMessage({ id: randomUUID(), sessionId: session.id, storeId: session.storeId, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence: response.evidence, createdAt: now + 1 })
     } catch { /* Chat still returns even if the message ledger is temporarily unavailable. */ }
   }
 }

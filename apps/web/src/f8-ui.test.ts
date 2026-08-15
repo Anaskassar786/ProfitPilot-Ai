@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -20,5 +21,14 @@ describe('Jarvis readiness UI', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Start voice input"/)
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Send message"/)
     expect(html).toContain('aria-busy="true"')
+  })
+  it('keeps chat mounted during inline voice and isolates microphone errors from session lifecycle', () => {
+    const source = readFileSync(new URL('./f8.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('jarvis-immersive')
+    expect(source).toContain('jarvis-voice-inline')
+    expect(source).toContain("role: 'merchant'")
+    const voiceErrorHandler = source.slice(source.indexOf('next.onerror'), source.indexOf('next.onend'))
+    expect(voiceErrorHandler).not.toContain('dispatchLifecycle')
+    expect(voiceErrorHandler).toContain('setVoiceError')
   })
 })

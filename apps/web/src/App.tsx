@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -44,7 +44,6 @@ import {
   Mail,
   Menu,
   MessageSquare,
-  Mic,
   Moon,
   MoreHorizontal,
   Package,
@@ -81,11 +80,12 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { activateWorkflow, analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { activateWorkflow, analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, createWorkflow, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, fetchWorkflows, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, JsonValue, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
-import type { JarvisEvidence } from './f8-model.js'
+import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
+import { PASSIVE_RECOMMENDATION_INTERVAL_MS, PASSIVE_SNOOZE_MS, passiveRecommendationsAllowed, selectPassiveRecommendation } from './passive-jarvis.js'
 import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenuePoints, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
 import type { ChartPeriod } from './model.js'
 
@@ -173,6 +173,12 @@ export default function App() {
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [jarvisEvidence, setJarvisEvidence] = useState<JarvisEvidence | null>(null)
+  const [jarvisPreference, setJarvisPreference] = useState<JarvisPreference | null>(null)
+  const [passiveRecommendation, setPassiveRecommendation] = useState<Recommendation | null>(null)
+  const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null)
+  const dismissedRecommendationIds = useRef(new Set<string>())
+  const shownRecommendationIds = useRef(new Set<string>())
+  const snoozedRecommendations = useRef<Readonly<Record<string, number>>>({})
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [lightMode, setLightMode] = useState(false)
@@ -224,6 +230,41 @@ export default function App() {
   useEffect(() => { void loadData() }, [context.storeId])
 
   useEffect(() => {
+    if (!context.storeId) { setJarvisPreference(null); setPassiveRecommendation(null); return }
+    const storeId = context.storeId
+    let cancelled = false
+    let timer: number | null = null
+    dismissedRecommendationIds.current = new Set(readStoredStringArray(`profitpilot:jarvis:dismissed:${storeId}`))
+    snoozedRecommendations.current = readStoredNumberRecord(`profitpilot:jarvis:snoozed:${storeId}`)
+    shownRecommendationIds.current = new Set()
+    setPassiveRecommendation(null)
+    const refresh = async () => {
+      if (document.visibilityState === 'hidden') return
+      const [recommendationsResult, preferenceResult] = await Promise.allSettled([fetchRecommendations(storeId), fetchJarvisPreferences(storeId)])
+      if (cancelled) return
+      if (recommendationsResult.status === 'fulfilled') setData((current) => ({ ...current, recommendations: recommendationsResult.value }))
+      if (preferenceResult.status === 'fulfilled') setJarvisPreference(preferenceResult.value)
+    }
+    const startTimer = () => {
+      if (timer !== null) window.clearInterval(timer)
+      timer = document.visibilityState === 'visible' ? window.setInterval(() => { void refresh() }, PASSIVE_RECOMMENDATION_INTERVAL_MS) : null
+    }
+    const onVisibility = () => { startTimer(); if (document.visibilityState === 'visible') void refresh() }
+    document.addEventListener('visibilitychange', onVisibility)
+    startTimer()
+    void refresh()
+    return () => { cancelled = true; if (timer !== null) window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [context.storeId])
+
+  useEffect(() => {
+    if (!context.storeId || !passiveRecommendationsAllowed(jarvisPreference)) { setPassiveRecommendation(null); return }
+    if (passiveRecommendation && passiveRecommendation.status === 'PENDING' && data.recommendations.some((item) => item.id === passiveRecommendation.id && item.status === 'PENDING')) return
+    const next = selectPassiveRecommendation({ recommendations: data.recommendations, preference: jarvisPreference, dismissedIds: dismissedRecommendationIds.current, shownIds: shownRecommendationIds.current, snoozedUntil: snoozedRecommendations.current })
+    if (next) shownRecommendationIds.current.add(next.id)
+    setPassiveRecommendation(next)
+  }, [context.storeId, data.recommendations, jarvisPreference, passiveRecommendation])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(true) }
       if (event.key === '?' && !isTypingTarget(event.target)) setShortcutsOpen(true)
@@ -271,9 +312,6 @@ export default function App() {
       }))
       showToast(result.failed.length > 0 ? `Sync all finished: ${result.succeeded.length} succeeded, ${result.failed.length} failed.` : 'Sync all finished successfully for all 8 modules.', result.failed.length > 0 ? 'warning' : 'success')
       await loadData()
-      if (context.storeId && result.succeeded.includes('orders')) {
-        try { await analyzeRecommendations(context.storeId); await loadData() } catch { /* analysis is best-effort after sync */ }
-      }
     } catch (error: unknown) {
       const message = errorMessage(error)
       setSyncProgress(syncModules.map((module) => ({ module, status: 'failed', detail: message })))
@@ -293,6 +331,28 @@ export default function App() {
   const phaseGate = (phase: string, capability: string) => {
     try { throw new PhaseNotImplementedError(phase, capability) } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'This capability is phase-gated.', 'info') }
   }
+  const dismissPassiveRecommendation = () => {
+    if (!passiveRecommendation || !context.storeId) return
+    dismissedRecommendationIds.current.add(passiveRecommendation.id)
+    storeStringArray(`profitpilot:jarvis:dismissed:${context.storeId}`, [...dismissedRecommendationIds.current])
+    setPassiveRecommendation(null)
+  }
+  const snoozePassiveRecommendation = () => {
+    if (!passiveRecommendation || !context.storeId) return
+    const next = { ...snoozedRecommendations.current, [passiveRecommendation.id]: Date.now() + PASSIVE_SNOOZE_MS }
+    snoozedRecommendations.current = next
+    shownRecommendationIds.current.delete(passiveRecommendation.id)
+    storeNumberRecord(`profitpilot:jarvis:snoozed:${context.storeId}`, next)
+    setPassiveRecommendation(null)
+  }
+  const reviewPassiveRecommendation = () => {
+    if (!passiveRecommendation) return
+    setSelectedRecommendation(passiveRecommendation)
+    setJarvisEvidence(null)
+    setJarvisOpen(true)
+    setEvidenceOpen(true)
+    setPassiveRecommendation(null)
+  }
 
   return (
     <div className={`app-shell ${lightMode ? 'light-mode' : ''}`}>
@@ -306,10 +366,11 @@ export default function App() {
           <PageRouter active={activePage} context={context} data={data} onNavigate={navigate} onSync={sync} onSyncAll={syncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} onDecide={decide} onRefresh={() => void loadData()} onToast={showToast} onPhaseGate={phaseGate} onEvidence={() => setEvidenceOpen(true)} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} />
         </div>
       </main>
-      <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} />
+      <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} />
+      {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />}
       {notificationsOpen && <NotificationDrawer onClose={() => setNotificationsOpen(false)} />}
       {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
-      {evidenceOpen && <EvidenceDrawer recommendation={data.recommendations[0] ?? null} jarvisEvidence={jarvisEvidence} onClose={() => { setEvidenceOpen(false); setJarvisEvidence(null) }} />}
+      {evidenceOpen && <EvidenceDrawer recommendation={selectedRecommendation ?? data.recommendations[0] ?? null} jarvisEvidence={jarvisEvidence} onClose={() => { setEvidenceOpen(false); setJarvisEvidence(null); setSelectedRecommendation(null) }} />}
       {onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
@@ -573,12 +634,14 @@ function DagNode({ title, detail, icon: Icon, tone }: { title: string; detail: s
 function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><button onClick={onSettings}><Settings size={15} /> Settings</button><button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</button><button onClick={onClose}><LockKeyhole size={15} /> Security boundary</button></div> }
 function OfflineBanner({ error, onRetry }: { error: string | null; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>API unavailable</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><button onClick={onRetry}><RotateCcw size={14} /> Retry</button></div> }
 function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></button></div> }
-function JarvisOrb({ onClick }: { onClick: () => void }) { return <button className="jarvis-orb-wrap" onClick={onClick} aria-label="Open Jarvis shell"><span className="jarvis-orb-ring ring-a" /><span className="jarvis-orb-ring ring-b" /><span className="jarvis-orb"><span className="orb-core" /><span className="orb-shine" /></span><span className="jarvis-orb-label">Jarvis</span></button> }
-function JarvisPanel({ onClose, onPhaseGate }: { onClose: () => void; onPhaseGate: (phase: string, capability: string) => void }) { return <aside className="jarvis-panel"><div className="jarvis-panel-header"><div className="jarvis-title"><span className="jarvis-mini-orb"><span /></span><span><strong>Jarvis</strong><small>AI assistant shell</small></span><span className="phase-tag">AI</span></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="jarvis-context"><span><Radio size={13} /> Background shell</span><span>Phase-gated</span></div><div className="jarvis-messages"><div className="jarvis-message"><span className="message-orb"><Sparkles size={12} /></span><p>I’m present as the Jarvis interface. I will not invent a store answer before the F8 copilot and voice engine exist.</p></div></div><div className="jarvis-suggestions"><button onClick={() => onPhaseGate('F8', 'Jarvis responses')}>Ask about revenue</button><button onClick={() => onPhaseGate('F8', 'Jarvis voice control')}>Start voice mode</button></div><div className="jarvis-composer"><textarea disabled placeholder="Jarvis responses are gated to F8…" rows={2} /><div className="jarvis-composer-actions"><button className="icon-button" disabled><Mic size={16} /></button><span>F8 response engine</span><button className="send-button" onClick={() => onPhaseGate('F8', 'Jarvis chat responses')}><ArrowUpRight size={16} /></button></div></div><div className="jarvis-panel-footer"><span><ShieldCheck size={12} /> PII-safe contract reserved</span><button onClick={onClose}>Close</button></div></aside> }
 function EvidenceDrawer({ recommendation, jarvisEvidence, onClose }: { recommendation: Recommendation | null; jarvisEvidence: JarvisEvidence | null; onClose: () => void }) {
   const hash = recommendation && typeof recommendation.evidencePack.sha256 === 'string' ? recommendation.evidencePack.sha256 : null
   const evidence = jarvisEvidence
   return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close evidence drawer" /><aside className="evidence-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Database size={13} /> {evidence ? 'JARVIS GROUNDED EVIDENCE' : 'IMMUTABLE EVIDENCE PACK'}</span><h2>{evidence ? 'Review before action' : recommendation ? recommendation.title : 'No evidence yet'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="drawer-scroll">{evidence ? <><div className="drawer-hero"><span>{evidence.page} · {evidence.confidenceLevel} confidence</span><strong>{evidence.suggestedAction?.label ?? 'Evidence only'}</strong><small>Generated from real tenant data · {evidence.generatedAt}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Facts and sources</div><div className="evidence-stack">{evidence.facts.map((fact, index) => <div className="evidence-line" key={fact.key}><span>{String(index + 1).padStart(2, '0')}</span><strong>{fact.label}: {String(fact.value ?? '—')}</strong><small>{fact.source}</small><CheckCircle2 size={15} /></div>)}</div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> AI sees language-safe evidence only</span><span><Check size={14} /> Risky actions require explicit confirmation</span><span><Check size={14} /> Merchant-owned draft/sender checks remain enforced</span></div></div></> : recommendation ? <><div className="drawer-hero"><span>{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><small>Deterministic rule output · {recommendation.ruleId}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Proof and status</div><div className="evidence-stack"><div className="evidence-line"><span>01</span><strong>{recommendation.reason}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>02</span><strong>Confidence: {recommendation.confidenceLevel}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>03</span><strong className="mono">SHA-256: {hash ?? 'unavailable'}</strong><CheckCircle2 size={15} /></div></div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> {recommendation.actionRisk.replaceAll('_', ' ')} policy</span><span><Check size={14} /> CAS approval version {recommendation.version}</span><span><Check size={14} /> AI language: {recommendation.explanationStatus}</span></div></div></> : <div className="gated-panel"><LockKeyhole size={22} /><strong>No persisted evidence packs</strong><p>Run analysis after the store snapshot is available. The UI will never fabricate evidence.</p></div>}</div><div className="drawer-footer"><button className="button secondary" onClick={onClose}>Close</button></div></aside></>
+}
+
+function PassiveRecommendationCard({ recommendation, onReview, onDismiss, onSnooze }: { recommendation: Recommendation; onReview: () => void; onDismiss: () => void; onSnooze: () => void }) {
+  return <aside className="passive-recommendation-card" aria-live="polite"><div className="passive-card-heading"><span className="passive-card-icon"><Sparkles size={15} /></span><span><small>JARVIS RECOMMENDATION</small><strong>{recommendation.title}</strong></span><button onClick={onDismiss} aria-label="Dismiss recommendation"><X size={14} /></button></div><p>{recommendation.reason}</p><div className="passive-card-meta"><span className={`status-badge ${recommendation.confidenceLevel === 'HIGH' ? 'green' : 'amber'}`}>{recommendation.confidenceLevel} confidence</span><span>Already in your recommendations</span></div><div className="passive-card-actions"><button className="button primary" onClick={onReview}><Eye size={13} /> Review evidence</button><button className="button secondary" onClick={onSnooze}><Clock3 size={13} /> Snooze 1 hour</button></div></aside>
 }
 
 function NotificationDrawer({ onClose }: { onClose: () => void }) { return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>No new notifications</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>Real sync and F2 notifications will appear here. Nothing is fabricated.</span></div><button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></> }
@@ -587,6 +650,10 @@ function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, se
 function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><button className="button primary full-width" onClick={onClose}>Done</button></div></div> }
 function Shortcut({ keys, label }: { keys: string; label: string }) { return <div className="shortcut-row"><kbd>{keys}</kbd><span>{label}</span><Check size={14} /></div> }
 function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) { const Icon = toast.kind === 'success' ? CheckCircle2 : toast.kind === 'error' ? AlertCircle : Info; return <div className={`toast ${toast.kind}`}><span className="toast-icon"><Icon size={16} /></span><span>{toast.message}</span><button onClick={onClose} aria-label="Close notification"><X size={15} /></button></div> }
+function readStoredStringArray(key: string): readonly string[] { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] } catch { return [] } }
+function readStoredNumberRecord(key: string): Readonly<Record<string, number>> { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '{}'); if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}; return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))) } catch { return {} } }
+function storeStringArray(key: string, value: readonly string[]): void { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* Storage may be disabled in a hardened embedded browser. */ } }
+function storeNumberRecord(key: string, value: Readonly<Record<string, number>>): void { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* Storage may be disabled in a hardened embedded browser. */ } }
 function stringValue(value: JsonValue | undefined): string | null { return typeof value === 'string' ? value : null }
 function numberValue(value: JsonValue | undefined): number | null { return typeof value === 'number' && Number.isFinite(value) ? value : null }
 /** True for the 503 the API returns while a store's Shopify circuit is open. */

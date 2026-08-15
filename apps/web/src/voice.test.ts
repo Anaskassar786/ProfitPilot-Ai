@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognition, speakNative, speechRecognitionAvailable, speechRecognitionFailure, stopNativeSpeech, transcriptFromEvent } from './voice.js'
+import { createSpeechRecognition, microphonePreflight, speakNative, speechRecognitionAvailable, speechRecognitionFailure, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 class FakeRecognition implements NativeSpeechRecognition {
@@ -38,6 +38,27 @@ describe('F8 browser-native voice contracts', () => {
     expect(speechRecognitionFailure('network').message).toContain('connectivity')
     expect(speechRecognitionFailure('vendor-code')).toEqual({ code: 'vendor-code', message: 'Speech recognition failed (vendor-code). You can retry or type your message.' })
     expect(speechRecognitionFailure(undefined).code).toBe('unknown')
+  })
+
+  it('preflights iframe policy, secure context, and media devices before recognition starts', () => {
+    const standalone = { isSecureContext: true } as unknown as Window
+    Object.defineProperties(standalone, { self: { value: standalone }, top: { value: standalone } })
+    const media = { mediaDevices: {} } as Navigator
+    expect(microphonePreflight(standalone, {} as Document, media)).toMatchObject({ allowed: true, framed: false, code: 'ready' })
+    const top = {} as Window
+    const framed = { isSecureContext: true } as unknown as Window
+    Object.defineProperties(framed, { self: { value: framed }, top: { value: top } })
+    expect(microphonePreflight(framed, {} as Document, media)).toMatchObject({ allowed: false, framed: true, code: 'embedded-policy' })
+    const allowedDocument = { permissionsPolicy: { allowsFeature: () => true } } as unknown as Document
+    expect(microphonePreflight(framed, allowedDocument, media)).toMatchObject({ allowed: true, framed: true })
+    expect(microphonePreflight({ ...standalone, isSecureContext: false } as Window, {} as Document, media).code).toBe('insecure')
+  })
+
+  it('creates a safe standalone URL without signed Shopify parameters', () => {
+    const result = new URL(standaloneAppUrl({ href: 'https://app.example/?shop=demo.myshopify.com&storeId=s1&id_token=secret&host=signed&hmac=hash&timestamp=1&embedded=1' } as Location))
+    expect(result.searchParams.get('shop')).toBe('demo.myshopify.com')
+    expect(result.searchParams.get('storeId')).toBe('s1')
+    for (const key of ['id_token', 'host', 'hmac', 'timestamp', 'embedded']) expect(result.searchParams.has(key)).toBe(false)
   })
 
   it('extracts transcripts and speaks/cancels through native TTS', () => {

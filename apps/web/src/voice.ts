@@ -1,5 +1,32 @@
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error' | 'sleeping'
 export type SpeechRecognitionFailure = Readonly<{ code: string; message: string }>
+export type MicrophonePreflight = Readonly<{ allowed: boolean; framed: boolean; code: 'ready' | 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable'; message: string | null }>
+
+type PermissionsPolicyLike = Readonly<{ allowsFeature(feature: string): boolean }>
+
+export function microphonePreflight(scope: Window | undefined, documentScope: Document | undefined, navigatorScope: Navigator | undefined): MicrophonePreflight {
+  const framed = isFramed(scope)
+  if (!scope?.isSecureContext) return { allowed: false, framed, code: 'insecure', message: 'Voice requires a secure HTTPS connection.' }
+  const policy = (documentScope as (Document & { permissionsPolicy?: PermissionsPolicyLike }) | undefined)?.permissionsPolicy
+  if (framed && (!policy || !safeAllowsMicrophone(policy))) return { allowed: false, framed, code: 'embedded-policy', message: 'Microphone unavailable in embedded view. Open ProfitPilot in a new tab to use voice.' }
+  if (policy && !safeAllowsMicrophone(policy)) return { allowed: false, framed, code: 'policy-denied', message: 'Microphone access is blocked by this page policy.' }
+  if (!navigatorScope?.mediaDevices) return { allowed: false, framed, code: 'media-devices-unavailable', message: 'This browser does not expose a microphone device. Chat remains available.' }
+  return { allowed: true, framed, code: 'ready', message: null }
+}
+
+export function standaloneAppUrl(location: Pick<Location, 'href'>): string {
+  const url = new URL(location.href)
+  for (const parameter of ['id_token', 'hmac', 'signature', 'timestamp', 'embedded', 'host']) url.searchParams.delete(parameter)
+  return url.toString()
+}
+
+function isFramed(scope: Window | undefined): boolean {
+  if (!scope) return false
+  try { return scope.self !== scope.top } catch { return true }
+}
+function safeAllowsMicrophone(policy: PermissionsPolicyLike): boolean {
+  try { return policy.allowsFeature('microphone') } catch { return false }
+}
 
 type NativeSpeechResult = Readonly<{ transcript: string }>
 type NativeSpeechEvent = Readonly<{ results: readonly Readonly<{ 0?: NativeSpeechResult; length: number }>[] }>
