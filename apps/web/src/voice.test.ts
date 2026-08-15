@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognition, speakNative, speechRecognitionAvailable, stopNativeSpeech, transcriptFromEvent } from './voice.js'
+import { createSpeechRecognition, speakNative, speechRecognitionAvailable, speechRecognitionFailure, stopNativeSpeech, transcriptFromEvent } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 class FakeRecognition implements NativeSpeechRecognition {
@@ -28,6 +28,16 @@ describe('F8 browser-native voice contracts', () => {
     expect(createSpeechRecognition(scope)).toBeInstanceOf(FakeRecognition)
     expect(speechRecognitionAvailable(undefined)).toBe(false)
     expect(createSpeechRecognition(undefined)).toBeNull()
+  })
+
+  it('preserves recognition error codes and gives failure-specific recovery guidance', () => {
+    expect(speechRecognitionFailure('not-allowed')).toMatchObject({ code: 'not-allowed' })
+    expect(speechRecognitionFailure('not-allowed').message).toContain('Shopify Admin')
+    expect(speechRecognitionFailure('audio-capture').message).toContain('microphone')
+    expect(speechRecognitionFailure('no-speech').message).toContain('No speech')
+    expect(speechRecognitionFailure('network').message).toContain('connectivity')
+    expect(speechRecognitionFailure('vendor-code')).toEqual({ code: 'vendor-code', message: 'Speech recognition failed (vendor-code). You can retry or type your message.' })
+    expect(speechRecognitionFailure(undefined).code).toBe('unknown')
   })
 
   it('extracts transcripts and speaks/cancels through native TTS', () => {

@@ -1,4 +1,5 @@
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error' | 'sleeping'
+export type SpeechRecognitionFailure = Readonly<{ code: string; message: string }>
 
 type NativeSpeechResult = Readonly<{ transcript: string }>
 type NativeSpeechEvent = Readonly<{ results: readonly Readonly<{ 0?: NativeSpeechResult; length: number }>[] }>
@@ -44,4 +45,19 @@ export function stopNativeSpeech(scope: Window | undefined): void { scope?.speec
 
 export function transcriptFromEvent(event: NativeSpeechEvent): string {
   return [...event.results].map((result) => result[0]?.transcript ?? '').join(' ').trim()
+}
+
+/** Preserve the browser code and turn it into recovery guidance. */
+export function speechRecognitionFailure(codeValue: string | undefined): SpeechRecognitionFailure {
+  const code = codeValue?.trim() || 'unknown'
+  const messages: Readonly<Record<string, string>> = {
+    'not-allowed': 'Microphone permission was denied. Allow microphone access; if Shopify Admin blocks the embedded frame, open ProfitPilot in a new tab.',
+    'service-not-allowed': 'Your browser blocked its speech-recognition service. Check browser privacy settings or type your message instead.',
+    'audio-capture': 'No working microphone was found. Check the selected input device and system permissions.',
+    'no-speech': 'No speech was detected. Try again and speak after the listening indicator appears.',
+    network: 'Speech recognition lost its network connection. Check connectivity and try again.',
+    aborted: 'Voice recognition was stopped before it completed. Try again when you are ready.',
+    'language-not-supported': 'The selected speech language is not supported by this browser. Switch language or type your message.',
+  }
+  return { code, message: messages[code] ?? `Speech recognition failed (${code}). You can retry or type your message.` }
 }

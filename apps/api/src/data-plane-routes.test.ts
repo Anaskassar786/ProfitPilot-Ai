@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { Logger } from '@profitpilot/logger'
 import { StoreCircuitRegistry } from '@profitpilot/sync'
-import { storeId } from '@profitpilot/types'
+import { AppError, storeId } from '@profitpilot/types'
 import { createApi } from './app.js'
 import type { DataPlaneDependencies } from './data-plane-routes.js'
 
@@ -38,6 +38,23 @@ describe('F2 data plane API', () => {
     expect(response.status).toBe(202)
     expect(receivedToken).toBe('signed-id-token')
   })
+  it('runs every module sequentially and reports partial failures without stopping', async () => {
+    const calls: string[] = []
+    const sync: DataPlaneDependencies['sync'] = {
+      runModule: async (store, module) => {
+        calls.push(module)
+        if (module === 'customers') throw new AppError('DEPENDENCY_ERROR', 'Customer endpoint unavailable', 502)
+        return { storeId: store, module, pages: 1, records: 1, cursor: null, resumedFrom: null }
+      },
+    }
+    const response = await request('/sync/all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1' }) }, sync)
+    const body = await response.json()
+    expect(response.status).toBe(207)
+    expect(calls).toEqual(['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'])
+    expect(body.data.succeeded).toHaveLength(7)
+    expect(body.data.failed).toEqual(['customers'])
+    expect(body.data.modules[2]).toMatchObject({ module: 'customers', status: 'failed', error: { code: 'DEPENDENCY_ERROR', message: 'Customer endpoint unavailable' } })
+  })
 
   it('rejects an invalid sync module', async () => {
     const response = await request('/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', module: 'unknown' }) })
@@ -52,6 +69,20 @@ describe('F2 data plane API', () => {
     const response = await request('/catalog?storeId=store-1')
     expect(response.status).toBe(200)
     expect((await response.json()).data).toEqual([])
+  })
+  it('returns a normalized catalog payload whose title is directly addressable', async () => {
+    const dataPlane: DataPlaneDependencies = {
+      sync: { runModule: async (store, module) => ({ storeId: store, module, pages: 1, records: 0, cursor: null, resumedFrom: null }) },
+      analytics: {
+        read: async () => analytics,
+        readCatalog: async (tenant) => [{ storeId: tenant, productId: '8429887141223', payload: { id: '8429887141223', title: 'Commander Pilot Mug' }, syncedAt: 100 }],
+      },
+    }
+    await withDataPlane(dataPlane, async (base) => {
+      const body = await (await fetch(`${base}/catalog?storeId=store-1`)).json()
+      expect(body.data[0].payload.title).toBe('Commander Pilot Mug')
+      expect(body.data[0].payload.payload).toBeUndefined()
+    })
   })
   it('validates a missing analytics tenant', async () => expect((await request('/analytics')).status).toBe(400))
   it('validates malformed sync input', async () => {
@@ -74,7 +105,10 @@ function dataPlaneWith(circuits: StoreCircuitRegistry, token: string | null): Da
     analytics: { read: async () => analytics, readCatalog: async () => [] },
     circuits,
     tokenVault: { get: async () => token },
-    directory: { get: async (store) => ({ storeId: store, shopDomain: 'commander-pilot.myshopify.com', installedAt: 0 }) },
+    directory: {
+      get: async (store) => ({ storeId: store, shopDomain: 'commander-pilot.myshopify.com' }),
+      getByShopDomain: async (shop) => shop.toLowerCase() === 'commander-pilot.myshopify.com' ? ({ storeId: storeId('store-1'), shopDomain: 'commander-pilot.myshopify.com' }) : null,
+    },
   }
 }
 
@@ -109,6 +143,22 @@ describe('sync connection diagnostics', () => {
   it('never returns the access token itself', async () => {
     await withDataPlane(dataPlaneWith(new StoreCircuitRegistry(), 'shpat_supersecret'), async (base) => {
       expect(await (await fetch(`${base}/sync/status?storeId=store-1`)).text()).not.toContain('shpat_supersecret')
+    })
+  })
+
+  it('resolves a Shopify domain to the internal store status', async () => {
+    await withDataPlane(dataPlaneWith(new StoreCircuitRegistry(), 'shpat_token'), async (base) => {
+      const response = await fetch(`${base}/shopify/status?shop=COMMANDER-PILOT.myshopify.com`)
+      expect(response.status).toBe(200)
+      expect((await response.json()).data).toMatchObject({ storeId: 'store-1', shopDomain: 'commander-pilot.myshopify.com', registered: true, canSync: true })
+    })
+  })
+
+  it('returns a friendly unregistered status for an unknown Shopify domain', async () => {
+    await withDataPlane(dataPlaneWith(new StoreCircuitRegistry(), null), async (base) => {
+      const response = await fetch(`${base}/shopify/status?shop=unknown.myshopify.com`)
+      expect(response.status).toBe(200)
+      expect((await response.json()).data).toMatchObject({ storeId: null, registered: false, canSync: false })
     })
   })
 

@@ -44,9 +44,12 @@ describe('sync foundation', () => {
     const requested: (string | null)[] = []
     const source: SyncSource = { fetchPage: async (_store, _module, cursor) => { requested.push(cursor); const page = pages[cursor ?? 'start']; if (!page) throw new Error('unexpected cursor'); return { nextCursor: page[0], records: page[1] } } }
     const upsert = vi.fn(async () => undefined)
-    const result = await new SyncEngine(source, { upsert }, new CheckpointLedger(), policy(), null, () => 100).runModule(store, 'products')
+    const complete = vi.fn(async () => undefined)
+    const result = await new SyncEngine(source, { upsert, complete }, new CheckpointLedger(), policy(), null, () => 100).runModule(store, 'products')
     expect(requested).toEqual([null, 'next'])
     expect(upsert).toHaveBeenCalledTimes(2)
+    expect(complete).toHaveBeenCalledOnce()
+    expect(complete).toHaveBeenCalledWith(store, 'products')
     expect(result).toMatchObject({ pages: 2, records: 2, cursor: null, resumedFrom: null })
   })
   it('resumes from the last committed cursor after a previous run', async () => {

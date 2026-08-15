@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averageOrderValue, formatMoney, formatNumber, latestSyncLabel, revenueSeries, sumOrders, sumRevenue, workspaceContext } from './model.js'
+import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenueSeries, sumOrders, sumRevenue, workspaceContext } from './model.js'
 import type { AnalyticsSnapshot } from './model.js'
 
 const snapshot: AnalyticsSnapshot = {
@@ -36,4 +36,10 @@ describe('F3 workspace model', () => {
   it('labels a missing snapshot honestly', () => expect(latestSyncLabel(null)).toBe('No analytics sync yet'))
   it('labels an empty snapshot honestly', () => expect(latestSyncLabel({ ...snapshot, revenue: [], orders: [] })).toBe('No analytics sync yet'))
   it('preserves configured currency', () => expect(formatMoney(10, 'EUR')).toBe('€10'))
+  it('renders a normalized catalog title directly from product.payload.title', () => {
+    const product = { storeId: 's', productId: 'gid://shopify/Product/123', payload: { id: '123', title: 'Commander Mug' }, syncedAt: 100 }
+    expect(product.payload.title).toBe('Commander Mug')
+    expect(catalogProductTitle(product)).toBe('Commander Mug')
+  })
+  it('falls back to the stable product id when Shopify has no usable title', () => expect(catalogProductTitle({ storeId: 's', productId: 'p1', payload: {}, syncedAt: 100 })).toBe('p1'))
 })

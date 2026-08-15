@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchSyncStatus, requestJson, requestSync, resetSyncCircuit } from './api.js'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchSyncStatus, initializeCsrf, requestJson, requestSync, requestSyncAll, resetApiClientStateForTests, resetSyncCircuit, startJarvisSession } from './api.js'
 import type { Fetcher } from './api.js'
 
 type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>
@@ -10,6 +10,8 @@ function fetcher(payload: ResponsePayload, status = 200, calls: string[] = []) {
     return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   }
 }
+
+beforeEach(() => resetApiClientStateForTests())
 
 describe('F3 relative API client', () => {
   it('unwraps a successful API envelope', async () => expect(await requestJson<{ value: number }>('/analytics', {}, fetcher({ ok: true, data: { value: 2 } }))).toEqual({ value: 2 }))
@@ -27,6 +29,14 @@ describe('F3 relative API client', () => {
     const calls: string[] = []
     await requestSync('store-1', 'products', fetcher({ ok: true, data: { records: 2 } }, 202, calls))
     expect(calls[0]).toBe('POST /sync')
+  })
+  it('posts Sync all and preserves module-level partial failures', async () => {
+    const calls: string[] = []
+    const data = { storeId: 'store-1', modules: [{ module: 'products', status: 'succeeded', result: { records: 2 } }, { module: 'orders', status: 'failed', error: { code: 'DEPENDENCY_ERROR', message: 'Shopify unavailable' } }], succeeded: ['products'], failed: ['orders'] }
+    const result = await requestSyncAll('store-1', fetcher({ ok: true, data }, 207, calls), null)
+    expect(calls).toEqual(['POST /sync/all'])
+    expect(result.failed).toEqual(['orders'])
+    expect(result.modules[1]).toMatchObject({ module: 'orders', status: 'failed' })
   })
   it('sends the embedded id_token only in the sync retry header', async () => {
     let captured: Headers | undefined
@@ -47,6 +57,45 @@ describe('F3 relative API client', () => {
     await fetchCsrfToken(capturing)
     await requestSync('store-1', 'products', capturing)
     expect(captured?.get('x-csrf-token')).toBe('tok-123')
+  })
+  it('deduplicates concurrent CSRF initialization and gates Jarvis startup on it', async () => {
+    let releaseCsrf!: () => void
+    const csrfReady = new Promise<void>((resolve) => { releaseCsrf = resolve })
+    const calls: string[] = []
+    const capturing: Fetcher = async (input, init) => {
+      calls.push(`${init?.method ?? 'GET'} ${input}`)
+      if (input === '/security/csrf') {
+        await csrfReady
+        return new Response(JSON.stringify({ ok: true, data: { csrfToken: 'ready-token' } }), { status: 200 })
+      }
+      expect(new Headers(init?.headers).get('x-csrf-token')).toBe('ready-token')
+      return new Response(JSON.stringify({ ok: true, data: { id: 'session-1' } }), { status: 201 })
+    }
+    const initialization = initializeCsrf(capturing)
+    const session = startJarvisSession('store-1', 'dashboard', 'trial', capturing)
+    await Promise.resolve()
+    expect(calls).toEqual(['GET /security/csrf'])
+    releaseCsrf()
+    await Promise.all([initialization, session])
+    expect(calls).toEqual(['GET /security/csrf', 'POST /jarvis/sessions'])
+  })
+  it('recovers once from a stale CSRF token and retries the unsafe request', async () => {
+    let csrfCalls = 0
+    let syncCalls = 0
+    const tokens: Array<string | null> = []
+    const capturing: Fetcher = async (input, init) => {
+      if (input === '/security/csrf') {
+        csrfCalls += 1
+        return new Response(JSON.stringify({ ok: true, data: { csrfToken: csrfCalls === 1 ? 'stale-token' : 'fresh-token' } }), { status: 200 })
+      }
+      syncCalls += 1
+      tokens.push(new Headers(init?.headers).get('x-csrf-token'))
+      if (syncCalls === 1) return new Response(JSON.stringify({ ok: false, error: { code: 'FORBIDDEN', message: 'CSRF validation failed' } }), { status: 403 })
+      return new Response(JSON.stringify({ ok: true, data: { records: 1 } }), { status: 202 })
+    }
+    await initializeCsrf(capturing)
+    await requestSync('store-1', 'products', capturing, null)
+    expect({ csrfCalls, syncCalls, tokens }).toEqual({ csrfCalls: 2, syncCalls: 2, tokens: ['stale-token', 'fresh-token'] })
   })
   it('surfaces structured API failures', async () => {
     await expect(requestJson('/analytics', {}, fetcher({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'storeId required' } }, 400))).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })

@@ -3,10 +3,13 @@ import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, Jarvi
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
+export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
+export type SyncAllResult = Readonly<{ storeId: string; modules: readonly SyncAllModuleResult[]; succeeded: readonly string[]; failed: readonly string[] }>
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 let csrfToken: string | null = null
+let csrfInitialization: Promise<string> | null = null
 
 export class ApiClientError extends Error {
   public readonly status: number
@@ -20,7 +23,11 @@ export class ApiClientError extends Error {
   }
 }
 
-export async function requestJson<Value>(path: string, init: RequestInit = {}, fetcher: Fetcher = fetch): Promise<Value> {
+export function requestJson<Value>(path: string, init: RequestInit = {}, fetcher: Fetcher = fetch): Promise<Value> {
+  return requestJsonAttempt<Value>(path, init, fetcher, true)
+}
+
+async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetcher: Fetcher, allowCsrfRetry: boolean): Promise<Value> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = new Headers(init.headers)
   if (UNSAFE_METHODS.has(method) && csrfToken) headers.set('x-csrf-token', csrfToken)
@@ -38,6 +45,12 @@ export async function requestJson<Value>(path: string, init: RequestInit = {}, f
     payload = null
   }
   if (!response.ok) {
+    if (allowCsrfRetry && UNSAFE_METHODS.has(method) && isCsrfFailure(payload, response.status)) {
+      csrfToken = null
+      csrfInitialization = null
+      await initializeCsrf(fetcher)
+      return requestJsonAttempt<Value>(path, init, fetcher, false)
+    }
     throw failureFromPayload(payload, response.status)
   }
   if (!isRecord(payload) || payload.ok !== true || !('data' in payload)) {
@@ -62,6 +75,23 @@ export async function fetchCsrfToken(fetcher: Fetcher = fetch): Promise<string> 
   return result.csrfToken
 }
 
+/** Deduplicates page-start CSRF acquisition across App and Jarvis startup. */
+export function initializeCsrf(fetcher: Fetcher = fetch): Promise<string> {
+  if (csrfToken) return Promise.resolve(csrfToken)
+  if (csrfInitialization) return csrfInitialization
+  csrfInitialization = fetchCsrfToken(fetcher).catch((error: unknown) => {
+    csrfInitialization = null
+    throw error
+  })
+  return csrfInitialization
+}
+
+/** Clears module state between isolated browser-client tests. */
+export function resetApiClientStateForTests(): void {
+  csrfToken = null
+  csrfInitialization = null
+}
+
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {
   return requestJson<AnalyticsSnapshot>(`/analytics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
@@ -77,6 +107,12 @@ export function requestSync(storeId: string, module: string, fetcher: Fetcher = 
   // 401, then performs one token-exchange retry.
   if (idToken) headers.set('x-shopify-session-token', idToken)
   return requestJson<SyncResult>('/sync', { method: 'POST', headers, body: JSON.stringify({ storeId, module }) }, fetcher)
+}
+
+export function requestSyncAll(storeId: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncAllResult> {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  if (idToken) headers.set('x-shopify-session-token', idToken)
+  return requestJson<SyncAllResult>('/sync/all', { method: 'POST', headers, body: JSON.stringify({ storeId }) }, fetcher)
 }
 
 export type SyncStatus = Readonly<{
@@ -133,7 +169,10 @@ export function createBillingCharge(storeId: string, plan: BillingPlan['code'], 
 
 export function fetchJarvisPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>(`/jarvis/preferences?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function saveJarvisPreferences(preferences: Readonly<Partial<JarvisPreference> & { storeId: string }>, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>('/jarvis/preferences', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(preferences) }, fetcher) }
-export function startJarvisSession(storeId: string, page: string, plan: JarvisSession['plan'] = 'trial', fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>('/jarvis/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, page, plan }) }, fetcher) }
+export async function startJarvisSession(storeId: string, page: string, plan: JarvisSession['plan'] = 'trial', fetcher: Fetcher = fetch): Promise<JarvisSession> {
+  await initializeCsrf(fetcher)
+  return requestJson<JarvisSession>('/jarvis/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, page, plan }) }, fetcher)
+}
 export function fetchJarvisBriefing(storeId: string, page: string, plan: JarvisSession['plan'] = 'trial', fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/briefing?storeId=${encodeURIComponent(storeId)}&page=${encodeURIComponent(page)}&plan=${encodeURIComponent(plan)}`, {}, fetcher) }
 export function fetchJarvisSession(storeId: string, sessionId: string, fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>(`/jarvis/sessions/${encodeURIComponent(sessionId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function fetchJarvisMessages(storeId: string, sessionId: string, fetcher: Fetcher = fetch): Promise<readonly JarvisMessage[]> { return requestJson<readonly JarvisMessage[]>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/messages?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
@@ -164,6 +203,11 @@ function embeddedSessionToken(): string | null {
   if (typeof window === 'undefined') return null
   const value = new URLSearchParams(window.location.search).get('id_token')?.trim()
   return value || null
+}
+
+function isCsrfFailure(payload: unknown, status: number): boolean {
+  if (status !== 403 || !isRecord(payload) || !isRecord(payload.error)) return false
+  return payload.error.code === 'FORBIDDEN' && typeof payload.error.message === 'string' && payload.error.message.toLowerCase().includes('csrf')
 }
 
 function failureFromPayload(payload: unknown, status: number): ApiClientError {

@@ -1,5 +1,7 @@
 import type { AnalyticsRepository, DbJsonObject, CatalogProduct, SqlExecutor } from '@profitpilot/db'
 import type { StoreId } from '@profitpilot/types'
+import { aggregateOrderFacts } from './analytics.js'
+import { shopifyOrderToFact } from './order-facts.js'
 import type { SyncModule, SyncRecord, SyncSink } from './sync.js'
 
 export class PostgresSyncSink implements SyncSink {
@@ -23,5 +25,15 @@ export class PostgresSyncSink implements SyncSink {
       if (module === 'products' && this.analytics) catalog.push({ storeId, productId: String(recordId), payload: record as DbJsonObject, syncedAt: this.now() })
     }
     if (catalog.length > 0 && this.analytics) await this.analytics.upsertCatalog(catalog)
+  }
+
+  public async complete(storeId: StoreId, module: SyncModule): Promise<void> {
+    if (module !== 'orders' || !this.analytics) return
+    const result = await this.executor.query<{ payload: unknown }>(
+      `SELECT payload FROM sync_records WHERE store_id = $1 AND module = 'orders' ORDER BY record_id`,
+      [storeId],
+    )
+    const facts = result.rows.map((row) => shopifyOrderToFact(row.payload))
+    await this.analytics.upsert(aggregateOrderFacts(storeId, facts))
   }
 }
