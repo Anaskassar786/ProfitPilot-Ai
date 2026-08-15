@@ -33,6 +33,9 @@
 - **AI unavailable:** Jarvis returns an honest unavailable response; inspect OpenRouter status and cost cap before rotating keys.
 - **Report R2 failure:** verify canonical or `CLOUDFLARE_R2_*` aliases, bucket permissions, endpoint, and system clock for signatures.
 - **Email unavailable:** verify SMTP settings and merchant-email verification. Report status remains explicit.
+- **`/sync` returns 503 "Shopify circuit is open for this store":** call `GET /sync/status?storeId=...` first. If `hasAccessToken` is false the cause is a failed token exchange — search logs for `Shopify offline access token exchange failed` and read `upstreamCode`. The circuit self-closes after its cooldown, closes automatically after a successful token exchange, and can be closed immediately with `POST /sync/circuit/reset`.
+- **`/sync` returns 503 with `reason: SHOPIFY_TOKEN_MISSING`:** the store has no offline access token. Hard refresh the embedded app so a fresh `id_token` can be exchanged. This condition never trips the circuit breaker.
+- **`/billing/charge` returns 422:** Shopify rejected the charge. The response names the offending fields and the API error log carries the upstream body. On a development or partner-test store, confirm `SHOPIFY_BILLING_TEST_MODE` is `auto` (or `true`) so the charge is created with `test: true`.
 - **Job stuck:** inspect queue, failed, and dead-letter views; retry only after understanding the error and idempotency key.
 - **Worker not ready:** check port 3100, process logs, and `lastTickAt`; restart only after preserving failed-job evidence.
 

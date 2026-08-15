@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, requestJson, requestSync } from './api.js'
+import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchSyncStatus, requestJson, requestSync, resetSyncCircuit } from './api.js'
 import type { Fetcher } from './api.js'
 
 type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>
@@ -64,4 +64,24 @@ describe('F3 relative API client', () => {
     await expect(requestJson('/analytics', {}, fetcher({ ok: false, error: {} }, 500))).rejects.toMatchObject({ status: 500, code: 'API_ERROR', message: 'API request failed' })
   })
   it('is an Error instance for consumer boundaries', () => expect(new ApiClientError('no', 503)).toBeInstanceOf(Error))
+})
+
+describe('sync circuit diagnostics client', () => {
+  it('reads connection status for a store', async () => {
+    const calls: string[] = []
+    const status = await fetchSyncStatus('store-1', fetcher({ ok: true, data: { storeId: 'store-1', registered: true, hasAccessToken: true, canSync: true, circuit: { open: false, failures: 0, retryAfterMs: null, cooldownMs: 60000 }, shopDomain: 'demo.myshopify.com' } }, 200, calls))
+    expect(calls[0]).toBe('GET /sync/status?storeId=store-1')
+    expect(status.canSync).toBe(true)
+  })
+  it('posts a circuit reset for a store', async () => {
+    const calls: string[] = []
+    await resetSyncCircuit('store-1', fetcher({ ok: true, data: { storeId: 'store-1' } }, 200, calls))
+    expect(calls[0]).toBe('POST /sync/circuit/reset')
+  })
+  it('surfaces an open-circuit 503 as a typed API error', async () => {
+    const failure: unknown = await fetchSyncStatus('store-1', fetcher({ ok: false, error: { code: 'DEPENDENCY_ERROR', message: 'Shopify circuit is open for this store' } }, 503)).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(ApiClientError)
+    expect((failure as ApiClientError).status).toBe(503)
+    expect((failure as ApiClientError).message).toContain('circuit is open')
+  })
 })

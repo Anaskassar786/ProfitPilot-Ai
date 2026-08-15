@@ -1,6 +1,6 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresStoreDirectory } from '@profitpilot/db'
-import { storeId } from '@profitpilot/types'
+import { AppError, storeId } from '@profitpilot/types'
 import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, ShopifyBillingClient, TrialAndGiftLedger } from '@profitpilot/billing'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
@@ -25,10 +25,12 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   const stepUp = new AdminStepUpSessions(15)
   const billingClient = async (shopId: string): Promise<ShopifyBillingClient> => {
     const connection = await directory.get(storeId(shopId))
-    if (!connection) throw new Error('Shopify store is not registered')
+    if (!connection) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404, { storeId: shopId })
     const token = await vault.get(connection.shopDomain)
-    if (!token) throw new Error('Shopify token is unavailable')
-    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, testMode: env.SHOPIFY_BILLING_TEST_MODE === 'true' })
+    // Same reconnect path as /sync: an absent offline token is a 503 the
+    // merchant can act on, not an opaque 500.
+    if (!token) throw new AppError('DEPENDENCY_ERROR', 'Shopify access token is missing. Hard refresh the embedded app to reconnect this store, then retry.', 503, { storeId: shopId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' })
+    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', testMode: billingTestMode(env) })
   }
   return {
     ...f4,
@@ -61,6 +63,19 @@ async function roi(database: { query<Row extends QueryResultRow>(text: string, v
 function featureLimit(plan: 'trial' | 'start' | 'growth' | 'commander', feature: string): number | null {
   const allowed = ['orders_sync_month', 'products_sync', 'customers_sync', 'ai_recommendations_month', 'active_agents', 'jarvis_messages_month', 'automation_workflows', 'active_campaigns', 'email_sends_month', 'sms_sends_month', 'team_members', 'reports', 'exports', 'forecasting', 'attribution'] as const
   return allowed.includes(feature as (typeof allowed)[number]) ? limitForPlan(plan, feature as (typeof allowed)[number]) : null
+}
+
+/**
+ * `SHOPIFY_BILLING_TEST_MODE` accepts `true`, `false`, or `auto` (default).
+ * `auto` lets the billing client read the shop's plan and force `test: true`
+ * for development/partner-test stores, which Shopify otherwise rejects with a
+ * 422 when a live charge is requested.
+ */
+function billingTestMode(env: Readonly<Record<string, string | undefined>>): boolean | 'auto' {
+  const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return 'auto'
 }
 
 function giftCodesFromEnv(env: Readonly<Record<string, string | undefined>>) {

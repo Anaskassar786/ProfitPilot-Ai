@@ -119,10 +119,15 @@ async function registerTenant(
       requestId: requestIdFrom(response),
     })
   } catch (error: unknown) {
+    // upstreamStatus/upstreamCode are what distinguish "the merchant's id_token
+    // expired" from "SHOPIFY_API_SECRET is wrong" from "Shopify is down". They
+    // are set by ShopifyTokenExchangeError and never contain a credential.
     dependencies.logger?.error('Shopify offline access token exchange failed', {
       shopDomain: tenant.shopDomain,
       storeId: tenant.storeId,
       error: errorMessage(error),
+      upstreamStatus: numberProperty(error, 'upstreamStatus'),
+      upstreamCode: stringProperty(error, 'upstreamCode'),
       stack: error instanceof Error ? (error.stack ?? '') : '',
       requestId: requestIdFrom(response),
     })
@@ -157,4 +162,16 @@ function requestIdFrom(response: Response): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function numberProperty(value: unknown, key: string): number {
+  if (typeof value !== 'object' || value === null) return 0
+  const property = (value as Record<string, unknown>)[key]
+  return typeof property === 'number' ? property : 0
+}
+
+function stringProperty(value: unknown, key: string): string {
+  if (typeof value !== 'object' || value === null) return ''
+  const property = (value as Record<string, unknown>)[key]
+  return typeof property === 'string' ? property : ''
 }

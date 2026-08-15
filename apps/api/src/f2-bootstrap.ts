@@ -28,14 +28,29 @@ export function createF2Bootstrap(env: Readonly<Record<string, string | undefine
         { storeId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' },
       )
     }
-    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION ?? '2024-04')
+    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION?.trim() || '2025-10')
   })
   const cache = createCache(env)
-  const policy = new StoreRequestPolicy(new AdaptiveRateController(), new StoreCircuitRegistry())
+  // A store circuit now auto-closes after this cooldown, and /sync closes it
+  // early whenever a token exchange repairs the underlying cause.
+  const circuits = new StoreCircuitRegistry({ failureThreshold: circuitThreshold(env), cooldownMs: circuitCooldownMs(env) })
+  const policy = new StoreRequestPolicy(new AdaptiveRateController(), circuits)
   const logger = new Logger()
   const engine = new SyncEngine(source, new PostgresSyncSink(f1.database, analytics), new PostgresCheckpointStore(f1.database), policy, logger, () => Date.now(), cache)
-  const sync = new TokenRefreshingSync(engine, directory, f1.tokenExchange, logger)
-  return { ...f1, dataPlane: { sync, analytics } }
+  const sync = new TokenRefreshingSync(engine, directory, f1.tokenExchange, logger, circuits)
+  return { ...f1, dataPlane: { sync, analytics, circuits, tokenVault: f1.tokenVault, directory } }
+}
+
+/** Default 3 consecutive upstream failures, overridable per deployment. */
+function circuitThreshold(env: Readonly<Record<string, string | undefined>>): number {
+  const parsed = Number(env.SYNC_CIRCUIT_FAILURE_THRESHOLD?.trim())
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 3
+}
+
+/** Default 60s cooldown; the circuit half-opens automatically afterwards. */
+function circuitCooldownMs(env: Readonly<Record<string, string | undefined>>): number {
+  const parsed = Number(env.SYNC_CIRCUIT_COOLDOWN_MS?.trim())
+  return Number.isFinite(parsed) && parsed >= 1_000 ? Math.floor(parsed) : 60_000
 }
 
 function createCache(env: Readonly<Record<string, string | undefined>>): TenantVersionedCache | null {

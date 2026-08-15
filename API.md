@@ -9,6 +9,21 @@ All successful responses use `{ ok: true, data, meta }`; failures use a typed er
 - `GET /ready` — PostgreSQL, Redis, OpenRouter, and Shopify dependency checks.
 - `GET /security/csrf` — issue the CSRF double-submit token.
 
+## Data plane
+
+- `POST /sync` — run one sync module for a store. Send the current embedded
+  `id_token` in `X-Shopify-Session-Token` so a missing/rejected offline token
+  can be repaired with one token exchange and one retry.
+- `GET /sync/status?storeId=` — connection diagnostics: `registered`,
+  `hasAccessToken`, `canSync`, and the store's circuit state
+  (`open`, `failures`, `retryAfterMs`, `cooldownMs`). Never returns the token.
+- `POST /sync/circuit/reset` — close an open Shopify circuit for `{ storeId }`.
+- `GET /analytics?storeId=` and `GET /catalog?storeId=`.
+
+A `503 DEPENDENCY_ERROR` from `/sync` carries `details.reason`:
+`SHOPIFY_CIRCUIT_OPEN` (retry after `retryAfterMs`, or reset) or
+`SHOPIFY_TOKEN_MISSING` (hard refresh the embedded app).
+
 ## Jarvis
 
 - `GET /jarvis/preferences?storeId=`

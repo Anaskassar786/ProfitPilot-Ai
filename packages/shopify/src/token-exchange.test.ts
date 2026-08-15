@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { InMemoryTokenRecordStore, OFFLINE_ACCESS_TOKEN_TYPE, ShopifyTokenExchangeService, TOKEN_EXCHANGE_GRANT_TYPE, TokenVault } from './index.js'
+import { InMemoryTokenRecordStore, OFFLINE_ACCESS_TOKEN_TYPE, ShopifyTokenExchangeError, ShopifyTokenExchangeService, TOKEN_EXCHANGE_GRANT_TYPE, TokenVault } from './index.js'
 
 const API_KEY = 'token-exchange-client-id'
 const API_SECRET = 'token-exchange-client-secret'
@@ -94,5 +94,45 @@ describe('Shopify session-token exchange', () => {
     release?.()
     await Promise.all([first, second])
     expect(transport).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('token exchange failure diagnostics', () => {
+  it('surfaces the Shopify OAuth error code and description from the body', async () => {
+    const transport = async () => new Response(JSON.stringify({ error: 'invalid_subject_token', error_description: 'The subject token is expired' }), { status: 400 })
+    const service = new ShopifyTokenExchangeService({ apiKey: API_KEY, apiSecret: API_SECRET }, vault(), transport)
+    const failure: unknown = await service.exchangeOfflineAccessToken(SHOP, idToken()).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(ShopifyTokenExchangeError)
+    expect((failure as ShopifyTokenExchangeError).upstreamStatus).toBe(400)
+    expect((failure as ShopifyTokenExchangeError).upstreamCode).toBe('invalid_subject_token')
+    expect((failure as ShopifyTokenExchangeError).message).toContain('The subject token is expired')
+  })
+
+  it('reports invalid_client so a wrong SHOPIFY_API_KEY/SECRET is obvious', async () => {
+    const transport = async () => new Response(JSON.stringify({ error: 'invalid_client' }), { status: 401 })
+    const service = new ShopifyTokenExchangeService({ apiKey: API_KEY, apiSecret: API_SECRET }, vault(), transport)
+    await expect(service.exchangeOfflineAccessToken(SHOP, idToken())).rejects.toThrow('invalid_client')
+  })
+
+  it('condenses a non-JSON body without leaking token-shaped values', async () => {
+    const transport = async () => new Response('unexpected shpat_supersecrettokenvalue failure', { status: 500 })
+    const service = new ShopifyTokenExchangeService({ apiKey: API_KEY, apiSecret: API_SECRET }, vault(), transport)
+    const failure: unknown = await service.exchangeOfflineAccessToken(SHOP, idToken()).catch((error: unknown) => error)
+    expect((failure as Error).message).toContain('[redacted-token]')
+    expect((failure as Error).message).not.toContain('supersecrettokenvalue')
+  })
+
+  it('names the reason a session token could not be verified', async () => {
+    const service = new ShopifyTokenExchangeService({ apiKey: API_KEY, apiSecret: 'a-different-secret' }, vault(), async () => new Response('{}', { status: 200 }))
+    const failure: unknown = await service.exchangeOfflineAccessToken(SHOP, idToken()).catch((error: unknown) => error)
+    expect((failure as ShopifyTokenExchangeError).upstreamCode).toBe('signature-mismatch')
+    expect((failure as ShopifyTokenExchangeError).message).toContain('signature-mismatch')
+  })
+
+  it('flags an expired id_token distinctly from a bad secret', async () => {
+    const seconds = Math.floor(Date.now() / 1000)
+    const service = new ShopifyTokenExchangeService({ apiKey: API_KEY, apiSecret: API_SECRET }, vault(), async () => new Response('{}', { status: 200 }))
+    const failure: unknown = await service.exchangeOfflineAccessToken(SHOP, idToken(SHOP, { exp: seconds - 120, nbf: seconds - 180, iat: seconds - 180 })).catch((error: unknown) => error)
+    expect((failure as ShopifyTokenExchangeError).upstreamCode).toBe('expired')
   })
 })

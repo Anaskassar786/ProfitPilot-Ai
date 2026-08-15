@@ -79,6 +79,24 @@ export function requestSync(storeId: string, module: string, fetcher: Fetcher = 
   return requestJson<SyncResult>('/sync', { method: 'POST', headers, body: JSON.stringify({ storeId, module }) }, fetcher)
 }
 
+export type SyncStatus = Readonly<{
+  storeId: string
+  shopDomain: string | null
+  registered: boolean
+  hasAccessToken: boolean | null
+  circuit: Readonly<{ open: boolean; failures: number; retryAfterMs: number | null; cooldownMs: number }> | null
+  canSync: boolean
+}>
+
+export function fetchSyncStatus(storeId: string, fetcher: Fetcher = fetch): Promise<SyncStatus> {
+  return requestJson<SyncStatus>(`/sync/status?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+/** Closes a Shopify circuit breaker that opened for this store. */
+export function resetSyncCircuit(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ storeId: string }>> {
+  return requestJson(`/sync/circuit/reset`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher)
+}
+
 export function fetchAgentStatuses(fetcher: Fetcher = fetch): Promise<readonly AgentStatus[]> {
   return requestJson<readonly AgentStatus[]>('/ai/agents', {}, fetcher)
 }

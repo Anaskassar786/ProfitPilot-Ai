@@ -20,7 +20,7 @@ export class ShopifyClient {
   private readonly apiVersion: string
   private readonly transport: ShopifyTransport
 
-  public constructor(shop: string, accessToken: string, transport: ShopifyTransport = fetch, apiVersion = '2024-04') {
+  public constructor(shop: string, accessToken: string, transport: ShopifyTransport = fetch, apiVersion = '2025-10') {
     if (!shop.endsWith('.myshopify.com')) throw new TypeError('Shopify client requires a validated shop domain')
     if (!accessToken.trim()) throw new TypeError('Shopify access token cannot be empty')
     this.shop = shop

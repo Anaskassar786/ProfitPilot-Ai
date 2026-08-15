@@ -55,6 +55,37 @@ export class AdaptiveRateController {
   }
 }
 
+export type CircuitSnapshot = Readonly<{ storeId: string; failures: number; open: boolean; openedAt: number | null; retryAfterMs: number | null; cooldownMs: number }>
+
+/**
+ * Reason string carried by the 503 raised when a store circuit is open. Callers
+ * (and the dashboard) branch on this instead of matching the message text.
+ */
+export const CIRCUIT_OPEN_REASON = 'SHOPIFY_CIRCUIT_OPEN'
+
+/**
+ * Decides whether a failed Shopify operation should count against the store
+ * circuit.
+ *
+ * Only genuine upstream problems may trip the breaker: Shopify 5xx, 429, and
+ * transport errors. Local/configuration problems — a missing offline access
+ * token, a rejected token (401), validation errors, checkpoint conflicts — must
+ * NOT, because those are exactly the failures the token-exchange retry is meant
+ * to repair. Counting them was what left `/sync` returning `503 Circuit Open`
+ * in ~9ms with no Shopify request ever being attempted.
+ */
+export function isCircuitTrippingFailure(error: unknown): boolean {
+  if (error instanceof AppError) {
+    if (error.details.reason === CIRCUIT_OPEN_REASON) return false
+    if (error.details.reason === 'SHOPIFY_TOKEN_MISSING') return false
+    return error.status >= 500 && error.status !== 501
+  }
+  const status = upstreamStatus(error)
+  if (status === null) return true // transport/unknown failure: treat as upstream
+  if (status === 429) return true
+  return status >= 500
+}
+
 export class StoreCircuitRegistry {
   private readonly states = new Map<StoreId, Readonly<{ failures: number; openedAt: number | null }>>()
   private readonly threshold: number
@@ -67,13 +98,22 @@ export class StoreCircuitRegistry {
   }
 
   public assertAvailable(storeId: StoreId, now = Date.now()): void {
-    const state = this.states.get(storeId)
-    if (!state?.openedAt) return
-    if (now - state.openedAt >= this.cooldownMs) {
+    const openedAt = this.states.get(storeId)?.openedAt ?? null
+    // Compare against null explicitly: `openedAt === 0` is a valid timestamp
+    // and a truthiness check would treat that circuit as closed.
+    if (openedAt === null) return
+    if (now - openedAt >= this.cooldownMs) {
+      // Cooldown elapsed: the circuit auto-resets (half-open) and the next
+      // request is allowed through to probe Shopify again.
       this.states.set(storeId, { failures: 0, openedAt: null })
       return
     }
-    throw new AppError('DEPENDENCY_ERROR', 'Shopify circuit is open for this store', 503, { storeId, retryAfterMs: this.cooldownMs - (now - state.openedAt) })
+    throw new AppError('DEPENDENCY_ERROR', 'Shopify circuit is open for this store', 503, {
+      storeId,
+      reason: CIRCUIT_OPEN_REASON,
+      action: 'RETRY_AFTER_COOLDOWN',
+      retryAfterMs: this.cooldownMs - (now - openedAt),
+    })
   }
 
   public recordSuccess(storeId: StoreId): void {
@@ -88,9 +128,32 @@ export class StoreCircuitRegistry {
     return { failures, opened }
   }
 
+  /** Manual close, used after a token exchange repairs the underlying cause. */
+  public reset(storeId: StoreId): void {
+    this.states.delete(storeId)
+  }
+
+  public resetAll(): void {
+    this.states.clear()
+  }
+
   public state(storeId: StoreId): Readonly<{ failures: number; open: boolean }> {
     const state = this.states.get(storeId)
     return { failures: state?.failures ?? 0, open: state?.openedAt !== null && state?.openedAt !== undefined }
+  }
+
+  public snapshot(storeId: StoreId, now = Date.now()): CircuitSnapshot {
+    const state = this.states.get(storeId)
+    const openedAt = state?.openedAt ?? null
+    const open = openedAt !== null && now - openedAt < this.cooldownMs
+    return {
+      storeId,
+      failures: state?.failures ?? 0,
+      open,
+      openedAt,
+      retryAfterMs: open && openedAt !== null ? this.cooldownMs - (now - openedAt) : null,
+      cooldownMs: this.cooldownMs,
+    }
   }
 }
 
@@ -112,10 +175,16 @@ export class StoreRequestPolicy {
       this.circuits.recordSuccess(storeId)
       return result
     } catch (error: unknown) {
-      this.circuits.recordFailure(storeId, this.now())
+      if (isCircuitTrippingFailure(error)) this.circuits.recordFailure(storeId, this.now())
       throw error
     }
   }
+}
+
+function upstreamStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null) return null
+  const status = (error as { status?: unknown }).status
+  return typeof status === 'number' && Number.isFinite(status) ? status : null
 }
 
 function isRateLimited(error: unknown): error is RateLimitSignal {
