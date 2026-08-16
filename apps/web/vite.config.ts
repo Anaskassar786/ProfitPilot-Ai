@@ -22,6 +22,7 @@ export default defineConfig({
       '/automation': 'http://127.0.0.1:3000',
       '/campaigns': 'http://127.0.0.1:3000',
       '/customers': 'http://127.0.0.1:3000',
+      '/inventory': 'http://127.0.0.1:3000',
       '/exports': 'http://127.0.0.1:3000',
       '/support': 'http://127.0.0.1:3000',
       '/settings': 'http://127.0.0.1:3000',

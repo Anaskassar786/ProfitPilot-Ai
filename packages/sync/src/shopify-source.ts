@@ -5,6 +5,18 @@ import type { SyncModule, SyncPage, SyncRecord, SyncSource } from './sync.js'
 
 export type ShopifyClientFactory = (storeId: StoreId) => Promise<ShopifyClient>
 
+/**
+ * Shopify accepts a bounded `location_ids` filter on /inventory_levels.json.
+ * Locations beyond this bound are still persisted as metadata (flagged with
+ * `levels_queried: false`) so the workspace can tell the merchant that some
+ * locations were not included instead of silently dropping them.
+ */
+export const INVENTORY_LOCATION_QUERY_LIMIT = 50
+/** Marks a location metadata row inside the `inventory` sync module. */
+export const LOCATION_RECORD_PREFIX = 'location:'
+
+type ShopifyLocation = Readonly<{ id: string; name: string | null; city: string | null; province: string | null; country: string | null; active: boolean | null; legacy: boolean | null }>
+
 const RESOURCE_PATHS: Readonly<Record<SyncModule, string>> = {
   products: '/products.json',
   orders: `/orders.json?status=${['a', 'n', 'y'].join('')}`,
@@ -53,15 +65,30 @@ export class ShopifyRestSyncSource implements SyncSource {
   /**
    * Inventory levels require location_ids (or inventory_item_ids). Fetch
    * locations first, then page inventory for those locations.
+   *
+   * The location resources are persisted alongside the levels (once, on the
+   * first page) under a `location:` record id so the workspace can render a
+   * real location name instead of a bare Shopify id. Shopify has no
+   * `/locations` sync module, and adding one would change the eight-module
+   * sync-all contract, so the inventory module carries both record kinds.
    */
   private async fetchInventory(client: ShopifyClient, cursor: string | null): Promise<SyncPage> {
-    const locationIds = await this.locationIds(client)
-    if (locationIds.length === 0) return { records: [], nextCursor: null }
+    const locations = await this.locations(client)
+    if (locations.length === 0) return { records: [], nextCursor: null }
+    const queried = locations.slice(0, INVENTORY_LOCATION_QUERY_LIMIT)
     const params = cursor
       ? `limit=${this.pageSize}&page_info=${encodeURIComponent(cursor)}`
-      : `limit=${this.pageSize}&location_ids=${locationIds.slice(0, 50).join(',')}`
+      : `limit=${this.pageSize}&location_ids=${queried.map((location) => location.id).join(',')}`
     const response = await this.request(client, `/inventory_levels.json?${params}`, 'inventory')
-    return { records: recordsFrom(response.data, 'inventory_levels', 'inventory'), nextCursor: parseNextCursor(response.headers.link ?? null) }
+    const levels = recordsFrom(response.data, 'inventory_levels', 'inventory')
+    // Only the first page carries the location metadata; resumed pages must not
+    // re-request or duplicate it.
+    const locationRecords: readonly SyncRecord[] = cursor
+      ? []
+      : locations.map((location, index) => ({ ...location, id: `${LOCATION_RECORD_PREFIX}${location.id}`, record_kind: 'location', location_id: location.id, levels_queried: index < INVENTORY_LOCATION_QUERY_LIMIT }))
+    // Levels stay first so the module's primary payload is unchanged; the
+    // location rows are appended metadata.
+    return { records: [...levels, ...locationRecords], nextCursor: parseNextCursor(response.headers.link ?? null) }
   }
 
   /**
@@ -108,11 +135,24 @@ export class ShopifyRestSyncSource implements SyncSource {
     return { records, nextCursor: parseNextCursor(orders.headers.link ?? null) }
   }
 
-  private async locationIds(client: ShopifyClient): Promise<readonly string[]> {
+  /**
+   * Returns the shop's locations with their real metadata. Previously only the
+   * id was kept, which forced the UI to display a raw Shopify location number.
+   */
+  private async locations(client: ShopifyClient): Promise<readonly ShopifyLocation[]> {
     const response = await this.request(client, '/locations.json?limit=250', 'inventory')
     return arrayField(response.data, 'locations').flatMap((location) => {
       const id = location.id
-      return typeof id === 'string' || typeof id === 'number' ? [String(id)] : []
+      if (typeof id !== 'string' && typeof id !== 'number') return []
+      return [{
+        id: String(id),
+        name: typeof location.name === 'string' && location.name.trim() ? location.name.trim() : null,
+        city: typeof location.city === 'string' && location.city.trim() ? location.city.trim() : null,
+        province: typeof location.province === 'string' && location.province.trim() ? location.province.trim() : null,
+        country: typeof location.country === 'string' && location.country.trim() ? location.country.trim() : null,
+        active: typeof location.active === 'boolean' ? location.active : null,
+        legacy: typeof location.legacy === 'boolean' ? location.legacy : null,
+      }]
     })
   }
 

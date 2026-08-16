@@ -18,6 +18,7 @@ const API_PATH_PREFIXES = [
   '/exports',
   '/forecasting',
   '/health',
+  '/inventory',
   '/jarvis',
   '/legal',
   '/live',
