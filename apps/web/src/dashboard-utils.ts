@@ -9,6 +9,8 @@ export type BarChartPoint = {
   value: number
   isCurrent: boolean
   day?: string
+  /** True when the period has no revenue rows — rendered as a dim placeholder bar */
+  isEmpty?: boolean
 }
 
 /** Growth result for KPIs */
@@ -34,6 +36,14 @@ export type RecentOrder = {
   amount: number
   status: 'paid' | 'pending' | 'cancelled' | 'fulfilled'
   date: string
+  /** Orders recorded on that day */
+  orderCount: number
+  /** Fulfilled orders recorded on that day */
+  fulfilledCount: number
+  /** Cancelled orders recorded on that day */
+  cancelledCount: number
+  /** Average order value for that day */
+  averageOrderValue: number
 }
 
 /** Calendar day data for heatmap */
@@ -83,6 +93,13 @@ export function formatGrowth(
 }
 
 /**
+ * Minimum number of bars the revenue chart renders so that a store with a
+ * single day/week/month of data still shows a structured chart instead of one
+ * lonely bar. Missing periods render as dim `isEmpty` bars worth $0.
+ */
+export const MIN_BAR_PERIODS = 8
+
+/**
  * Aggregate daily revenue into periods for bar chart.
  */
 export function aggregateRevenueByPeriod(
@@ -110,6 +127,83 @@ export function aggregateRevenueByPeriod(
   return aggregateMonthly(sorted, 12)
 }
 
+// ─── Period key arithmetic (used for gap filling / padding) ──────
+
+type Granularity = 'week' | 'month' | 'year'
+
+function shiftKey(key: string, granularity: Granularity, delta: number): string {
+  if (granularity === 'year') {
+    return String(Number(key) + delta)
+  }
+  if (granularity === 'month') {
+    const [yearStr = '1970', monthStr = '01'] = key.split('-')
+    const index = Number(yearStr) * 12 + (Number(monthStr) - 1) + delta
+    const year = Math.floor(index / 12)
+    const month = index - year * 12 + 1
+    return `${year}-${String(month).padStart(2, '0')}`
+  }
+  const date = new Date(key + 'T00:00:00Z')
+  date.setUTCDate(date.getUTCDate() + delta * 7)
+  return date.toISOString().slice(0, 10)
+}
+
+function currentKey(granularity: Granularity): string {
+  const now = new Date()
+  if (granularity === 'year') return String(now.getFullYear())
+  if (granularity === 'month') {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }
+  return new Date(getWeekStart(now)).toISOString().slice(0, 10)
+}
+
+/**
+ * Take the aggregated period keys and return a dense, padded key list:
+ * internal gaps are filled and the series is extended (forwards up to the
+ * current period, then backwards) until it holds at least `minPeriods` keys.
+ * Never returns more than `maxPeriods` keys.
+ */
+export function densePeriodKeys(
+  keys: readonly string[],
+  granularity: Granularity,
+  minPeriods = MIN_BAR_PERIODS,
+  maxPeriods = 12,
+): string[] {
+  if (keys.length === 0) return []
+
+  const sorted = [...keys].sort((a, b) => a.localeCompare(b))
+  const first = sorted[0] as string
+  const last = sorted[sorted.length - 1] as string
+
+  // 1. Fill internal gaps.
+  const dense: string[] = [first]
+  let cursor = first
+  let guard = 0
+  while (cursor !== last && guard < 600) {
+    cursor = shiftKey(cursor, granularity, 1)
+    dense.push(cursor)
+    guard += 1
+  }
+
+  const target = Math.min(Math.max(minPeriods, 1), maxPeriods)
+
+  // 2. Extend forwards, but never past the current (in-progress) period.
+  const today = currentKey(granularity)
+  let tail = dense[dense.length - 1] as string
+  while (dense.length < target && tail.localeCompare(today) < 0) {
+    tail = shiftKey(tail, granularity, 1)
+    dense.push(tail)
+  }
+
+  // 3. Still short? Extend backwards so the chart keeps its full width.
+  let head = dense[0] as string
+  while (dense.length < target) {
+    head = shiftKey(head, granularity, -1)
+    dense.unshift(head)
+  }
+
+  return dense.slice(-maxPeriods)
+}
+
 function aggregateWeekly(
   sorted: readonly { day: string; grossRevenue: number }[],
   count = 12,
@@ -125,22 +219,23 @@ function aggregateWeekly(
     weeks.set(key, (weeks.get(key) ?? 0) + row.grossRevenue)
   }
 
-  const sortedWeeks = [...weeks.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  const recent = sortedWeeks.slice(-count)
+  const recent = densePeriodKeys([...weeks.keys()], 'week', MIN_BAR_PERIODS, count)
 
   const now = new Date()
   const currentWeekStart = getWeekStart(now)
 
-  return recent.map(([key, value]) => {
+  return recent.map((key) => {
+    const raw = weeks.get(key)
     const monday = new Date(key + 'T00:00:00')
     const isCurrent = monday.getTime() === currentWeekStart
     const month = monday.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
     const day = monday.getUTCDate()
     return {
       label: `${month} ${day}`,
-      value: Math.round(value),
+      value: raw === undefined ? 0 : Math.round(raw),
       isCurrent,
       day: key,
+      isEmpty: raw === undefined,
     }
   })
 }
@@ -155,13 +250,13 @@ function aggregateMonthly(
     months.set(key, (months.get(key) ?? 0) + row.grossRevenue)
   }
 
-  const sortedMonths = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  const recent = sortedMonths.slice(-count)
+  const recent = densePeriodKeys([...months.keys()], 'month', MIN_BAR_PERIODS, count)
 
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  return recent.map(([key, value]) => {
+  return recent.map((key) => {
+    const raw = months.get(key)
     const parts = key.split('-')
     const yearStr = parts[0] ?? ''
     const monthDate = new Date(`${key}-01T00:00:00`)
@@ -172,9 +267,10 @@ function aggregateMonthly(
     const yearLabel = yearStr && yearStr !== String(now.getFullYear()) ? `'${yearStr.slice(2)}` : ''
     return {
       label: `${monthName} ${yearLabel}`.trim(),
-      value: Math.round(value),
+      value: raw === undefined ? 0 : Math.round(raw),
       isCurrent: key === currentMonth,
       day: `${key}-01`,
+      isEmpty: raw === undefined,
     }
   })
 }
@@ -189,17 +285,20 @@ function aggregateYearly(
     years.set(key, (years.get(key) ?? 0) + row.grossRevenue)
   }
 
-  const sortedYears = [...years.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  const recent = sortedYears.slice(-count)
+  const recent = densePeriodKeys([...years.keys()], 'year', Math.min(MIN_BAR_PERIODS, count), count)
 
   const currentYear = String(new Date().getFullYear())
 
-  return recent.map(([key, value]) => ({
-    label: key,
-    value: Math.round(value),
-    isCurrent: key === currentYear,
-    day: `${key}-01-01`,
-  }))
+  return recent.map((key) => {
+    const raw = years.get(key)
+    return {
+      label: key,
+      value: raw === undefined ? 0 : Math.round(raw),
+      isCurrent: key === currentYear,
+      day: `${key}-01-01`,
+      isEmpty: raw === undefined,
+    }
+  })
 }
 
 function aggregateRange(
@@ -216,20 +315,26 @@ function aggregateRange(
 
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
 
-  return [...months.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, value]) => {
-      const monthName = new Date(`${key}-01T00:00:00`).toLocaleDateString('en-US', {
-        month: 'short',
-        timeZone: 'UTC',
-      })
-      return {
-        label: monthName,
-        value: Math.round(value),
-        isCurrent: key === currentMonth,
-        day: `${key}-01`,
-      }
+  // Anchor the dense series to the requested range so empty months inside the
+  // selection still render as placeholder bars.
+  const keys = months.size > 0
+    ? [...months.keys(), start.slice(0, 7), end.slice(0, 7)]
+    : []
+
+  return densePeriodKeys(keys, 'month', MIN_BAR_PERIODS, 12).map((key) => {
+    const raw = months.get(key)
+    const monthName = new Date(`${key}-01T00:00:00`).toLocaleDateString('en-US', {
+      month: 'short',
+      timeZone: 'UTC',
     })
+    return {
+      label: monthName,
+      value: raw === undefined ? 0 : Math.round(raw),
+      isCurrent: key === currentMonth,
+      day: `${key}-01`,
+      isEmpty: raw === undefined,
+    }
+  })
 }
 
 /**
@@ -420,6 +525,10 @@ export function buildRecentOrders(
       amount: revenuePerOrder * order.orderCount,
       status: order.fulfilledCount > 0 ? 'fulfilled' as const : 'paid' as const,
       date: order.day,
+      orderCount: order.orderCount,
+      fulfilledCount: order.fulfilledCount,
+      cancelledCount: order.cancelledCount,
+      averageOrderValue: order.orderCount > 0 ? Math.round(revenuePerOrder) : 0,
     }
   })
 }

@@ -69,6 +69,7 @@ type DashboardData = {
 
 const BAR_COLOR = '#3B82F6'
 const BAR_CURRENT_COLOR = '#72A7FF'
+const BAR_EMPTY_COLOR = '#6B7280'
 const GRID_COLOR = 'rgba(107,114,128,.12)'
 const TEXT_COLOR = '#9CA3AF'
 
@@ -132,6 +133,35 @@ export function DashboardLayout(props: DashboardLayoutProps) {
     [data.analytics, calYear, calMonth],
   )
 
+  const prevCalendarMonth = useMemo(() => {
+    const year = calMonth === 1 ? calYear - 1 : calYear
+    const month = calMonth === 1 ? 12 : calMonth - 1
+    return buildCalendarMonth(data.analytics, year, month)
+  }, [data.analytics, calYear, calMonth])
+
+  const calendarGrowth = useMemo(
+    () => calculateGrowth(calendarMonth.total || null, prevCalendarMonth.total || null),
+    [calendarMonth.total, prevCalendarMonth.total],
+  )
+
+  const goPrevMonth = () => {
+    if (calMonth === 1) {
+      setCalMonth(12)
+      setCalYear(calYear - 1)
+    } else {
+      setCalMonth(calMonth - 1)
+    }
+  }
+
+  const goNextMonth = () => {
+    if (calMonth === 12) {
+      setCalMonth(1)
+      setCalYear(calYear + 1)
+    } else {
+      setCalMonth(calMonth + 1)
+    }
+  }
+
   const categoryData = useMemo(
     () => aggregateByCategory(data.analytics, data.catalog),
     [data.analytics, data.catalog],
@@ -192,8 +222,8 @@ export function DashboardLayout(props: DashboardLayoutProps) {
         />
       </div>
 
-      {/* Row 2: Revenue Bar Chart + Store Health */}
-      <div className="dash-row two-col-row">
+      {/* Row 2: Revenue Bar Chart + Compact Calendar + Store Health */}
+      <div className="dash-row chart-cal-health-row">
         <div className="dash-card revenue-chart-card">
           <div className="dash-card-header">
             <div>
@@ -225,6 +255,40 @@ export function DashboardLayout(props: DashboardLayoutProps) {
           ) : (
             <EmptyChart onSync={() => void onSync('orders')} message="No revenue data for this period. Sync orders to populate." />
           )}
+        </div>
+        <div className="dash-card calendar-card-compact">
+          <div className="dash-kicker"><span className="kicker-dot green" />Daily Revenue</div>
+          <div className="cal-compact-header">
+            <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="Previous month">
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              className="cal-month-label"
+              onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth() + 1) }}
+              title="Jump to current month"
+            >
+              {new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </button>
+            <button className="cal-nav-btn" onClick={goNextMonth} aria-label="Next month">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <CompactCalendar month={calendarMonth} loading={loading} />
+          <div className="cal-total-block">
+            <span className="cal-total-label">Total revenue</span>
+            <div className="cal-total-row">
+              <strong className="cal-total-value">{formatMoney(calendarMonth.total || null)}</strong>
+              {calendarGrowth.percent !== null && (
+                <span className={`growth-badge ${calendarGrowth.direction === 'up' ? 'up' : calendarGrowth.direction === 'down' ? 'down' : 'flat'}`}>
+                  {calendarGrowth.direction === 'up' ? <TrendingUp size={10} /> : calendarGrowth.direction === 'down' ? <TrendingDown size={10} /> : <Minus size={10} />}
+                  {`${calendarGrowth.percent > 0 ? '+' : ''}${calendarGrowth.percent.toFixed(1)}%`}
+                </span>
+              )}
+            </div>
+            <span className="cal-total-sub">
+              {calendarGrowth.percent !== null ? 'vs previous month' : 'Daily revenue heatmap'}
+            </span>
+          </div>
         </div>
         <div className="dash-card health-card-compact">
           <div className="dash-card-header">
@@ -297,8 +361,15 @@ export function DashboardLayout(props: DashboardLayoutProps) {
               {[1, 2, 3, 4].map((i) => <div key={i} className="order-row-skeleton"><span /><span /><span /></div>)}
             </div>
           ) : recentOrders.length > 0 ? (
-            <div className="orders-list">
-              {recentOrders.map((order) => <OrderRow key={order.id} order={order} />)}
+            <div className={`orders-list ${recentOrders.length <= 3 ? 'sparse' : ''}`}>
+              {recentOrders.map((order) => (
+                <OrderRow key={order.id} order={order} detailed={recentOrders.length <= 3} />
+              ))}
+              {recentOrders.length <= 3 && (
+                <button className="orders-cta" onClick={() => void onSync('orders')}>
+                  <RefreshCw size={12} /> Sync more orders
+                </button>
+              )}
             </div>
           ) : (
             <EmptyChart onSync={() => void onSync('orders')} message="Sync orders to see recent activity." />
@@ -306,34 +377,6 @@ export function DashboardLayout(props: DashboardLayoutProps) {
         </div>
       </div>
 
-      {/* Row 4: Calendar Heatmap */}
-      <div className="dash-row calendar-row">
-        <div className="dash-card calendar-card">
-          <div className="dash-card-header">
-            <div>
-              <div className="dash-kicker"><span className="kicker-dot blue" />Daily Revenue</div>
-              <h3>
-                {new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                <span className="calendar-total"> · {formatMoney(calendarMonth.total)}</span>
-              </h3>
-            </div>
-            <div className="cal-nav">
-              <button className="cal-nav-btn" onClick={() => { if (calMonth === 1) { setCalMonth(12); setCalYear(calYear - 1) } else { setCalMonth(calMonth - 1) } }} aria-label="Previous month">
-                <ChevronLeft size={15} />
-              </button>
-              <button className="cal-today-btn" onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth() + 1) }}>Today</button>
-              <button className="cal-nav-btn" onClick={() => { if (calMonth === 12) { setCalMonth(1); setCalYear(calYear + 1) } else { setCalMonth(calMonth + 1) } }} aria-label="Next month">
-                <ChevronRight size={15} />
-              </button>
-            </div>
-          </div>
-          {loading ? (
-            <ChartSkeleton />
-          ) : (
-            <CalendarHeatmap month={calendarMonth} />
-          )}
-        </div>
-      </div>
     </div>
   )
 }
@@ -427,28 +470,46 @@ function BarTooltip({ active, payload, label }: { active?: boolean; payload?: Ar
   if (!point) return null
   return (
     <div className="recharts-tooltip-custom">
-      <strong>{formatMoney(point.value)}</strong>
-      <span>{point.label}</span>
+      <strong>{point.isEmpty ? '$0' : formatMoney(point.value)}</strong>
+      <span>{point.isEmpty ? `${point.label} · no sales` : point.label}</span>
     </div>
   )
 }
 
 function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
+  // Empty periods get a small baseline so the grey placeholder is visible.
+  const maxValue = data.reduce((max, point) => (point.value > max ? point.value : max), 0)
+  const placeholder = maxValue > 0 ? Math.max(maxValue * 0.03, 1) : 1
+  const chartData = data.map((point) => ({
+    ...point,
+    plotted: point.isEmpty || point.value === 0 ? placeholder : point.value,
+  }))
+  const emptyCount = data.filter((point) => point.isEmpty).length
+
   return (
     <div className="dash-chart-container">
       <ResponsiveContainer width="100%" height={260}>
-        <RechartsBarChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
+        <RechartsBarChart data={chartData} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
           <XAxis dataKey="label" tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={{ stroke: GRID_COLOR }} tickLine={false} interval="preserveStartEnd" />
           <YAxis tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => value >= 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value}`} />
           <Tooltip content={BarTooltip as any} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={400}>
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.isCurrent ? BAR_CURRENT_COLOR : BAR_COLOR} opacity={entry.isCurrent ? 1 : 0.7} />
+          <Bar dataKey="plotted" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={400}>
+            {chartData.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={entry.isEmpty ? BAR_EMPTY_COLOR : entry.isCurrent ? BAR_CURRENT_COLOR : BAR_COLOR}
+                opacity={entry.isEmpty ? 0.18 : entry.isCurrent ? 1 : 0.7}
+              />
             ))}
           </Bar>
         </RechartsBarChart>
       </ResponsiveContainer>
+      {emptyCount > 0 && (
+        <div className="chart-empty-note">
+          <span className="empty-bar-swatch" /> {emptyCount} period{emptyCount > 1 ? 's' : ''} with no sales
+        </div>
+      )}
     </div>
   )
 }
@@ -474,6 +535,23 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
 
   if (data.length === 0) return null
 
+  // Single category: a donut of one slice reads as broken — show a focused card instead.
+  if (data.length === 1) {
+    const only = data[0] as CategorySales
+    return (
+      <div className="single-category">
+        <div className="single-category-ring" style={{ borderColor: only.color, boxShadow: `0 0 24px ${only.color}22` } as CSSProperties}>
+          <strong>{formatMoney(only.value)}</strong>
+          <span>revenue</span>
+        </div>
+        <div className="single-category-meta">
+          <span className="single-category-name" style={{ color: only.color } as CSSProperties}>{only.name}</span>
+          <span className="single-category-note">1 category active · 100% of tracked sales</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="dash-chart-container pie-container">
       <ResponsiveContainer width="100%" height={240}>
@@ -491,21 +569,37 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
   )
 }
 
-// ─── Calendar Heatmap ─────────────────────────────────────────────
+// ─── Compact Calendar (side widget) ───────────────────────────────
 
-function CalendarHeatmap({ month }: { month: CalendarMonth }) {
+function CompactCalendar({ month, loading }: { month: CalendarMonth; loading?: boolean }) {
   const [hoveredDay, setHoveredDay] = useState<CalendarDay | null>(null)
 
-  const values = month.days.filter((d): d is CalendarDay & { value: number } => d.value !== null).map((d) => d.value)
+  const values = month.days
+    .filter((d): d is CalendarDay & { value: number } => d.value !== null)
+    .map((d) => d.value)
   const maxVal = values.length > 0 ? Math.max(...values) : 1
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (loading) {
+    return (
+      <div className="calendar-compact loading" aria-hidden="true">
+        <div className="cal-day-names">
+          {dayNames.map((name, i) => <span key={i} className="cal-day-name">{name}</span>)}
+        </div>
+        <div className="cal-grid">
+          {Array.from({ length: 35 }, (_, i) => <div key={i} className="cal-cell skeleton" />)}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="calendar-heatmap">
+    <div className="calendar-compact">
       <div className="cal-day-names">
-        {dayNames.map((name) => (
-          <span key={name} className="cal-day-name">{name}</span>
+        {dayNames.map((name, i) => (
+          <span key={i} className="cal-day-name">{name}</span>
         ))}
       </div>
       <div className="cal-grid">
@@ -515,12 +609,12 @@ function CalendarHeatmap({ month }: { month: CalendarMonth }) {
           return (
             <div
               key={index}
-              className={`cal-cell ${day.isCurrentMonth ? 'current' : 'other'} ${day.value !== null ? 'has-data' : ''} ${isHovered ? 'hovered' : ''}`}
+              className={`cal-cell ${day.isCurrentMonth ? 'current' : 'other'} ${day.value !== null ? 'has-data' : ''} ${day.date === today ? 'today' : ''} ${isHovered ? 'hovered' : ''}`}
               style={{
                 backgroundColor: day.value !== null
                   ? `rgba(16, 185, 129, ${0.12 + intensity * 0.75})`
                   : 'rgba(107,114,128,.06)',
-                borderColor: isHovered ? 'rgba(59,130,246,.5)' : day.isCurrentMonth ? 'rgba(107,114,128,.12)' : 'transparent',
+                borderColor: isHovered ? 'rgba(59,130,246,.5)' : 'transparent',
               } as CSSProperties}
               onMouseEnter={() => setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
@@ -531,18 +625,21 @@ function CalendarHeatmap({ month }: { month: CalendarMonth }) {
           )
         })}
       </div>
-      {hoveredDay && hoveredDay.value !== null && (
-        <div className="cal-tooltip">
-          <strong>{formatMoney(hoveredDay.value)}</strong>
-          <span>{new Date(hoveredDay.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-        </div>
-      )}
-      <div className="cal-legend">
-        <span>Less</span>
-        <div className="cal-legend-bar">
-          <span /><span /><span /><span /><span />
-        </div>
-        <span>More</span>
+      <div className="cal-hover-line">
+        {hoveredDay && hoveredDay.value !== null ? (
+          <>
+            <strong>{formatMoney(hoveredDay.value)}</strong>
+            <span>
+              {new Date(hoveredDay.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+          </>
+        ) : (
+          <div className="cal-legend">
+            <span>Less</span>
+            <div className="cal-legend-bar"><span /><span /><span /><span /></div>
+            <span>More</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -550,7 +647,7 @@ function CalendarHeatmap({ month }: { month: CalendarMonth }) {
 
 // ─── Order Row ─────────────────────────────────────────────────────
 
-function OrderRow({ order }: { order: RecentOrder }) {
+function OrderRow({ order, detailed }: { order: RecentOrder; detailed?: boolean }) {
   const statusConfig: Record<string, { label: string; className: string }> = {
     paid: { label: 'Paid', className: 'green' },
     pending: { label: 'Pending', className: 'amber' },
@@ -560,7 +657,7 @@ function OrderRow({ order }: { order: RecentOrder }) {
   const config = statusConfig[order.status] ?? { label: order.status, className: 'neutral' }
 
   return (
-    <div className="order-row">
+    <div className={`order-row ${detailed ? 'detailed' : ''}`}>
       <div className="order-row-main">
         <span className="order-id">#{order.orderNumber}</span>
         <span className="order-customer">{order.customer}</span>
@@ -570,6 +667,14 @@ function OrderRow({ order }: { order: RecentOrder }) {
         <span className={`order-status status-badge ${config.className}`}>{config.label}</span>
         <span className="order-date">{order.date.slice(5)}</span>
       </div>
+      {detailed && (
+        <div className="order-row-detail">
+          <span><em>Date</em>{new Date(order.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+          <span><em>AOV</em>{formatMoney(order.averageOrderValue || null)}</span>
+          <span><em>Fulfilled</em>{order.fulfilledCount}/{order.orderCount}</span>
+          <span><em>Cancelled</em>{order.cancelledCount}</span>
+        </div>
+      )}
     </div>
   )
 }

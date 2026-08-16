@@ -7,6 +7,8 @@ import {
   buildCalendarMonth,
   buildRecentOrders,
   generateSummary,
+  densePeriodKeys,
+  MIN_BAR_PERIODS,
 } from './dashboard-utils.js'
 
 // ─── calculateGrowth ──────────────────────────────────────────
@@ -109,6 +111,103 @@ describe('aggregateRevenueByPeriod', () => {
     const result = aggregateRevenueByPeriod(mockSnapshot as any, 'yearly')
     expect(result.length).toBeGreaterThanOrEqual(1)
   })
+
+  it('pads sparse monthly data with empty placeholder periods', () => {
+    const single = {
+      ...mockSnapshot,
+      revenue: [{ storeId: 's1', day: '2025-01-10', grossRevenue: 250, discounts: 0, orderCount: 3 }],
+    }
+    const result = aggregateRevenueByPeriod(single as any, 'monthly')
+    expect(result.length).toBeGreaterThanOrEqual(MIN_BAR_PERIODS)
+    const withData = result.filter((point) => !point.isEmpty)
+    expect(withData).toHaveLength(1)
+    expect(withData[0]?.value).toBe(250)
+    expect(result.every((point) => point.isEmpty ? point.value === 0 : true)).toBe(true)
+  })
+
+  it('pads sparse weekly data with empty placeholder periods', () => {
+    const single = {
+      ...mockSnapshot,
+      revenue: [{ storeId: 's1', day: '2025-01-10', grossRevenue: 90, discounts: 0, orderCount: 1 }],
+    }
+    const result = aggregateRevenueByPeriod(single as any, 'weekly')
+    expect(result.length).toBeGreaterThanOrEqual(MIN_BAR_PERIODS)
+    expect(result.filter((point) => point.isEmpty).length).toBeGreaterThan(0)
+  })
+
+  it('fills gaps between months instead of collapsing them', () => {
+    const gapped = {
+      ...mockSnapshot,
+      revenue: [
+        { storeId: 's1', day: '2025-01-05', grossRevenue: 100, discounts: 0, orderCount: 1 },
+        { storeId: 's1', day: '2025-04-05', grossRevenue: 400, discounts: 0, orderCount: 4 },
+      ],
+    }
+    const result = aggregateRevenueByPeriod(gapped as any, 'monthly')
+    const labels = result.map((point) => point.label)
+    expect(labels).toContain("Feb '25")
+    expect(labels).toContain("Mar '25")
+    const feb = result.find((point) => point.label === "Feb '25")
+    expect(feb?.isEmpty).toBe(true)
+    expect(feb?.value).toBe(0)
+  })
+
+  it('never returns more than 12 monthly bars', () => {
+    const rows = Array.from({ length: 24 }, (_, i) => ({
+      storeId: 's1',
+      day: `20${23 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-05`,
+      grossRevenue: 10 * (i + 1),
+      discounts: 0,
+      orderCount: 1,
+    }))
+    const result = aggregateRevenueByPeriod({ ...mockSnapshot, revenue: rows } as any, 'monthly')
+    expect(result.length).toBeLessThanOrEqual(12)
+  })
+})
+
+// ─── densePeriodKeys ──────────────────────────────────────────
+
+describe('densePeriodKeys', () => {
+  it('returns empty for no keys', () => {
+    expect(densePeriodKeys([], 'month')).toEqual([])
+  })
+
+  it('fills month gaps', () => {
+    expect(densePeriodKeys(['2025-01', '2025-04'], 'month', 1, 12)).toEqual([
+      '2025-01', '2025-02', '2025-03', '2025-04',
+    ])
+  })
+
+  it('extends forwards (never past today) to reach the minimum period count', () => {
+    const result = densePeriodKeys(['2020-06'], 'month', 6, 12)
+    expect(result).toHaveLength(6)
+    expect(result[0]).toBe('2020-06')
+    expect(result[result.length - 1]).toBe('2020-11')
+  })
+
+  it('extends backwards when the series already reaches the current period', () => {
+    const now = new Date()
+    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const result = densePeriodKeys([key], 'month', 6, 12)
+    expect(result).toHaveLength(6)
+    expect(result[result.length - 1]).toBe(key)
+  })
+
+  it('fills year gaps', () => {
+    expect(densePeriodKeys(['2021', '2024'], 'year', 1, 12)).toEqual(['2021', '2022', '2023', '2024'])
+  })
+
+  it('fills week gaps in 7-day steps', () => {
+    expect(densePeriodKeys(['2025-01-06', '2025-01-27'], 'week', 1, 12)).toEqual([
+      '2025-01-06', '2025-01-13', '2025-01-20', '2025-01-27',
+    ])
+  })
+
+  it('caps the result at maxPeriods', () => {
+    const result = densePeriodKeys(['2020-01', '2025-01'], 'month', 8, 12)
+    expect(result).toHaveLength(12)
+    expect(result[result.length - 1]).toBe('2025-01')
+  })
 })
 
 // ─── aggregateByCategory ──────────────────────────────────────
@@ -197,6 +296,22 @@ describe('buildRecentOrders', () => {
     expect(result.length).toBe(2)
     expect(result[0]?.status).toBe('fulfilled')
     expect(result[0]?.amount).toBeGreaterThan(0)
+  })
+
+  it('exposes per-day detail fields used by the sparse orders view', () => {
+    const snap = {
+      revenue: [{ storeId: 's1', day: '2025-02-15', grossRevenue: 150, discounts: 0, orderCount: 6 }],
+      orders: [
+        { storeId: 's1', day: '2025-02-15', orderCount: 6, fulfilledCount: 5, cancelledCount: 1, averageOrderValue: 25 },
+      ],
+      productSales: [],
+      customerCohorts: [],
+    }
+    const [order] = buildRecentOrders(snap as any)
+    expect(order?.orderCount).toBe(6)
+    expect(order?.fulfilledCount).toBe(5)
+    expect(order?.cancelledCount).toBe(1)
+    expect(order?.averageOrderValue).toBe(25)
   })
 })
 
