@@ -1,8 +1,10 @@
 import { createBrevoMailer } from '@profitpilot/automation'
 import { sha256Hex } from '@profitpilot/crypto'
-import type { Logger } from '@profitpilot/logger'
+import { Logger } from '@profitpilot/logger'
+import type { Logger as LoggerType } from '@profitpilot/logger'
 import type { QueryResultRow } from '@profitpilot/db'
 import { OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
+import type { JarvisActionAuditEntry, JarvisActionTool } from '@profitpilot/ai'
 import { PostgresCopilotRepository, PostgresJarvisRepository, PostgresReportRepository } from './f8-repositories.js'
 import { F8ContextProvider } from './f8-context.js'
 import { computeForecast } from './f8-forecast.js'
@@ -29,7 +31,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     ...(logger ? { onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => logger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }) } : {}),
   })
   if (logger) void validateOpenRouterModels(provider, logger)
-  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) })
+  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
   const reports = createReports(f7, env)
@@ -49,6 +51,60 @@ function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | un
   const dataProvider: ReportDataProvider = { get: async (storeId, _frequency, period) => { const raw = await f7.dataPlane.analytics.read(storeId as import('@profitpilot/types').StoreId); const startDay = period.start.slice(0, 10); const endDay = period.end.slice(0, 10); const analytics = { revenue: raw.revenue.filter((row) => row.day >= startDay && row.day <= endDay), orders: raw.orders.filter((row) => row.day >= startDay && row.day <= endDay), productSales: raw.productSales.filter((row) => row.day >= startDay && row.day <= endDay), customerCohorts: raw.customerCohorts.filter((row) => row.activityDay >= startDay && row.activityDay <= endDay) }; const scopedAnalytics = { read: async () => analytics, readCatalog: (tenant: import('@profitpilot/types').StoreId) => f7.dataPlane.analytics.readCatalog(tenant) }; const forecast = await computeForecast(storeId, { analytics: scopedAnalytics, customers: (tenant) => customerRfm(f7.database, tenant) }); const rows = [{ metric: 'closed_period_revenue', value: analytics.revenue.length > 0 ? analytics.revenue.reduce((sum, row) => sum + row.grossRevenue, 0) : null, source: 'analytics_revenue_daily' }, { metric: 'closed_period_orders', value: analytics.orders.length > 0 ? analytics.orders.reduce((sum, row) => sum + row.orderCount, 0) : null, source: 'analytics_orders_daily' }, { metric: 'forecast_method', value: forecast.revenue?.method.method ?? 'unavailable', source: 'forecasting' }, { metric: 'forecast_value', value: forecast.revenue?.value ?? null, source: 'forecasting' }]; return { storeId, currency: null, rows, summary: 'Deterministic closed-period ProfitPilot report.' } } }
   const delivery = reportDelivery(f7, env)
   return new ReportService(new PostgresReportRepository(f7.database), objectStore, dataProvider, delivery)
+}
+
+/**
+ * Plan-gated store actions Jarvis can execute after confirmation. These map to
+ * capabilities that already exist in the product (recommendation decisions).
+ * The plan check happens inside JarvisService before the tool runs, so these
+ * tools are only ever reached for Commander stores that have confirmed.
+ */
+function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, JarvisActionTool>>> {
+  const decide = async (storeId: string, recommendationId: string, status: 'APPROVED' | 'REJECTED') => {
+    // Recommendations use optimistic concurrency via version; Jarvis confirms
+    // the current pending version before applying the decision.
+    const result = await f7.database.query<{ version: number }>('SELECT version FROM ai_recommendations WHERE store_id = $1 AND id = $2 AND status = $3 LIMIT 1', [storeId, recommendationId, 'PENDING'])
+    const current = result.rows[0]
+    if (!current) throw new Error('That recommendation is not pending or could not be found.')
+    await f7.ai.recommendations.decide(storeId as import('@profitpilot/types').StoreId, recommendationId, current.version, status)
+    return status === 'APPROVED' ? 'Recommendation approved — its workflow is now cleared to run.' : 'Recommendation rejected.'
+  }
+  return {
+    approve_recommendation: async (storeId, parameters) => {
+      const recommendationId = typeof parameters.recommendationId === 'string' ? parameters.recommendationId : ''
+      if (!recommendationId) throw new Error('A recommendation id is required.')
+      return { message: await decide(storeId, recommendationId, 'APPROVED') }
+    },
+    reject_recommendation: async (storeId, parameters) => {
+      const recommendationId = typeof parameters.recommendationId === 'string' ? parameters.recommendationId : ''
+      if (!recommendationId) throw new Error('A recommendation id is required.')
+      return { message: await decide(storeId, recommendationId, 'REJECTED') }
+    },
+    // Sync touches the data-plane module; rather than reach across module
+    // boundaries from Jarvis scope, we report the action honestly as a
+    // suggestion the merchant can trigger from the workspace.
+    trigger_sync: async () => ({ message: 'I can queue a fresh sync for you from the Dashboard — use "Sync all" to pull the latest Shopify data.' }),
+  }
+}
+
+/**
+ * Writes every Jarvis store-action attempt (executed, refused, or failed) to
+ * the existing operational audit_log table. Failures here never block Jarvis.
+ */
+function jarvisActionAudit(f7: F7Bootstrap, logger: LoggerType): { record(entry: JarvisActionAuditEntry): Promise<void> } {
+  return {
+    async record(entry: JarvisActionAuditEntry): Promise<void> {
+      try {
+        const payload = JSON.stringify({ actionId: entry.actionId, outcome: entry.outcome, plan: entry.plan, parameters: entry.parameters })
+        await f7.database.query(
+          `INSERT INTO audit_log (id, store_id, action, idempotency_key, payload_hash) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (store_id, idempotency_key) DO NOTHING`,
+          [entry.id, entry.storeId, `jarvis.action.${entry.actionId}`, `jarvis:${entry.id}`, sha256Hex(payload)],
+        )
+      } catch (error: unknown) {
+        logger.warn('Jarvis action audit write failed', { actionId: entry.actionId, outcome: entry.outcome, error: error instanceof Error ? error.message : String(error) })
+      }
+    },
+  }
 }
 
 function r2FromEnv(env: Readonly<Record<string, string | undefined>>): CloudflareR2ObjectStore | null {

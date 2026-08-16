@@ -87,4 +87,70 @@ describe('F8 API routes', () => {
     expect((await fetch(`${base}/copilot/query`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: 'revenue' }) })).status).toBe(400)
     expect((await fetch(`${base}/jarvis/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', plan: 'bad' }) })).status).toBe(400)
   }))
+
+  it('gates Jarvis store actions by plan and requires confirmation for writes', async () => {
+    const { JarvisService } = await import('@profitpilot/ai')
+    // A tool that records when it actually runs.
+    let executed = false
+    const tools = { approve_recommendation: async () => { executed = true; return { message: 'Recommendation approved.' } } }
+    const jarvis = new JarvisService(new (await import('@profitpilot/ai')).OpenRouterClient({ keys: [] }), evidence, new InMemoryJarvisRepository(), null, () => 1_000, null, tools)
+    const app = createApi({ logger: new Logger(), readinessChecks: [], jarvis: { service: jarvis } })
+    const server = createServer(app); await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error('No address')
+    const base = `http://127.0.0.1:${address.port}`
+    try {
+      // Start plan session — write action must be refused with a plan message.
+      const startStart = await fetch(`${base}/jarvis/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', page: 'dashboard', plan: 'start' }) })
+      const startSession = (await startStart.json() as { data: { id: string } }).data
+      const refused = await fetch(`${base}/jarvis/sessions/${startSession.id}/store-action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', actionId: 'approve_recommendation', parameters: { recommendationId: 'r1' }, confirmed: true }) })
+      expect(refused.status).toBe(200)
+      const refusedBody = await refused.json() as { data: { status: string; text: string; requiresConfirmation: boolean } }
+      expect(refusedBody.data.status).toBe('ACTION_UNAVAILABLE')
+      expect(refusedBody.data.text).toContain('Commander plan')
+      expect(refusedBody.data.requiresConfirmation).toBe(false)
+      expect(executed).toBe(false)
+      // End the start-plan session so a fresh Commander session is created.
+      await fetch(`${base}/jarvis/sessions/${startSession.id}/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1' }) })
+
+      // Commander session — without confirmation it must ask first and not run.
+      const startCmd = await fetch(`${base}/jarvis/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', page: 'dashboard', plan: 'commander' }) })
+      const cmdSession = (await startCmd.json() as { data: { id: string } }).data
+      const unconfirmed = await fetch(`${base}/jarvis/sessions/${cmdSession.id}/store-action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', actionId: 'approve_recommendation', parameters: { recommendationId: 'r1' }, confirmed: false }) })
+      const unconfirmedBody = await unconfirmed.json() as { data: { status: string; requiresConfirmation: boolean } }
+      expect(unconfirmedBody.data.status).toBe('ACTION_PENDING')
+      expect(unconfirmedBody.data.requiresConfirmation).toBe(true)
+      expect(executed).toBe(false)
+
+      // With confirmation the tool actually runs.
+      const confirmed = await fetch(`${base}/jarvis/sessions/${cmdSession.id}/store-action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', actionId: 'approve_recommendation', parameters: { recommendationId: 'r1' }, confirmed: true }) })
+      const confirmedBody = await confirmed.json() as { data: { status: string; text: string } }
+      expect(confirmedBody.data.status).toBe('ACTION_EXECUTED')
+      expect(confirmedBody.data.text).toContain('approved')
+      expect(executed).toBe(true)
+    } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
+  })
+
+  it('degrades gracefully when evidence sources fail on a cold start (regression for production 500)', async () => {
+    // The evidence provider rejects (simulating a missing table / RLS / outage).
+    // Previously this 500'd every Jarvis message; now it must answer 200 with
+    // grounded empty evidence, over both non-streaming and SSE transports.
+    const brokenEvidence = { async get() { throw new Error('relation "ai_recommendations" does not exist') } }
+    const jarvis = new JarvisService(new (await import('@profitpilot/ai')).OpenRouterClient({ keys: [] }), brokenEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const app = createApi({ logger: new Logger(), readinessChecks: [], jarvis: { service: jarvis } })
+    const server = createServer(app); await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error('No address')
+    const base = `http://127.0.0.1:${address.port}`
+    try {
+      const started = await fetch(`${base}/jarvis/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', page: 'dashboard', plan: 'trial' }) })
+      const session = (await started.json() as { data: { id: string } }).data
+      const nonStream = await fetch(`${base}/jarvis/sessions/${session.id}/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', text: 'hello Jarvis', page: 'dashboard' }) })
+      expect(nonStream.status).toBe(200)
+      const payload = await nonStream.json() as { ok: boolean; data: { text: string; status: string } }
+      expect(payload.ok).toBe(true)
+      expect(payload.data.text.length).toBeGreaterThan(0)
+      const stream = await fetch(`${base}/jarvis/sessions/${session.id}/message`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId: 'store-1', text: 'mujhe revenue dikhao', page: 'dashboard', stream: true }) })
+      expect(stream.status).toBe(200)
+      const body = await stream.text()
+      expect(body).toContain('event: done')
+      expect(body).not.toContain('event: error')
+    } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
+  })
 })

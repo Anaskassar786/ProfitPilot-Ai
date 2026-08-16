@@ -47,20 +47,44 @@ function registerJarvis(router: Router, dependencies: JarvisRouteDependencies): 
         response.setHeader('connection', 'keep-alive')
         response.setHeader('x-accel-buffering', 'no')
         response.flushHeaders()
-        const send = (event: string, payload: unknown) => { response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`) }
+        let connectionOpen = true
+        const onClose = () => { connectionOpen = false }
+        response.on('close', onClose)
+        const send = (event: string, payload: unknown): void => {
+          // A client can navigate away or close the tab mid-stream. Writing to
+          // a destroyed socket throws and would surface as an unhandled
+          // rejection / 500, so guard every frame.
+          if (!connectionOpen || response.writableEnded || response.destroyed) return
+          response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+        }
         try {
           const result = await dependencies.service.message(store, sessionId, input, (fullText) => send('text', { text: fullText }))
           send('done', { response: result })
         } catch (error: unknown) {
-          send('error', { message: error instanceof Error ? error.message : 'Jarvis stream failed' })
+          // Streaming failed (provider error, evidence degradation, etc.). The
+          // service already degrades most failures to a DEGRADED response, but
+          // if a genuine error escapes, report it as a framed SSE error instead
+          // of leaving the connection hanging so the client can fall back.
+          if (connectionOpen && !response.writableEnded) {
+            send('error', { message: error instanceof Error ? error.message : 'Jarvis stream failed' })
+          }
+        } finally {
+          response.off('close', onClose)
+          if (!response.writableEnded) response.end()
         }
-        response.end()
         return
       }
       response.status(200).json(success(await dependencies.service.message(store, sessionId, input), requestId(requestIdValue || randomUUID())))
     })().catch((error: unknown) => next(error))
   })
   router.post('/jarvis/sessions/:id/action', asyncRoute(async (request) => { const body = requireRecord(request.body); if (typeof body.actionId !== 'string') throw new AppError('VALIDATION_ERROR', 'actionId is required', 400); return dependencies.service.confirmAction(queryStore(request), param(request.params.id, 'session id'), body.actionId) }))
+  router.post('/jarvis/sessions/:id/store-action', asyncRoute(async (request) => {
+    const body = requireRecord(request.body)
+    if (typeof body.actionId !== 'string') throw new AppError('VALIDATION_ERROR', 'actionId is required', 400)
+    const parameters = isRecord(body.parameters) ? body.parameters : {}
+    const confirmed = body.confirmed === true
+    return dependencies.service.invokeStoreAction(queryStore(request), param(request.params.id, 'session id'), { actionId: body.actionId, parameters: parameters as Readonly<Record<string, string | number | boolean | null>> }, confirmed)
+  }))
   router.post('/jarvis/sessions/:id/:state', asyncRoute(async (request) => { const state = request.params.state; if (state !== 'pause' && state !== 'resume' && state !== 'end') throw new AppError('NOT_FOUND', 'Jarvis session command not found', 404); return dependencies.service.setSessionState(queryStore(request), param(request.params.id, 'session id'), state) }))
 }
 
