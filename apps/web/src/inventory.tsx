@@ -398,7 +398,7 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
       {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
       {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
       <div className="inventory-sort-control">
-        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} triggerLabel="Sort" />
+        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} label="Sort" />
         <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? '↑' : '↓'}</button>
       </div>
     </div>

@@ -28,7 +28,11 @@ export type CustomSelectProps<Value extends string> = Readonly<{
   className?: string
   /** Rendered when `value` matches no option (an empty filter, for example). */
   placeholder?: string
-  /** Keeps the selected check in the popup while showing a compact fixed trigger label. */
+  /**
+   * Optional fixed trigger text that replaces the selected option label.
+   * Prefer showing the selected option (default) so merchants can see the
+   * current choice at a glance. Use CSS width/ellipsis for overflow instead.
+   */
   triggerLabel?: string
 }>
 
