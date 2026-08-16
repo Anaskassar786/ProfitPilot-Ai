@@ -1,6 +1,6 @@
 export type OrderStatus = 'new' | 'completed' | 'canceled' | 'pending'
 export type PaymentStatus = 'paid' | 'pending' | 'not_paid' | 'refunded' | 'partially_refunded' | 'unknown'
-export type OrderInsightFeature = 'top_selling_product' | 'cancellation_rate' | 'fulfillment_rate' | 'order_trends' | 'peak_times' | 'repeat_customers' | 'ai_suggestion' | 'trend_comparisons' | 'anomaly_alerts' | 'auto_action_suggestions' | 'custom_ai_queries'
+export type OrderInsightFeature = 'top_selling_product' | 'cancellation_rate' | 'fulfillment_rate' | 'order_health_score' | 'peak_times' | 'repeat_customers' | 'ai_suggestion' | 'trend_comparisons' | 'anomaly_alerts' | 'auto_action_suggestions' | 'custom_ai_queries'
 
 export type OrderLine = Readonly<{ id: string | null; productId: string | null; variantId: string | null; title: string | null; variantTitle: string | null; sku: string | null; quantity: number; price: number | null; totalDiscount: number | null }>
 export type OrderAddress = Readonly<{ firstName: string | null; lastName: string | null; company: string | null; address1: string | null; address2: string | null; city: string | null; province: string | null; zip: string | null; country: string | null; countryCode: string | null; phone: string | null }>
