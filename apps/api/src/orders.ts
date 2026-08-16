@@ -554,8 +554,23 @@ function trendComparison(orders: readonly OrderView[], now: number): unknown {
   return { status: 'available', currentOrders: current, previousOrders: previous, changePercent: round(((current - previous) / previous) * 100) }
 }
 
+/** Internal daily order counts for anomaly detection (not a public insight feature). */
+function dailyOrderPoints(orders: readonly OrderView[]): { points: readonly { day: string; orders: number }[] } {
+  const counts = new Map<string, number>()
+  for (const order of orders) {
+    if (!order.createdAt) continue
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(order.createdAt)
+    if (!match?.[1]) continue
+    counts.set(match[1], (counts.get(match[1]) ?? 0) + 1)
+  }
+  const points = [...counts.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([day, orderCount]) => ({ day, orders: orderCount }))
+  return { points }
+}
+
 function anomalyAlerts(orders: readonly OrderView[]): unknown {
-  const trends = orderTrends(orders) as { points: readonly { day: string; orders: number }[] }
+  const trends = dailyOrderPoints(orders)
   const values = trends.points.map((point) => point.orders)
   if (orders.length < 14 || values.length < 7) return { status: 'insufficient_data', alerts: [], message: 'More order history is required for anomaly detection.' }
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length
