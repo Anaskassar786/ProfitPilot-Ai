@@ -1,6 +1,7 @@
 import type { AgentStatus, AnalyticsSnapshot, BillingAccount, BillingPlan, CatalogProduct, Recommendation, RoiMetrics, SectionId, UsageMeter, WorkspaceContext } from './model.js'
 import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, ReportRun } from './f8-model.js'
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
+import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderView } from './orders-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -98,6 +99,23 @@ export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promi
 
 export function fetchCatalog(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CatalogProduct[]> {
   return requestJson<readonly CatalogProduct[]>(`/catalog?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchOrders(storeId: string, query: OrderQuery = {}, fetcher: Fetcher = fetch): Promise<OrdersPageResult> {
+  const parameters = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') parameters.set(key, String(value))
+  return requestJson<OrdersPageResult>(`/orders?${parameters.toString()}`, {}, fetcher)
+}
+
+export function fetchOrder(storeId: string, orderId: string, fetcher: Fetcher = fetch): Promise<OrderView> {
+  return requestJson<OrderView>(`/orders/${encodeURIComponent(orderId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchOrderInsights(storeId: string, options: Readonly<{ feature?: OrderInsightFeature; question?: string }> = {}, fetcher: Fetcher = fetch): Promise<OrderInsightsResult> {
+  const parameters = new URLSearchParams({ storeId })
+  if (options.feature) parameters.set('feature', options.feature)
+  if (options.question?.trim()) parameters.set('question', options.question.trim())
+  return requestJson<OrderInsightsResult>(`/orders/insights?${parameters.toString()}`, {}, fetcher)
 }
 
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {

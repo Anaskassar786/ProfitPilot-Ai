@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchSyncStatus, initializeCsrf, requestJson, requestSync, requestSyncAll, resetApiClientStateForTests, resetSyncCircuit, startJarvisSession } from './api.js'
+import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchOrder, fetchOrderInsights, fetchOrders, fetchSyncStatus, initializeCsrf, requestJson, requestSync, requestSyncAll, resetApiClientStateForTests, resetSyncCircuit, startJarvisSession } from './api.js'
 import type { Fetcher } from './api.js'
 
 type ResponsePayload = Readonly<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>
@@ -24,6 +24,17 @@ describe('F3 relative API client', () => {
     const calls: string[] = []
     await fetchCatalog('store/one', fetcher({ ok: true, data: [] }, 200, calls))
     expect(calls[0]).toContain('store%2Fone')
+  })
+  it('encodes server-side order filters, detail IDs, and insight questions', async () => {
+    const calls: string[] = []
+    const ordersData = { orders: [], tabCounts: { all: 0, new: 0, completed: 0, canceled: 0, pending: 0 }, pagination: { page: 1, limit: 20, total: 0, pages: 1 } }
+    await fetchOrders('store/one', { q: 'A & B', status: 'pending', page: 2 }, fetcher({ ok: true, data: ordersData }, 200, calls))
+    await fetchOrder('store/one', 'gid://shopify/Order/1', fetcher({ ok: true, data: { id: '1' } }, 200, calls))
+    await fetchOrderInsights('store/one', { feature: 'custom_ai_queries', question: 'Compare 30 days' }, fetcher({ ok: true, data: { available: [] } }, 200, calls))
+    expect(calls[0]).toContain('/orders?storeId=store%2Fone&q=A+%26+B&status=pending&page=2')
+    expect(calls[1]).toContain('/orders/gid%3A%2F%2Fshopify%2FOrder%2F1?storeId=store%2Fone')
+    expect(calls[2]).toContain('/orders/insights?storeId=store%2Fone&feature=custom_ai_queries&question=Compare+30+days')
+    expect(calls.every((call) => !call.includes('localhost'))).toBe(true)
   })
   it('posts sync requests through the F2 API', async () => {
     const calls: string[] = []

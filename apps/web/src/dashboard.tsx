@@ -57,7 +57,7 @@ import type {
 
 // ─── Types ──────────────────────────────────────────────────────
 
-type LoadState = 'idle' | 'loading' | 'ready' | 'offline'
+type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 
 type DashboardData = {
   analytics: AnalyticsSnapshot | null
