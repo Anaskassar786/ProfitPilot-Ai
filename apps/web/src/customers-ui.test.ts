@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { CustomerActivityStatus, CustomerEmailAction, CustomersEmptyState, InitialsAvatar, TargetedEmailComposer } from './customers.js'
+import { CustomerActivityStatus, CustomerEmailAction, CustomersEmptyState, CustomerPremiumIntelligence, InitialsAvatar, TargetedEmailComposer } from './customers.js'
 import { customerAvatarColor, customerEmailLabel, customerMoney, initialsForCustomer, primaryBehaviorLabel } from './customers-model.js'
-import type { CustomerSummary } from './customers-model.js'
+import type { CustomerCoverage, CustomerDetail, CustomerInsightsResult, CustomerSummary } from './customers-model.js'
 
 const customer: CustomerSummary = { id: 'real-1', displayName: 'Asha Khan', hasRealName: true, email: 'asha@example.com', emailVisibility: 'available', marketingState: 'subscribed', canEmail: true, emailDisabledReason: null, phone: null, createdAt: '2026-08-01T00:00:00Z', lifetimeOrders: 2, totalSpent: 200, currency: 'INR', lastOrderAt: '2026-08-10T00:00:00Z', activity: 'active', segments: ['vip'], primarySegment: 'vip', purchasePattern: null }
 
@@ -89,5 +89,56 @@ describe('Customers UI safety regressions', () => {
     expect(send).toContain('customerId')
     expect(send).not.toContain('recipientEmail')
     expect(send).not.toContain('acceptsMarketing')
+  })
+})
+
+describe('Customer detail drawer premium sections', () => {
+  const detailCoverage: CustomerCoverage = { ordersSyncCompleted: true, knownComplete90Days: true, cutoffDate: '2026-05-19', lastCompletedSyncAt: '2026-08-16T00:00:00Z', explanation: 'Synced order history reaches 2026-05-19.' }
+  const detailCustomer: CustomerDetail = {
+    id: 'cust-1', adminGraphqlApiId: null, firstName: 'Asha', lastName: 'Khan', displayName: 'Asha Khan', hasRealName: true, email: 'asha@example.com', emailVisibility: 'available', marketingState: 'subscribed', canEmail: true, emailDisabledReason: null, phone: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-08-01T00:00:00Z', syncedAt: '2026-08-16T00:00:00Z', lifetimeOrders: 4, totalSpent: 480, currency: 'INR', lastOrderId: 'order-4', lastOrderName: '#1004', lastOrderAt: '2026-08-01T00:00:00Z', activity: 'active', tags: [], note: null, addresses: [], defaultAddress: null,
+    orders: [{ id: 'order-1', orderNumber: '#1001', createdAt: '2026-01-15T00:00:00Z', total: 120, currency: 'INR', lines: [] }, { id: 'order-4', orderNumber: '#1004', createdAt: '2026-08-01T00:00:00Z', total: 120, currency: 'INR', lines: [] }],
+    products: [], cumulativeValue: [],
+    purchasePattern: { status: 'available', averageIntervalDays: 27, intervals: 3, basisOrders: 4 },
+    predictedNextOrder: { status: 'available', predictedNextOrderAt: '2026-08-28T00:00:00Z', averageIntervalDays: 27, basisOrders: 4 },
+    predictiveLtv: { status: 'available', value: 1620, currency: 'INR', horizonMonths: 12, averageOrderValue: 120, averageIntervalDays: 27, basisOrders: 4, method: 'cadence_aov_heuristic' },
+    segments: ['vip'], primarySegment: 'vip', coverage: detailCoverage,
+  }
+  const insights: CustomerInsightsResult = { plan: 'growth', planLabel: 'Growth', customerCount: 5, available: [{ feature: 'retention_suggestion', name: 'AI retention suggestion', data: { status: 'generated', text: 'Re-engage VIPs with a curated restock note.' } }], locked: [], usage: { feature: 'customers_ai_insights_day', used: 1, limit: 20, remaining: 19, limitReached: false }, coverage: detailCoverage, cached: false }
+
+  it('locks every premium feature individually for a Trial plan instead of leaving blank sections', () => {
+    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'trial', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    expect(html).toContain('Purchase intelligence')
+    expect(html).toContain('Upgrade to Growth to unlock purchase patterns and cadence analysis')
+    expect(html).toContain('Predicted next order')
+    expect(html).toContain('Upgrade to Commander to unlock predicted next order date')
+    expect(html).toContain('Predictive LTV')
+    expect(html).toContain('Upgrade to Commander to unlock 12-month LTV forecast')
+    expect(html).toContain('Retention recommendation')
+    expect(html).toContain('Upgrade to Growth to unlock AI retention suggestions')
+    // Each locked feature renders the reusable PR #30 locked card (a button → billing).
+    expect(html.match(/plan-locked-feature/g)?.length).toBe(4)
+    // Real intelligence is never leaked to a locked plan.
+    expect(html).not.toContain('Average cadence')
+    expect(html).not.toContain('27 days')
+  })
+
+  it('unlocks Growth features while keeping Commander predictions locked', () => {
+    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'growth', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    expect(html).toContain('Average cadence')
+    expect(html).toContain('27 days')
+    expect(html).toContain('Re-engage VIPs')
+    expect(html).toContain('Upgrade to Commander to unlock predicted next order date')
+    expect(html).toContain('Upgrade to Commander to unlock 12-month LTV forecast')
+    expect(html.match(/plan-locked-feature/g)?.length).toBe(2)
+  })
+
+  it('unlocks every prediction for Commander with the heuristic LTV disclaimer', () => {
+    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'commander', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    expect(html).toContain('Average cadence')
+    expect(html).toContain('Predicted date')
+    expect(html).toContain('12-month forecast')
+    expect(html).toContain('Heuristic forecast')
+    expect(html).not.toContain('plan-locked-feature')
+    expect(html).not.toContain('Upgrade to ')
   })
 })

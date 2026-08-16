@@ -212,10 +212,11 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
   </section>
 }
 
-export function PlanLockedFeature({ featureName, requiredPlan, children, onUpgrade }: { featureName: string; requiredPlan: 'growth' | 'commander'; children: ReactNode; onUpgrade: () => void }) {
+export function PlanLockedFeature({ featureName, requiredPlan, description, children, onUpgrade }: { featureName: string; requiredPlan: 'growth' | 'commander'; description?: string; children: ReactNode; onUpgrade: () => void }) {
+  const tagline = description?.trim() ? description : `Upgrade to ${titleCase(requiredPlan)} to unlock`
   return <button className="plan-locked-feature" onClick={onUpgrade} aria-label={`Upgrade to ${titleCase(requiredPlan)} to unlock ${featureName}`}>
     <span className="plan-locked-blur" aria-hidden="true">{children}</span>
-    <span className="plan-locked-overlay"><LockKeyhole size={17} /><strong>{featureName}</strong><small>Upgrade to {titleCase(requiredPlan)} to unlock</small></span>
+    <span className="plan-locked-overlay"><LockKeyhole size={17} /><strong>{featureName}</strong><small>{tagline}</small></span>
   </button>
 }
 
