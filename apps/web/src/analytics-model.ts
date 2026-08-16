@@ -1,4 +1,5 @@
 import type { AnalyticsSnapshot } from './model.js'
+import { safeAddDays, safeDayKey } from './safe-date.js'
 
 export type AnalyticsPeriod = 7 | 30 | 90 | 365
 export type AnalyticsInsights = Readonly<{
@@ -30,33 +31,56 @@ export type TrendPoint = Readonly<{ day: string; revenue: number; orders: number
 export type Kpi = Readonly<{ label: string; value: number | null; format: 'money' | 'number' | 'percent'; money: boolean; change: number | null; sparkline: readonly number[]; detail: string }>
 const finite = (value: unknown, fallback = 0) => { const number = typeof value === 'number' ? value : Number(value); return Number.isFinite(number) ? number : fallback }
 
+/**
+ * Rewrite each row's `day` to a bare `YYYY-MM-DD` key, dropping rows whose date
+ * cannot be parsed. Guarantees the string comparisons and `safeAddDays` calls
+ * downstream operate on a consistent, sortable key format.
+ */
+function normalizeDays<T extends { day: string }>(rows: readonly T[]): readonly T[] {
+  const result: T[] = []
+  for (const row of rows) { const day = safeDayKey(row?.day); if (day) result.push({ ...row, day }) }
+  return result
+}
+
+/** Map of normalised day key -> numeric value, skipping unparseable dates. */
+function keyedByDay<T extends { day: string }>(rows: readonly T[], get: (row: T) => number): ReadonlyMap<string, number> {
+  const map = new Map<string, number>()
+  for (const row of rows) { const day = safeDayKey(row?.day); if (day) map.set(day, get(row)) }
+  return map
+}
+
 export function periodTrend(snapshot: AnalyticsSnapshot | null, period: AnalyticsPeriod, forecast: AnalyticsInsights['forecast'] | null): readonly TrendPoint[] {
   const revenueRows = snapshot?.revenue ?? []
   if (!revenueRows.length) return []
-  const revenue = new Map(revenueRows.map((row) => [row.day, finite(row.grossRevenue)]))
-  const orders = new Map((snapshot?.orders ?? []).map((row) => [row.day, finite(row.orderCount)]))
-  const aov = new Map((snapshot?.orders ?? []).map((row) => [row.day, finite(row.averageOrderValue)]))
+  // `day` arrives as a full ISO timestamp when Postgres `date` columns are
+  // serialised by the pg driver, so every key is normalised to YYYY-MM-DD
+  // before it is used for lookups or arithmetic.
+  const revenue = keyedByDay(revenueRows, (row) => finite(row.grossRevenue))
+  const orders = keyedByDay(snapshot?.orders ?? [], (row) => finite(row.orderCount))
+  const aov = keyedByDay(snapshot?.orders ?? [], (row) => finite(row.averageOrderValue))
   const latest = [...revenue.keys()].filter(Boolean).sort().at(-1)
   if (!latest) return []
-  const end = new Date(`${latest}T00:00:00Z`)
-  if (!Number.isFinite(end.valueOf())) return []
   const points: TrendPoint[] = []
   for (let offset = period - 1; offset >= 0; offset -= 1) {
-    const date = new Date(end.valueOf() - offset * 86_400_000); const day = date.toISOString().slice(0, 10); const previousDay = new Date(date.valueOf() - period * 86_400_000).toISOString().slice(0, 10)
-    points.push({ day, revenue: revenue.get(day) ?? 0, orders: orders.get(day) ?? 0, aov: aov.get(day) ?? 0, previous: revenue.has(previousDay) ? revenue.get(previousDay)! : null, forecast: null, lower: null, upper: null })
+    const day = safeAddDays(latest, -offset)
+    if (!day) continue
+    const previousDay = safeAddDays(day, -period)
+    const previous = previousDay !== null && revenue.has(previousDay) ? revenue.get(previousDay)! : null
+    points.push({ day, revenue: revenue.get(day) ?? 0, orders: orders.get(day) ?? 0, aov: aov.get(day) ?? 0, previous, forecast: null, lower: null, upper: null })
   }
-  if (forecast?.status === 'available') for (const row of forecast.points) if (row?.day) points.push({ day: row.day, revenue: 0, orders: 0, aov: 0, previous: null, forecast: finite(row.value), lower: finite(row.lower), upper: finite(row.upper) })
+  if (forecast?.status === 'available') for (const row of forecast.points ?? []) { const day = safeDayKey(row?.day); if (day) points.push({ day, revenue: 0, orders: 0, aov: 0, previous: null, forecast: finite(row.value), lower: finite(row.lower), upper: finite(row.upper) }) }
   return points
 }
 
 export function analyticsKpis(snapshot: AnalyticsSnapshot | null, totalCustomers: number | null, customerStats?: AnalyticsInsights['customerStats']): readonly Kpi[] {
-  const revenue = snapshot?.revenue ?? []; const orders = snapshot?.orders ?? []
+  // Rows are normalised up front: a raw `day` may be a bare day key or a full
+  // ISO timestamp depending on how the API serialised the Postgres date.
+  const revenue = normalizeDays(snapshot?.revenue ?? []); const orders = normalizeDays(snapshot?.orders ?? [])
   const latest = [...new Set([...revenue.map((row) => row.day), ...orders.map((row) => row.day)])].filter(Boolean).sort().at(-1)
-  const end = latest ? Date.parse(`${latest}T00:00:00Z`) : Number.NaN
-  const currentStart = Number.isFinite(end) ? new Date(end - 27 * 86_400_000).toISOString().slice(0, 10) : ''
-  const previousStart = Number.isFinite(end) ? new Date(end - 55 * 86_400_000).toISOString().slice(0, 10) : ''
+  const currentStart = safeAddDays(latest, -27) ?? ''
+  const previousStart = safeAddDays(latest, -55) ?? ''
   const sum = <T extends { day: string }>(rows: readonly T[], start: string, finish: string, get: (row: T) => number) => rows.filter((row) => row.day >= start && row.day <= finish).reduce((total, row) => total + finite(get(row)), 0)
-  const previousEnd = Number.isFinite(end) ? new Date(end - 28 * 86_400_000).toISOString().slice(0, 10) : ''
+  const previousEnd = safeAddDays(latest, -28) ?? ''
   const revNow = latest ? sum(revenue, currentStart, latest, (row) => row.grossRevenue) : 0; const revBefore = latest ? sum(revenue, previousStart, previousEnd, (row) => row.grossRevenue) : 0
   const ordNow = latest ? sum(orders, currentStart, latest, (row) => row.orderCount) : 0; const ordBefore = latest ? sum(orders, previousStart, previousEnd, (row) => row.orderCount) : 0
   const change = (current: number, previous: number) => previous > 0 && Number.isFinite(current) ? (current - previous) / previous * 100 : null
