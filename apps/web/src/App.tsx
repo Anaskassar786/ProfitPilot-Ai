@@ -91,6 +91,7 @@ import type { ChartPeriod } from './model.js'
 import { DashboardLayout } from './dashboard.js'
 import { ProductsWorkspace } from './products.js'
 import { OrdersWorkspace } from './orders.js'
+import { CustomersPage } from './customers.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -404,6 +405,7 @@ function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, sync
   if (active === 'dashboard') return <DashboardPage context={context} data={data} onNavigate={onNavigate} onSync={onSync} onSyncAll={onSyncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} />
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
   if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
+  if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'analytics') return <AnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'inventory') return <InventoryPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'command-center') return <CommandCenterPage agents={data.agents} onRefresh={onRefresh} onPhaseGate={onPhaseGate} />

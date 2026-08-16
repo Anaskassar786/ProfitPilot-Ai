@@ -2,6 +2,7 @@ import type { AgentStatus, AnalyticsSnapshot, BillingAccount, BillingPlan, Catal
 import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, ReportRun } from './f8-model.js'
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
 import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderView } from './orders-model.js'
+import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, CustomerQuery, CustomersPageResult } from './customers-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -116,6 +117,26 @@ export function fetchOrderInsights(storeId: string, options: Readonly<{ feature?
   if (options.feature) parameters.set('feature', options.feature)
   if (options.question?.trim()) parameters.set('question', options.question.trim())
   return requestJson<OrderInsightsResult>(`/orders/insights?${parameters.toString()}`, {}, fetcher)
+}
+
+export function fetchCustomers(storeId: string, query: CustomerQuery = {}, fetcher: Fetcher = fetch): Promise<CustomersPageResult> {
+  const parameters = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') parameters.set(key, String(value))
+  return requestJson<CustomersPageResult>(`/customers?${parameters.toString()}`, {}, fetcher)
+}
+
+export function fetchCustomer(storeId: string, customerId: string, fetcher: Fetcher = fetch): Promise<CustomerDetail> {
+  return requestJson<CustomerDetail>(`/customers/${encodeURIComponent(customerId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchCustomerInsights(storeId: string, feature?: CustomerInsightFeature, fetcher: Fetcher = fetch): Promise<CustomerInsightsResult> {
+  const parameters = new URLSearchParams({ storeId })
+  if (feature) parameters.set('feature', feature)
+  return requestJson<CustomerInsightsResult>(`/customers/insights?${parameters.toString()}`, {}, fetcher)
+}
+
+export function queryCustomerInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<CustomerInsightsResult> {
+  return requestJson<CustomerInsightsResult>('/customers/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher)
 }
 
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {
