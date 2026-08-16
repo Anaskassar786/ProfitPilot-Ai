@@ -88,6 +88,7 @@ import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
 import { PASSIVE_RECOMMENDATION_INTERVAL_MS, PASSIVE_SNOOZE_MS, passiveRecommendationsAllowed, selectPassiveRecommendation } from './passive-jarvis.js'
 import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenuePoints, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
 import type { ChartPeriod } from './model.js'
+import { DashboardLayout } from './dashboard.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -417,18 +418,18 @@ function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, sync
 }
 
 function DashboardPage({ context, data, onNavigate, onSync, onSyncAll, syncProgress, syncAllRunning }: { context: WorkspaceContext; data: WorkspaceData; onNavigate: (page: SectionId) => void; onSync: (module: string) => Promise<void>; onSyncAll: () => Promise<void>; syncProgress: readonly SyncModuleProgress[]; syncAllRunning: boolean }) {
-  const [period, setPeriod] = useState<ChartPeriod>('all')
-  const revenue = sumRevenue(data.analytics)
-  const orders = sumOrders(data.analytics)
-  const aov = averageOrderValue(data.analytics)
-  const series = revenuePoints(data.analytics, period)
-  const health = storeHealthView(data.analytics, data.catalog.length)
   return <PageLayout eyebrow="Store intelligence" title={context.shop ? `Good morning, ${context.shop}` : 'Connect your Shopify store'} description={context.storeId ? 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.' : 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'} actions={<><button className="button secondary" onClick={() => onNavigate('analytics')}><LineChart size={15} /> Open analytics</button><button className="button primary" disabled={syncAllRunning} onClick={() => void onSyncAll()}><RotateCcw size={15} className={syncAllRunning ? 'spin' : ''} /> {syncAllRunning ? 'Syncing all…' : 'Sync all'}</button></>}>
     <div className="sync-banner"><span className="sync-pulse"><span /></span><span><strong>{context.storeId ? 'Shopify data plane ready' : 'No store context'}</strong> · {latestSyncLabel(data.analytics)}</span><button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></button></div>
     {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} />}
-    <div className="stat-grid"><MetricCard label="Revenue" value={formatMoney(revenue)} detail={revenue === null ? 'Awaiting analytics rows' : 'From closed Shopify orders'} icon={WalletCards} tone="gold" /><MetricCard label="Orders" value={formatNumber(orders)} detail={orders === null ? 'Awaiting orders sync' : 'From closed Shopify orders'} icon={ShoppingBag} tone="blue" /><MetricCard label="Average order value" value={formatMoney(aov)} detail={aov === null ? 'Calculated after sync' : 'Revenue ÷ orders'} icon={Target} tone="purple" /><MetricCard label="Catalog products" value={formatNumber(data.catalog.length || null)} detail={data.catalog.length ? 'Synced from Shopify' : 'Sync products to populate'} icon={Package} tone="green" /> </div>
-    <div className="dashboard-grid top-grid"><section className="card revenue-card"><CardHeading kicker="Real analytics" dot="blue" title="Revenue overview" action={<label className="period-select">Period<select aria-label="Revenue period" value={period} onChange={(event) => setPeriod(event.target.value as ChartPeriod)}><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All closed periods</option></select></label>} /><div className="chart-legend"><span><i className="legend-line blue" /> Closed-period revenue from Shopify orders</span><span className="chart-last-updated"><Clock3 size={13} /> {data.loadState === 'loading' ? 'Loading…' : latestSyncLabel(data.analytics)}</span></div>{data.loadState === 'loading' ? <ChartSkeleton /> : series.length > 0 ? <AreaChart points={series} /> : <div className="empty-chart"><LineChart size={24} /><strong>No data for this period</strong><span>Sync orders or choose another range.</span><button className="text-button" onClick={() => void onSync('orders')}><RefreshCw size={14} /> Sync data</button></div>}</section><section className="card health-card"><CardHeading kicker="Deterministic state" dot="green" title="Store health" /><HealthGauge health={health} /><div className="health-items"><HealthLine label="Revenue coverage" value={data.analytics?.revenue.length ? `${data.analytics.revenue.length} closed day${data.analytics.revenue.length === 1 ? '' : 's'}` : 'No rows yet'} tone={data.analytics?.revenue.length ? 'green' : 'muted'} /><HealthLine label="Order coverage" value={orders ? `${orders} order${orders === 1 ? '' : 's'}` : 'No rows yet'} tone={orders ? 'green' : 'muted'} /><HealthLine label="Catalog" value={data.catalog.length ? `${data.catalog.length} products` : 'Not synced'} tone={data.catalog.length ? 'green' : 'muted'} /></div><button className="text-button full" onClick={() => onNavigate('analytics')}>View data health <ArrowUpRight size={14} /></button></section></div>
-    <div className="dashboard-grid middle-grid"><section className="card attention-card"><CardHeading kicker="Next safe action" dot="amber" title="Build your first data snapshot" /><div className="empty-action"><span className="empty-action-icon"><Database size={18} /></span><div><strong>{context.storeId ? 'Run a Shopify sync' : 'Connect Shopify first'}</strong><p>{context.storeId ? 'Sync products and orders to populate catalog and pre-aggregated metrics.' : 'The embedded install route will create the store context without preview data.'}</p></div><button className="button secondary" onClick={() => void onSync(context.storeId ? 'products' : 'install')}>{context.storeId ? 'Start sync' : 'Connect'}</button></div></section><section className="card employee-card"><div className="employee-glow" /><div className="employee-head"><span className="jarvis-mini-orb"><span /></span><div><div className="section-kicker">AI EMPLOYEE <span className="phase-tag">AI</span></div><h3>Decision engine is next</h3></div></div><p>Foundation, Shopify core, and data plane are ready. AI explanations will only appear once evidence packs are available.</p><div className="employee-progress"><span style={{ width: '34%' }} /><small>Foundation complete</small></div><button className="button ghost" onClick={() => onNavigate('command-center')}>See upcoming agents <ArrowUpRight size={14} /></button></section></div>
+    <DashboardLayout
+      data={{ analytics: data.analytics, catalog: data.catalog as unknown as Array<{ productId: string; payload: Record<string, unknown> }>, loadState: data.loadState }}
+      onSync={onSync}
+      onSyncAll={onSyncAll}
+      syncAllRunning={syncAllRunning}
+      onNavigate={onNavigate as (page: string) => void}
+      storeName={context.shop}
+      storeId={context.storeId}
+    />
   </PageLayout>
 }
 

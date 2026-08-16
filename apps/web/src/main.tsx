@@ -8,6 +8,7 @@ import './f6.css'
 import './f8.css'
 import './jarvis-orb.css'
 import './f9.css'
+import './dashboard.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
 
 const root = document.getElementById('root')

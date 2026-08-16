@@ -1,0 +1,644 @@
+import { useState, useMemo } from 'react'
+import type { CSSProperties, ComponentType, ReactNode } from 'react'
+import {
+  BarChart as RechartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts'
+import {
+  WalletCards,
+  ShoppingBag,
+  Target,
+  Package,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  RefreshCw,
+  Clock3,
+  LineChart,
+} from 'lucide-react'
+import type { AnalyticsSnapshot, StoreHealthView } from './model.js'
+import {
+  formatMoney,
+  formatNumber,
+  storeHealthView,
+  latestSyncLabel,
+} from './model.js'
+import {
+  aggregateRevenueByPeriod,
+  buildCalendarMonth,
+  aggregateByCategory,
+  buildRecentOrders,
+  generateSummary,
+  calculateGrowth,
+  formatGrowth,
+  revenueForPeriod,
+} from './dashboard-utils.js'
+import type {
+  PeriodView,
+  BarChartPoint,
+  CalendarMonth,
+  CalendarDay,
+  CategorySales,
+  RecentOrder,
+  GrowthResult,
+} from './dashboard-utils.js'
+
+// ─── Types ──────────────────────────────────────────────────────
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'offline'
+
+type DashboardData = {
+  analytics: AnalyticsSnapshot | null
+  catalog: readonly { productId: string; payload: Record<string, unknown> }[]
+  loadState: LoadState
+}
+
+// ─── Color & style constants ────────────────────────────────────
+
+const BAR_COLOR = '#3B82F6'
+const BAR_CURRENT_COLOR = '#72A7FF'
+const GRID_COLOR = 'rgba(107,114,128,.12)'
+const TEXT_COLOR = '#9CA3AF'
+
+// ─── Main Dashboard Page Component ─────────────────────────────
+
+interface DashboardLayoutProps {
+  data: DashboardData
+  onSync: (module: string) => Promise<void>
+  onSyncAll: () => Promise<void>
+  syncAllRunning: boolean
+  onNavigate: (page: string) => void
+  storeName: string | null
+  storeId: string | null
+  onToast?: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
+}
+
+export function DashboardLayout(props: DashboardLayoutProps) {
+  const { data, onSync, onSyncAll, syncAllRunning, onNavigate, storeName, storeId } = props
+
+  const [periodView, setPeriodView] = useState<PeriodView>('monthly')
+  const [barRangeStart, setBarRangeStart] = useState<string>('')
+  const [barRangeEnd, setBarRangeEnd] = useState<string>('')
+
+  const now = new Date()
+  const [calYear, setCalYear] = useState(now.getFullYear())
+  const [calMonth, setCalMonth] = useState(now.getMonth() + 1)
+
+  const revenue = calcRevenue(data.analytics)
+  const orders = calcOrders(data.analytics)
+  const aov = calcAov(data.analytics)
+  const catalogCount = data.catalog.length
+  const health = storeHealthView(data.analytics, catalogCount)
+
+  const revenue30d = useMemo(() => revenueForPeriod(data.analytics, '30d'), [data.analytics])
+  const prevRevenue30d = useMemo(() => getPrevious30dRevenue(data.analytics), [data.analytics])
+  const revenueGrowthResult = useMemo(
+    () => calculateGrowth(revenue30d, prevRevenue30d),
+    [revenue30d, prevRevenue30d],
+  )
+
+  const ordersGrowthResult = useMemo(() => {
+    if (data.analytics && data.analytics.orders.length > 0) {
+      const total = data.analytics.orders.reduce((s, o) => s + o.orderCount, 0)
+      return calculateGrowth(total, null)
+    }
+    return calculateGrowth(null, null)
+  }, [data.analytics])
+
+  const aovGrowthResult = useMemo(() => {
+    const aovVal = calcAov(data.analytics)
+    return calculateGrowth(aovVal, null)
+  }, [data.analytics])
+
+  const barData = useMemo(
+    () => aggregateRevenueByPeriod(data.analytics, periodView, barRangeStart || undefined, barRangeEnd || undefined),
+    [data.analytics, periodView, barRangeStart, barRangeEnd],
+  )
+
+  const calendarMonth = useMemo(
+    () => buildCalendarMonth(data.analytics, calYear, calMonth),
+    [data.analytics, calYear, calMonth],
+  )
+
+  const categoryData = useMemo(
+    () => aggregateByCategory(data.analytics, data.catalog),
+    [data.analytics, data.catalog],
+  )
+
+  const recentOrders = useMemo(
+    () => buildRecentOrders(data.analytics),
+    [data.analytics],
+  )
+
+  const summary = useMemo(
+    () => generateSummary(data.analytics, data.catalog),
+    [data.analytics, data.catalog],
+  )
+
+  const loading = data.loadState === 'loading'
+
+  return (
+    <div className="dashboard-modern">
+      {/* Row 1: Enhanced KPI Cards */}
+      <div className="dash-row kpi-row">
+        <EnhancedMetricCard
+          label="Revenue"
+          value={formatMoney(revenue)}
+          icon={WalletCards as ComponentType<{ size?: number; className?: string }>}
+          tone="gold"
+          growth={revenueGrowthResult}
+          periodLabel="last 30 days"
+          loading={loading}
+        />
+        <EnhancedMetricCard
+          label="Orders"
+          value={formatNumber(orders)}
+          icon={ShoppingBag as ComponentType<{ size?: number; className?: string }>}
+          tone="blue"
+          growth={ordersGrowthResult}
+          periodLabel="all time"
+          loading={loading}
+        />
+        <EnhancedMetricCard
+          label="Average Order Value"
+          value={formatMoney(aov)}
+          icon={Target as ComponentType<{ size?: number; className?: string }>}
+          tone="purple"
+          growth={aovGrowthResult}
+          periodLabel="all time"
+          loading={loading}
+        />
+        <EnhancedMetricCard
+          label="Catalog Products"
+          value={formatNumber(catalogCount || null)}
+          icon={Package as ComponentType<{ size?: number; className?: string }>}
+          tone="green"
+          growth={calculateGrowth(catalogCount, null)}
+          periodLabel="all time"
+          loading={loading}
+          detail={catalogCount > 0 ? `${catalogCount} synced from Shopify` : 'Sync to populate'}
+        />
+      </div>
+
+      {/* Row 2: Revenue Bar Chart + Store Health */}
+      <div className="dash-row two-col-row">
+        <div className="dash-card revenue-chart-card">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot blue" />Revenue by period</div>
+              <h3>Revenue Overview</h3>
+            </div>
+            <div className="period-toggle-group">
+              <button className={`period-toggle-btn ${periodView === 'weekly' ? 'active' : ''}`} onClick={() => setPeriodView('weekly')}>Weekly</button>
+              <button className={`period-toggle-btn ${periodView === 'monthly' ? 'active' : ''}`} onClick={() => setPeriodView('monthly')}>Monthly</button>
+              <button className={`period-toggle-btn ${periodView === 'yearly' ? 'active' : ''}`} onClick={() => setPeriodView('yearly')}>Yearly</button>
+              <button className={`period-toggle-btn ${periodView === 'range' ? 'active' : ''}`} onClick={() => setPeriodView('range')}>Range</button>
+            </div>
+          </div>
+          {periodView === 'range' && (
+            <div className="range-picker">
+              <input type="date" value={barRangeStart} onChange={(e) => setBarRangeStart(e.target.value)} placeholder="Start" />
+              <span>→</span>
+              <input type="date" value={barRangeEnd} onChange={(e) => setBarRangeEnd(e.target.value)} placeholder="End" />
+            </div>
+          )}
+          <div className="dash-chart-legend">
+            <span><i className="legend-line blue" />Revenue</span>
+            <span className="chart-updated"><Clock3 size={11} /> {latestSyncLabel(data.analytics)}</span>
+          </div>
+          {loading ? (
+            <ChartSkeleton />
+          ) : barData.length > 0 ? (
+            <RevenueBarChart data={barData} />
+          ) : (
+            <EmptyChart onSync={() => void onSync('orders')} message="No revenue data for this period. Sync orders to populate." />
+          )}
+        </div>
+        <div className="dash-card health-card-compact">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot green" />Store Health</div>
+              <h3>Performance Score</h3>
+            </div>
+          </div>
+          <HealthGaugeWidget health={health} loading={loading} />
+          <div className="health-metrics">
+            <HealthRow label="Revenue data" value={data.analytics?.revenue.length ? `${data.analytics.revenue.length} days` : 'No data'} healthy={!!data.analytics?.revenue.length} />
+            <HealthRow label="Orders" value={orders ? `${orders} total` : 'No data'} healthy={!!orders} />
+            <HealthRow label="Catalog" value={catalogCount ? `${catalogCount} products` : 'Not synced'} healthy={!!catalogCount} />
+            <HealthRow label="Customers" value={data.analytics?.customerCohorts.length ? 'Cohort data present' : 'No data'} healthy={!!data.analytics?.customerCohorts.length} />
+          </div>
+          <button className="dash-text-link" onClick={() => onNavigate('analytics')}>View details →</button>
+        </div>
+      </div>
+
+      {/* Row 3: AI Summary + Pie Chart + Recent Orders */}
+      <div className="dash-row three-col-row">
+        <div className="dash-card ai-summary-card">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot purple" />AI Insights</div>
+              <h3>Store Summary</h3>
+            </div>
+            <Sparkles size={16} className="ai-sparkle" />
+          </div>
+          <div className="ai-summary-body">
+            {loading ? (
+              <div className="summary-loading"><Sparkles size={14} className="spin" /> Analyzing your store data...</div>
+            ) : (
+              <p>{summary}</p>
+            )}
+          </div>
+          {data.analytics && data.analytics.revenue.length > 0 && (
+            <div className="ai-summary-footer">
+              <span><TrendingUp size={12} /> Based on {data.analytics.revenue.length} days of data</span>
+            </div>
+          )}
+        </div>
+
+        <div className="dash-card pie-card">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot gold" />Revenue</div>
+              <h3>By Category</h3>
+            </div>
+          </div>
+          {loading ? (
+            <ChartSkeleton />
+          ) : categoryData.length > 0 ? (
+            <CategoryPieChart data={categoryData} />
+          ) : (
+            <EmptyChart onSync={() => void onSync('products')} message="Sync products to see category breakdown." />
+          )}
+        </div>
+
+        <div className="dash-card orders-card">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot blue" />Orders</div>
+              <h3>Recent Activity</h3>
+            </div>
+            <button className="dash-text-link" onClick={() => onNavigate('orders')}>View all →</button>
+          </div>
+          {loading ? (
+            <div className="orders-loading">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="order-row-skeleton"><span /><span /><span /></div>)}
+            </div>
+          ) : recentOrders.length > 0 ? (
+            <div className="orders-list">
+              {recentOrders.map((order) => <OrderRow key={order.id} order={order} />)}
+            </div>
+          ) : (
+            <EmptyChart onSync={() => void onSync('orders')} message="Sync orders to see recent activity." />
+          )}
+        </div>
+      </div>
+
+      {/* Row 4: Calendar Heatmap */}
+      <div className="dash-row calendar-row">
+        <div className="dash-card calendar-card">
+          <div className="dash-card-header">
+            <div>
+              <div className="dash-kicker"><span className="kicker-dot blue" />Daily Revenue</div>
+              <h3>
+                {new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                <span className="calendar-total"> · {formatMoney(calendarMonth.total)}</span>
+              </h3>
+            </div>
+            <div className="cal-nav">
+              <button className="cal-nav-btn" onClick={() => { if (calMonth === 1) { setCalMonth(12); setCalYear(calYear - 1) } else { setCalMonth(calMonth - 1) } }} aria-label="Previous month">
+                <ChevronLeft size={15} />
+              </button>
+              <button className="cal-today-btn" onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth() + 1) }}>Today</button>
+              <button className="cal-nav-btn" onClick={() => { if (calMonth === 12) { setCalMonth(1); setCalYear(calYear + 1) } else { setCalMonth(calMonth + 1) } }} aria-label="Next month">
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
+            <CalendarHeatmap month={calendarMonth} />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Pure helper functions ──────────────────────────────────────
+
+function calcRevenue(snapshot: AnalyticsSnapshot | null): number | null {
+  if (!snapshot || snapshot.revenue.length === 0) return null
+  return snapshot.revenue.reduce((total, row) => total + row.grossRevenue, 0)
+}
+
+function calcOrders(snapshot: AnalyticsSnapshot | null): number | null {
+  if (!snapshot || snapshot.orders.length === 0) return null
+  return snapshot.orders.reduce((total, row) => total + row.orderCount, 0)
+}
+
+function calcAov(snapshot: AnalyticsSnapshot | null): number | null {
+  if (!snapshot || snapshot.orders.length === 0) return null
+  const orders = calcOrders(snapshot)
+  if (!orders) return null
+  const revenue = calcRevenue(snapshot)
+  return revenue === null ? null : revenue / orders
+}
+
+function getPrevious30dRevenue(snapshot: AnalyticsSnapshot | null): number | null {
+  if (!snapshot) return null
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+  const filtered = snapshot.revenue.filter((row) => row.day >= sixtyDaysAgo && row.day < thirtyDaysAgo)
+  if (filtered.length === 0) return null
+  return filtered.reduce((sum, row) => sum + row.grossRevenue, 0)
+}
+
+// ─── Enhanced Metric Card ──────────────────────────────────────────
+
+function EnhancedMetricCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  growth,
+  periodLabel,
+  loading,
+  detail,
+}: {
+  label: string
+  value: string
+  icon: ComponentType<{ size?: number; className?: string }>
+  tone: string
+  growth: GrowthResult
+  periodLabel?: string
+  loading?: boolean
+  detail?: string
+}) {
+  const growthLabel = periodLabel ? formatGrowth(growth, periodLabel) : null
+  const isPositive = growth.direction === 'up'
+  const isNegative = growth.direction === 'down'
+  const hasGrowth = growth.direction !== 'none'
+
+  return (
+    <div className="dash-card metric-card-enhanced">
+      <div className="metric-card-top">
+        <span className={`metric-icon ${tone}`}>
+          <Icon size={18} />
+        </span>
+        {hasGrowth && (
+          <span className={`growth-badge ${isPositive ? 'up' : isNegative ? 'down' : 'flat'}`}>
+            {isPositive ? <TrendingUp size={11} /> : isNegative ? <TrendingDown size={11} /> : <Minus size={11} />}
+            {growth.percent !== null ? `${growth.percent > 0 ? '+' : ''}${growth.percent.toFixed(1)}%` : '—'}
+          </span>
+        )}
+      </div>
+      <div className="metric-value">
+        {loading ? <span className="metric-skeleton-value" /> : value}
+      </div>
+      <div className="metric-label-row">
+        <span className="metric-label">{label}</span>
+        {growthLabel && <span className="metric-growth-label">{growthLabel}</span>}
+        {detail && !growthLabel && <span className="metric-detail">{detail}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Revenue Bar Chart (recharts) ─────────────────────────────────
+
+/** Custom tooltip for bar chart — uses `any` for recharts compatibility */
+function BarTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: BarChartPoint }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  return (
+    <div className="recharts-tooltip-custom">
+      <strong>{formatMoney(point.value)}</strong>
+      <span>{point.label}</span>
+    </div>
+  )
+}
+
+function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
+  return (
+    <div className="dash-chart-container">
+      <ResponsiveContainer width="100%" height={260}>
+        <RechartsBarChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
+          <XAxis dataKey="label" tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={{ stroke: GRID_COLOR }} tickLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => value >= 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value}`} />
+          <Tooltip content={BarTooltip as any} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={400}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.isCurrent ? BAR_CURRENT_COLOR : BAR_COLOR} opacity={entry.isCurrent ? 1 : 0.7} />
+            ))}
+          </Bar>
+        </RechartsBarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ─── Category Pie Chart (recharts) ────────────────────────────────
+
+/** Custom tooltip for pie chart */
+function PieTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: CategorySales }> }) {
+  if (!active || !payload || payload.length === 0) return null
+  const entry = payload[0]?.payload
+  if (!entry) return null
+  const total = (payload[0] as unknown as { total: number }).total || 0
+  return (
+    <div className="recharts-tooltip-custom">
+      <strong>{entry.name}</strong>
+      <span>{formatMoney(entry.value)}</span>
+    </div>
+  )
+}
+
+function CategoryPieChart({ data }: { data: CategorySales[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+
+  if (data.length === 0) return null
+
+  return (
+    <div className="dash-chart-container pie-container">
+      <ResponsiveContainer width="100%" height={240}>
+        <PieChart>
+          <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="value" nameKey="name" isAnimationActive={true} animationDuration={400}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+            ))}
+          </Pie>
+          <Tooltip content={PieTooltip as any} />
+          <Legend formatter={(value: string) => <span className="pie-legend-text">{value}</span>} wrapperStyle={{ fontSize: 10, color: TEXT_COLOR }} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ─── Calendar Heatmap ─────────────────────────────────────────────
+
+function CalendarHeatmap({ month }: { month: CalendarMonth }) {
+  const [hoveredDay, setHoveredDay] = useState<CalendarDay | null>(null)
+
+  const values = month.days.filter((d): d is CalendarDay & { value: number } => d.value !== null).map((d) => d.value)
+  const maxVal = values.length > 0 ? Math.max(...values) : 1
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  return (
+    <div className="calendar-heatmap">
+      <div className="cal-day-names">
+        {dayNames.map((name) => (
+          <span key={name} className="cal-day-name">{name}</span>
+        ))}
+      </div>
+      <div className="cal-grid">
+        {month.days.map((day, index) => {
+          const intensity = day.value !== null && maxVal > 0 ? day.value / maxVal : 0
+          const isHovered = hoveredDay?.date === day.date
+          return (
+            <div
+              key={index}
+              className={`cal-cell ${day.isCurrentMonth ? 'current' : 'other'} ${day.value !== null ? 'has-data' : ''} ${isHovered ? 'hovered' : ''}`}
+              style={{
+                backgroundColor: day.value !== null
+                  ? `rgba(16, 185, 129, ${0.12 + intensity * 0.75})`
+                  : 'rgba(107,114,128,.06)',
+                borderColor: isHovered ? 'rgba(59,130,246,.5)' : day.isCurrentMonth ? 'rgba(107,114,128,.12)' : 'transparent',
+              } as CSSProperties}
+              onMouseEnter={() => setHoveredDay(day)}
+              onMouseLeave={() => setHoveredDay(null)}
+              title={day.value !== null ? `${day.date}: ${formatMoney(day.value)}` : day.date}
+            >
+              <span className="cal-day-number">{day.day}</span>
+            </div>
+          )
+        })}
+      </div>
+      {hoveredDay && hoveredDay.value !== null && (
+        <div className="cal-tooltip">
+          <strong>{formatMoney(hoveredDay.value)}</strong>
+          <span>{new Date(hoveredDay.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
+      )}
+      <div className="cal-legend">
+        <span>Less</span>
+        <div className="cal-legend-bar">
+          <span /><span /><span /><span /><span />
+        </div>
+        <span>More</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Order Row ─────────────────────────────────────────────────────
+
+function OrderRow({ order }: { order: RecentOrder }) {
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    paid: { label: 'Paid', className: 'green' },
+    pending: { label: 'Pending', className: 'amber' },
+    cancelled: { label: 'Cancelled', className: 'red' },
+    fulfilled: { label: 'Fulfilled', className: 'blue' },
+  }
+  const config = statusConfig[order.status] ?? { label: order.status, className: 'neutral' }
+
+  return (
+    <div className="order-row">
+      <div className="order-row-main">
+        <span className="order-id">#{order.orderNumber}</span>
+        <span className="order-customer">{order.customer}</span>
+      </div>
+      <div className="order-row-right">
+        <span className="order-amount">{formatMoney(order.amount)}</span>
+        <span className={`order-status status-badge ${config.className}`}>{config.label}</span>
+        <span className="order-date">{order.date.slice(5)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Health Gauge Widget ───────────────────────────────────────────
+
+function HealthGaugeWidget({ health, loading }: { health: StoreHealthView; loading?: boolean }) {
+  const sweep = health.score === null ? 0 : Math.max(8, Math.round(health.score * 2.4))
+
+  return (
+    <div className="health-gauge-wrap">
+      <div
+        className={`health-gauge ${health.tone} compact`}
+        style={health.score !== null && !loading ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties : undefined}
+      >
+        <div className="gauge-inner">
+          {loading ? (
+            <>
+              <strong>—</strong>
+              <span>Loading</span>
+            </>
+          ) : (
+            <>
+              <strong>
+                {health.score === null ? '—' : health.score}
+                {health.score !== null && <small>/100</small>}
+              </strong>
+              <span>{health.score === null ? 'NO DATA' : `${health.grade} · ${health.label}`}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HealthRow({ label, value, healthy }: { label: string; value: string; healthy: boolean }) {
+  return (
+    <div className="health-row">
+      <span className={`health-dot ${healthy ? 'green' : 'muted'}`} />
+      <span className="health-label">{label}</span>
+      <span className={`health-value ${healthy ? 'green' : 'muted'}`}>{value}</span>
+    </div>
+  )
+}
+
+// ─── Shared helper components ──────────────────────────────────────
+
+function ChartSkeleton() {
+  return (
+    <div className="chart-skeleton-wrap">
+      <div className="chart-skeleton"><span /><span /><span /><span /><span /></div>
+    </div>
+  )
+}
+
+function EmptyChart({ onSync, message }: { onSync?: () => void; message: string }) {
+  return (
+    <div className="empty-chart">
+      <LineChart size={28} />
+      <strong>No data yet</strong>
+      <span>{message}</span>
+      {onSync && (
+        <button className="dash-text-link" onClick={onSync}>
+          <RefreshCw size={13} /> Sync data
+        </button>
+      )}
+    </div>
+  )
+}
+
+export type { DashboardData }
