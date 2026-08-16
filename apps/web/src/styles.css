@@ -236,7 +236,7 @@ kbd { padding: 2px 5px; color: var(--text-tertiary); border: 1px solid var(--bor
 .custom-select-trigger:hover, .custom-select-trigger[aria-expanded="true"] { color: var(--text); background: rgba(59,130,246,.1); }
 .custom-select-trigger:focus-visible { outline: 2px solid var(--blue-bright); outline-offset: 1px; }
 .custom-select-trigger > span { color: var(--text-tertiary); font-size: 8px; white-space: nowrap; }
-.custom-select-trigger > strong { flex: 1; min-width: 84px; overflow: hidden; color: var(--text); font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-trigger > strong { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .custom-select-trigger > svg:first-child { flex: 0 0 auto; color: var(--text-tertiary); }
 .custom-select-trigger > svg:last-child { flex: 0 0 auto; margin-left: 1px; color: var(--text-tertiary); transition: transform 150ms ease; }
 .custom-select-trigger[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }

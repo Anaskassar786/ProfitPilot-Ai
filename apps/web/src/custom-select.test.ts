@@ -96,7 +96,8 @@ describe('page wiring', () => {
     expect(source).not.toContain('<select')
     expect(source).not.toContain('<option')
     expect(source.match(/<CustomSelect/g) ?? []).toHaveLength(4)
-    for (const label of ['All categories', 'All vendors', 'All locations', "label: 'Name'", 'triggerLabel="Sort"']) expect(source).toContain(label)
+    for (const label of ['All categories', 'All vendors', 'All locations', "label: 'Name'", "label=\"Sort\""]) expect(source).toContain(label)
+    expect(source).not.toContain('triggerLabel="Sort"')
   })
 
   it('keeps the Products page on the same shared component', async () => {

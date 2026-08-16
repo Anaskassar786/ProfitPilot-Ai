@@ -1,0 +1,247 @@
+import { createElement, Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { JSDOM } from 'jsdom'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { analyticsKpis } from './analytics-model.js'
+import type { AnalyticsSnapshot } from './model.js'
+
+class RO {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+const emptySnapshot: AnalyticsSnapshot = {
+  revenue: [],
+  orders: [],
+  productSales: [],
+  customerCohorts: [],
+}
+
+const twoOrderSnapshot: AnalyticsSnapshot = {
+  revenue: [
+    { storeId: 's', day: '2026-08-14', grossRevenue: 100, discounts: 0, orderCount: 1 },
+    { storeId: 's', day: '2026-08-16', grossRevenue: 50, discounts: 0, orderCount: 1 },
+  ],
+  orders: [
+    { storeId: 's', day: '2026-08-14', orderCount: 1, fulfilledCount: 1, cancelledCount: 0, averageOrderValue: 100 },
+    { storeId: 's', day: '2026-08-16', orderCount: 1, fulfilledCount: 1, cancelledCount: 0, averageOrderValue: 50 },
+  ],
+  productSales: [],
+  customerCohorts: [],
+}
+
+function insightsFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    plan: 'trial' as const,
+    generatedAt: new Date().toISOString(),
+    salesHistoryDays: 2,
+    forecast: { status: 'insufficient_data' as const, message: 'Awaiting more data — at least 7 sales days are needed.', points: [], standardDeviation: 0 },
+    anomalies: null,
+    categories: [] as readonly { name: string; revenue: number; units: number }[],
+    topProducts: [] as readonly { productId: string; name: string; image: string | null; units: number; revenue: number; share: number; trend: 'up' | 'down' | 'flat' }[],
+    weekdays: [
+      { day: 'Mon', revenue: 0 }, { day: 'Tue', revenue: 0 }, { day: 'Wed', revenue: 0 },
+      { day: 'Thu', revenue: 0 }, { day: 'Fri', revenue: 0 }, { day: 'Sat', revenue: 0 }, { day: 'Sun', revenue: 0 },
+    ],
+    peakHours: null as readonly { hour: number; orders: number }[] | null,
+    totalCustomers: null as number | null,
+    available: [] as readonly string[],
+    locked: [
+      { feature: 'anomaly_detection', requiredPlan: 'start' as const },
+      { feature: 'product_trends', requiredPlan: 'growth' as const },
+      { feature: 'customer_segments', requiredPlan: 'growth' as const },
+      { feature: 'natural_language_insight', requiredPlan: 'growth' as const },
+      { feature: 'period_comparisons', requiredPlan: 'growth' as const },
+      { feature: 'geographic_distribution', requiredPlan: 'growth' as const },
+      { feature: 'predictive_revenue', requiredPlan: 'commander' as const },
+      { feature: 'cohort_analysis', requiredPlan: 'commander' as const },
+      { feature: 'growth_opportunities', requiredPlan: 'commander' as const },
+      { feature: 'custom_ai_queries', requiredPlan: 'commander' as const },
+      { feature: 'executive_report', requiredPlan: 'commander' as const },
+    ],
+    usage: { used: 0, limit: 0, remaining: 0 },
+    cached: false,
+    ...overrides,
+  }
+}
+
+describe('analytics defensive model helpers used by UI', () => {
+  it('KPI sparklines stay safe with 0, 1, and 2 points', () => {
+    expect(analyticsKpis(emptySnapshot, null)[0]?.sparkline).toEqual([])
+    expect(analyticsKpis({
+      ...emptySnapshot,
+      revenue: [{ storeId: 's', day: '2026-08-16', grossRevenue: 10, discounts: 0, orderCount: 1 }],
+      orders: [{ storeId: 's', day: '2026-08-16', orderCount: 1, fulfilledCount: 1, cancelledCount: 0, averageOrderValue: 10 }],
+    }, null)[0]?.sparkline).toHaveLength(1)
+    expect(analyticsKpis(twoOrderSnapshot, null)[0]?.sparkline).toHaveLength(2)
+  })
+})
+
+describe('analytics page low-data rendering', () => {
+  afterEach(() => {
+    vi.resetModules()
+    vi.restoreAllMocks()
+  })
+
+  async function mount(snapshot: AnalyticsSnapshot | null, insights: ReturnType<typeof insightsFixture> | null) {
+    const dom = new JSDOM('<!doctype html><html lang="en"><body><div id="root"></div></body></html>', {
+      pretendToBeVisual: true,
+      url: 'http://localhost/',
+    })
+    for (const [key, value] of [
+      ['window', dom.window],
+      ['document', dom.window.document],
+      ['navigator', dom.window.navigator],
+      ['HTMLElement', dom.window.HTMLElement],
+      ['SVGElement', (dom.window as unknown as { SVGElement: unknown }).SVGElement],
+      ['Node', dom.window.Node],
+      ['Element', dom.window.Element],
+      ['ResizeObserver', RO],
+    ] as const) {
+      Object.defineProperty(globalThis, key, { configurable: true, value })
+    }
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    Object.defineProperty(dom.window, 'matchMedia', {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() { return false },
+      }),
+    })
+
+    vi.doMock('./api.js', async () => {
+      const actual = await vi.importActual<Record<string, unknown>>('./api.js')
+      return {
+        ...actual,
+        fetchAnalyticsInsights: async () => {
+          if (!insights) throw new Error('insights unavailable')
+          return insights
+        },
+      }
+    })
+
+    const { createRoot } = await import('react-dom/client')
+    const { act } = await import('react')
+    const { AnalyticsPage } = await import('./analytics.js')
+
+    class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+      state = { error: null as Error | null }
+      static getDerivedStateFromError(error: Error) { return { error } }
+      componentDidCatch(error: Error, info: ErrorInfo) {
+        console.error('PAGE_CRASH', error.message, info.componentStack)
+      }
+      render() {
+        return this.state.error
+          ? createElement('div', { 'data-page-error': this.state.error.message })
+          : this.props.children
+      }
+    }
+
+    const container = dom.window.document.getElementById('root')
+    if (!container) throw new Error('missing root')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(Boundary, null, createElement(AnalyticsPage as never, {
+        context: { storeId: 's', shop: 'test.myshopify.com' },
+        snapshot,
+        onSync: async () => {},
+        onNavigateBilling: () => {},
+      })))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 80)) })
+    return { dom, container }
+  }
+
+  it('renders without black-screen crash for 0 orders', async () => {
+    const { dom, container } = await mount(emptySnapshot, insightsFixture({ salesHistoryDays: 0 }))
+    expect(container.querySelector('[data-page-error]')).toBeNull()
+    expect(container.querySelector('.analytics-page')).not.toBeNull()
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
+    expect(container.textContent).toContain('Sync orders to see your revenue trend.')
+    expect(container.textContent).not.toContain('NaN')
+    dom.window.close()
+  })
+
+  it('renders a 2-order test store with KPI cards and empty states', async () => {
+    const { dom, container } = await mount(twoOrderSnapshot, insightsFixture({
+      salesHistoryDays: 2,
+      weekdays: [
+        { day: 'Mon', revenue: 0 }, { day: 'Tue', revenue: 100 }, { day: 'Wed', revenue: 0 },
+        { day: 'Thu', revenue: 0 }, { day: 'Fri', revenue: 50 }, { day: 'Sat', revenue: 0 }, { day: 'Sun', revenue: 0 },
+      ],
+      topProducts: [{ productId: 'p1', name: 'Tee', image: null, units: 1, revenue: 50, share: 100, trend: 'flat' }],
+    }))
+    expect(container.querySelector('[data-page-error]')).toBeNull()
+    expect(container.querySelector('.analytics-page')).not.toBeNull()
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
+    expect(container.textContent).toContain('Total Revenue')
+    expect(container.textContent).toContain('Top Products by Revenue')
+    expect(container.textContent).toContain('Tee')
+    expect(container.textContent).toContain('Awaiting order-level timestamps.')
+    expect(container.textContent).toContain('Anomaly Detection')
+    expect(container.textContent).not.toContain('NaN%')
+    expect(container.textContent).not.toContain('NaN')
+    dom.window.close()
+  })
+
+  it('shows a focused card for a single category instead of a broken pie', async () => {
+    const { dom, container } = await mount(twoOrderSnapshot, insightsFixture({
+      categories: [{ name: 'Apparel', revenue: 150, units: 2 }],
+    }))
+    expect(container.querySelector('[data-page-error]')).toBeNull()
+    expect(container.textContent).toContain('Only 1 category')
+    expect(container.textContent).toContain('Apparel')
+    expect(container.textContent).toContain('100% of revenue')
+    dom.window.close()
+  })
+
+  it('keeps the page alive when insights fetch fails', async () => {
+    const { dom, container } = await mount(twoOrderSnapshot, null)
+    expect(container.querySelector('[data-page-error]')).toBeNull()
+    expect(container.querySelector('.analytics-page')).not.toBeNull()
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
+    dom.window.close()
+  })
+
+  it('ships section error boundaries in the analytics module', async () => {
+    const source = await (await import('node:fs/promises')).readFile(new URL('./analytics.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('AnalyticsSectionBoundary')
+    expect(source).toContain('getDerivedStateFromError')
+    expect(source).toContain('componentDidCatch')
+    expect(source).toContain('data.length >= 2')
+    expect(source).toContain('Only 1 category')
+    expect(source).toContain('Awaiting order-level timestamps.')
+  })
+})
+
+describe('analytics sort-dropdown regression contract', () => {
+  it('restores selected sort labels on list pages (no compact triggerLabel)', async () => {
+    const fs = await import('node:fs/promises')
+    for (const file of ['inventory.tsx', 'products.tsx', 'orders.tsx', 'customers.tsx'] as const) {
+      const source = await fs.readFile(new URL(`./${file}`, import.meta.url), 'utf8')
+      expect(source).not.toContain('triggerLabel="Sort"')
+      expect(source).toContain('label="Sort"')
+    }
+  })
+})
+
+describe('analytics static empty markup smoke', () => {
+  it('renders empty KPI change copy without NaN via model formatting contract', () => {
+    const kpis = analyticsKpis(emptySnapshot, null)
+    const html = kpis.map((kpi) => {
+      const change = kpi.change
+      const changeText = change === null || !Number.isFinite(change)
+        ? 'Comparison awaits prior-period data'
+        : `${Math.abs(change).toFixed(1)}%`
+      return `<div>${kpi.label}:${kpi.value === null ? '—' : kpi.value}:${changeText}</div>`
+    }).join('')
+    expect(html).not.toContain('NaN')
+    expect(renderToStaticMarkup(createElement('div', { dangerouslySetInnerHTML: { __html: html } }))).toContain('—')
+  })
+})

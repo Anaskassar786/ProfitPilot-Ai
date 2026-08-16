@@ -300,7 +300,7 @@ function OrderFilterPanel({ value, onChange, onApply, onClear }: { value: Filter
 function FilterField({ label, children }: { label: string; children: ReactNode }) { return <label className="orders-filter-field"><span>{label}</span>{children}</label> }
 
 function SortControl({ sort, direction, onSort, onDirection }: { sort: 'date' | 'price' | 'status'; direction: 'asc' | 'desc'; onSort: (value: 'date' | 'price' | 'status') => void; onDirection: () => void }) {
-  return <div className="orders-sort-control"><CustomSelect ariaLabel="Sort orders" value={sort} onChange={onSort} triggerLabel="Sort" options={[{ value: 'date', label: 'Date' }, { value: 'price', label: 'Price' }, { value: 'status', label: 'Status' }]} /><button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button></div>
+  return <div className="orders-sort-control"><CustomSelect ariaLabel="Sort orders" value={sort} onChange={onSort} label="Sort" options={[{ value: 'date', label: 'Date' }, { value: 'price', label: 'Price' }, { value: 'status', label: 'Status' }]} /><button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button></div>
 }
 
 function OrdersTable({ orders, onSelect }: { orders: readonly OrderView[]; onSelect: (id: string) => void }) {
