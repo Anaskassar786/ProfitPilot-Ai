@@ -84,7 +84,7 @@ describe('plan-enforced customer intelligence', () => {
     const result = await fixture(plan).insights.get(TENANT)
     expect(result.available).toHaveLength(available)
     expect(result.locked).toHaveLength(locked)
-    expect(result.locked.every((item) => Object.keys(item).sort().join(',') === 'feature,locked,required_plan')).toBe(true)
+    expect(result.locked.every((item) => Object.keys(item).sort().join(',') === 'feature,locked,name,required_plan')).toBe(true)
   })
 
   it('enforces Growth twenty-per-day generation usage', async () => {
@@ -96,6 +96,22 @@ describe('plan-enforced customer intelligence', () => {
     expect(result.available[0]?.data).toMatchObject({ status: 'limit_reached' })
     expect(result.usage).toMatchObject({ used: 20, limit: 20, remaining: 0, limitReached: true })
     expect(providerCalls).toBe(0)
+  })
+
+  it('returns locked features with display names for Trial plan', async () => {
+    const result = await fixture('trial').insights.get(TENANT)
+    expect(result.available).toHaveLength(0)
+    expect(result.locked.length).toBeGreaterThanOrEqual(6)
+    for (const item of result.locked) {
+      expect(item.locked).toBe(true)
+      expect(typeof item.name).toBe('string')
+      expect(item.name.length).toBeGreaterThan(0)
+      expect(['growth', 'commander']).toContain(item.required_plan)
+    }
+    const growthLocked = result.locked.filter((item) => item.required_plan === 'growth')
+    const commanderLocked = result.locked.filter((item) => item.required_plan === 'commander')
+    expect(growthLocked.length).toBeGreaterThanOrEqual(3)
+    expect(commanderLocked.length).toBeGreaterThanOrEqual(2)
   })
 
   it('rechecks the plan before serving a five-minute cached insight', async () => {

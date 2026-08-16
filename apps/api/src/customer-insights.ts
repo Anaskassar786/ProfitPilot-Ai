@@ -64,7 +64,7 @@ export type CustomersPageResult = Readonly<{
   pagination: Readonly<{ page: number; limit: number; total: number; pages: number }>
 }>
 
-export type LockedCustomerInsight = Readonly<{ locked: true; feature: CustomerInsightFeature; required_plan: 'growth' | 'commander' }>
+export type LockedCustomerInsight = Readonly<{ locked: true; feature: CustomerInsightFeature; name: string; required_plan: 'growth' | 'commander' }>
 export type AvailableCustomerInsight = Readonly<{ feature: CustomerInsightFeature; name: string; data: unknown }>
 export type CustomerInsightsResult = Readonly<{
   plan: PlanTier
@@ -200,7 +200,7 @@ export class CustomerInsightsService {
     const selected = requestedFeature ? INSIGHTS.filter((definition) => definition.feature === requestedFeature) : INSIGHTS.filter((definition) => definition.feature !== 'custom_ai_queries')
     const availableDefinitions = selected.filter((definition) => planAtLeast(plan, definition.minimumPlan))
     const lockedDefinitions = selected.filter((definition) => !planAtLeast(plan, definition.minimumPlan))
-    const locked = lockedDefinitions.map((definition): LockedCustomerInsight => ({ locked: true, feature: definition.feature, required_plan: requiredPlan(definition.minimumPlan) }))
+    const locked = lockedDefinitions.map((definition): LockedCustomerInsight => ({ locked: true, feature: definition.feature, name: definition.name, required_plan: requiredPlan(definition.minimumPlan) }))
     for (const item of locked) await this.audit.locked(storeId, item.feature, plan, item.required_plan)
     if (requestedFeature && locked[0]) throw new CustomerFeatureLockedError(locked[0].feature, locked[0].required_plan)
 

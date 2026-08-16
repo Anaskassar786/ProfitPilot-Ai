@@ -88,7 +88,7 @@ export type CustomerInsightsResult = Readonly<{
   planLabel: string
   customerCount: number
   available: readonly Readonly<{ feature: CustomerInsightFeature; name: string; data: unknown }>[]
-  locked: readonly Readonly<{ locked: true; feature: CustomerInsightFeature; required_plan: 'growth' | 'commander' }>[]
+  locked: readonly Readonly<{ locked: true; feature: CustomerInsightFeature; name: string; required_plan: 'growth' | 'commander' }>[]
   usage: Readonly<{ feature: 'customers_ai_insights_day'; used: number; limit: number | null; remaining: number | null; limitReached: boolean }>
   coverage: CustomerCoverage
   cached: boolean
