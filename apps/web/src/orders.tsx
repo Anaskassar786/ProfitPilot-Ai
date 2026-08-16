@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   Bar,
   BarChart,
@@ -34,6 +34,7 @@ import {
   ShoppingBag,
   Sparkles,
   TrendingUp,
+  HeartPulse,
   UserRound,
   Users,
   X,
@@ -192,7 +193,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <TopProductInsight insight={available('top_selling_product')} />
           <RateInsight feature="cancellation_rate" title="Cancellation Rate" icon={<AlertTriangle size={16} />} insight={available('cancellation_rate')} />
           <RateInsight feature="fulfillment_rate" title="Fulfillment Rate" icon={<CheckCircle2 size={16} />} insight={available('fulfillment_rate')} />
-          <OrderTrendInsight insight={available('order_trends')} />
+          <OrderHealthInsight insight={available('order_health_score')} />
         </div>
         <div className="orders-premium-insights">
           <InsightSlot feature="peak_times" title="Peak Order Times" icon={<Clock3 size={16} />} available={available('peak_times')} locked={locked('peak_times')} onUpgrade={onNavigateBilling}><PeakTimeContent insight={available('peak_times')} /></InsightSlot>
@@ -231,9 +232,36 @@ function RateInsight({ title, icon, insight }: { feature: string; title: string;
   const data = record(insight?.data); const rate = numberOrNull(data.rate)
   return <article className="orders-basic-card"><div className="orders-insight-label">{icon}<span>{title}</span></div><strong>{rate === null ? '—' : `${rate}%`}</strong><p>{number(data.canceled ?? data.fulfilled)} of {number(data.total)} orders</p></article>
 }
-function OrderTrendInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
-  const points = array(record(insight?.data).points).flatMap((point) => { const value = record(point); const day = text(value.day); const orders = numberOrNull(value.orders); return day && orders !== null ? [{ day: day.slice(5), orders }] : [] })
-  return <article className="orders-basic-card order-trend-card"><div className="orders-insight-label"><TrendingUp size={16} /><span>Order Trends</span></div>{points.length ? <div className="orders-mini-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={points} margin={{ top: 4, right: 2, bottom: 0, left: -27 }}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false} /><XAxis dataKey="day" tick={{ fill: '#718096', fontSize: 7 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#718096', fontSize: 7 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(148,163,184,.18)', borderRadius: 8, fontSize: 9 }} /><Bar dataKey="orders" fill="#3B82F6" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div> : <InsightUnavailable />}</article>
+function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+  const data = record(insight?.data)
+  const insufficient = data.status === 'insufficient_data'
+  const score = numberOrNull(data.score)
+  const grade = text(data.grade) ?? '—'
+  const fulfilledRate = numberOrNull(data.fulfilledRate)
+  const cancelledRate = numberOrNull(data.cancelledRate)
+  const paidRate = numberOrNull(data.paidRate)
+  const tone = text(data.tone) === 'healthy' ? 'healthy' : text(data.tone) === 'warning' ? 'warning' : 'critical'
+  const sweep = score === null || insufficient ? 0 : Math.max(8, Math.round(score * 2.4))
+
+  return <article className="orders-basic-card order-health-card">
+    <div className="orders-insight-label"><HeartPulse size={16} /><span>Order Health</span></div>
+    <div className="order-health-gauge-wrap">
+      <div
+        className={`health-gauge compact ${insufficient ? 'no-data' : tone}`}
+        style={!insufficient && score !== null ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties : undefined}
+      >
+        <div className="gauge-inner">
+          <strong>{insufficient ? '—' : score}</strong>
+          <span>{insufficient ? 'Insufficient data' : `${grade} · ${tone === 'healthy' ? 'Excellent' : tone === 'warning' ? 'Good' : 'Needs attention'}`}</span>
+        </div>
+      </div>
+    </div>
+    <div className="order-health-stats">
+      <div><span>✅ Fulfilled</span><strong>{fulfilledRate === null ? '—' : `${fulfilledRate}%`}</strong></div>
+      <div><span>⏳ Cancelled</span><strong>{cancelledRate === null ? '—' : `${cancelledRate}%`}</strong></div>
+      <div><span>💰 Paid</span><strong>{paidRate === null ? '—' : `${paidRate}%`}</strong></div>
+    </div>
+  </article>
 }
 function PeakTimeContent({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'available' ? <><strong>{text(data.day)} · {text(data.hourLabel)}</strong><p>{number(data.ordersAtPeakHour)} orders at the peak hour</p></> : <InsightUnavailable message={text(data.message)} /> }
 function RepeatContent({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'available' ? <><strong>{number(data.repeatCustomers)} repeat</strong><p>{number(data.newCustomers)} new · {number(data.guestOrders)} guest orders</p></> : <InsightUnavailable message={text(data.message)} /> }

@@ -13,7 +13,7 @@ export type OrderInsightFeature =
   | 'top_selling_product'
   | 'cancellation_rate'
   | 'fulfillment_rate'
-  | 'order_trends'
+  | 'order_health_score'
   | 'peak_times'
   | 'repeat_customers'
   | 'ai_suggestion'
@@ -235,7 +235,7 @@ const INSIGHTS: readonly Readonly<{ feature: OrderInsightFeature; name: string; 
   { feature: 'top_selling_product', name: 'Top Selling Product', minimumPlan: 'trial' },
   { feature: 'cancellation_rate', name: 'Cancellation Rate', minimumPlan: 'trial' },
   { feature: 'fulfillment_rate', name: 'Fulfillment Rate', minimumPlan: 'trial' },
-  { feature: 'order_trends', name: 'Order Trends', minimumPlan: 'trial' },
+  { feature: 'order_health_score', name: 'Order Health', minimumPlan: 'trial' },
   { feature: 'peak_times', name: 'Peak Order Times', minimumPlan: 'growth' },
   { feature: 'repeat_customers', name: 'Repeat Customers', minimumPlan: 'growth' },
   { feature: 'ai_suggestion', name: 'AI Suggestion', minimumPlan: 'growth' },
@@ -292,7 +292,7 @@ export class OrderInsightsService {
       if (definition.feature === 'top_selling_product') data = topSellingProduct(orderRows)
       else if (definition.feature === 'cancellation_rate') data = cancellationRate(orderRows)
       else if (definition.feature === 'fulfillment_rate') data = fulfillmentRate(orderRows)
-      else if (definition.feature === 'order_trends') data = orderTrends(orderRows)
+      else if (definition.feature === 'order_health_score') data = orderHealthScore(orderRows)
       else if (definition.feature === 'peak_times') data = context.sufficientData ? peakTimes(orderRows) : insufficientData()
       else if (definition.feature === 'repeat_customers') data = context.sufficientData ? repeatCustomers(orderRows) : insufficientData()
       else if (definition.feature === 'trend_comparisons') data = context.sufficientData ? trendComparison(orderRows, this.now()) : insufficientData()
@@ -490,13 +490,28 @@ function fulfillmentRate(orders: readonly OrderView[]): unknown {
   return { status: orders.length ? 'available' : 'unavailable', fulfilled, total: orders.length, rate: percentage(fulfilled, orders.length), basis: 'Shopify fulfillment status' }
 }
 
-function orderTrends(orders: readonly OrderView[]): unknown {
-  const days = new Map<string, number>()
-  for (const order of orders) {
-    const day = order.createdAt?.slice(0, 10)
-    if (day) days.set(day, (days.get(day) ?? 0) + 1)
+function orderHealthScore(orders: readonly OrderView[]): unknown {
+  if (orders.length < 2) return { status: 'insufficient_data', message: 'At least 2 real orders are needed for an accurate health score.' }
+  const total = orders.length
+  const canceled = orders.filter((order) => order.status === 'canceled').length
+  const fulfilled = orders.filter((order) => order.status === 'completed').length
+  const paid = orders.filter((order) => order.paymentStatus === 'paid').length
+  const cancellationRate = total > 0 ? canceled / total : 0
+  const unfulfilledRate = total > 0 ? (total - fulfilled) / total : 0
+  const unpaidRate = total > 0 ? (total - paid) / total : 0
+  const score = Math.max(0, Math.min(100, Math.round(100 - 30 * cancellationRate - 20 * unfulfilledRate - 10 * unpaidRate)))
+  const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 50 ? 'C' : 'D'
+  const tone = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical'
+  return {
+    status: 'available',
+    score,
+    grade,
+    tone,
+    fulfilledRate: Math.round((fulfilled / total) * 100),
+    cancelledRate: Math.round(cancellationRate * 100),
+    paidRate: Math.round((paid / total) * 100),
+    basis: 'Real Shopify orders',
   }
-  return { status: days.size ? 'available' : 'unavailable', points: [...days.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([day, orders]) => ({ day, orders })) }
 }
 
 function peakTimes(orders: readonly OrderView[]): unknown {

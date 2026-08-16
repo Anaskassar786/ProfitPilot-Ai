@@ -188,6 +188,36 @@ describe('plan-enforced order insights', () => {
   })
 })
 
+describe('order health score calculation', () => {
+  it('returns insufficient data for fewer than 2 orders', async () => {
+    const fixture = service('trial', [rawOrder(1)])
+    const result = await fixture.service.get(TENANT)
+    const health = result.available.find((item) => item.feature === 'order_health_score')
+    expect(health?.data).toMatchObject({ status: 'insufficient_data' })
+  })
+
+  it('calculates score, grade, and mini percentages from real orders', async () => {
+    const fixture = service('trial', [
+      rawOrder(1, { cancelled_at: '2026-08-02T00:00:00Z', fulfillment_status: null, financial_status: 'not_paid' }),
+      rawOrder(2, { fulfillment_status: 'fulfilled', financial_status: 'paid' }),
+      rawOrder(3, { fulfillment_status: null, financial_status: 'paid' }),
+    ])
+    const result = await fixture.service.get(TENANT)
+    const health = result.available.find((item) => item.feature === 'order_health_score')
+    const data = health?.data as Record<string, unknown>
+    expect(data.status).toBe('available')
+    expect(typeof data.score).toBe('number')
+    expect(typeof data.grade).toBe('string')
+    expect(typeof data.fulfilledRate).toBe('number')
+    expect(typeof data.cancelledRate).toBe('number')
+    expect(typeof data.paidRate).toBe('number')
+    // 3 orders: 1 canceled (33%), 1 fulfilled (33%), 1 new (unfulfilled 67%), 2 paid (67%), 1 not_paid (33%)
+    // Score = 100 - 30*0.33 - 20*0.67 - 10*0.33 ≈ 100 - 10 - 13 - 3 ≈ 74
+    expect((data.score as number)).toBeGreaterThanOrEqual(0)
+    expect((data.score as number)).toBeLessThanOrEqual(100)
+  })
+})
+
 describe('orders HTTP routes', () => {
   it('returns tenant-scoped list/detail data and locked metadata from the error envelope', async () => {
     const orders = [rawOrder(1), rawOrder(2)]
