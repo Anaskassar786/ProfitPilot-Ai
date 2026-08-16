@@ -4,6 +4,7 @@ import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from 
 import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderView } from './orders-model.js'
 import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, CustomerQuery, CustomersPageResult } from './customers-model.js'
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
+import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -154,6 +155,25 @@ export function fetchInventoryItem(storeId: string, variantId: string, fetcher: 
 
 export function fetchInventoryLocations(storeId: string, fetcher: Fetcher = fetch): Promise<InventoryLocationsResult> {
   return requestJson<InventoryLocationsResult>(`/inventory/locations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchInventoryInsights(storeId: string, feature?: InventoryInsightFeature, fetcher: Fetcher = fetch): Promise<InventoryInsightsResult> {
+  const parameters = new URLSearchParams({ storeId })
+  if (feature) parameters.set('feature', feature)
+  return requestJson<InventoryInsightsResult>(`/inventory/insights?${parameters.toString()}`, {}, fetcher)
+}
+
+export function queryInventoryInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<InventoryInsightsResult> {
+  return requestJson<InventoryInsightsResult>('/inventory/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher)
+}
+
+export function fetchInventoryHistory(storeId: string, days: number, fetcher: Fetcher = fetch): Promise<InventoryHistoryResult> {
+  return requestJson<InventoryHistoryResult>(`/inventory/history?storeId=${encodeURIComponent(storeId)}&days=${encodeURIComponent(String(days))}`, {}, fetcher)
+}
+
+/** Records a manual reorder decision. ProfitPilot never places the order itself. */
+export function submitReorderDecision(storeId: string, productId: string, decision: 'approved' | 'dismissed', fetcher: Fetcher = fetch): Promise<Readonly<{ productId: string; decision: string; recordedAt: string; execution: string }>> {
+  return requestJson('/inventory/reorder-decision', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, productId, decision }) }, fetcher)
 }
 
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {

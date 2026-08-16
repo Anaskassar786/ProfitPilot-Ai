@@ -222,23 +222,30 @@ kbd { padding: 2px 5px; color: var(--text-tertiary); border: 1px solid var(--bor
 .products-toolbar-title h2 { margin: 6px 0 3px; color: var(--text); font-size: 16px; letter-spacing: -.055em; }
 .products-toolbar-title > span { color: var(--text-tertiary); font-size: 8px; }
 .products-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 1; min-width: 0; }
-.products-search, .products-select { min-height: 36px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 10px; background: rgba(8,13,24,.52); color: var(--text-tertiary); }
+.products-search, .custom-select { min-height: 36px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 10px; background: rgba(8,13,24,.52); color: var(--text-tertiary); }
 .products-search { width: min(340px,100%); padding: 0 11px; }
 .products-search input { width: 100%; min-width: 0; color: var(--text); background: transparent; font-size: 9px; }
 .products-search input::placeholder { color: var(--text-tertiary); }
-.products-select { position: relative; padding: 0; }
-.products-select-trigger { width: 100%; min-height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--text-tertiary); border-radius: 10px; background: transparent; font-size: 9px; text-align: left; transition: background 150ms ease, color 150ms ease; }
-.products-select-trigger:hover, .products-select-trigger[aria-expanded="true"] { color: var(--text); background: rgba(59,130,246,.1); }
-.products-select-trigger span { color: var(--text-tertiary); font-size: 8px; white-space: nowrap; }
-.products-select-trigger strong { min-width: 84px; color: var(--text); font-size: 9px; font-weight: 600; white-space: nowrap; }
-.products-select-trigger > svg:first-child { flex: 0 0 auto; color: var(--text-tertiary); }
-.products-select-trigger > svg:last-child { margin-left: 1px; color: var(--text-tertiary); transition: transform 150ms ease; }
-.products-select-trigger[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
-.products-select-menu { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; min-width: 168px; margin: 0; padding: 5px; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--card); box-shadow: var(--shadow-lg); }
-.products-select-menu li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 9px; color: var(--text-secondary); border-radius: 7px; font-size: 9px; cursor: pointer; }
-.products-select-menu li:hover, .products-select-menu li.highlighted { color: var(--text); background: rgba(59,130,246,.12); }
-.products-select-menu li[aria-selected="true"] { color: var(--blue-bright); }
-.products-select-menu li[aria-selected="true"]::after { content: "✓"; font-size: 8px; color: var(--blue-bright); }
+
+/* ── Shared dark listbox (Products + Inventory) ─────────────────── */
+/* A native <select> paints its popup with the OS palette, which renders a
+   white sheet on this dark theme. Every filter/sort control uses this custom
+   listbox instead so the popup inherits --card and the accent hover. */
+.custom-select { position: relative; padding: 0; }
+.custom-select-trigger { width: 100%; min-height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--text-tertiary); border-radius: 10px; background: transparent; font-size: 9px; text-align: left; transition: background 150ms ease, color 150ms ease; }
+.custom-select-trigger:hover, .custom-select-trigger[aria-expanded="true"] { color: var(--text); background: rgba(59,130,246,.1); }
+.custom-select-trigger:focus-visible { outline: 2px solid var(--blue-bright); outline-offset: 1px; }
+.custom-select-trigger > span { color: var(--text-tertiary); font-size: 8px; white-space: nowrap; }
+.custom-select-trigger > strong { flex: 1; min-width: 84px; overflow: hidden; color: var(--text); font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-trigger > svg:first-child { flex: 0 0 auto; color: var(--text-tertiary); }
+.custom-select-trigger > svg:last-child { flex: 0 0 auto; margin-left: 1px; color: var(--text-tertiary); transition: transform 150ms ease; }
+.custom-select-trigger[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.custom-select-menu { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; min-width: 168px; max-height: 280px; overflow-y: auto; margin: 0; padding: 5px; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--card); box-shadow: var(--shadow-lg); }
+.custom-select-menu li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 9px; color: var(--text-secondary); border-radius: 7px; font-size: 9px; cursor: pointer; }
+.custom-select-menu li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-menu li:hover, .custom-select-menu li.highlighted { color: var(--text); background: rgba(59,130,246,.12); }
+.custom-select-menu li[aria-selected="true"] { color: var(--blue-bright); }
+.custom-select-menu li[aria-selected="true"] svg { flex: 0 0 auto; color: var(--blue-bright); }
 .product-list { display: flex; flex-direction: column; }
 .product-row { display: grid; grid-template-columns: minmax(260px,1.15fr) minmax(460px,1.5fr); gap: 16px; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); transition: background .18s ease, border-color .18s ease; }
 .product-row:last-child { border-bottom: 0; }
@@ -299,7 +306,7 @@ kbd { padding: 2px 5px; color: var(--text-tertiary); border: 1px solid var(--bor
   .products-toolbar { align-items: flex-start; flex-direction: column; }
   .products-controls { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
   .products-search { width: 100%; }
-  .products-select { flex: 1; min-width: 150px; }
+  .products-controls .custom-select { flex: 1; min-width: 150px; }
   .product-row-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 

@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { BasicInsightsCard, InventoryEmptyState, InventoryHealthCard, InventoryStatsGrid, InventoryTable, PremiumPreviewGrid, StockDistributionChart, StockLevelBadge } from './inventory.js'
-import { EMPTY_INVENTORY_PAGE, distributionSegments, formatMoney, formatUnits, locationBreakdown, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
-import type { InventoryItem, InventoryPageResult } from './inventory-model.js'
+import { BasicInsightsCard, DaysOfCoverCell, InventoryEmptyState, InventoryHealthCard, InventoryStatsGrid, InventoryTable, StockDistributionChart, StockLevelBadge, inventorySortOptions } from './inventory.js'
+import { EMPTY_INVENTORY_PAGE, distributionSegments, daysOfCoverLabel, formatMoney, formatUnits, locationBreakdown, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
+import type { InventoryPageResult, InventoryRowItem } from './inventory-model.js'
 
-function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
+function item(overrides: Partial<InventoryRowItem> = {}): InventoryRowItem {
   return {
     variantId: '9001',
     productId: '7001',
@@ -29,6 +29,7 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
     locations: [{ locationId: '61', locationName: 'Morādābād Warehouse', available: 20, updatedAt: '2026-08-15T09:00:00Z' }, { locationId: '62', locationName: 'Delhi Retail', available: 4, updatedAt: null }],
     updatedAt: '2026-08-15T09:00:00Z',
     syncedAt: '2026-08-16T06:00:00Z',
+    daysOfCover: { status: 'locked', required_plan: 'growth' },
     ...overrides,
   }
 }
@@ -122,21 +123,54 @@ describe('Inventory insights and gating', () => {
     expect(html).toContain('Needs Attention')
   })
 
-  it('renders locked premium previews from backend metadata with upgrade CTAs', () => {
-    const html = renderToStaticMarkup(createElement(PremiumPreviewGrid, { data: page(), onUpgrade: vi.fn() }))
-    expect(html).toContain('Dead Stock Detector')
+  it('keeps the free Days of Cover slot locked for a Trial plan with an upgrade CTA', () => {
+    const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page({ lockedFeatures: [{ locked: true, feature: 'days_of_cover', name: 'Days of Cover', required_plan: 'growth' }] }), onUpgrade: vi.fn() }))
     expect(html).toContain('Upgrade to Growth to unlock')
-    expect(html).toContain('Auto-Reorder Suggestions')
-    expect(html).toContain('Upgrade to Commander to unlock')
     expect(html).toContain('plan-locked-blur')
   })
 
-  it('renders nothing when a Commander plan has no locked features left', () => {
-    expect(renderToStaticMarkup(createElement(PremiumPreviewGrid, { data: page({ plan: 'commander', lockedFeatures: [] }), onUpgrade: vi.fn() }))).toBe('')
+  it('points an unlocked plan at the real Days of Cover column instead of a duplicate number', () => {
+    const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page({ plan: 'growth', lockedFeatures: [] }), onUpgrade: vi.fn() }))
+    expect(html).toContain('Days of Cover')
+    expect(html).toContain('Shown per item in the Days of Cover column below.')
+    expect(html).not.toContain('plan-locked-blur')
+  })
+})
+
+describe('Days of Cover column', () => {
+  it('is hidden entirely for plans that cannot compute it', () => {
+    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item()], multiLocation: false, onSelect: vi.fn() }))
+    expect(html).not.toContain('Days of Cover')
   })
 
-  it('does not surface Bundle Recommendations, which is out of scope', () => {
-    expect(renderToStaticMarkup(createElement(PremiumPreviewGrid, { data: page(), onUpgrade: vi.fn() }))).not.toContain('Bundle')
+  it('renders the real cover and velocity for a Growth plan', () => {
+    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item({ daysOfCover: { status: 'available', days: 12.5, velocity: 1.92 } })], multiLocation: false, showDaysOfCover: true, onSelect: vi.fn() }))
+    expect(html).toContain('Days of Cover')
+    expect(html).toContain('12.5 days')
+    expect(html).toContain('1.92 units/day')
+  })
+
+  it('says insufficient data rather than showing a fabricated cover', () => {
+    const html = renderToStaticMarkup(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'sales_history', message: 'Awaiting 28 more days of sales history.' } }))
+    expect(html).toContain('Insufficient data')
+    expect(html).toContain('Awaiting sales history')
+    expect(html).not.toMatch(/\d+ days<\/strong>/)
+  })
+
+  it('explains that Shopify reports sales per product for multi-variant rows', () => {
+    const html = renderToStaticMarkup(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'variant_sales_unavailable', message: 'Sales are per product.' } }))
+    expect(html).toContain('Sales are per product')
+  })
+
+  it('offers the cover sort option only when the column is unlocked', () => {
+    expect(inventorySortOptions(false).map((option) => option.value)).not.toContain('days_of_cover')
+    expect(inventorySortOptions(true).map((option) => option.value)).toContain('days_of_cover')
+  })
+
+  it('labels every cover state honestly', () => {
+    expect(daysOfCoverLabel({ status: 'available', days: 41, velocity: 0.5 })).toBe('41 days')
+    expect(daysOfCoverLabel({ status: 'locked', required_plan: 'growth' })).toBe('Growth')
+    expect(daysOfCoverLabel({ status: 'insufficient_data', reason: 'no_sales', message: 'x' })).toBe('Insufficient data')
   })
 })
 
