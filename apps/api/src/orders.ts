@@ -75,6 +75,8 @@ export type OrderView = Readonly<{
   billingAddress: OrderAddress | null
   tags: readonly string[]
   note: string | null
+  /** Shopify order origin used only for aggregate channel analytics. */
+  sourceName?: string | null
 }>
 
 export type OrderFilters = Readonly<{
@@ -409,6 +411,7 @@ export function normalizeOrder(recordId: string, rawValue: unknown, syncedAt: Da
     billingAddress,
     tags: tags(raw.tags),
     note: nullableString(raw.note),
+    sourceName: nullableString(raw.source_name ?? raw.sourceName),
   }
 }
 

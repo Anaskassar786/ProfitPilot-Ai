@@ -41,7 +41,10 @@ describe('analytics model', () => {
     expect(kpis[0]?.value).toBe(400)
     expect(kpis[1]?.value).toBe(4)
     expect(kpis[2]?.value).toBe(100)
-    expect(kpis[3]?.value).toBe(7)
+    expect(kpis).toHaveLength(6)
+    expect(kpis[3]?.label).toBe('Conversion Rate')
+    expect(kpis[3]?.value).toBeNull()
+    expect(kpis[4]?.value).toBe(7)
   })
 
   it('returns empty trend and null KPIs for 0 orders', () => {

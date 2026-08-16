@@ -1,608 +1,132 @@
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
-import { Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, Clock3, LockKeyhole, RefreshCw, Send, Sparkles, Trophy } from 'lucide-react'
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
 import { fetchAnalyticsInsights, queryAnalyticsInsights } from './api.js'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
-import type { AnalyticsInsights, AnalyticsPeriod } from './analytics-model.js'
-import { UpgradePlanButton } from './UpgradePlanButton.js'
+import type { AnalyticsInsights, AnalyticsPeriod, Kpi, TrendPoint } from './analytics-model.js'
+import './analytics.css'
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#22c55e', '#06b6d4', '#f97316']
-const FEATURE_NAMES: Readonly<Record<string, string>> = {
-  anomaly_detection: 'Anomaly Detection',
-  product_trends: 'Product Performance Trends',
-  customer_segments: 'Customer Segment Analysis',
-  natural_language_insight: 'AI Natural Language Insight',
-  period_comparisons: 'Period Comparisons',
-  geographic_distribution: 'Geographic Distribution',
-  predictive_revenue: 'Predictive Revenue (Advanced)',
-  cohort_analysis: 'Cohort Analysis',
-  growth_opportunities: 'Growth Opportunity Detection',
-  custom_ai_queries: 'Custom AI Analytics Queries',
-  executive_report: 'Executive AI Report',
-}
+const COLORS = ['#38bdf8', '#8b5cf6', '#2dd4bf', '#f59e0b', '#ec4899', '#84cc16', '#06b6d4', '#f97316']
+const PLAN_RANK = { trial: 0, start: 1, growth: 2, commander: 3 } as const
 
-export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: {
-  context: WorkspaceContext
-  snapshot: AnalyticsSnapshot | null
-  onSync: (module: string) => Promise<void>
-  onNavigateBilling: () => void
-}) {
+type PageProps = { context: WorkspaceContext; snapshot: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void>; onNavigateBilling: () => void }
+export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: PageProps) {
   const [insights, setInsights] = useState<AnalyticsInsights | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [period, setPeriod] = useState<AnalyticsPeriod>(30)
-  const [open, setOpen] = useState(true)
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('')
-  const [asking, setAsking] = useState(false)
-
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [period, setPeriodValue] = useState<AnalyticsPeriod>(30)
+  const [customRange, setCustomRange] = useState<Readonly<{ from: string; to: string }> | null>(null)
+  const setPeriod = (value: AnalyticsPeriod) => { setCustomRange(null); setPeriodValue(value) }
   const refresh = () => {
-    if (!context.storeId) {
-      setInsights(null)
-      return
-    }
+    if (!context.storeId) { setInsights(null); setLoading(false); return }
     setLoading(true)
-    void fetchAnalyticsInsights(context.storeId)
-      .then((result) => setInsights(normalizeInsights(result)))
-      .catch(() => setInsights(null))
-      .finally(() => setLoading(false))
+    void fetchAnalyticsInsights(context.storeId).then((value) => setInsights(normalizeInsights(value))).catch(() => setInsights(null)).finally(() => setLoading(false))
   }
-
   useEffect(refresh, [context.storeId])
-
-  const trend = useMemo(
-    () => periodTrend(snapshot, period, insights?.forecast ?? null),
-    [snapshot, period, insights],
-  )
-  const kpis = useMemo(
-    () => analyticsKpis(snapshot, insights?.totalCustomers ?? null),
-    [snapshot, insights],
-  )
-  const categories = insights?.categories ?? []
-  const topProducts = insights?.topProducts ?? []
-  const weekdays = insights?.weekdays ?? []
-  const peakHours = Array.isArray(insights?.peakHours) && insights.peakHours.length > 0 ? insights.peakHours : null
-  const totalCategory = categories.reduce((sum, row) => sum + safeNumber(row.revenue), 0)
-  const peakDay = bestDay(weekdays)
-
-  const ask = async () => {
-    if (!context.storeId || !question.trim()) return
-    setAsking(true)
-    try {
-      const result = await queryAnalyticsInsights(context.storeId, question)
-      setAnswer(result.text)
-    } catch {
-      setAnswer('Unable to answer right now. Try again in a moment.')
-    } finally {
-      setAsking(false)
-    }
-  }
-
-  return (
-    <main className="analytics-page">
-      <header className="analytics-page-header">
-        <div>
-          <div className="section-kicker"><span className="kicker-dot blue" /> STORE PERFORMANCE</div>
-          <h1>Analytics</h1>
-          <p>AI-powered insights into your store performance</p>
-        </div>
-        <button className="button primary" onClick={() => void onSync('orders')}>
-          <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh data
-        </button>
-      </header>
-
-      <AnalyticsSectionBoundary label="KPI cards">
-        <section className="analytics-kpis">
-          {kpis.map((kpi) => <KpiCard key={kpi.label} {...kpi} />)}
-        </section>
-      </AnalyticsSectionBoundary>
-
-      <section className="analytics-deep-dive">
-        <AnalyticsSectionBoundary label="Revenue trend">
-          <article className="analytics-card revenue-trend">
-            <header>
-              <div><span>Revenue deep dive</span><h2>Revenue Trend</h2></div>
-              <div className="period-toggle">
-                {([7, 30, 90, 365] as const).map((days) => (
-                  <button className={period === days ? 'active' : ''} onClick={() => setPeriod(days)} key={days}>
-                    {days === 365 ? '1y' : `${days}d`}
-                  </button>
-                ))}
-              </div>
-            </header>
-            {trend.length > 0 ? (
-              <div className="chart-large">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <ComposedChart data={[...trend]} margin={{ top: 12, right: 14, left: -12, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stopColor="#3b82f6" stopOpacity=".4" />
-                        <stop offset="1" stopColor="#3b82f6" stopOpacity=".02" />
-                      </linearGradient>
-                      <linearGradient id="forecastFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stopColor="#8b5cf6" stopOpacity=".22" />
-                        <stop offset="1" stopColor="#8b5cf6" stopOpacity=".01" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(148,163,184,.11)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#718096', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={28} />
-                    <YAxis tickFormatter={compactMoney} tick={{ fill: '#718096', fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<RevenueTooltip />} />
-                    <Bar dataKey="revenue" fill="#3b82f6" opacity={.13} radius={[3, 3, 0, 0]} barSize={12} />
-                    <Area type="monotone" dataKey="revenue" fill="url(#revenueFill)" stroke="none" isAnimationActive={false} />
-                    <Line type="monotone" dataKey="previous" name="Previous period" stroke="#64748b" strokeDasharray="4 5" strokeWidth={1.5} dot={false} connectNulls={false} isAnimationActive={false} />
-                    <Area type="monotone" dataKey="forecast" fill="url(#forecastFill)" stroke="none" connectNulls={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#60a5fa" strokeWidth={2.7} dot={{ r: 2.5, fill: '#bfdbfe', stroke: '#3b82f6', strokeWidth: 2 }} activeDot={{ r: 5 }} connectNulls={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="forecast" name="Basic forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} connectNulls={false} isAnimationActive={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <Empty message="Sync orders to see your revenue trend." />
-            )}
-            <footer>
-              <span><i className="legend-line actual" /> Actual</span>
-              <span><i className="legend-line previous" /> Previous period</span>
-              <span><i className="legend-line forecast" /> Basic forecast</span>
-              {insights?.forecast?.status === 'insufficient_data' && <small>{insights.forecast.message}</small>}
-            </footer>
-          </article>
-        </AnalyticsSectionBoundary>
-
-        <AnalyticsSectionBoundary label="Sales by category">
-          <article className="analytics-card category-card">
-            <header><div><span>Revenue mix</span><h2>Sales by Category</h2></div></header>
-            <CategorySection categories={categories} totalCategory={totalCategory} />
-          </article>
-        </AnalyticsSectionBoundary>
-      </section>
-
-      <AnalyticsSectionBoundary label="AI analytics">
-        <section className={`analytics-card ai-analytics ${open ? '' : 'collapsed'}`}>
-          <header>
-            <div className="ai-title">
-              <span><Sparkles size={18} /></span>
-              <div>
-                <small>SMART SIGNALS</small>
-                <h2>AI Analytics Intelligence</h2>
-                <p>Forecasts and store signals grounded in your synced sales.</p>
-              </div>
-            </div>
-            <div className="ai-actions">
-              {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onNavigateBilling} />}
-              <button onClick={() => setOpen((value) => !value)} aria-label={open ? 'Collapse AI analytics' : 'Expand AI analytics'}>
-                {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-            </div>
-          </header>
-          {open && (
-            <div className="ai-body">
-              <div className="ai-feature-grid">
-                <article className="ai-feature basic">
-                  <span><ArrowUpRight size={16} /></span>
-                  <div>
-                    <small>AVAILABLE ON EVERY PLAN</small>
-                    <h3>AI Sales Forecast</h3>
-                    <p>{insights?.forecast?.message ?? 'Loading forecast…'}</p>
-                    <em>Basic forecast · upgrade for advanced AI</em>
-                  </div>
-                </article>
-                <AnomalyCard insights={insights} />
-                {Object.entries(FEATURE_NAMES)
-                  .filter(([feature]) => feature !== 'anomaly_detection')
-                  .map(([feature, title]) => (
-                    <FeatureCard key={feature} feature={feature} title={title} insights={insights} onUpgrade={onNavigateBilling} />
-                  ))}
-              </div>
-              {insights?.plan === 'commander' && (
-                <div className="analytics-query">
-                  <div>
-                    <Sparkles size={15} />
-                    <span>
-                      <strong>Ask your analytics</strong>
-                      <small>Only aggregate, non-identifying store facts are sent.</small>
-                    </span>
-                  </div>
-                  <div>
-                    <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What changed in my sales?" />
-                    <button onClick={() => void ask()} disabled={!question.trim() || asking}>
-                      {asking ? <RefreshCw className="spin" size={14} /> : <Send size={14} />}
-                    </button>
-                  </div>
-                  {answer && <p>{answer}</p>}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-      </AnalyticsSectionBoundary>
-
-      <AnalyticsSectionBoundary label="Top products">
-        <section className="analytics-card top-products">
-          <header><div><span>Revenue leaders</span><h2>Top Products by Revenue</h2></div></header>
-          {topProducts.length > 0 ? (
-            <div className="top-products-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Product</th>
-                    <th>Units sold</th>
-                    <th>Revenue</th>
-                    <th>% of total</th>
-                    <th>Trend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProducts.map((product, index) => {
-                    const name = product.name?.trim() || product.productId || 'Product'
-                    const share = Number.isFinite(product.share) ? product.share : 0
-                    return (
-                      <tr key={product.productId || `${name}-${index}`}>
-                        <td><b className={index < 3 ? 'top-rank' : ''}>{index + 1}</b></td>
-                        <td>
-                          <div className="product-cell">
-                            {product.image ? <img src={product.image} alt="" /> : <span>{name.slice(0, 1)}</span>}
-                            <strong>{name}</strong>
-                          </div>
-                        </td>
-                        <td>{safeNumber(product.units).toLocaleString()}</td>
-                        <td><strong>{money(safeNumber(product.revenue))}</strong></td>
-                        <td>{share.toFixed(1)}%</td>
-                        <td className={product.trend}>
-                          {product.trend === 'up' ? <ArrowUpRight size={15} /> : product.trend === 'down' ? <ArrowDownRight size={15} /> : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty message="Top products appear after product sales are synced." />
-          )}
-        </section>
-      </AnalyticsSectionBoundary>
-
-      <section className="patterns-grid">
-        <AnalyticsSectionBoundary label="Best performing day">
-          <article className="analytics-card pattern-card">
-            <header>
-              <div><span>Weekly rhythm</span><h2>Best Performing Day</h2></div>
-              {peakDay && peakDay.revenue > 0 && <b><Trophy size={13} />{peakDay.day}</b>}
-            </header>
-            {weekdays.some((row) => safeNumber(row.revenue) > 0) ? (
-              <div className="weekday-chart">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <BarChart data={[...weekdays]}>
-                    <CartesianGrid stroke="rgba(148,163,184,.09)" strokeDasharray="3 6" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fill: '#718096', fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={compactMoney} tick={{ fill: '#718096', fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <Tooltip formatter={(value) => money(safeNumber(value))} />
-                    <Bar dataKey="revenue" radius={[5, 5, 0, 0]} isAnimationActive={false}>
-                      {weekdays.map((row) => (
-                        <Cell key={row.day} fill={row.day === peakDay?.day ? '#60a5fa' : 'rgba(59,130,246,.3)'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <Empty message="Awaiting daily sales history." />
-            )}
-          </article>
-        </AnalyticsSectionBoundary>
-
-        <AnalyticsSectionBoundary label="Peak sales hours">
-          <article className="analytics-card pattern-card">
-            <header>
-              <div><span>Shopping rhythm</span><h2>Peak Sales Hours</h2></div>
-              <Clock3 size={17} />
-            </header>
-            {peakHours ? (
-              <div className="hour-chart">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <BarChart data={[...peakHours]}>
-                    <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}:00`} tick={{ fill: '#718096', fontSize: 8 }} interval={3} axisLine={false} />
-                    <Tooltip labelFormatter={(hour) => `${hour}:00–${Number(hour) + 1}:00`} />
-                    <Bar dataKey="orders" fill="#8b5cf6" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <Empty message="Awaiting order-level timestamps." />
-            )}
-          </article>
-        </AnalyticsSectionBoundary>
-      </section>
-    </main>
-  )
+  const trend = useMemo(() => {
+    const points = periodTrend(snapshot, customRange ? 365 : period, insights?.forecast ?? null)
+    return customRange ? points.filter((point) => point.day >= customRange.from && point.day <= customRange.to) : points
+  }, [snapshot, period, customRange, insights])
+  const kpis = useMemo(() => analyticsKpis(snapshot, insights?.totalCustomers ?? null, insights?.customerStats), [snapshot, insights])
+  const sync = async () => { setSyncing(true); try { await onSync('orders'); refresh() } finally { setSyncing(false) } }
+  return <main className="analytics-page">
+    <AnalyticsHeader period={period} setPeriod={setPeriod} customRange={customRange} onCustomRange={setCustomRange} syncing={syncing} onSync={sync} snapshot={snapshot} />
+    <Boundary label="performance overview"><AnalyticsHero kpis={kpis} loading={loading} /></Boundary>
+    <section className="analytics-split analytics-trends-row">
+      <Boundary label="revenue intelligence"><RevenueTrendChart trend={trend} period={period} setPeriod={setPeriod} /></Boundary>
+      <Boundary label="orders and AOV"><OrdersAOVCorrelation trend={trend} /></Boundary>
+    </section>
+    <section className="analytics-split">
+      <Boundary label="sales channels"><SalesByChannel channels={insights?.channels ?? []} /></Boundary>
+      <Boundary label="category distribution"><CategoryDistribution categories={insights?.categories ?? []} /></Boundary>
+    </section>
+    <Boundary label="AI business intelligence"><AIIntelligence insights={insights} trend={trend} loading={loading} onUpgrade={onNavigateBilling} /></Boundary>
+    <section className="analytics-split">
+      <Boundary label="customer cohorts"><CohortAnalysis insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+      <Boundary label="geographic distribution"><GeographicDistribution insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+    </section>
+    <Boundary label="product performance"><ProductPerformance insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+    <Boundary label="temporal patterns"><TemporalPatterns insights={insights} /></Boundary>
+    <Boundary label="conversion funnel"><ConversionFunnel insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+    <Boundary label="advanced comparisons"><Benchmarks insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+    <Boundary label="custom AI analyst"><CustomAIQuery context={context} insights={insights} onUpgrade={onNavigateBilling} /></Boundary>
+  </main>
 }
 
-function CategorySection({ categories, totalCategory }: {
-  categories: readonly Readonly<{ name: string; revenue: number; units: number }>[]
-  totalCategory: number
-}) {
-  if (categories.length === 0) {
-    return <Empty message="Product categories appear after product sales are synced." />
+function AnalyticsHeader({ period, setPeriod, customRange, onCustomRange, syncing, onSync, snapshot }: { period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void; customRange: Readonly<{ from: string; to: string }> | null; onCustomRange: (range: Readonly<{ from: string; to: string }> | null) => void; syncing: boolean; onSync: () => Promise<void>; snapshot: AnalyticsSnapshot | null }) {
+  const [customOpen, setCustomOpen] = useState(false)
+  const latest = snapshot?.revenue.map((row) => row.day).sort().at(-1) ?? new Date().toISOString().slice(0, 10)
+  const [from, setFrom] = useState(new Date(Date.parse(`${latest}T00:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10))
+  const [to, setTo] = useState(latest)
+  const exportCsv = () => {
+    const rows = snapshot?.revenue ?? []; if (!rows.length) return
+    const csv = ['Date,Revenue,Orders,Discounts', ...rows.map((row) => [row.day, row.grossRevenue, row.orderCount, row.discounts].join(','))].join('\n')
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = 'profitpilot-analytics.csv'; link.click(); URL.revokeObjectURL(link.href)
   }
-
-  if (categories.length === 1) {
-    const only = categories[0]!
-    const name = only.name?.trim() || 'Uncategorized'
-    return (
-      <div className="category-single">
-        <div className="category-single-card" style={{ borderColor: COLORS[0] }}>
-          <small>Only 1 category</small>
-          <strong>{name}</strong>
-          <span>{money(safeNumber(only.revenue))} · 100% of revenue</span>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <div className="donut-wrap">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-          <PieChart>
-            <Pie data={[...categories]} dataKey="revenue" nameKey="name" innerRadius="60%" outerRadius="83%" paddingAngle={3} isAnimationActive={false}>
-              {categories.map((row, index) => (
-                <Cell key={row.name || index} fill={COLORS[index % COLORS.length] ?? '#3b82f6'} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value) => money(safeNumber(value))} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="donut-center">
-          <strong>{money(totalCategory)}</strong>
-          <span>Total revenue</span>
-        </div>
-      </div>
-      <div className="category-legend">
-        {categories.map((row, index) => {
-          const revenue = safeNumber(row.revenue)
-          const percent = totalCategory > 0 && Number.isFinite(revenue / totalCategory)
-            ? `${((revenue / totalCategory) * 100).toFixed(1)}%`
-            : '—'
-          return (
-            <div key={row.name || index}>
-              <i style={{ background: COLORS[index % COLORS.length] ?? '#3b82f6' }} />
-              <span>{row.name?.trim() || 'Uncategorized'}</span>
-              <strong>{percent}</strong>
-              <small>{money(revenue)}</small>
-            </div>
-          )
-        })}
-      </div>
-    </>
-  )
-}
-
-function KpiCard({ label, value, money: isMoney, change, sparkline }: ReturnType<typeof analyticsKpis>[number]) {
-  const points = (sparkline ?? []).filter((amount) => Number.isFinite(amount))
-  const data = points.map((amount, index) => ({ index, amount }))
-  const changeLabel = formatChange(change)
-
-  return (
-    <article className="analytics-kpi">
-      <div>
-        <span>{label}</span>
-        <strong>
-          {value === null || !Number.isFinite(value)
-            ? '—'
-            : isMoney
-              ? money(value)
-              : Math.round(value).toLocaleString()}
-        </strong>
-        {changeLabel === null
-          ? <small>Comparison awaits prior-period data</small>
-          : <small className={changeLabel.positive ? 'positive' : 'negative'}>
-              {changeLabel.positive ? '▲' : '▼'} {changeLabel.text}% vs last 28 days
-            </small>}
-      </div>
-      <div className="sparkline">
-        {data.length >= 2 ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-            <ComposedChart data={data}>
-              <Area type="monotone" dataKey="amount" stroke="#60a5fa" fill="rgba(59,130,246,.12)" strokeWidth={1.8} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : data.length === 1 ? (
-          <span className="sparkline-placeholder" aria-hidden="true" />
-        ) : null}
-      </div>
-    </article>
-  )
-}
-
-function AnomalyCard({ insights }: { insights: AnalyticsInsights | null }) {
-  const locked = insights?.locked?.find((item) => item.feature === 'anomaly_detection')
-  if (locked) {
-    return (
-      <article className="ai-feature locked">
-        <LockKeyhole size={16} />
-        <div>
-          <small>START+</small>
-          <h3>Anomaly Detection</h3>
-          <p>Upgrade to spot unusual revenue spikes and dips.</p>
-        </div>
-      </article>
-    )
-  }
-  const anomalies = insights?.anomalies ?? []
-  const first = anomalies[0]
-  const percent = first && Number.isFinite(first.percentFromAverage) ? Math.abs(first.percentFromAverage).toFixed(0) : null
-  return (
-    <article className="ai-feature">
-      <Sparkles size={16} />
-      <div>
-        <small>DETERMINISTIC SIGNAL</small>
-        <h3>Anomaly Detection</h3>
-        <p>
-          {!insights
-            ? 'Loading…'
-            : (insights.salesHistoryDays ?? 0) < 14
-              ? 'Need 14+ days for anomaly detection.'
-              : first && percent !== null
-                ? `${first.direction === 'spike' ? 'Revenue spike' : 'Revenue dip'} on ${first.day} (${percent}% vs average)`
-                : 'No unusual revenue days detected.'}
-        </p>
-      </div>
-    </article>
-  )
-}
-
-function FeatureCard({ feature, title, insights, onUpgrade }: {
-  feature: string
-  title: string
-  insights: AnalyticsInsights | null
-  onUpgrade: () => void
-}) {
-  const locked = insights?.locked?.find((item) => item.feature === feature)
-  if (locked) {
-    return (
-      <button className="ai-feature locked" onClick={onUpgrade}>
-        <LockKeyhole size={16} />
-        <div>
-          <small>{(locked.requiredPlan ?? 'growth').toUpperCase()}+</small>
-          <h3>{title}</h3>
-          <p>Upgrade to unlock this deeper analysis.</p>
-        </div>
-      </button>
-    )
-  }
-  return (
-    <article className="ai-feature">
-      <Sparkles size={16} />
-      <div>
-        <small>AVAILABLE</small>
-        <h3>{title}</h3>
-        <p>
-          {feature === 'cohort_analysis'
-            ? 'Built from your customer retention history.'
-            : feature === 'custom_ai_queries'
-              ? 'Ask questions using aggregate store facts.'
-              : 'Ready when enough supporting sales history is available.'}
-        </p>
-      </div>
-    </article>
-  )
-}
-
-function RevenueTooltip({ active, payload, label }: {
-  active?: boolean
-  payload?: readonly { name?: string; value?: number | null; color?: string }[]
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-  const rows = payload.filter((item) => item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value)))
-  if (!rows.length) return null
-  return (
-    <div className="analytics-tooltip">
-      <strong>{label}</strong>
-      {rows.map((item) => (
-        <span key={String(item.name)}>
-          <i style={{ background: item.color ?? '#60a5fa' }} />
-          {item.name}: {money(Number(item.value))}
-        </span>
-      ))}
+  return <header className="analytics-page-header">
+    <div className="analytics-heading"><span className="analytics-page-icon"><BarChart3 size={20} /></span><div><div className="analytics-eyebrow">PERFORMANCE COMMAND CENTER</div><h1>Analytics</h1><p>AI-powered business intelligence</p></div></div>
+    <div className="analytics-toolbar">
+      <div className="date-range-control"><div className="period-toggle" aria-label="Date range">{([7, 30, 90, 365] as const).map((days) => <button className={!customRange && period === days ? 'active' : ''} onClick={() => setPeriod(days)} key={days}>{days === 365 ? '1y' : `${days}d`}</button>)}<button className={customRange ? 'active' : ''} onClick={() => setCustomOpen((value) => !value)}>Custom</button></div>{customOpen && <div className="custom-range-popover"><label>From<input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label><label>To<input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} /></label><button onClick={() => { if (from && to && from <= to) { onCustomRange({ from, to }); setCustomOpen(false) } }}>Apply range</button></div>}</div>
+      <button className="analytics-tool-button" onClick={exportCsv} disabled={!snapshot?.revenue.length}><Download size={14} /> Export</button>
+      <button className="analytics-tool-button primary" onClick={() => void onSync()} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Refresh</button>
     </div>
-  )
+  </header>
 }
 
-function Empty({ message }: { message: string }) {
-  return (
-    <div className="analytics-empty">
-      <Sparkles size={20} />
-      <p>{message}</p>
-    </div>
-  )
+export function AnalyticsHero({ kpis, loading }: { kpis: readonly Kpi[]; loading: boolean }) { return <section className="analytics-kpis">{kpis.map((kpi, index) => <KpiCard key={kpi.label} kpi={kpi} index={index} loading={loading} />)}</section> }
+function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: boolean }) {
+  const data = kpi.sparkline.filter(Number.isFinite).map((value, point) => ({ point, value }))
+  const icons = [BarChart3, ShoppingBag, Target, Activity, Users, Zap]; const Icon = icons[index] ?? Activity
+  if (loading) return <article className="analytics-kpi skeleton-card"><div className="skeleton-line short" /><div className="skeleton-line value" /><div className="skeleton-line" /></article>
+  return <article className={`analytics-kpi tone-${index}`}><header><span className="kpi-icon"><Icon size={14} /></span><small>{kpi.label}</small>{kpi.change !== null && <b className={kpi.change >= 0 ? 'positive' : 'negative'}>{kpi.change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(kpi.change).toFixed(1)}%</b>}</header><strong>{formatKpi(kpi)}</strong><p>{kpi.detail}</p><div className="sparkline">{data.length >= 2 ? <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={data}><Area type="monotone" dataKey="value" stroke={COLORS[index % COLORS.length] ?? '#38bdf8'} fill={COLORS[index % COLORS.length] ?? '#38bdf8'} fillOpacity={.1} strokeWidth={2} isAnimationActive={false} /></ComposedChart></ResponsiveContainer> : <div className="sparkline-guide"><i /><i /><i /></div>}</div></article>
 }
 
-/** Isolates a section crash so the rest of Analytics still paints. */
-class AnalyticsSectionBoundary extends Component<
-  { label: string; children: ReactNode },
-  { error: string | null }
-> {
-  public state: { error: string | null } = { error: null }
-
-  public static getDerivedStateFromError(error: unknown): { error: string } {
-    return { error: error instanceof Error ? error.message : 'Unexpected render error' }
-  }
-
-  public componentDidCatch(error: unknown, info: ErrorInfo): void {
-    console.error(`[analytics:${this.props.label}]`, error, info.componentStack)
-  }
-
-  public render(): ReactNode {
-    if (this.state.error) {
-      return (
-        <div className="analytics-section-fallback" role="alert">
-          <Sparkles size={18} />
-          <strong>{this.props.label} unavailable</strong>
-          <p>This section could not render. Other analytics below still work.</p>
-          <button type="button" className="button secondary" onClick={() => this.setState({ error: null })}>
-            Retry section
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
+export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
+  const real = trend.some((row) => row.revenue > 0); const now = trend.filter((row) => row.forecast === null).reduce((sum, row) => sum + row.revenue, 0); const before = trend.reduce((sum, row) => sum + (row.previous ?? 0), 0); const growth = before > 0 ? (now - before) / before * 100 : null
+  return <Widget className="revenue-trend" eyebrow="REVENUE DEEP DIVE" title="Revenue momentum" action={<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div>}>
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 12, right: 12, left: -12 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".38"/><stop offset="1" stopColor="#38bdf8" stopOpacity="0"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.09)" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>}/><Bar dataKey="revenue" fill="#38bdf8" opacity={.09} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#38bdf8" strokeWidth={2.8} dot={{r:2,fill:'#dbeafe'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
+  </Widget>
 }
 
-function bestDay(weekdays: readonly Readonly<{ day: string; revenue: number }>[]) {
-  if (!weekdays.length) return null
-  return weekdays.reduce(
-    (best, row) => (safeNumber(row.revenue) > safeNumber(best.revenue) ? row : best),
-    weekdays[0]!,
-  )
-}
+export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }) { const real = trend.some((row) => row.orders > 0); const orders = trend.reduce((sum,row)=>sum+row.orders,0); const avg = orders ? trend.reduce((sum,row)=>sum+row.revenue,0)/orders : 0; return <Widget eyebrow="VALUE × VOLUME" title="Orders & AOV correlation" badge={real ? `${orders} orders` : undefined}>{real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={trend.filter((row)=>row.forecast===null)} margin={{top:12,right:0,left:-20}}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false}/><Tooltip/><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#6366f1" radius={[4,4,0,0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={false}/></ComposedChart></ResponsiveContainer></div><div className="insight-strip"><Brain size={14}/><span>Your blended AOV is <b>{money(avg)}</b>. Watch for days where volume and basket value rise together.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}</Widget> }
 
-function formatChange(change: number | null): { positive: boolean; text: string } | null {
-  if (change === null || !Number.isFinite(change)) return null
-  return { positive: change >= 0, text: Math.abs(change).toFixed(1) }
-}
+export function SalesByChannel({ channels }: { channels: NonNullable<AnalyticsInsights['channels']> }) { const max = Math.max(1,...channels.map((row)=>row.revenue)); return <Widget eyebrow="ATTRIBUTION" title="Sales by channel" badge={channels.length ? `${channels.length} active` : undefined}>{channels.length ? <div className="channel-list">{channels.map((row,index)=><div className="channel-row" key={row.channel}><div className="channel-label"><span className="channel-icon"><ShoppingBag size={13}/></span><div><b>{row.channel}</b><small>{row.orders} orders · {row.share.toFixed(1)}%</small></div><strong>{money(row.revenue)}</strong></div><div className="channel-track"><i style={{width:`${Math.max(4,row.revenue/max*100)}%`,background:COLORS[index%COLORS.length]}}/></div><em className={row.growth !== null && row.growth < 0 ? 'negative':'positive'}>{row.growth === null ? 'New baseline' : `${row.growth>=0?'↑':'↓'} ${Math.abs(row.growth).toFixed(1)}%`}</em></div>)}</div> : <RichEmpty icon={Target} title="Channel attribution is ready" message="Shopify order source data will separate Online Store, POS, mobile, and integrations after sync." progress={0} goal="Sync order source data" />}</Widget> }
 
-function normalizeInsights(value: AnalyticsInsights | null | undefined): AnalyticsInsights | null {
-  if (!value || typeof value !== 'object') return null
-  return {
-    ...value,
-    categories: Array.isArray(value.categories) ? value.categories : [],
-    topProducts: Array.isArray(value.topProducts) ? value.topProducts : [],
-    weekdays: Array.isArray(value.weekdays) ? value.weekdays : [],
-    peakHours: Array.isArray(value.peakHours) ? value.peakHours : null,
-    anomalies: Array.isArray(value.anomalies) ? value.anomalies : value.anomalies === null ? null : [],
-    locked: Array.isArray(value.locked) ? value.locked : [],
-    available: Array.isArray(value.available) ? value.available : [],
-    forecast: value.forecast ?? { status: 'insufficient_data', message: 'Awaiting more data — at least 7 sales days are needed.', points: [], standardDeviation: 0 },
-  }
-}
+export function CategoryDistribution({ categories }: { categories: AnalyticsInsights['categories'] }) { const total=categories.reduce((sum,row)=>sum+safe(row.revenue),0); return <Widget eyebrow="REVENUE MIX" title="Sales by category">{categories.length>1?<div className="category-layout"><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={[...categories]} dataKey="revenue" nameKey="name" innerRadius="62%" outerRadius="84%" paddingAngle={3}>{categories.map((row,index)=><Cell key={row.name} fill={COLORS[index%COLORS.length] ?? '#38bdf8'}/>)}</Pie><Tooltip formatter={(value)=>money(safe(value))}/></PieChart></ResponsiveContainer><div className="donut-center"><strong>{money(total)}</strong><span>Total mix</span></div></div><div className="category-legend">{categories.slice(0,6).map((row,index)=><div key={row.name}><i style={{background:COLORS[index%COLORS.length]}}/><span>{row.name}</span><strong>{total?((row.revenue/total)*100).toFixed(1):0}%</strong><small>{money(row.revenue)}</small></div>)}</div></div>:categories.length===1?<div className="single-category"><span style={{background:COLORS[0]}}/><small>100% OF CATEGORY REVENUE</small><strong>{categories[0]!.name}</strong><b>{money(categories[0]!.revenue)}</b><p>Add product types in Shopify to unlock a richer revenue mix.</p></div>:<RichEmpty icon={PackageSearch} title="Build your category mix" message="Product type plus sales data will reveal which categories drive your revenue." progress={0} goal="Sync products and orders" />}</Widget> }
 
-function safeNumber(value: unknown): number {
-  const number = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(number) ? number : 0
-}
+export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insights: AnalyticsInsights|null; trend: readonly TrendPoint[]; loading:boolean; onUpgrade:()=>void }) { const [open,setOpen]=useState(true); const plan=insights?.plan??'trial'; const locked=(feature:string)=>insights?.locked.some((item)=>item.feature===feature)??false; const forecast=insights?.forecast; const projection=forecast?.points.reduce((sum,row)=>sum+row.value,0)??0; return <section className={`analytics-widget ai-intelligence ${open?'':'collapsed'}`}><header className="widget-header"><div className="widget-title ai-heading"><span className="brain-badge"><Brain size={20}/></span><div><small>PROFITPILOT INTELLIGENCE LAYER</small><h2>AI Business Intelligence</h2><p>Signals, forecasts, and next moves Shopify does not give you.</p></div></div><div className="widget-actions"><span className="plan-pill">{plan} intelligence</span><button className="icon-button" onClick={()=>setOpen(!open)} aria-label={open?'Collapse AI intelligence':'Expand AI intelligence'}>{open?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button></div></header>{open&&<div className="ai-grid">{loading?<>{[0,1,2,3].map((key)=><div className="ai-card skeleton-card" key={key}><div className="skeleton-line short"/><div className="skeleton-line value"/><div className="skeleton-line"/></div>)}</>:<><article className="ai-card forecast-card"><CardLabel icon={LineChart} text="AI REVENUE FORECAST"/><h3>{forecast?.status==='available'?money(projection):`${Math.min(7,insights?.salesHistoryDays??0)} / 7 days learned`}</h3><p>{forecast?.message??'Preparing your first evidence-based forecast.'}</p><div className="forecast-mini">{forecast?.status==='available'?<ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend.slice(-14)]}><Area type="monotone" dataKey="upper" fill="#8b5cf6" fillOpacity={.12} stroke="none"/><Line type="monotone" dataKey="revenue" stroke="#38bdf8" dot={false}/><Line type="monotone" dataKey="forecast" stroke="#a78bfa" strokeDasharray="4 4" dot={false}/></ComposedChart></ResponsiveContainer>:<Progress current={insights?.salesHistoryDays??0} total={7}/>}</div><footer><span className="confidence-dot"/>Confidence: {forecast?.status==='available'?(forecast.standardDeviation<projection*.15?'HIGH':'MEDIUM'):'BUILDING'}</footer></article><article className="ai-card"><CardLabel icon={AlertTriangle} text="ANOMALY DETECTION"/>{locked('anomaly_detection')?<LockedInline plan="Start" message="Catch unusual spikes and dips before they become mysteries." onUpgrade={onUpgrade}/>:insights?.anomalies?.length?<div className="signal-list">{insights.anomalies.slice(0,3).map((item)=><div key={item.day}><span className={item.direction}/><p><b>{shortDay(item.day)} · {item.direction==='spike'?'Revenue spike':'Revenue dip'}</b><small>{Math.abs(item.percentFromAverage).toFixed(0)}% from your baseline</small></p></div>)}</div>:<EducationalState title="No unusual signals" message={(insights?.salesHistoryDays??0)<14?'Anomaly detection needs 14 sales days to establish a trustworthy baseline.':'Revenue is tracking within its normal range.'} current={insights?.salesHistoryDays??0} total={14}/>}</article><article className="ai-card"><CardLabel icon={Lightbulb} text="GROWTH OPPORTUNITIES"/>{locked('growth_opportunities')?<LockedInline plan="Growth" message="Turn verified patterns into a prioritized growth playbook." onUpgrade={onUpgrade}/>:insights?.opportunities?.length?<div className="opportunity-list">{insights.opportunities.map((item,index)=><div key={item.title}><b>{index+1}</b><p><strong>{item.title}</strong><small>{item.action}</small></p></div>)}</div>:<EducationalState title="Opportunity engine is listening" message="More product and day-level variation will produce prioritized next moves." current={insights?.salesHistoryDays??0} total={14}/>}</article><article className="ai-card executive-card"><CardLabel icon={Wand2} text="EXECUTIVE BRIEF"/>{locked('executive_summary')?<LockedInline plan="Growth" message="Get a concise analyst brief grounded in your store data." onUpgrade={onUpgrade}/>:<><blockquote>“{insights?.executiveSummary??'Your intelligence brief will activate with synced sales.'}”</blockquote><footer><Brain size={13}/> Grounded only in verified store metrics</footer></>}</article></>}</div>}</section> }
 
-const money = (value: number) => {
-  const amount = Number.isFinite(value) ? value : 0
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: amount >= 1000 ? 0 : 2,
-  }).format(amount)
-}
+export function CohortAnalysis({ insights,onUpgrade }:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if (!hasPlan(insights,'growth')) return <LockedWidget icon={Users} title="Customer cohort analysis" eyebrow="RETENTION ENGINE" plan="Growth" message="See which acquisition cohorts return month after month." onUpgrade={onUpgrade}/>; const cohorts=insights?.cohorts??[]; return <Widget eyebrow="RETENTION ENGINE" title="Customer cohort analysis" badge={cohorts.length?'Monthly retention':undefined}>{cohorts.length?<div className="cohort-table"><div className="cohort-row cohort-head"><span>Acquired</span>{[0,1,2,3,4,5].map((month)=><b key={month}>M{month}</b>)}</div>{cohorts.map((row)=><div className="cohort-row" key={row.cohort}><span>{row.cohort}</span>{[0,1,2,3,4,5].map((month)=>{const value=row.periods.find((period)=>period.month===month)?.retention; return <b key={month} style={{background:value===undefined?'rgba(30,41,59,.35)':`rgba(45,212,191,${.08+Math.min(1,value/100)*.7})`}}>{value===undefined?'—':`${value.toFixed(0)}%`}</b>})}</div>)}</div>:<RichEmpty icon={Users} title="Retention needs time, not guesses" message="Cohort rows populate from real returning-customer activity. Three months creates the first meaningful retention curve." progress={Math.min(3,new Set((insights?.cohorts??[]).map((row)=>row.cohort)).size)} goal="3 months of customer history" />}</Widget> }
 
-const compactMoney = (value: number) => {
-  const amount = Number.isFinite(value) ? value : 0
-  return `$${Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(amount)}`
-}
+export function GeographicDistribution({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget icon={Globe2} title="Geographic distribution" eyebrow="MARKET MAP" plan="Growth" message="Find the countries and regions driving demand." onUpgrade={onUpgrade}/>; const geo=insights?.geography??[]; return <Widget eyebrow="MARKET MAP" title="Geographic distribution" badge={geo.length?`${geo.length} markets`:undefined}>{geo.length?<div className="geo-layout"><div className="geo-orb"><Globe2 size={80}/><span className="geo-ping p1"/><span className="geo-ping p2"/><span className="geo-ping p3"/></div><div className="geo-list">{geo.slice(0,6).map((row,index)=><div key={row.country}><b>{index+1}</b><span><strong>{row.country}</strong><small>{row.orders} orders · {row.share.toFixed(1)}%</small></span><em>{money(row.revenue)}</em></div>)}</div></div>:<RichEmpty icon={MapPin} title="Your demand map is ready to form" message="Shipping-country aggregates appear when synced orders include addresses. No customer-level location is exposed." progress={0} goal="Sync orders with shipping countries" />}</Widget> }
 
-const shortDay = (value: string) => {
-  if (!value) return ''
-  const date = new Date(`${value}T00:00:00Z`)
-  if (!Number.isFinite(date.valueOf())) return value
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
-}
+export function ProductPerformance({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const products=insights?.topProducts??[]; return <section className="product-performance"><Widget className="products-table-card" eyebrow="REVENUE LEADERS" title="Top products by revenue" badge={products.length?`Top ${Math.min(15,products.length)}`:undefined}>{products.length?<div className="products-scroll"><table><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th>Units</th><th>Revenue</th><th>Share</th><th>Momentum</th></tr></thead><tbody>{products.map((product,index)=><tr key={product.productId}><td><b className={index<3?'rank':''}>{index+1}</b></td><td><div className="product-cell">{product.image?<img src={product.image} alt=""/>:<span>{product.name.slice(0,1)}</span>}<strong>{product.name}</strong></div></td><td>{product.category??'Uncategorized'}</td><td>{product.units.toLocaleString()}</td><td><strong>{money(product.revenue)}</strong></td><td>{product.share.toFixed(1)}%</td><td className={product.trend}>{product.trend==='up'?<ArrowUpRight size={15}/>:product.trend==='down'?<ArrowDownRight size={15}/>:<Activity size={14}/>} {product.growth!=null?`${Math.abs(product.growth).toFixed(0)}%`:'Building'}</td></tr>)}</tbody></table></div>:<RichEmpty icon={PackageSearch} title="Your product leaderboard awaits" message="Product sales rows will rank winners using revenue, units, share, and real period momentum." progress={0} goal="Sync product-level sales" />}</Widget><Widget className="product-insights" eyebrow="AI MERCHANDISING" title="Product insights">{!hasPlan(insights,'growth')?<LockedInline plan="Growth" message="Reveal rising stars, declining products, and category champions." onUpgrade={onUpgrade}/>:products.length?<div className="merch-list"><MerchSignal icon={ArrowUpRight} tone="green" label="Rising star" value={products.find((p)=>p.trend==='up')?.name??'No rising product yet'} /><MerchSignal icon={ArrowDownRight} tone="red" label="Needs attention" value={products.find((p)=>p.trend==='down')?.name??'No decline detected'} /><MerchSignal icon={Trophy} tone="amber" label="Revenue leader" value={products[0]?.name??'Building'} /></div>:<EducationalState title="Merchandising signals are warming up" message="Two comparable product-sales periods are needed for momentum calls." current={insights?.salesHistoryDays??0} total={14}/>}</Widget></section> }
+function MerchSignal({icon:Icon,tone,label,value}:{icon:typeof Activity;tone:string;label:string;value:string}) { return <div className={`merch-signal ${tone}`}><span><Icon size={15}/></span><p><small>{label}</small><strong>{value}</strong></p><ChevronUp size={14}/></div> }
+
+export function TemporalPatterns({insights}:{insights:AnalyticsInsights|null}) { const weekdays=insights?.weekdays??[]; const peak=insights?.peakHours??[]; const best=[...weekdays].sort((a,b)=>b.revenue-a.revenue)[0]; const hasDays=weekdays.some((row)=>row.revenue>0); const hasHours=peak.some((row)=>row.orders>0); return <section className="analytics-split"><Widget eyebrow="WEEKLY RHYTHM" title="Best performing day" badge={hasDays&&best?<><Trophy size={12}/>{best.day} leads</>:undefined}>{hasDays?<div className="temporal-chart"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...weekdays]}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tick={{fill:'#8090a5',fontSize:9}} axisLine={false} tickLine={false}/><YAxis tickFormatter={compactMoney} tick={{fill:'#8090a5',fontSize:8}} axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>money(safe(value))}/><Bar dataKey="revenue" radius={[6,6,0,0]}>{weekdays.map((row)=><Cell key={row.day} fill={row.day===best?.day?'#38bdf8':'rgba(56,189,248,.22)'}/>)}</Bar></ComposedChart></ResponsiveContainer></div>:<RichEmpty icon={CalendarDays} title="Your weekly rhythm is forming" message={`${Math.min(7,insights?.salesHistoryDays??0)} of 7 sales days captured. Each synced day makes timing guidance more useful.`} progress={Math.min(7,insights?.salesHistoryDays??0)} goal="7 sales days" />}</Widget><Widget eyebrow="SHOPPING RHYTHM" title="Peak sales hours" badge={hasHours?'Order timestamps · UTC':undefined}>{hasHours?<div className="hour-heatmap"><div className="heat-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div><div className="heat-cells">{peak.map((row)=>{const max=Math.max(...peak.map((item)=>item.orders),1);return <div key={row.hour} title={`${row.hour}:00 · ${row.orders} orders`} style={{background:`rgba(139,92,246,${.08+row.orders/max*.8})`}}><span>{row.orders||''}</span></div>})}</div><div className="insight-strip"><Clock3 size={14}/><span>Use your busiest hours to schedule campaigns and support coverage.</span></div></div>:<RichEmpty icon={Clock3} title="Hourly demand needs timestamps" message="Sync order-level timestamps to unlock the 24-hour demand heatmap. Your weekly pattern remains available meanwhile." progress={0} goal="Order timestamp coverage" />}</Widget></section> }
+
+export function ConversionFunnel({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget wide icon={Target} title="Conversion funnel" eyebrow="JOURNEY ANALYTICS" plan="Growth" message="Diagnose drop-off from visitor to purchase with a scope-aware funnel." onUpgrade={onUpgrade}/>; const funnel=insights?.funnel; return <Widget eyebrow="JOURNEY ANALYTICS" title="Conversion funnel" action={<span className="scope-pill"><Activity size={12}/> Order-based view</span>}><div className="funnel-layout"><div className="funnel-bars">{(funnel?.stages??[]).map((stage,index)=><div className={stage.value===null?'unavailable':''} style={{width:`${100-index*10}%`}} key={stage.name}><span>{stage.name}</span><strong>{stage.value===null?'Scope needed':stage.value.toLocaleString()}</strong></div>)}</div><div className="funnel-note"><Target size={22}/><div><strong>Purchase data is live. Traffic stages need Shopify Analytics.</strong><p>{funnel?.message??'Connect session analytics to calculate exact visitor, product-view, cart, and checkout drop-off.'}</p><button className="text-button">View connection roadmap →</button></div></div></div></Widget> }
+
+export function Benchmarks({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={BarChart3} title="Benchmarks & advanced comparisons" eyebrow="EXECUTIVE LENS" plan="Commander" message="Compare periods side by side and add industry context when benchmark coverage is available." onUpgrade={onUpgrade}/>; const comparisons=insights?.comparisons??[]; return <Widget eyebrow="EXECUTIVE LENS" title="Benchmarks & advanced comparisons" badge="Commander">{comparisons.length?<div className="comparison-grid">{comparisons.map((row)=><div key={row.metric}><small>{row.metric}</small><strong>{row.metric==='Revenue'?money(row.current):row.current.toLocaleString()}</strong><span>Previous: {row.metric==='Revenue'?money(row.previous):row.previous.toLocaleString()}</span><b className={row.change!==null&&row.change<0?'negative':'positive'}>{row.change===null?'Baseline needed':`${row.change>=0?'↑':'↓'} ${Math.abs(row.change).toFixed(1)}%`}</b></div>)}{insights?.advancedForecast?.status==='available'&&<div><small>30-day predictive revenue</small><strong>{money(insights.advancedForecast.points.reduce((sum,row)=>sum+row.value,0))}</strong><span>Confidence range included</span><b className="positive">AI projection</b></div>}<div className="benchmark-pending"><Globe2 size={18}/><p><strong>Industry benchmark coverage</strong><small>Activates only when a trustworthy comparison dataset is connected.</small></p></div></div>:<RichEmpty icon={BarChart3} title="Comparison baseline is building" message="Two complete periods are required before executive comparisons are reported." progress={Math.min(60,insights?.salesHistoryDays??0)} goal="60 sales days" />}</Widget> }
+
+export function CustomAIQuery({context,insights,onUpgrade}:{context:WorkspaceContext;insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const [question,setQuestion]=useState(''); const [answer,setAnswer]=useState(''); const [asking,setAsking]=useState(false); if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={Brain} title="Ask your AI business analyst" eyebrow="COMMANDER COPILOT" plan="Commander" message="Ask plain-language questions and receive aggregate, data-backed answers—not generic advice." onUpgrade={onUpgrade}/>; const ask=async(value=question)=>{if(!context.storeId||!value.trim())return;setQuestion(value);setAsking(true);try{const result=await queryAnalyticsInsights(context.storeId,value);setAnswer(result.text)}catch{setAnswer('Your analyst is temporarily unavailable. Your deterministic dashboard remains current.')}finally{setAsking(false)}}; const suggestions=['Which products should I promote this weekend?','Why did revenue change last period?','What is my strongest growth opportunity?']; return <Widget className="ai-query-widget" eyebrow="COMMANDER COPILOT" title="Ask your AI business analyst" badge={insights?.usage.limit===null?'Unlimited':`${insights?.usage.remaining??0} left today`}><div className="query-shell">{answer?<div className="analyst-answer"><span><Brain size={17}/></span><p>{answer}</p></div>:<div className="query-welcome"><Brain size={28}/><div><strong>What decision are you making today?</strong><p>Answers use aggregate store facts only. Customer PII is never sent.</p></div></div>}<div className="query-suggestions">{suggestions.map((item)=><button key={item} onClick={()=>void ask(item)}>{item}</button>)}</div><div className="query-input"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void ask()}} placeholder="Ask about revenue, products, customers, or timing…"/><button onClick={()=>void ask()} disabled={!question.trim()||asking}>{asking?<RefreshCw size={16} className="spin"/>:<Send size={16}/>}</button></div></div></Widget> }
+
+function Widget({eyebrow,title,badge,action,className='',children}:{eyebrow:string;title:string;badge?:ReactNode;action?:ReactNode;className?:string;children:ReactNode}) { return <article className={`analytics-widget ${className}`}><header className="widget-header"><div className="widget-title"><small>{eyebrow}</small><h2>{title}</h2></div>{action??(badge?<span className="widget-badge">{badge}</span>:null)}</header><div className="widget-body">{children}</div></article> }
+function LockedWidget({icon:Icon,title,eyebrow,plan,message,onUpgrade,wide=false}:{icon:typeof Activity;title:string;eyebrow:string;plan:string;message:string;onUpgrade:()=>void;wide?:boolean}) { return <Widget className={`locked-widget ${wide?'wide':''}`} eyebrow={eyebrow} title={title}><div className="locked-hero"><span><Icon size={24}/><LockKeyhole size={12}/></span><div><b>{plan} intelligence</b><p>{message}</p></div><button onClick={onUpgrade}>Unlock with {plan} <ArrowUpRight size={13}/></button></div></Widget> }
+function LockedInline({plan,message,onUpgrade}:{plan:string;message:string;onUpgrade:()=>void}) { return <div className="locked-inline"><span><LockKeyhole size={17}/></span><strong>{plan} intelligence</strong><p>{message}</p><button onClick={onUpgrade}>See upgrade <ArrowUpRight size={12}/></button></div> }
+function CardLabel({icon:Icon,text}:{icon:typeof Activity;text:string}) { return <div className="card-label"><span><Icon size={13}/></span><small>{text}</small></div> }
+function RichEmpty({icon:Icon,title,message,progress,goal}:{icon:typeof Activity;title:string;message:string;progress:number;goal:string}) { return <div className="rich-empty"><span className="empty-visual"><Icon size={23}/><i/><i/><i/></span><strong>{title}</strong><p>{message}</p><div className="empty-progress"><span><i style={{width:`${Math.max(3,Math.min(100,progress/Math.max(1,parseInt(goal)||7)*100))}%`}}/></span><small>{progress?`${progress} collected · `:''}{goal}</small></div></div> }
+function EducationalState({title,message,current,total}:{title:string;message:string;current:number;total:number}) { return <div className="educational-state"><strong>{title}</strong><p>{message}</p><Progress current={current} total={total}/></div> }
+function Progress({current,total}:{current:number;total:number}) { const value=Math.min(total,current); return <div className="progress"><span><i style={{width:`${value/total*100}%`}}/></span><small>{value} of {total} days</small></div> }
+function RevenueTooltip({active,payload,label}:{active?:boolean;payload?:readonly {name?:string;value?:number|null;color?:string}[];label?:string}) { if(!active||!payload?.length)return null; const rows=payload.filter((item)=>item.value!==null&&item.value!==undefined&&Number.isFinite(Number(item.value))); return <div className="analytics-tooltip"><strong>{label}</strong>{rows.map((item)=><span key={String(item.name)}><i style={{background:item.color??'#38bdf8'}}/>{item.name}: {money(Number(item.value))}</span>)}</div> }
+class Boundary extends Component<{label:string;children:ReactNode},{error:string|null}> { public state={error:null as string|null}; static getDerivedStateFromError(error:unknown){return{error:error instanceof Error?error.message:'Render error'}} componentDidCatch(error:unknown,info:ErrorInfo){console.error(`[analytics:${this.props.label}]`,error,info.componentStack)} render(){return this.state.error?<div className="section-fallback" role="alert"><AlertTriangle size={20}/><strong>{this.props.label} is taking a pause</strong><p>The rest of your analytics are still available.</p><button onClick={()=>this.setState({error:null})}>Retry section</button></div>:this.props.children} }
+export const AnalyticsSectionBoundary = Boundary
+function hasPlan(insights:AnalyticsInsights|null,required:'growth'|'commander'){return Boolean(insights&&PLAN_RANK[insights.plan]>=PLAN_RANK[required])}
+function normalizeInsights(value:AnalyticsInsights|null|undefined):AnalyticsInsights|null { if(!value||typeof value!=='object')return null; return {...value,categories:Array.isArray(value.categories)?value.categories:[],topProducts:Array.isArray(value.topProducts)?value.topProducts:[],weekdays:Array.isArray(value.weekdays)?value.weekdays:[],peakHours:Array.isArray(value.peakHours)?value.peakHours:null,anomalies:Array.isArray(value.anomalies)?value.anomalies:value.anomalies===null?null:[],channels:Array.isArray(value.channels)?value.channels:[],geography:Array.isArray(value.geography)?value.geography:value.geography===null?null:[],cohorts:Array.isArray(value.cohorts)?value.cohorts:value.cohorts===null?null:[],comparisons:Array.isArray(value.comparisons)?value.comparisons:value.comparisons===null?null:[],opportunities:Array.isArray(value.opportunities)?value.opportunities:value.opportunities===null?null:[],locked:Array.isArray(value.locked)?value.locked:[],available:Array.isArray(value.available)?value.available:[],forecast:value.forecast??{status:'insufficient_data',message:'Connect your first sales days to begin forecasting.',points:[],standardDeviation:0}} }
+function formatKpi(kpi:Kpi){if(kpi.value===null||!Number.isFinite(kpi.value))return '—';if(kpi.format==='money')return money(kpi.value);if(kpi.format==='percent')return `${kpi.value.toFixed(1)}%`;return Math.round(kpi.value).toLocaleString()}
+const safe=(value:unknown)=>{const number=typeof value==='number'?value:Number(value);return Number.isFinite(number)?number:0}
+const money=(value:number)=>new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:Math.abs(value)>=1000?0:2}).format(safe(value))
+const compactMoney=(value:number)=>`$${Intl.NumberFormat(undefined,{notation:'compact',maximumFractionDigits:1}).format(safe(value))}`
+const shortDay=(value:string)=>{const date=new Date(`${value}T00:00:00Z`);return Number.isFinite(date.valueOf())?date.toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'}):value}
