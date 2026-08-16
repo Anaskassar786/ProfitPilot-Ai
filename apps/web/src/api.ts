@@ -215,6 +215,12 @@ export async function streamJarvisMessage(storeId: string, sessionId: string, te
   throw new ApiClientError('Jarvis stream ended without a response', response.status)
 }
 export function confirmJarvisAction(storeId: string, sessionId: string, actionId: string, fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, actionId }) }, fetcher) }
+/**
+ * Invokes a plan-gated Jarvis store action (read on all plans, write actions
+ * are Commander-only and require confirmation). The backend re-checks the plan
+ * before running anything; `confirmed` marks an explicit merchant approval.
+ */
+export function invokeJarvisStoreAction(storeId: string, sessionId: string, actionId: string, parameters: Readonly<Record<string, string | number | boolean | null>>, confirmed: boolean, fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/store-action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, actionId, parameters, confirmed }) }, fetcher) }
 export function setJarvisState(storeId: string, sessionId: string, state: 'pause' | 'resume' | 'end', fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/${state}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher) }
 
 export function fetchCopilotThreads(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CopilotThread[]> { return requestJson<readonly CopilotThread[]>(`/copilot/threads?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }

@@ -79,3 +79,36 @@
 .voice-stop { align-self: start; width: 25px; height: 25px; }
 .jarvis-composer-actions .voice-active { color: #DFF8FF; background: rgba(48,189,240,.2); box-shadow: 0 0 12px rgba(48,189,240,.22); }
 @media (max-width: 640px) { .jarvis-voice-inline { grid-template-columns: 48px minmax(0,1fr) 25px; } .jarvis-voice-inline > .jarvis-particle-orb { width: 48px !important; height: 48px !important; } }
+
+/* Floating background voice widget — persists after the chat panel closes. */
+.jarvis-floating-widget {
+  position: fixed;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  height: 76px;
+  padding: 10px 12px;
+  border: 1px solid rgba(61, 194, 245, .28);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(13, 33, 54, .92), rgba(9, 16, 31, .94));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .52), 0 0 22px rgba(48, 189, 240, .18);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  user-select: none;
+  transition: box-shadow .18s ease, transform .12s ease;
+}
+.jarvis-floating-widget:active { transform: scale(.995); }
+.jarvis-floating-orb { display: grid; place-items: center; }
+.jarvis-floating-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.jarvis-floating-copy strong { color: #E6F6FF; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jarvis-floating-copy span { color: var(--text-secondary); font-size: 8px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jarvis-floating-controls { display: flex; align-items: center; gap: 2px; }
+.jarvis-floating-controls .icon-button { width: 26px; height: 26px; color: var(--text-secondary); background: transparent; }
+.jarvis-floating-controls .icon-button:hover { color: #E6F6FF; background: rgba(255,255,255,.06); }
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-floating-widget { transition: none; }
+  .jarvis-floating-widget:active { transform: none; }
+}
+.jarvis-action-confirm { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.jarvis-action-confirm .button { min-height: 26px; padding: 0 10px; font-size: 9px; }

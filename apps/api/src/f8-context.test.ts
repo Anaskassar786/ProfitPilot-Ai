@@ -55,4 +55,47 @@ describe('F8 real data context adapter', () => {
     expect(forecast.revenue?.method.method).toContain('seasonality')
     expect(forecast.stockout[0]?.forecast.risk).toBe('high')
   })
+
+  it('degrades a failed source instead of throwing when a source rejects on cold start', async () => {
+    // Regression: before this fix a single rejected source (missing table, RLS
+    // error, transient outage) made Promise.all reject and 500 every message.
+    const resilient = new F8ContextProvider({
+      analytics: { read: async () => analytics, readCatalog: async () => { throw new Error('catalog unavailable') } },
+      recommendations: { list: async () => { throw new Error('relation "ai_recommendations" does not exist') } },
+    }, () => 1_000)
+    const evidence = await resilient.get('store-1' as never, 'dashboard')
+    expect(evidence.currency).toBe('USD')
+    // Analytics still loads, so revenue facts remain; the rejected sources are
+    // treated as empty. The important contract is: no throw, USD fallback.
+    expect(evidence.facts.find((fact) => fact.key === 'revenue_total')?.value).toBe(231)
+    expect(evidence.facts.find((fact) => fact.key === 'pending_recommendations')?.value).toBe(0)
+    expect(evidence.suggestedAction).toBeNull()
+  })
+
+  it('falls back to USD when a recommendation carries an invalid currency code', async () => {
+    // Regression: an invalid/short currency from the database made Intl throw
+    // RangeError: Invalid currency code, which 500'd the request.
+    const badCurrency = [{ ...recommendations[0], currency: 'RUPEES' }] as unknown as typeof recommendations
+    const resilient = new F8ContextProvider({
+      analytics: { read: async () => ({ revenue: [{ storeId: 'store-1' as never, day: '2024-05-14', grossRevenue: 189, discounts: 0, orderCount: 2 }], orders: [], productSales: [], customerCohorts: [] }), readCatalog: async () => catalog },
+      recommendations: { list: async () => badCurrency },
+    }, () => 1_000)
+    const evidence = await resilient.get('store-1' as never, 'dashboard')
+    expect(evidence.currency).toBe('USD')
+    // Money formatting must not throw for the bad currency and must render USD.
+    expect(evidence.facts.find((fact) => fact.key === 'revenue_display')?.value).toBe('$189')
+  })
+
+  it('survives all three evidence sources being unavailable (cold cache / cold start)', async () => {
+    const resilient = new F8ContextProvider({
+      analytics: { read: async () => { throw new Error('connection refused') }, readCatalog: async () => { throw new Error('connection refused') } },
+      recommendations: { list: async () => { throw new Error('connection refused') } },
+    }, () => 1_000)
+    const evidence = await resilient.get('store-1' as never, 'orders')
+    // No throw — safe null/zero facts, USD fallback, no suggested action.
+    expect(evidence.currency).toBe('USD')
+    expect(evidence.suggestedAction).toBeNull()
+    expect(evidence.facts.find((fact) => fact.key === 'orders_total')?.value).toBeNull()
+    expect(evidence.facts.find((fact) => fact.key === 'revenue_total')?.value).toBeNull()
+  })
 })

@@ -39,8 +39,18 @@ describe('Jarvis readiness UI', () => {
     expect(source).not.toContain('jarvis-immersive')
     expect(source).toContain('jarvis-voice-inline')
     expect(source).toContain("role: 'merchant'")
-    const voiceErrorHandler = source.slice(source.indexOf('next.onerror'), source.indexOf('next.onend'))
-    expect(voiceErrorHandler).not.toContain('dispatchLifecycle')
-    expect(voiceErrorHandler).toContain('setVoiceError')
+    // Voice now runs through the shared controller so a microphone error never
+    // tears down the chat session lifecycle.
+    expect(source).toContain('jarvisVoiceController')
+    expect(source).not.toContain('setVoiceError')
+    expect(source).not.toContain('createSpeechRecognition')
+  })
+
+  it('renders the floating background voice widget so voice survives panel close', () => {
+    const source = readFileSync(new URL('./f8.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('FloatingVoiceWidget')
+    // The widget is rendered on the closed branch too (not only when open).
+    const closedBranch = source.slice(source.indexOf('if (!open)'))
+    expect(closedBranch).toContain('floatingWidget')
   })
 })

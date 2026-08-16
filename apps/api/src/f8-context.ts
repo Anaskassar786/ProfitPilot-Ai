@@ -28,10 +28,24 @@ export class F8ContextProvider implements JarvisEvidenceProvider, CopilotEvidenc
   public async factsForIntent(storeId: StoreId, intent: CopilotIntent, page: JarvisPage): Promise<CopilotEvidence> { return this.get(storeId, intent, page) }
 
   private async facts(storeId: StoreId, page: JarvisPage): Promise<Readonly<{ facts: readonly CopilotFact[]; currency: string }>> {
-    const [analytics, catalog, recommendations] = await Promise.all([this.dependencies.analytics.read(storeId), this.dependencies.analytics.readCatalog(storeId), this.dependencies.recommendations.list(storeId)])
+    // Each evidence source is fetched independently so a single cold-start
+    // failure (a missing table, an RLS/tenant-context error, or a transient
+    // Postgres blip) degrades to empty data instead of taking the whole Jarvis
+    // message down with a 500. Previously Promise.all rejected here and crashed
+    // every message before the language model was even called.
+    const [analyticsResult, catalogResult, recommendationsResult] = await Promise.allSettled([
+      this.dependencies.analytics.read(storeId),
+      this.dependencies.analytics.readCatalog(storeId),
+      this.dependencies.recommendations.list(storeId),
+    ])
+    const analytics = analyticsResult.status === 'fulfilled' ? analyticsResult.value : emptyAnalyticsSnapshot()
+    const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : []
+    const recommendations = recommendationsResult.status === 'fulfilled' ? recommendationsResult.value : []
     // The store currency comes from the same Shopify store context the rest of
     // the app formats money with (the recommendation/store snapshot currency),
-    // so Jarvis always matches the dashboard's symbol and rounding.
+    // so Jarvis always matches the dashboard's symbol and rounding. Any
+    // malformed/unsupported code from the database falls back to USD rather
+    // than throwing inside Intl.NumberFormat (which would 500 the request).
     const currency = storeCurrency(recommendations)
     const money = (value: number | null): string | null => value === null ? null : formatMoney(value, currency)
     const revenue = analytics.revenue.map((row) => row.grossRevenue)
@@ -71,7 +85,13 @@ export class F8ContextProvider implements JarvisEvidenceProvider, CopilotEvidenc
   }
 
   private async suggestedAction(storeId: StoreId): Promise<JarvisActionPlan | null> {
-    const recommendations = await this.dependencies.recommendations.list(storeId)
+    let recommendations: readonly Recommendation[]
+    try {
+      recommendations = await this.dependencies.recommendations.list(storeId)
+    } catch {
+      // Never let a recommendation lookup failure 500 the Jarvis reply.
+      return null
+    }
     const candidate = recommendations.find((recommendation) => recommendation.status === 'PENDING' && recommendation.actionRisk === 'APPROVAL_REQUIRED')
     if (!candidate) return null
     return { id: `recommendation:${candidate.id}`, recommendationId: candidate.id, actionType: candidate.actionType, label: candidate.title, risk: candidate.actionRisk, undoWindowSeconds: 120, requiresVoiceConfirmation: true }
@@ -87,12 +107,27 @@ function numeric(value: unknown): number | null { return typeof value === 'numbe
 
 /** Mirrors the dashboard's formatMoney so Jarvis quotes the exact same figures. */
 function formatMoney(value: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
+  const safeCurrency = isValidCurrency(currency) ? currency : 'USD'
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: safeCurrency, maximumFractionDigits: 0 }).format(value)
+  } catch {
+    // Defense in depth: never let a money-formatting error 500 a Jarvis reply.
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+  }
+}
+
+/** ISO 4217 currency codes are exactly three uppercase letters. */
+function isValidCurrency(currency: string): boolean {
+  return /^[A-Z]{3}$/.test(currency)
 }
 
 function storeCurrency(recommendations: readonly Recommendation[]): string {
-  const found = recommendations.find((recommendation) => typeof recommendation.currency === 'string' && recommendation.currency.trim().length > 0)
+  const found = recommendations.find((recommendation) => typeof recommendation.currency === 'string' && isValidCurrency(recommendation.currency))
   return found?.currency ?? 'USD'
+}
+
+function emptyAnalyticsSnapshot(): import('@profitpilot/db').AnalyticsSnapshot {
+  return { revenue: [], orders: [], productSales: [], customerCohorts: [] }
 }
 
 function newCustomerCount(cohorts: CohortRows): number | null {
