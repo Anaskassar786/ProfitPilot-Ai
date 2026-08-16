@@ -10,3 +10,4 @@ coverage/
 
 *.tsbuildinfo
 shopify.app.toml
+package-lock.json
