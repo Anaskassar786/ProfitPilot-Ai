@@ -21,9 +21,11 @@ import type { CustomerRouteDependencies } from './customer-routes.js'
 import { PostgresInventoryRepository } from './inventory.js'
 import { InventoryInsightsService, PostgresInventoryInsightAudit, PostgresInventoryInsightUsage, PostgresInventorySnapshotRepository } from './inventory-insights.js'
 import type { InventoryRouteDependencies } from './inventory-routes.js'
+import { AnalyticsInsightsService, PostgresAnalyticsQueryUsage } from './analytics-insights.js'
+import type { AnalyticsRouteDependencies } from './analytics-routes.js'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
-export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; inventory: InventoryRouteDependencies; jarvisProvider: OpenRouterClient }>
+export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; analyticsInsights: AnalyticsRouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; inventory: InventoryRouteDependencies; jarvisProvider: OpenRouterClient }>
 
 export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>, logger?: Logger): F8Bootstrap | null {
   const f7 = createF7Bootstrap(env)
@@ -82,7 +84,8 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
     ),
   }
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider }
+  const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

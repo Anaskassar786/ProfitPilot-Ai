@@ -1,0 +1,5 @@
+import { describe, expect, it } from 'vitest'
+import { analyticsKpis, periodTrend } from './analytics-model.js'
+import type { AnalyticsSnapshot } from './model.js'
+const snapshot: AnalyticsSnapshot = { revenue: [{ storeId:'s', day:'2026-08-14', grossRevenue:100, discounts:0, orderCount:1 }, { storeId:'s', day:'2026-08-16', grossRevenue:300, discounts:0, orderCount:3 }], orders: [{ storeId:'s', day:'2026-08-14', orderCount:1, fulfilledCount:1, cancelledCount:0, averageOrderValue:100 }, { storeId:'s', day:'2026-08-16', orderCount:3, fulfilledCount:3, cancelledCount:0, averageOrderValue:100 }], productSales:[], customerCohorts:[] }
+describe('analytics model', () => { it('fills missing chart periods with honest zero values', () => { const points = periodTrend(snapshot, 7, null); expect(points).toHaveLength(7); expect(points.find((point) => point.day === '2026-08-15')?.revenue).toBe(0) }); it('derives real KPI totals and AOV', () => { const kpis = analyticsKpis(snapshot, 7); expect(kpis[0]?.value).toBe(400); expect(kpis[1]?.value).toBe(4); expect(kpis[2]?.value).toBe(100); expect(kpis[3]?.value).toBe(7) }) })

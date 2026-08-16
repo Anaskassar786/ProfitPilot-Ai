@@ -40,6 +40,8 @@ import {
   X,
 } from 'lucide-react'
 import { fetchOrder, fetchOrderInsights, fetchOrders } from './api.js'
+import { CustomSelect } from './CustomSelect.js'
+import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { WorkspaceContext } from './model.js'
 import type { OrderAddress, OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderStatus, OrderView, PaymentStatus } from './orders-model.js'
 import { initials, insightByFeature, isInsightData, lockedInsightByFeature, orderStatusLabel, paymentStatusLabel } from './orders-model.js'
@@ -184,7 +186,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
   return <section className={`card orders-insights ${collapsed ? 'collapsed' : ''}`}>
     <header className="orders-insights-header">
       <div className="orders-insights-title"><span className="ai-insights-icon"><Sparkles size={18} /></span><div><div className="section-kicker">AI ORDER INTELLIGENCE</div><h2>AI Insights</h2><p>Deterministic Shopify analysis with plan-enforced premium intelligence.</p></div></div>
-      <div className="orders-insights-head-actions">{result && <span className={`orders-plan-badge ${result.plan}`}>{result.planBadge}</span>}<button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand AI insights' : 'Collapse AI insights'}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}</button></div>
+      <div className="orders-insights-head-actions">{result && <UpgradePlanButton plan={result.plan} onUpgrade={onNavigateBilling} />}<button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand AI insights' : 'Collapse AI insights'}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}</button></div>
     </header>
     {!collapsed && <div className="orders-insights-body">
       {loading ? <InsightsSkeleton /> : !result ? <div className="orders-insight-unavailable"><AlertTriangle size={18} /> Insights could not be loaded.</div> : <>
@@ -298,7 +300,7 @@ function OrderFilterPanel({ value, onChange, onApply, onClear }: { value: Filter
 function FilterField({ label, children }: { label: string; children: ReactNode }) { return <label className="orders-filter-field"><span>{label}</span>{children}</label> }
 
 function SortControl({ sort, direction, onSort, onDirection }: { sort: 'date' | 'price' | 'status'; direction: 'asc' | 'desc'; onSort: (value: 'date' | 'price' | 'status') => void; onDirection: () => void }) {
-  return <div className="orders-sort-control"><select aria-label="Sort orders" value={sort} onChange={(event) => onSort(event.target.value as 'date' | 'price' | 'status')}><option value="date">Sort: Date</option><option value="price">Sort: Price</option><option value="status">Sort: Status</option></select><button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button></div>
+  return <div className="orders-sort-control"><CustomSelect ariaLabel="Sort orders" value={sort} onChange={onSort} triggerLabel="Sort" options={[{ value: 'date', label: 'Date' }, { value: 'price', label: 'Price' }, { value: 'status', label: 'Status' }]} /><button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button></div>
 }
 
 function OrdersTable({ orders, onSelect }: { orders: readonly OrderView[]; onSelect: (id: string) => void }) {

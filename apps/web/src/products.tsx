@@ -95,7 +95,7 @@ function ProductsToolbar({ query, sort, status, resultCount, totalCount, onQuery
     <div className="products-toolbar-title"><div className="section-kicker"><span className="kicker-dot blue" /> All product list</div><h2>Catalog performance</h2><span>{formatNumber(resultCount)} of {formatNumber(totalCount)} real products</span></div>
     <div className="products-controls">
       <label className="products-search"><Search size={15} /><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search by product name" aria-label="Search by product name" /></label>
-      <CustomSelect icon={<SlidersHorizontal size={14} />} label="Sort by" value={sort} options={PRODUCT_SORT_OPTIONS} onChange={onSort} ariaLabel="Sort products" />
+      <CustomSelect icon={<SlidersHorizontal size={14} />} value={sort} options={PRODUCT_SORT_OPTIONS} onChange={onSort} ariaLabel="Sort products" triggerLabel="Sort" />
       <CustomSelect icon={<Tag size={14} />} label="Show" value={status} options={PRODUCT_STATUS_OPTIONS} onChange={onStatus} ariaLabel="Filter by status" />
     </div>
   </div>

@@ -5,6 +5,7 @@ import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageRe
 import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, CustomerQuery, CustomersPageResult } from './customers-model.js'
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
+import type { AnalyticsInsights } from './analytics-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -99,6 +100,8 @@ export function resetApiClientStateForTests(): void {
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {
   return requestJson<AnalyticsSnapshot>(`/analytics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
+export function fetchAnalyticsInsights(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsInsights> { return requestJson<AnalyticsInsights>(`/analytics/insights?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function queryAnalyticsInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<Readonly<{ text: string; model: string }>> { return requestJson('/analytics/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher) }
 
 export function fetchCatalog(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CatalogProduct[]> {
   return requestJson<readonly CatalogProduct[]>(`/catalog?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
