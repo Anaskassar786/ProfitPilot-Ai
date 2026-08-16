@@ -162,8 +162,8 @@ describe('analytics page low-data rendering', () => {
     const { dom, container } = await mount(emptySnapshot, insightsFixture({ salesHistoryDays: 0 }))
     expect(container.querySelector('[data-page-error]')).toBeNull()
     expect(container.querySelector('.analytics-page')).not.toBeNull()
-    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
-    expect(container.textContent).toContain('Sync orders to see your revenue trend.')
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(6)
+    expect(container.textContent).toContain('Your revenue story starts here')
     expect(container.textContent).not.toContain('NaN')
     dom.window.close()
   })
@@ -179,12 +179,12 @@ describe('analytics page low-data rendering', () => {
     }))
     expect(container.querySelector('[data-page-error]')).toBeNull()
     expect(container.querySelector('.analytics-page')).not.toBeNull()
-    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(6)
     expect(container.textContent).toContain('Total Revenue')
-    expect(container.textContent).toContain('Top Products by Revenue')
+    expect(container.textContent).toContain('Top products by revenue')
     expect(container.textContent).toContain('Tee')
-    expect(container.textContent).toContain('Awaiting order-level timestamps.')
-    expect(container.textContent).toContain('Anomaly Detection')
+    expect(container.textContent).toContain('Hourly demand needs timestamps')
+    expect(container.textContent).toContain('ANOMALY DETECTION')
     expect(container.textContent).not.toContain('NaN%')
     expect(container.textContent).not.toContain('NaN')
     dom.window.close()
@@ -195,9 +195,9 @@ describe('analytics page low-data rendering', () => {
       categories: [{ name: 'Apparel', revenue: 150, units: 2 }],
     }))
     expect(container.querySelector('[data-page-error]')).toBeNull()
-    expect(container.textContent).toContain('Only 1 category')
+    expect(container.textContent).toContain('100% OF CATEGORY REVENUE')
     expect(container.textContent).toContain('Apparel')
-    expect(container.textContent).toContain('100% of revenue')
+    expect(container.textContent).toContain('$150.00')
     dom.window.close()
   })
 
@@ -205,7 +205,7 @@ describe('analytics page low-data rendering', () => {
     const { dom, container } = await mount(twoOrderSnapshot, null)
     expect(container.querySelector('[data-page-error]')).toBeNull()
     expect(container.querySelector('.analytics-page')).not.toBeNull()
-    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(4)
+    expect(container.querySelectorAll('.analytics-kpi')).toHaveLength(6)
     dom.window.close()
   })
 
@@ -215,8 +215,24 @@ describe('analytics page low-data rendering', () => {
     expect(source).toContain('getDerivedStateFromError')
     expect(source).toContain('componentDidCatch')
     expect(source).toContain('data.length >= 2')
-    expect(source).toContain('Only 1 category')
-    expect(source).toContain('Awaiting order-level timestamps.')
+    expect(source).toContain('100% OF CATEGORY REVENUE')
+    expect(source).toContain('Hourly demand needs timestamps')
+    expect(source).not.toContain('<Sparkles')
+  })
+})
+
+describe('world-class analytics composition', () => {
+  it('ships every analytics row as a composable component with rich empty states', async () => {
+    const source = await (await import('node:fs/promises')).readFile(new URL('./analytics.tsx', import.meta.url), 'utf8')
+    for (const component of [
+      'AnalyticsHero', 'RevenueTrendChart', 'OrdersAOVCorrelation', 'SalesByChannel',
+      'CategoryDistribution', 'AIIntelligence', 'CohortAnalysis', 'GeographicDistribution',
+      'ProductPerformance', 'TemporalPatterns', 'ConversionFunnel', 'Benchmarks', 'CustomAIQuery',
+    ]) expect(source).toContain(`function ${component}`)
+    expect(source).toContain('RichEmpty')
+    expect(source).toContain('Custom')
+    expect(source).toContain('Brain')
+    expect(source).not.toContain('No data')
   })
 })
 

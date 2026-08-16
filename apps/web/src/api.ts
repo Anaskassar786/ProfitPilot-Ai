@@ -101,6 +101,11 @@ export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promi
   return requestJson<AnalyticsSnapshot>(`/analytics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
 export function fetchAnalyticsInsights(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsInsights> { return requestJson<AnalyticsInsights>(`/analytics/insights?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function fetchAnalyticsChannels(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['channels']>> { return requestJson(`/analytics/channels?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function fetchAnalyticsGeography(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['geography']>> { return requestJson(`/analytics/geography?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function fetchAnalyticsCohorts(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['cohorts']>> { return requestJson(`/analytics/cohorts?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function fetchAnalyticsComparisons(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['comparisons']>> { return requestJson(`/analytics/comparisons?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
+export function fetchAnalyticsFunnel(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['funnel']>> { return requestJson(`/analytics/funnel?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function queryAnalyticsInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<Readonly<{ text: string; model: string }>> { return requestJson('/analytics/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher) }
 
 export function fetchCatalog(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CatalogProduct[]> {
