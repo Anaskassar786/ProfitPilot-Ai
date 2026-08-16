@@ -1,6 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
-import { ArrowUpRight, Award, BarChart3, Box, ChevronDown, Database, Gauge, Package, RefreshCw, Search, ShoppingBag, SlidersHorizontal, Tag, TrendingUp } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { ArrowUpRight, Award, BarChart3, Box, Database, Gauge, Package, RefreshCw, Search, ShoppingBag, SlidersHorizontal, Tag, TrendingUp } from 'lucide-react'
+import { CustomSelect } from './CustomSelect.js'
 import type { AnalyticsSnapshot, CatalogProduct, WorkspaceContext } from './model.js'
 import { formatMoney, formatNumber } from './model.js'
 import { buildProductsViewModel, filterAndSortProducts } from './products-model.js'
@@ -94,58 +95,9 @@ function ProductsToolbar({ query, sort, status, resultCount, totalCount, onQuery
     <div className="products-toolbar-title"><div className="section-kicker"><span className="kicker-dot blue" /> All product list</div><h2>Catalog performance</h2><span>{formatNumber(resultCount)} of {formatNumber(totalCount)} real products</span></div>
     <div className="products-controls">
       <label className="products-search"><Search size={15} /><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search by product name" aria-label="Search by product name" /></label>
-      <ProductsDropdown icon={<SlidersHorizontal size={14} />} label="Sort by" value={sort} options={PRODUCT_SORT_OPTIONS} onChange={onSort} ariaLabel="Sort products" />
-      <ProductsDropdown icon={<Tag size={14} />} label="Show" value={status} options={PRODUCT_STATUS_OPTIONS} onChange={onStatus} ariaLabel="Filter by status" />
+      <CustomSelect icon={<SlidersHorizontal size={14} />} label="Sort by" value={sort} options={PRODUCT_SORT_OPTIONS} onChange={onSort} ariaLabel="Sort products" />
+      <CustomSelect icon={<Tag size={14} />} label="Show" value={status} options={PRODUCT_STATUS_OPTIONS} onChange={onStatus} ariaLabel="Filter by status" />
     </div>
-  </div>
-}
-
-function ProductsDropdown<T extends string>({ icon, label, value, options, onChange, ariaLabel }: { icon: ReactNode; label: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; ariaLabel: string }) {
-  const [open, setOpen] = useState(false)
-  const [activeIndex, setActiveIndex] = useState(0)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const listId = useId()
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value))
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
-
-  useEffect(() => {
-    if (open) setActiveIndex(selectedIndex)
-  }, [open, selectedIndex])
-
-  const commit = (index: number) => {
-    const option = options[index]
-    if (!option) return
-    onChange(option.value)
-    setOpen(false)
-    triggerRef.current?.focus()
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % options.length) }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + options.length) % options.length) }
-    else if (event.key === 'Home') { event.preventDefault(); setActiveIndex(0) }
-    else if (event.key === 'End') { event.preventDefault(); setActiveIndex(options.length - 1) }
-    else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (open) commit(activeIndex); else setOpen(true) }
-    else if (event.key === 'Escape') { event.preventDefault(); setOpen(false); triggerRef.current?.focus() }
-    else if (event.key === 'Tab') { setOpen(false) }
-  }
-
-  return <div className="products-select" ref={rootRef}>
-    <button type="button" ref={triggerRef} className="products-select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-activedescendant={open ? `${listId}-option-${activeIndex}` : undefined} aria-label={ariaLabel} onClick={() => setOpen((isOpen) => !isOpen)} onKeyDown={onKeyDown}>
-      {icon}<span>{label}</span><strong>{options[selectedIndex]?.label}</strong><ChevronDown size={13} />
-    </button>
-    {open && <ul className="products-select-menu" id={listId} role="listbox" aria-label={ariaLabel}>
-      {options.map((option, index) => <li key={option.value} id={`${listId}-option-${index}`} role="option" aria-selected={option.value === value} className={index === activeIndex ? 'highlighted' : ''} onMouseEnter={() => setActiveIndex(index)} onClick={() => commit(index)}>{option.label}</li>)}
-    </ul>}
   </div>
 }
 

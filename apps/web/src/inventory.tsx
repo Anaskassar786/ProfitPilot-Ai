@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import {
   AlertTriangle,
+  ArrowUpDown,
   Boxes,
   CalendarClock,
   ChevronLeft,
@@ -15,20 +16,24 @@ import {
   MoreHorizontal,
   PackageX,
   RefreshCw,
-  Repeat,
   Search,
   ShoppingCart,
   Sparkles,
+  Tag,
   TrendingDown,
   TrendingUp,
   Truck,
   X,
 } from 'lucide-react'
-import { fetchInventory, fetchInventoryItem } from './api.js'
+import { fetchInventory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
 import { PlanLockedFeature } from './orders.js'
+import { CustomSelect } from './CustomSelect.js'
+import type { SelectOption } from './CustomSelect.js'
+import { AIInventoryInsightsCard } from './inventory-insights.js'
+import type { InventoryInsightsResult } from './inventory-insights-model.js'
 import type { WorkspaceContext } from './model.js'
-import type { InventoryItem, InventoryPageResult, InventoryQuery, InventorySort, InventoryTab, StockStatus } from './inventory-model.js'
-import { EMPTY_INVENTORY_PAGE, distributionSegments, formatDateTime, formatMoney, formatUnits, locationBreakdown, locationLabel, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
+import type { DaysOfCover, InventoryItem, InventoryPageResult, InventoryQuery, InventoryRowItem, InventorySort, InventoryTab, StockStatus } from './inventory-model.js'
+import { EMPTY_INVENTORY_PAGE, daysOfCoverLabel, daysOfCoverTone, distributionSegments, formatDateTime, formatMoney, formatUnits, locationBreakdown, locationLabel, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
 
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 type InventoryWorkspaceProps = Readonly<{
@@ -55,6 +60,9 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [syncing, setSyncing] = useState(false)
+  const [insights, setInsights] = useState<InventoryInsightsResult | null>(null)
+  const [insightsLoading, setInsightsLoading] = useState(true)
+  const [insightsError, setInsightsError] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => { setDebouncedQuery(query.trim()); setPage(1) }, 260)
@@ -77,6 +85,20 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [context.storeId, requestQuery, refreshVersion])
+
+  // Intelligence is fetched independently of the table so a slow AI call never
+  // delays the real stock numbers.
+  useEffect(() => {
+    if (!context.storeId) { setInsights(null); setInsightsLoading(false); return }
+    let cancelled = false
+    setInsightsLoading(true)
+    setInsightsError(null)
+    void fetchInventoryInsights(context.storeId)
+      .then((result) => { if (!cancelled) setInsights(result) })
+      .catch((reason: unknown) => { if (!cancelled) setInsightsError(errorText(reason)) })
+      .finally(() => { if (!cancelled) setInsightsLoading(false) })
+    return () => { cancelled = true }
+  }, [context.storeId, refreshVersion])
 
   const sync = async () => {
     setSyncing(true)
@@ -130,7 +152,15 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
 
       <BasicInsightsCard data={data} onUpgrade={upgrade} />
 
-      <PremiumPreviewGrid data={data} onUpgrade={upgrade} />
+      <AIInventoryInsightsCard
+        storeId={context.storeId}
+        insights={insights}
+        loading={insightsLoading}
+        error={insightsError}
+        onUpgrade={upgrade}
+        onRetry={() => setRefreshVersion((value) => value + 1)}
+        onToast={onToast}
+      />
 
       <section className="card inventory-table-card">
         <InventoryToolbar
@@ -145,6 +175,7 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
           categories={data.categories}
           vendors={data.vendors}
           locations={data.locations}
+          sortOptions={inventorySortOptions(lockedFeature(data, 'days_of_cover') === null)}
         />
 
         <InventoryTabs counts={data.tabCounts} active={activeTab} onSelect={(tab) => { setActiveTab(tab); setPage(1) }} />
@@ -152,7 +183,7 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
         {loading ? <InventoryTableSkeleton /> : data.items.length === 0 ? (
           <InventoryEmptyState compact title="No items match these filters" description="Change the active tab, search text, or filters to see your synced stock." action="Clear filters" onAction={clearFilters} />
         ) : (
-          <InventoryTable items={data.items} multiLocation={data.multiLocation} onSelect={setSelectedId} />
+          <InventoryTable items={data.items} multiLocation={data.multiLocation} showDaysOfCover={lockedFeature(data, 'days_of_cover') === null} onSelect={setSelectedId} />
         )}
 
         {!loading && data.pagination.total > 0 && <InventoryPagination pagination={data.pagination} onPage={setPage} />}
@@ -290,46 +321,21 @@ export function BasicInsightsCard({ data, onUpgrade }: { data: InventoryPageResu
         <strong>{healthGrade.grade}</strong>
         <p>{healthGrade.score === null ? healthGrade.label : `${healthGrade.score}/100 · ${healthGrade.label}`}</p>
       </article>
-      <LockedSlot data={data} feature="days_of_cover" title="Days of Cover" icon={<CalendarClock size={16} />} onUpgrade={onUpgrade} />
+      <LockedSlot data={data} feature="days_of_cover" title="Days of Cover" icon={<CalendarClock size={16} />} onUpgrade={onUpgrade} unlockedHint="Shown per item in the Days of Cover column below." />
     </div>
   </section>
 }
 
 /**
- * Premium inventory intelligence. PR-A renders these as blurred previews from
- * the backend's locked-feature metadata; no premium value is ever computed or
- * sent to a plan that has not unlocked it.
+ * Locked-state slot for a premium feature inside the free insights grid. Growth+
+ * plans see where the unlocked value now lives rather than a duplicate number.
  */
-export function PremiumPreviewGrid({ data, onUpgrade }: { data: InventoryPageResult; onUpgrade: () => void }) {
-  const previews: readonly Readonly<{ feature: string; title: string; icon: ReactNode }>[] = [
-    { feature: 'dead_stock', title: 'Dead Stock Detector', icon: <PackageX size={16} /> },
-    { feature: 'reorder_recommendations', title: 'Reorder Recommendations', icon: <Truck size={16} /> },
-    { feature: 'stock_turnover', title: 'Stock Turnover Analysis', icon: <Repeat size={16} /> },
-    { feature: 'overstock_alerts', title: 'Overstock Alerts', icon: <TrendingUp size={16} /> },
-    { feature: 'ai_suggestion', title: 'AI Suggestions', icon: <Sparkles size={16} /> },
-    { feature: 'predictive_restocking', title: 'Predictive Restocking', icon: <LineChart size={16} /> },
-    { feature: 'seasonal_trends', title: 'Seasonal Trends', icon: <CalendarClock size={16} /> },
-    { feature: 'auto_reorder', title: 'Auto-Reorder Suggestions', icon: <Truck size={16} /> },
-    { feature: 'custom_ai_queries', title: 'Custom AI Queries', icon: <Sparkles size={16} /> },
-  ]
-  const visible = previews.filter((preview) => lockedFeature(data, preview.feature))
-  if (visible.length === 0) return null
-  return <section className="card inventory-premium">
-    <header><div className="section-kicker">PREMIUM INVENTORY INTELLIGENCE</div><p>Unlock forecasting and reorder guidance built on your real sales history.</p></header>
-    <div className="inventory-premium-grid">
-      {visible.map((preview) => <LockedSlot key={preview.feature} data={data} feature={preview.feature} title={preview.title} icon={preview.icon} onUpgrade={onUpgrade} compact />)}
-    </div>
-  </section>
-}
-
-function LockedSlot({ data, feature, title, icon, onUpgrade, compact = false }: { data: InventoryPageResult; feature: string; title: string; icon: ReactNode; onUpgrade: () => void; compact?: boolean }) {
+function LockedSlot({ data, feature, title, icon, onUpgrade, unlockedHint, compact = false }: { data: InventoryPageResult; feature: string; title: string; icon: ReactNode; onUpgrade: () => void; unlockedHint: string; compact?: boolean }) {
   const locked = lockedFeature(data, feature)
   if (locked) return <PlanLockedFeature featureName={locked.name} requiredPlan={locked.required_plan} onUpgrade={onUpgrade}><InventoryMask compact={compact} /></PlanLockedFeature>
-  // Unlocked plans see an honest "in progress" state rather than a fabricated
-  // number; the calculations ship in the follow-up inventory intelligence work.
   return <article className={`inventory-basic-card ${compact ? 'compact' : ''}`}>
     <div className="inventory-card-label">{icon}<span>{title}</span></div>
-    <InsightPending message="Awaiting more sales history. This unlocks once your store has enough order data." />
+    <InsightPending message={unlockedHint} />
   </article>
 }
 
@@ -351,7 +357,19 @@ function InventoryTabs({ counts, active, onSelect }: { counts: InventoryPageResu
   </div>
 }
 
-function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection, filters, onFilters, categories, vendors, locations }: {
+/** Sort choices. Days of cover only appears when the plan actually computes it. */
+export function inventorySortOptions(daysOfCoverUnlocked: boolean): readonly SelectOption<InventorySort>[] {
+  const base: readonly SelectOption<InventorySort>[] = [
+    { value: 'name', label: 'Sort: Name' },
+    { value: 'stock', label: 'Sort: Stock' },
+    { value: 'value', label: 'Sort: Value' },
+    { value: 'category', label: 'Sort: Category' },
+    { value: 'updated', label: 'Sort: Updated' },
+  ]
+  return daysOfCoverUnlocked ? [...base, { value: 'days_of_cover', label: 'Sort: Days of cover' }] : base
+}
+
+function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection, filters, onFilters, categories, vendors, locations, sortOptions }: {
   query: string
   onQuery: (value: string) => void
   sort: InventorySort
@@ -363,7 +381,11 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
   categories: readonly string[]
   vendors: readonly string[]
   locations: InventoryPageResult['locations']
+  sortOptions: readonly SelectOption<InventorySort>[]
 }) {
+  const categoryOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All categories' }, ...categories.map((category) => ({ value: category, label: category }))]
+  const vendorOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All vendors' }, ...vendors.map((vendor) => ({ value: vendor, label: vendor }))]
+  const locationOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All locations' }, ...locations.map((location) => ({ value: location.id, label: locationLabel(location) }))]
   return <div className="inventory-toolbar">
     <label className="inventory-search">
       <Search size={16} />
@@ -371,44 +393,29 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
       {query && <button onClick={() => onQuery('')} aria-label="Clear search"><X size={14} /></button>}
     </label>
     <div className="inventory-toolbar-actions">
-      {categories.length > 0 && <select aria-label="Filter by category" value={filters.category} onChange={(event) => onFilters({ ...filters, category: event.target.value })}>
-        <option value="">All categories</option>
-        {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-      </select>}
-      {vendors.length > 0 && <select aria-label="Filter by vendor" value={filters.vendor} onChange={(event) => onFilters({ ...filters, vendor: event.target.value })}>
-        <option value="">All vendors</option>
-        {vendors.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
-      </select>}
-      {locations.length > 1 && <select aria-label="Filter by location" value={filters.locationId} onChange={(event) => onFilters({ ...filters, locationId: event.target.value })}>
-        <option value="">All locations</option>
-        {locations.map((location) => <option key={location.id} value={location.id}>{locationLabel(location)}</option>)}
-      </select>}
+      {categories.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by category" value={filters.category} options={categoryOptions} onChange={(value) => onFilters({ ...filters, category: value })} icon={<Tag size={13} />} />}
+      {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
+      {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
       <div className="inventory-sort-control">
-        <select aria-label="Sort inventory" value={sort} onChange={(event) => onSort(event.target.value as InventorySort)}>
-          <option value="name">Sort: Name</option>
-          <option value="stock">Sort: Stock</option>
-          <option value="value">Sort: Value</option>
-          <option value="category">Sort: Category</option>
-          <option value="updated">Sort: Updated</option>
-        </select>
+        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} />
         <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? '↑' : '↓'}</button>
       </div>
     </div>
   </div>
 }
 
-export function InventoryTable({ items, multiLocation, onSelect }: { items: readonly InventoryItem[]; multiLocation: boolean; onSelect: (id: string) => void }) {
+export function InventoryTable({ items, multiLocation, onSelect, showDaysOfCover = false }: { items: readonly InventoryRowItem[]; multiLocation: boolean; onSelect: (id: string) => void; showDaysOfCover?: boolean }) {
   return <div className="inventory-table-wrap">
     <table className="inventory-table">
       <thead><tr>
-        <th>Item</th><th>Category</th><th>Stock</th>{multiLocation && <th>Locations</th>}<th>Value</th><th>Status</th><th><span className="sr-only">Actions</span></th>
+        <th>Item</th><th>Category</th><th>Stock</th>{multiLocation && <th>Locations</th>}{showDaysOfCover && <th>Days of Cover</th>}<th>Value</th><th>Status</th><th><span className="sr-only">Actions</span></th>
       </tr></thead>
-      <tbody>{items.map((item) => <InventoryTableRow key={item.variantId} item={item} multiLocation={multiLocation} onSelect={onSelect} />)}</tbody>
+      <tbody>{items.map((item) => <InventoryTableRow key={item.variantId} item={item} multiLocation={multiLocation} showDaysOfCover={showDaysOfCover} onSelect={onSelect} />)}</tbody>
     </table>
   </div>
 }
 
-function InventoryTableRow({ item, multiLocation, onSelect }: { item: InventoryItem; multiLocation: boolean; onSelect: (id: string) => void }) {
+function InventoryTableRow({ item, multiLocation, showDaysOfCover, onSelect }: { item: InventoryRowItem; multiLocation: boolean; showDaysOfCover: boolean; onSelect: (id: string) => void }) {
   return <tr tabIndex={0} onClick={() => onSelect(item.variantId)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item.variantId) } }}>
     <td data-label="Item">
       <div className="inventory-item-cell">
@@ -419,10 +426,23 @@ function InventoryTableRow({ item, multiLocation, onSelect }: { item: InventoryI
     <td data-label="Category"><span>{item.category ?? '—'}</span>{item.vendor && <small>{item.vendor}</small>}</td>
     <td data-label="Stock"><StockQuantity item={item} /></td>
     {multiLocation && <td data-label="Locations"><LocationCell item={item} /></td>}
+    {showDaysOfCover && <td data-label="Days of Cover"><DaysOfCoverCell cover={item.daysOfCover} /></td>}
     <td data-label="Value"><strong>{formatMoney(item.value, item.currency)}</strong>{item.price !== null && <small>{formatMoney(item.price, item.currency)} each</small>}</td>
     <td data-label="Status"><StockLevelBadge status={item.status} /></td>
     <td data-label="Actions"><button className="inventory-action-button" aria-label={`View ${item.title}`} onClick={(event) => { event.stopPropagation(); onSelect(item.variantId) }}><MoreHorizontal size={17} /></button></td>
   </tr>
+}
+
+/**
+ * Growth+ column. An item without 30 days of sales history, or a variant of a
+ * multi-variant product (Shopify reports sales per product), says so instead of
+ * showing a number that would be invented.
+ */
+export function DaysOfCoverCell({ cover }: { cover: DaysOfCover }) {
+  const label = daysOfCoverLabel(cover)
+  if (cover.status === 'available') return <div className="inventory-cover-cell"><strong className={`tone-${daysOfCoverTone(cover)}`}>{label}</strong><small>{cover.velocity.toLocaleString(undefined, { maximumFractionDigits: 2 })} units/day</small></div>
+  if (cover.status === 'locked') return <div className="inventory-cover-cell"><strong className="tone-muted">Growth</strong><small>Upgrade to calculate</small></div>
+  return <div className="inventory-cover-cell"><strong className="tone-muted">{label}</strong><small title={cover.message}>{cover.reason === 'variant_sales_unavailable' ? 'Sales are per product' : cover.reason === 'no_sales' ? 'No sales in 30 days' : cover.reason === 'no_stock_signal' ? 'No tracked quantity' : 'Awaiting sales history'}</small></div>
 }
 
 function ProductThumbnail({ item }: { item: InventoryItem }) {

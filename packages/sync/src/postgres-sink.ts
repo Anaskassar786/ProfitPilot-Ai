@@ -1,6 +1,7 @@
 import type { AnalyticsRepository, DbJsonObject, CatalogProduct, SqlExecutor } from '@profitpilot/db'
 import type { StoreId } from '@profitpilot/types'
 import { aggregateOrderFacts } from './analytics.js'
+import { writeInventorySnapshots } from './inventory-snapshots.js'
 import { shopifyOrderToFact } from './order-facts.js'
 import type { SyncModule, SyncRecord, SyncSink } from './sync.js'
 
@@ -28,6 +29,15 @@ export class PostgresSyncSink implements SyncSink {
   }
 
   public async complete(storeId: StoreId, module: SyncModule): Promise<void> {
+    // Inventory completion is the only moment the app knows the store's real
+    // current stock, so today's snapshot is recorded here — same completion
+    // hook the orders module already uses to rebuild analytics. Records and the
+    // terminal checkpoint are committed before this runs, so a snapshot failure
+    // surfaces as a sync error without losing any synced Shopify data.
+    if (module === 'inventory') {
+      await writeInventorySnapshots(this.executor, storeId, this.now())
+      return
+    }
     if (module !== 'orders' || !this.analytics) return
     const result = await this.executor.query<{ payload: unknown }>(
       `SELECT payload FROM sync_records WHERE store_id = $1 AND module = 'orders' ORDER BY record_id`,

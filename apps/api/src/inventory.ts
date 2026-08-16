@@ -2,6 +2,8 @@ import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
 import { planAtLeast } from '@profitpilot/ai'
 import type { PlanTier, StoreId } from '@profitpilot/types'
+import { aggregateProductStock, buildSalesHistory, variantDaysOfCover } from './inventory-velocity.js'
+import type { DaysOfCover, ProductSalesDay, SalesHistory } from './inventory-velocity.js'
 
 /**
  * Real Shopify inventory, assembled from three already-synced sources:
@@ -24,7 +26,7 @@ export const DEFAULT_LOW_STOCK_THRESHOLD = 10
 const MAX_LOW_STOCK_THRESHOLD = 100_000
 
 export type StockStatus = 'in_stock' | 'low' | 'out' | 'untracked'
-export type InventorySort = 'name' | 'stock' | 'value' | 'category' | 'updated'
+export type InventorySort = 'name' | 'stock' | 'value' | 'category' | 'updated' | 'days_of_cover'
 /** Where a variant's on-hand number actually came from. */
 export type QuantitySource = 'inventory_levels' | 'variant_inventory_quantity' | 'unavailable'
 
@@ -69,6 +71,13 @@ export type InventoryItem = Readonly<{
   updatedAt: string | null
   syncedAt: string
 }>
+
+/**
+ * A table row: the Shopify item plus the Growth+ days-of-cover column. The
+ * value is `locked` metadata for Trial/Start so the column can render an
+ * upgrade affordance without ever computing a premium number for them.
+ */
+export type InventoryRowItem = InventoryItem & Readonly<{ daysOfCover: DaysOfCover }>
 
 export type InventoryStats = Readonly<{
   totalSkus: number
@@ -142,7 +151,7 @@ export type InventoryFilters = Readonly<{
 
 export type InventoryPageResult = Readonly<{
   plan: PlanTier
-  items: readonly InventoryItem[]
+  items: readonly InventoryRowItem[]
   stats: InventoryStats
   distribution: StockDistribution
   health: InventoryHealth
@@ -164,6 +173,8 @@ export type InventoryDataset = Readonly<{
   coverage: InventoryCoverage
   topProduct: Readonly<{ productId: string; unitsSold: number; grossRevenue: number }> | null
   currency: string | null
+  /** Real per-product daily sales, the only input to every velocity insight. */
+  sales: SalesHistory
 }>
 
 /**
@@ -189,6 +200,7 @@ type CatalogRow = QueryResultRow & { product_id: string; payload: unknown; synce
 type InventoryRow = QueryResultRow & { record_id: string; payload: unknown; synced_at: Date }
 type CheckpointRow = QueryResultRow & { cursor: string | null; updated_at: Date }
 type ProductSalesRow = QueryResultRow & { product_id: string; units_sold: string | number; gross_revenue: string | number }
+type ProductSalesDayRow = QueryResultRow & { product_id: string; day: Date | string; units_sold: string | number; gross_revenue: string | number }
 type CurrencyRow = QueryResultRow & { currency: string | null }
 
 export interface InventoryRepository {
@@ -197,11 +209,11 @@ export interface InventoryRepository {
 }
 
 export class PostgresInventoryRepository implements InventoryRepository {
-  public constructor(private readonly executor: SqlExecutor) {}
+  public constructor(private readonly executor: SqlExecutor, private readonly now: () => number = () => Date.now()) {}
 
   public list(storeId: StoreId, threshold = DEFAULT_LOW_STOCK_THRESHOLD): Promise<InventoryDataset> {
     return withTenantContext(this.executor, storeId, async (client) => {
-      const [catalogResult, inventoryResult, checkpointResult, salesResult, currencyResult] = await Promise.all([
+      const [catalogResult, inventoryResult, checkpointResult, salesResult, salesHistoryResult, currencyResult] = await Promise.all([
         client.query<CatalogRow>(
           `SELECT product_id, payload, synced_at
            FROM catalog_products
@@ -231,6 +243,15 @@ export class PostgresInventoryRepository implements InventoryRepository {
            LIMIT 1`,
           [storeId],
         ),
+        // Daily per-product sales power every velocity insight. 400 days keeps
+        // a full year plus the trailing window used for trend comparisons.
+        client.query<ProductSalesDayRow>(
+          `SELECT product_id, day, units_sold, gross_revenue
+           FROM analytics_product_sales_daily
+           WHERE store_id = $1 AND day >= (CURRENT_DATE - 400)
+           ORDER BY day`,
+          [storeId],
+        ),
         client.query<CurrencyRow>(
           `SELECT payload->>'currency' AS currency
            FROM sync_records
@@ -245,8 +266,10 @@ export class PostgresInventoryRepository implements InventoryRepository {
         inventory: inventoryResult.rows,
         checkpoint: checkpointResult.rows[0] ?? null,
         topSales: salesResult.rows[0] ?? null,
+        salesHistory: salesHistoryResult.rows.map(toProductSalesDay),
         currency: normalizeCurrency(currencyResult.rows[0]?.currency),
         threshold,
+        now: this.now(),
       })
     })
   }
@@ -262,8 +285,10 @@ export function buildInventoryDataset(input: Readonly<{
   inventory: readonly InventoryRow[]
   checkpoint: Readonly<{ cursor: string | null; updated_at: Date }> | null
   topSales: ProductSalesRow | null
+  salesHistory?: readonly ProductSalesDay[]
   currency: string | null
   threshold?: number
+  now?: number
 }>): InventoryDataset {
   const threshold = normalizeThreshold(input.threshold)
   const locations: InventoryLocation[] = []
@@ -334,7 +359,13 @@ export function buildInventoryDataset(input: Readonly<{
       ? { productId: input.topSales.product_id, unitsSold: Math.round(Number(input.topSales.units_sold) || 0), grossRevenue: round(Number(input.topSales.gross_revenue) || 0) }
       : null,
     currency: input.currency,
+    sales: buildSalesHistory(input.salesHistory ?? [], input.now ?? Date.now()),
   }
+}
+
+function toProductSalesDay(row: ProductSalesDayRow): ProductSalesDay {
+  const day = row.day instanceof Date ? row.day.toISOString().slice(0, 10) : String(row.day).slice(0, 10)
+  return { productId: String(row.product_id), day, unitsSold: Math.round(Number(row.units_sold) || 0), grossRevenue: Number(row.gross_revenue) || 0 }
 }
 
 function normalizeInventoryItem(
@@ -511,7 +542,7 @@ export function lockedInventoryFeatures(plan: PlanTier): readonly LockedInventor
     .map((definition) => ({ locked: true, feature: definition.feature, name: definition.name, required_plan: definition.minimumPlan === 'commander' ? 'commander' : 'growth' }))
 }
 
-export function filterInventory(dataset: InventoryDataset, filters: InventoryFilters, plan: PlanTier): InventoryPageResult {
+export function filterInventory(dataset: InventoryDataset, filters: InventoryFilters, plan: PlanTier, now = Date.now()): InventoryPageResult {
   const all = dataset.items
   const health = inventoryHealth(all, filters.lowStockThreshold)
   const query = filters.query.trim().toLowerCase()
@@ -523,7 +554,17 @@ export function filterInventory(dataset: InventoryDataset, filters: InventoryFil
     if (filters.locationId && !item.locations.some((level) => level.locationId === filters.locationId)) return false
     return true
   })
-  const sorted = [...matches].sort((left, right) => compareInventory(left, right, filters.sort, filters.direction))
+  // Days of cover is a Growth+ calculation. Lower plans receive locked
+  // metadata for the column and never a computed value.
+  const coverUnlocked = planAtLeast(plan, 'growth')
+  const variantCounts = new Map(aggregateProductStock(all).map((product) => [product.productId, product.variantCount]))
+  const rows: readonly InventoryRowItem[] = matches.map((item) => ({
+    ...item,
+    daysOfCover: coverUnlocked
+      ? variantDaysOfCover(item, variantCounts.get(item.productId) ?? 1, dataset.sales, now)
+      : { status: 'locked', required_plan: 'growth' },
+  }))
+  const sorted = [...rows].sort((left, right) => compareInventory(left, right, filters.sort, filters.direction))
   const pages = Math.max(1, Math.ceil(sorted.length / filters.limit))
   const page = Math.min(filters.page, pages)
   const start = (page - 1) * filters.limit
@@ -584,9 +625,18 @@ function searchableInventory(item: InventoryItem): readonly string[] {
   return [item.title, item.variantTitle, item.sku, item.category, item.vendor, item.variantId, item.productId].filter((value): value is string => Boolean(value))
 }
 
-function compareInventory(left: InventoryItem, right: InventoryItem, sort: InventorySort, direction: 'asc' | 'desc'): number {
+function compareInventory(left: InventoryRowItem, right: InventoryRowItem, sort: InventorySort, direction: 'asc' | 'desc'): number {
   let value = 0
-  if (sort === 'stock') value = nullableCompare(left.quantity, right.quantity)
+  if (sort === 'days_of_cover') {
+    // "Insufficient data" rows sink to the bottom in both directions rather
+    // than being ranked as if their cover were zero.
+    const leftDays = coverDays(left)
+    const rightDays = coverDays(right)
+    if (leftDays === null && rightDays !== null) return 1
+    if (rightDays === null && leftDays !== null) return -1
+    value = (leftDays ?? 0) - (rightDays ?? 0)
+  }
+  else if (sort === 'stock') value = nullableCompare(left.quantity, right.quantity)
   else if (sort === 'value') value = nullableCompare(left.value, right.value)
   else if (sort === 'category') value = (left.category ?? '').localeCompare(right.category ?? '')
   else if (sort === 'updated') value = (left.updatedAt ?? '').localeCompare(right.updatedAt ?? '')
@@ -594,6 +644,8 @@ function compareInventory(left: InventoryItem, right: InventoryItem, sort: Inven
   if (value === 0) value = left.variantId.localeCompare(right.variantId)
   return direction === 'asc' ? value : -value
 }
+
+function coverDays(item: InventoryRowItem): number | null { return item.daysOfCover.status === 'available' ? item.daysOfCover.days : null }
 
 function variantImageUrl(product: Readonly<Record<string, unknown>>, variant: Readonly<Record<string, unknown>>): string | null {
   const variantImageId = scalarString(variant.image_id)
@@ -650,4 +702,4 @@ function isoDateTime(value: unknown): string | null { const text = nullableStrin
 function bounded(value: unknown, max: number): string { return typeof value === 'string' ? value.trim().slice(0, max) : '' }
 function boundedInteger(value: unknown, min: number, max: number, fallback: number): number { const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN; return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback }
 function isStockStatus(value: unknown): value is StockStatus { return value === 'in_stock' || value === 'low' || value === 'out' || value === 'untracked' }
-function isInventorySort(value: unknown): value is InventorySort { return value === 'name' || value === 'stock' || value === 'value' || value === 'category' || value === 'updated' }
+function isInventorySort(value: unknown): value is InventorySort { return value === 'name' || value === 'stock' || value === 'value' || value === 'category' || value === 'updated' || value === 'days_of_cover' }

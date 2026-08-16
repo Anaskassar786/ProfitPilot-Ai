@@ -24,6 +24,38 @@ A `503 DEPENDENCY_ERROR` from `/sync` carries `details.reason`:
 `SHOPIFY_CIRCUIT_OPEN` (retry after `retryAfterMs`, or reset) or
 `SHOPIFY_TOKEN_MISSING` (hard refresh the embedded app).
 
+## Inventory
+
+- `GET /inventory?storeId=&q=&status=&category=&vendor=&locationId=&sort=&direction=&page=&limit=&lowStockThreshold=`
+  — real Shopify stock rows, KPIs, health, distribution, and locked-feature
+  metadata for the store's plan. `sort=days_of_cover` and the per-row
+  `daysOfCover` field are Growth+; lower plans receive
+  `{ status: 'locked', required_plan: 'growth' }` and never a computed value.
+- `GET /inventory/locations?storeId=` — per-location totals and sync coverage.
+- `GET /inventory/:variantId?storeId=` — one variant's stock detail.
+- `GET /inventory/insights?storeId=&feature=` — plan-gated intelligence:
+  `{ plan, available[], locked[], usage, salesHistory, coverage, cached }`.
+  Growth unlocks dead stock, reorder recommendations, stock turnover, overstock
+  alerts, the AI suggestion, days of cover, and stock history; Commander adds
+  predictive restocking, seasonal trends, auto-reorder review, and custom
+  queries. Results cache for five minutes and every locked access is written to
+  `billing_audit`.
+- `POST /inventory/insights/query` — `{ storeId, question }`, Commander only,
+  20 questions per day. Product names, SKUs, ids, and emails are redacted before
+  the model is called; only aggregate facts are sent.
+- `GET /inventory/history?storeId=&days=7|30|90|365` — Growth+ daily snapshots
+  from `inventory_snapshots_daily`, written by the inventory sync's completion
+  hook. Returns an empty series with an explanatory message before the first
+  sync rather than a synthesised curve.
+- `POST /inventory/reorder-decision` — `{ storeId, productId, decision }`,
+  Commander only. Records an `approved`/`dismissed` review in `billing_audit`.
+  ProfitPilot never places a purchase order.
+
+Every velocity-derived insight requires at least 30 days of sales history in
+`analytics_product_sales_daily`. Below that the endpoints return
+`{ status: 'insufficient_data', message }` explaining how many days are still
+missing instead of an estimate.
+
 ## Jarvis
 
 - `GET /jarvis/preferences?storeId=`

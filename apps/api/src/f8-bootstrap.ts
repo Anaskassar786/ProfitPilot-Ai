@@ -19,6 +19,7 @@ import { PostgresCustomerRepository } from './customers.js'
 import { CustomerInsightsService, CustomerService, PostgresCustomerInsightAudit, PostgresCustomerInsightUsage } from './customer-insights.js'
 import type { CustomerRouteDependencies } from './customer-routes.js'
 import { PostgresInventoryRepository } from './inventory.js'
+import { InventoryInsightsService, PostgresInventoryInsightAudit, PostgresInventoryInsightUsage, PostgresInventorySnapshotRepository } from './inventory-insights.js'
 import type { InventoryRouteDependencies } from './inventory-routes.js'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
@@ -65,11 +66,21 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
     ),
   }
+  const inventoryRepository = new PostgresInventoryRepository(f7.database)
   const inventory: InventoryRouteDependencies = {
-    repository: new PostgresInventoryRepository(f7.database),
+    repository: inventoryRepository,
     // Locked premium metadata must reflect the tenant's real plan, so the
     // existing billing repository is the single source of truth here too.
     plan: async (storeId) => (await f7.billing.repository.get(storeId))?.plan ?? 'trial',
+    insights: new InventoryInsightsService(
+      inventoryRepository,
+      new PostgresInventorySnapshotRepository(f7.database),
+      f7.billing.repository,
+      new PostgresInventoryInsightUsage(f7.database),
+      new PostgresInventoryInsightAudit(f7.database),
+      provider,
+      (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
+    ),
   }
   return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider }
 }

@@ -5,7 +5,7 @@
  */
 
 export type StockStatus = 'in_stock' | 'low' | 'out' | 'untracked'
-export type InventorySort = 'name' | 'stock' | 'value' | 'category' | 'updated'
+export type InventorySort = 'name' | 'stock' | 'value' | 'category' | 'updated' | 'days_of_cover'
 export type QuantitySource = 'inventory_levels' | 'variant_inventory_quantity' | 'unavailable'
 export type InventoryTab = 'all' | StockStatus
 
@@ -44,6 +44,16 @@ export type InventoryItem = Readonly<{
   updatedAt: string | null
   syncedAt: string
 }>
+
+/** Days of cover mirrors `apps/api/src/inventory-velocity.ts` exactly. */
+export type DaysOfCoverReason = 'sales_history' | 'no_sales' | 'no_stock_signal' | 'variant_sales_unavailable'
+export type DaysOfCover =
+  | Readonly<{ status: 'available'; days: number; velocity: number }>
+  | Readonly<{ status: 'insufficient_data'; reason: DaysOfCoverReason; message: string }>
+  | Readonly<{ status: 'locked'; required_plan: 'growth' }>
+
+/** A table row: the Shopify item plus its plan-gated days-of-cover cell. */
+export type InventoryRowItem = InventoryItem & Readonly<{ daysOfCover: DaysOfCover }>
 
 export type InventoryStats = Readonly<{
   totalSkus: number
@@ -113,7 +123,7 @@ export type InventoryQuery = Readonly<Partial<{
 
 export type InventoryPageResult = Readonly<{
   plan: 'trial' | 'start' | 'growth' | 'commander'
-  items: readonly InventoryItem[]
+  items: readonly InventoryRowItem[]
   stats: InventoryStats
   distribution: StockDistribution
   health: InventoryHealth
@@ -149,6 +159,20 @@ export const EMPTY_INVENTORY_PAGE: InventoryPageResult = {
   vendors: [],
   coverage: { inventorySyncCompleted: false, levelRowCount: 0, locationRowCount: 0, lastSyncedAt: null, catalogSynced: false, locationsTruncated: false, quantitySource: 'unavailable', explanation: 'No Shopify products are synced yet. Sync your products to see stock levels.' },
   pagination: { page: 1, limit: 20, total: 0, pages: 1 },
+}
+
+/** Honest label for the Days of Cover column; never renders a fabricated number. */
+export function daysOfCoverLabel(cover: DaysOfCover): string {
+  if (cover.status === 'available') return `${cover.days.toLocaleString(undefined, { maximumFractionDigits: 1 })} days`
+  if (cover.status === 'locked') return 'Growth'
+  return 'Insufficient data'
+}
+
+export function daysOfCoverTone(cover: DaysOfCover): 'red' | 'amber' | 'green' | 'muted' {
+  if (cover.status !== 'available') return 'muted'
+  if (cover.days < 14) return 'red'
+  if (cover.days < 30) return 'amber'
+  return 'green'
 }
 
 export function stockStatusLabel(status: StockStatus): string {
