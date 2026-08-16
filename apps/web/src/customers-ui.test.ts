@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { CustomerActivityStatus, CustomerEmailAction, CustomersEmptyState, InitialsAvatar } from './customers.js'
+import { CustomerActivityStatus, CustomerEmailAction, CustomersEmptyState, InitialsAvatar, TargetedEmailComposer } from './customers.js'
 import { customerAvatarColor, customerEmailLabel, customerMoney, initialsForCustomer, primaryBehaviorLabel } from './customers-model.js'
 import type { CustomerSummary } from './customers-model.js'
 
@@ -75,5 +75,19 @@ describe('Customers UI safety regressions', () => {
     const source = readFileSync(new URL('./customers.tsx', import.meta.url), 'utf8')
     for (const component of ['CustomerStatsGrid', 'AICustomerInsightsCard', 'CustomersToolbar', 'CustomerSegmentFilterBar', 'CustomersTable', 'CustomerRow', 'CustomerBulkActionBar', 'CustomerDetailDrawer', 'CustomerOrderHistory', 'CustomerLtvTimeline', 'ProductsBoughtList', 'CustomerHistoryCoverage']) expect(source).toContain(`function ${component}`)
     expect(source).not.toMatch(/https?:\/\/.*(avatar|photo|unsplash)/i)
+  })
+
+  it('renders a safety-first email composer with explicit review and no arbitrary recipient input', () => {
+    const html = renderToStaticMarkup(createElement(TargetedEmailComposer, { storeId: 'store-1', customer, onClose: vi.fn(), onToast: vi.fn() }))
+    expect(html).toContain('NO ONE-CLICK SEND')
+    expect(html).toContain('REAL SHOPIFY RECIPIENT')
+    expect(html).toContain('Send reviewed email')
+    expect(html).toContain('disabled')
+    expect(html).not.toContain('type="email"')
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    const send = api.slice(api.indexOf('function sendTargetedCampaign'), api.indexOf('export function exportRows'))
+    expect(send).toContain('customerId')
+    expect(send).not.toContain('recipientEmail')
+    expect(send).not.toContain('acceptsMarketing')
   })
 })

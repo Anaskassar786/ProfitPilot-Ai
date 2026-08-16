@@ -50,7 +50,11 @@ export const OPERATOR_MIGRATIONS: readonly Migration[] = [
   { id: '0014', filename: '0014_operator_fixes.sql', sql: 'tenant-safe writes, report PDF bytes, ticket descriptions, and workflow draft hashes' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS]
+export const CUSTOMER_CAMPAIGN_MIGRATIONS: readonly Migration[] = [
+  { id: '0015', filename: '0015_targeted_campaign_safety.sql', sql: 'durable customer-targeted campaign idempotency and outcome metadata' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

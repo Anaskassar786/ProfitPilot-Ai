@@ -27,7 +27,8 @@ import {
   X,
 } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { fetchCustomer, fetchCustomerInsights, fetchCustomers, queryCustomerInsights } from './api.js'
+import { fetchCampaignTemplates, fetchCustomer, fetchCustomerInsights, fetchCustomers, previewTargetedCampaign, queryCustomerInsights, sendTargetedCampaign } from './api.js'
+import type { CampaignTemplateRecord, TargetedCampaignPreview, TargetedCampaignResult } from './api.js'
 import type { WorkspaceContext } from './model.js'
 import { PlanLockedFeature } from './orders.js'
 import {
@@ -76,6 +77,7 @@ export function CustomersPage({ context, onSync, onNavigateBilling, onToast }: C
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [composerCustomer, setComposerCustomer] = useState<CustomerSummary | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -114,7 +116,7 @@ export function CustomersPage({ context, onSync, onNavigateBilling, onToast }: C
   }
   const select = (id: string, checked: boolean) => setSelectedIds((current) => { const next = new Set(current); if (checked) next.add(id); else next.delete(id); return next })
   const selectPage = (checked: boolean) => setSelectedIds(checked ? new Set(data.customers.map((customer) => customer.id)) : new Set())
-  const emailCustomer = (customer: CustomerSummary) => onToast(customer.canEmail ? `Choose a reviewed email template for ${customer.displayName}.` : customer.emailDisabledReason ?? 'Customer cannot receive marketing email.', customer.canEmail ? 'info' : 'warning')
+  const emailCustomer = (customer: CustomerSummary) => { if (customer.canEmail) setComposerCustomer(customer); else onToast(customer.emailDisabledReason ?? 'Customer cannot receive marketing email.', 'warning') }
 
   if (!context.storeId) return <CustomersEmptyState title="Connect Shopify to view customers" description="ProfitPilot only displays protected customer data returned for your authorized Shopify store." action="Open billing" onAction={onNavigateBilling} />
 
@@ -130,6 +132,7 @@ export function CustomersPage({ context, onSync, onNavigateBilling, onToast }: C
       <CustomersPagination pagination={data.pagination} onPage={setPage} />
     </section>
     {detailId && <CustomerDetailDrawer storeId={context.storeId} customerId={detailId} plan={data.plan} onClose={() => setDetailId(null)} onEmail={emailCustomer} onUpgrade={onNavigateBilling} onToast={onToast} />}
+    {composerCustomer && <TargetedEmailComposer storeId={context.storeId} customer={composerCustomer} onClose={() => setComposerCustomer(null)} onToast={onToast} />}
   </div>
 }
 
@@ -219,6 +222,33 @@ export function CustomerOrderHistory({ orders }: { orders: CustomerDetail['order
 export function ProductsBoughtList({ products }: { products: CustomerDetail['products'] }) { return <CustomerDetailSection title="Products bought" icon={<Package size={16} />}>{products.length === 0 ? <p className="customer-detail-empty">No products are available in qualifying synced orders.</p> : <div className="customer-products">{products.map((product, index) => <span key={product.productId ?? `${product.title}-${index}`}><Package size={13} /><strong>{product.title}</strong><small>{product.quantity} bought</small></span>)}</div>}</CustomerDetailSection> }
 export function CustomerLtvTimeline({ customer }: { customer: CustomerDetail }) { return <CustomerDetailSection title="Cumulative synced value" icon={<TrendingUp size={16} />}>{customer.cumulativeValue.length === 0 ? <p className="customer-detail-empty">A single-currency valued order timeline is not available. Mixed or missing currencies are never aggregated.</p> : <div className="customer-ltv-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={customer.cumulativeValue} margin={{ left: 4, right: 16, top: 8, bottom: 0 }}><CartesianGrid stroke="rgba(120,133,157,.12)" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => formatShortDate(value)} stroke="#6B7280" tick={{ fontSize: 8 }} /><YAxis stroke="#6B7280" tick={{ fontSize: 8 }} width={42} /><Tooltip formatter={(value) => customerMoney(typeof value === 'number' ? value : Number(value), customer.cumulativeValue[0]?.currency ?? null)} labelFormatter={(value) => formatDate(String(value))} contentStyle={{ background: '#171A23', border: '1px solid #2A2E38', borderRadius: 8, fontSize: 10 }} /><Line type="monotone" dataKey="value" stroke="#72A7FF" strokeWidth={2} dot={{ r: 2 }} /></LineChart></ResponsiveContainer></div>}</CustomerDetailSection> }
 
+export function TargetedEmailComposer({ storeId, customer, onClose, onToast }: { storeId: string; customer: CustomerSummary; onClose: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
+  const [templates, setTemplates] = useState<readonly CampaignTemplateRecord[]>([])
+  const [templateId, setTemplateId] = useState('')
+  const [preview, setPreview] = useState<TargetedCampaignPreview | null>(null)
+  const [result, setResult] = useState<TargetedCampaignResult | null>(null)
+  const [reviewed, setReviewed] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [previewing, setPreviewing] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  useEffect(() => { let cancelled = false; setLoading(true); void fetchCampaignTemplates(storeId).then((rows) => { if (!cancelled) setTemplates(rows.filter((template) => template.kind === 'EMAIL')) }).catch((reason: unknown) => { if (!cancelled) setError(errorText(reason)) }).finally(() => { if (!cancelled) setLoading(false) }); return () => { cancelled = true } }, [storeId])
+  const selectTemplate = (id: string) => { setTemplateId(id); setPreview(null); setResult(null); setReviewed(false); setError(null) }
+  const loadPreview = async () => { if (!templateId) return; setPreviewing(true); setError(null); try { setPreview(await previewTargetedCampaign(storeId, customer.id, templateId, idempotencyKey)) } catch (reason: unknown) { setError(errorText(reason)) } finally { setPreviewing(false) } }
+  const send = async () => { if (!templateId || !preview || !reviewed) return; setSending(true); setError(null); try { const sent = await sendTargetedCampaign(storeId, customer.id, templateId, idempotencyKey); setResult(sent); onToast(sent.status === 'sent' ? `Email sent to ${customer.displayName}.` : sent.reason ?? `Email ${sent.status}.`, sent.status === 'sent' ? 'success' : sent.status === 'suppressed' ? 'warning' : 'error') } catch (reason: unknown) { setError(errorText(reason)) } finally { setSending(false) } }
+  return <div className="targeted-email-layer"><button className="targeted-email-backdrop" onClick={onClose} aria-label="Close email composer" /><section className="targeted-email-modal" role="dialog" aria-modal="true" aria-label="Review targeted email"><header><div><span className="section-kicker">REVIEWED EMAIL · NO ONE-CLICK SEND</span><h2>Compose customer email</h2></div><button onClick={onClose} aria-label="Close email composer"><X size={18} /></button></header><div className="targeted-email-body">
+    <div className="targeted-recipient"><InitialsAvatar customer={customer} /><div><small>REAL SHOPIFY RECIPIENT</small><strong>{customer.displayName}</strong><span>{customerEmailLabel(customer)} · {marketingLabel(customer.marketingState)}</span></div><ShieldCheck size={17} /></div>
+    <label className="targeted-template-field">Email template<select value={templateId} disabled={loading || sending} onChange={(event) => selectTemplate(event.target.value)}><option value="">{loading ? 'Loading tenant templates…' : 'Select an EMAIL template'}</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+    {!loading && templates.length === 0 && <div className="targeted-email-notice"><Info size={14} /> No tenant EMAIL templates are available. Create one in Campaigns with an unsubscribe link.</div>}
+    {templateId && !preview && <button className="button secondary targeted-preview-button" disabled={previewing} onClick={() => void loadPreview()}>{previewing ? <RefreshCw className="spin" size={14} /> : <Mail size={14} />}{previewing ? 'Resolving preview…' : 'Preview resolved variables'}</button>}
+    {preview && <div className="targeted-preview"><div><small>FROM</small><strong>{preview.sender.fromName} &lt;{preview.sender.email}&gt;</strong></div><div><small>SUBJECT</small><strong>{preview.subject}</strong></div><div><small>MESSAGE PREVIEW</small><p>{plainEmailPreview(preview.html)}</p></div><span>Resolved variables: {preview.variables.join(', ') || 'none'}</span></div>}
+    {preview && !result && <label className="targeted-review-check"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} /><span><strong>I reviewed the recipient, sender, subject, and content.</strong><small>The backend will re-check plan, consent, suppression, sender verification, template ownership, unsubscribe URL, quota, and idempotency.</small></span></label>}
+    {error && <div className="targeted-email-error"><AlertTriangle size={14} />{error}</div>}
+    {result && <div className={`targeted-email-result ${result.status}`}><strong>{result.status === 'sent' ? 'Email accepted by provider' : result.status === 'suppressed' ? 'Send suppressed' : 'Send failed'}</strong><span>{result.reason ?? `Recorded as ${result.status}.`}</span></div>}
+  </div><footer><button className="button secondary" onClick={onClose}>{result ? 'Done' : 'Cancel'}</button><button className="button primary" disabled={!preview || !reviewed || sending || result !== null} onClick={() => void send()}>{sending ? <RefreshCw className="spin" size={14} /> : <Send size={14} />}{sending ? 'Sending…' : 'Send reviewed email'}</button></footer></section></div>
+}
+
 function CustomersPagination({ pagination, onPage }: { pagination: CustomersPageResult['pagination']; onPage: (page: number) => void }) { return <footer className="customers-pagination"><span>{number(pagination.total)} real customers</span><div><button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)}><ChevronLeft size={15} /></button><strong>Page {pagination.page} of {pagination.pages}</strong><button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)}><ChevronRight size={15} /></button></div></footer> }
 function CustomersSkeleton() { return <div className="customers-skeleton">{[1, 2, 3, 4, 5].map((row) => <div key={row}>{[1, 2, 3, 4, 5, 6].map((cell) => <span key={cell} />)}</div>)}</div> }
 function CustomersError({ message, onRetry }: { message: string; onRetry: () => void }) { return <div className="customers-error"><AlertTriangle size={21} /><strong>Customers could not be loaded</strong><p>{message}</p><button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry</button></div> }
@@ -234,6 +264,7 @@ function formatDateTime(value: string | null): string { if (!value) return '—'
 function relativeDays(value: string): string { const days = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 86_400_000)); return days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'} ago` }
 function shortId(value: string): string { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value }
 function errorText(value: unknown): string { return value instanceof Error ? value.message : 'Request failed' }
+function plainEmailPreview(html: string): string { return html.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim() }
 function downloadCustomers(customers: readonly CustomerSummary[]): void { const rows = [['Customer ID', 'Name', 'Email', 'Marketing state', 'Orders', 'Total spent', 'Currency', 'Last order', 'Activity'], ...customers.map((customer) => [customer.id, customer.displayName, customer.email ?? '', customer.marketingState, customer.lifetimeOrders, customer.totalSpent ?? '', customer.currency ?? '', customer.lastOrderAt ?? '', customer.activity])]; const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `shopify-customers-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); URL.revokeObjectURL(url) }
 function csvCell(value: unknown): string { const text = String(value); return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text }
 

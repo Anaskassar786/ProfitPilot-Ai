@@ -1,15 +1,42 @@
-import { MerchantEmailVerifier, PostgresTemplateRepository, PostgresWorkflowRepository, ThreadLedger } from '@profitpilot/automation'
+import { CampaignEmailService, MerchantEmailVerifier, PostgresMerchantEmailConfigRepository, PostgresTemplateRepository, PostgresWorkflowRepository, ThreadLedger, createBrevoMailer } from '@profitpilot/automation'
+import type { EmailTransport } from '@profitpilot/automation'
 import type { ExportRow } from '@profitpilot/reporting'
 import { createF5Bootstrap } from './f5-bootstrap.js'
 import type { F5Bootstrap } from './f5-bootstrap.js'
 import type { AutomationRouteDependencies } from './automation-routes.js'
-import { storeId } from '@profitpilot/types'
+import { AppError, storeId } from '@profitpilot/types'
+import { PostgresCustomerRepository } from './customers.js'
+import { PostgresCampaignSendStore, TargetedCampaignService } from './targeted-campaigns.js'
+import { withTenantContext } from '@profitpilot/db'
 
 export type F6Bootstrap = Readonly<F5Bootstrap & { automation: AutomationRouteDependencies }>
 export function createF6Bootstrap(env: Readonly<Record<string, string | undefined>>): F6Bootstrap | null {
   const f5 = createF5Bootstrap(env)
   if (!f5) return null
-  return { ...f5, automation: { workflows: new PostgresWorkflowRepository(f5.database), templates: new PostgresTemplateRepository(f5.database), emailVerifier: new MerchantEmailVerifier(env.TRACKING_SECRET?.trim() || 'development-tracking-secret'), tickets: new ThreadLedger(), exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset) } }
+  const templates = new PostgresTemplateRepository(f5.database)
+  const merchantEmails = new PostgresMerchantEmailConfigRepository(f5.database)
+  const emailVerifier = new MerchantEmailVerifier(env.MERCHANT_EMAIL_VERIFICATION_SECRET?.trim() || env.TRACKING_SECRET?.trim() || 'development-merchant-email-secret')
+  const mailer = campaignMailer(env)
+  const campaignEmail = new CampaignEmailService(mailer, mailer, emailVerifier, env.SMTP_FROM?.trim() || 'unconfigured@profitpilot.invalid', env.SMTP_FROM_NAME?.trim() || 'ProfitPilot', { physicalAddress: env.LEGAL_ENTITY_ADDRESS?.trim() || '', supportEmail: env.SUPPORT_EMAIL?.trim() || '' })
+  const targetedCampaigns = new TargetedCampaignService(
+    new PostgresCustomerRepository(f5.database),
+    f5.billing.repository,
+    templates,
+    merchantEmails,
+    emailVerifier,
+    campaignEmail,
+    new PostgresCampaignSendStore(f5.database),
+    async (tenant) => (await f5.storeDirectory.get(tenant))?.shopDomain ?? null,
+    env.TRACKING_SECRET?.trim() || 'development-campaign-unsubscribe-secret',
+    env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || null,
+    { locked: (tenant, plan) => withTenantContext(f5.database, tenant, async (client) => { await client.query(`INSERT INTO billing_audit (shop_id, actor, event, payload) VALUES ($1, 'merchant', 'campaigns.targeted_send.locked', $2::jsonb)`, [tenant, JSON.stringify({ plan, requiredPlan: 'growth' })]) }) },
+  )
+  return { ...f5, automation: { workflows: new PostgresWorkflowRepository(f5.database), templates, emailVerifier, merchantEmails, targetedCampaigns, tickets: new ThreadLedger(), exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset) } }
+}
+
+function campaignMailer(env: Readonly<Record<string, string | undefined>>): EmailTransport {
+  if (env.SMTP_HOST?.trim() && env.SMTP_USER?.trim() && env.SMTP_PASSWORD?.trim()) return createBrevoMailer(env)
+  return { async send() { throw new AppError('DEPENDENCY_ERROR', 'SMTP campaign transport is not configured', 503) } }
 }
 
 async function loadExportRows(f5: F5Bootstrap, tenant: string, dataset: 'orders' | 'catalog' | 'audit' | 'revenue'): Promise<readonly ExportRow[]> {
