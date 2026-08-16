@@ -131,7 +131,7 @@ export function CustomersPage({ context, onSync, onNavigateBilling, onToast }: C
       {loading ? <CustomersSkeleton /> : error ? <CustomersError message={error} onRetry={() => setRefreshVersion((value) => value + 1)} /> : data.customers.length === 0 ? <CustomersEmptyState compact title={data.stats.total === 0 ? 'No customer records synced' : 'No customers match these filters'} description={data.stats.total === 0 ? 'Run Customers sync to load the real records Shopify returns. No demo customers are created.' : 'Try another search or segment. Unknown activity is never treated as Inactive.'} action={data.stats.total === 0 ? 'Sync Customers' : 'Clear filters'} onAction={data.stats.total === 0 ? () => void sync() : () => { setQuery(''); setSegment('all') }} /> : <CustomersTable customers={data.customers} plan={data.plan} selected={selectedIds} onSelect={select} onSelectPage={selectPage} onOpen={setDetailId} onEmail={emailCustomer} onUpgrade={onNavigateBilling} />}
       <CustomersPagination pagination={data.pagination} onPage={setPage} />
     </section>
-    {detailId && <CustomerDetailDrawer storeId={context.storeId} customerId={detailId} plan={data.plan} onClose={() => setDetailId(null)} onEmail={emailCustomer} onUpgrade={onNavigateBilling} onToast={onToast} />}
+    {detailId && <CustomerDetailDrawer storeId={context.storeId} customerId={detailId} plan={data.plan} insights={insights} insightsLoading={insightsLoading} onClose={() => setDetailId(null)} onEmail={emailCustomer} onUpgrade={onNavigateBilling} onToast={onToast} />}
     {composerCustomer && <TargetedEmailComposer storeId={context.storeId} customer={composerCustomer} onClose={() => setComposerCustomer(null)} onToast={onToast} />}
   </div>
 }
@@ -195,7 +195,7 @@ export function CustomerEmailAction({ customer, premium, onEmail, onUpgrade }: {
 
 export function CustomerHistoryCoverage({ coverage }: { coverage: CustomerCoverage }) { return <div className={`customer-coverage ${coverage.knownComplete90Days ? 'known' : 'unknown'}`}><History size={15} /><div><strong>Synced history coverage</strong><span>{coverage.explanation}</span></div>{coverage.cutoffDate && <time dateTime={coverage.cutoffDate}>Cutoff {formatDate(coverage.cutoffDate)}</time>}</div> }
 
-export function CustomerDetailDrawer({ storeId, customerId, plan, onClose, onEmail, onUpgrade, onToast }: { storeId: string; customerId: string; plan: CustomersPageResult['plan']; onClose: () => void; onEmail: (customer: CustomerSummary) => void; onUpgrade: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
+export function CustomerDetailDrawer({ storeId, customerId, plan, insights, insightsLoading, onClose, onEmail, onUpgrade, onToast }: { storeId: string; customerId: string; plan: CustomersPageResult['plan']; insights: CustomerInsightsResult | null; insightsLoading: boolean; onClose: () => void; onEmail: (customer: CustomerSummary) => void; onUpgrade: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => { let cancelled = false; setLoading(true); void fetchCustomer(storeId, customerId).then((value) => { if (!cancelled) setCustomer(value) }).catch((reason: unknown) => { if (!cancelled) onToast(errorText(reason), 'error') }).finally(() => { if (!cancelled) setLoading(false) }); return () => { cancelled = true } }, [storeId, customerId])
@@ -207,7 +207,7 @@ export function CustomerDetailDrawer({ storeId, customerId, plan, onClose, onEma
     <CustomerLtvTimeline customer={customer} />
     <CustomerOrderHistory orders={customer.orders} />
     <ProductsBoughtList products={customer.products} />
-    <CustomerDetailSection title="Purchase intelligence" icon={<Sparkles size={16} />}>{growth ? <div className="customer-prediction-grid"><Prediction label="Average cadence" value={customer.purchasePattern.status === 'available' ? `${customer.purchasePattern.averageIntervalDays} days` : 'Insufficient data'} /><Prediction label="Predicted next order" value={plan === 'commander' && customer.predictedNextOrder.status === 'available' ? formatDate(customer.predictedNextOrder.predictedNextOrderAt) : plan === 'commander' ? 'Insufficient data' : 'Commander required'} /><Prediction label="Predictive LTV · 12 months" value={plan === 'commander' && customer.predictiveLtv.status === 'available' ? customerMoney(customer.predictiveLtv.value, customer.predictiveLtv.currency) : plan === 'commander' ? 'Insufficient data' : 'Commander required'} /></div> : <PlanLockedFeature featureName="Purchase patterns" requiredPlan="growth" onUpgrade={onUpgrade}><div className="customer-insight-mask"><span /><span /></div></PlanLockedFeature>}</CustomerDetailSection>
+    <CustomerPremiumIntelligence customer={customer} plan={plan} insights={insights} insightsLoading={insightsLoading} onUpgrade={onUpgrade} />
     {(customer.tags.length > 0 || customer.note) && <CustomerDetailSection title="Shopify tags & note" icon={<ShieldCheck size={16} />}>{customer.tags.length > 0 && <div className="customer-tags">{customer.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}{customer.note && <p className="customer-note">{customer.note}</p>}<small className="read-only-note"><LockKeyhole size={12} /> Read only · edit in Shopify</small></CustomerDetailSection>}
     {plan === 'commander' && <div className="retention-workflow-cta"><Bot size={17} /><div><strong>Retention workflow capability</strong><p>Manual reviewed sends only in this release. Autonomous scheduling is off.</p></div></div>}
   </div><footer><span><LockKeyhole size={13} /> Shopify remains the source of truth</span>{summary && <CustomerEmailAction customer={summary} premium={growth} onEmail={onEmail} onUpgrade={onUpgrade} />}</footer></>}</aside></div>
@@ -215,7 +215,45 @@ export function CustomerDetailDrawer({ storeId, customerId, plan, onClose, onEma
 
 function CustomerDetailSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <section className="customer-detail-section"><h3>{icon}{title}</h3>{children}</section> }
 function Detail({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div> }
-function Prediction({ label, value }: { label: string; value: string }) { return <div><small>{label}</small><strong>{value}</strong></div> }
+function Prediction({ label, value, hint }: { label: string; value: string; hint?: string }) { return <div><small>{label}</small><strong>{value}</strong>{hint ? <em>{hint}</em> : null}</div> }
+
+export function CustomerPremiumIntelligence({ customer, plan, insights, insightsLoading, onUpgrade }: { customer: CustomerDetail; plan: CustomersPageResult['plan']; insights: CustomerInsightsResult | null; insightsLoading: boolean; onUpgrade: () => void }) {
+  const growth = plan === 'growth' || plan === 'commander'
+  const commander = plan === 'commander'
+  return <>
+    {growth ? <CustomerDetailSection title="Purchase intelligence" icon={<Sparkles size={16} />}><PurchasePatternBody customer={customer} /></CustomerDetailSection> : <PlanLockedFeature featureName="Purchase intelligence" requiredPlan="growth" description="Upgrade to Growth to unlock purchase patterns and cadence analysis" onUpgrade={onUpgrade}><DrawerInsightMask /></PlanLockedFeature>}
+    {commander ? <CustomerDetailSection title="Predicted next order" icon={<CalendarDays size={16} />}><PredictedNextOrderBody customer={customer} /></CustomerDetailSection> : <PlanLockedFeature featureName="Predicted next order" requiredPlan="commander" description="Upgrade to Commander to unlock predicted next order date" onUpgrade={onUpgrade}><DrawerInsightMask /></PlanLockedFeature>}
+    {commander ? <CustomerDetailSection title="Predictive LTV" icon={<TrendingUp size={16} />}><PredictiveLtvBody customer={customer} /></CustomerDetailSection> : <PlanLockedFeature featureName="Predictive LTV" requiredPlan="commander" description="Upgrade to Commander to unlock 12-month LTV forecast" onUpgrade={onUpgrade}><DrawerInsightMask /></PlanLockedFeature>}
+    {growth ? <CustomerDetailSection title="Retention recommendation" icon={<Bot size={16} />}><RetentionRecommendationBody insights={insights} loading={insightsLoading} /></CustomerDetailSection> : <PlanLockedFeature featureName="Retention recommendation" requiredPlan="growth" description="Upgrade to Growth to unlock AI retention suggestions" onUpgrade={onUpgrade}><DrawerInsightMask /></PlanLockedFeature>}
+  </>
+}
+
+function DrawerInsightMask() { return <div className="customer-insight-mask"><span /><span /><span /></div> }
+function PurchasePatternBody({ customer }: { customer: CustomerDetail }) {
+  const pattern = customer.purchasePattern
+  if (pattern.status !== 'available') return <p className="customer-detail-empty">Insufficient data — two or more dated qualifying orders are required to measure purchase cadence.</p>
+  const firstOrderAt = customer.orders[0]?.createdAt ?? null
+  return <div className="customer-prediction-grid"><Prediction label="Average cadence" value={`${pattern.averageIntervalDays} days`} /><Prediction label="Intervals measured" value={number(pattern.intervals)} hint={`${number(pattern.basisOrders)} dated orders`} /><Prediction label="First order" value={formatDate(firstOrderAt)} /><Prediction label="Last order" value={formatDate(customer.lastOrderAt)} /></div>
+}
+function PredictedNextOrderBody({ customer }: { customer: CustomerDetail }) {
+  const prediction = customer.predictedNextOrder
+  if (prediction.status !== 'available') return <p className="customer-detail-empty">Insufficient data — three or more dated qualifying orders are required to predict the next order.</p>
+  return <div className="customer-prediction-grid"><Prediction label="Predicted date" value={formatDate(prediction.predictedNextOrderAt)} /><Prediction label="Cadence used" value={`${prediction.averageIntervalDays} days`} hint={`${number(prediction.basisOrders)} dated orders`} /></div>
+}
+function PredictiveLtvBody({ customer }: { customer: CustomerDetail }) {
+  const ltv = customer.predictiveLtv
+  if (ltv.status !== 'available') {
+    const reason = ltv.reason === 'mixed_or_missing_currency' ? 'a single currency across valued orders' : ltv.reason === 'missing_order_value' ? 'valued orders' : 'three or more dated qualifying orders in one currency'
+    return <p className="customer-detail-empty">Insufficient data — {reason} are required to forecast 12-month LTV.</p>
+  }
+  return <><div className="customer-prediction-grid"><Prediction label="12-month forecast" value={customerMoney(ltv.value, ltv.currency)} /><Prediction label="Average order value" value={customerMoney(ltv.averageOrderValue, ltv.currency)} /><Prediction label="Cadence used" value={`${ltv.averageIntervalDays} days`} hint={`${number(ltv.basisOrders)} dated orders`} /></div><small className="customer-prediction-disclaimer"><Info size={12} /> Heuristic forecast (cadence × AOV). Not a guarantee of future spend.</small></>
+}
+function RetentionRecommendationBody({ insights, loading }: { insights: CustomerInsightsResult | null; loading: boolean }) {
+  const retention = insightData(insights, 'retention_suggestion')
+  if (loading) return <div className="customer-ai-skeleton customer-ai-skeleton-compact"><span /><span /></div>
+  const text = typeof retention?.text === 'string' ? retention.text : typeof retention?.message === 'string' ? retention.message : ''
+  return <div className="retention-suggestion"><Sparkles size={16} /><div><strong>AI retention suggestion</strong><p>{text || 'No generated suggestion is available yet.'}</p><small>Store-level aggregate suggestion grounded in synced customer facts.</small></div></div>
+}
 
 export function CustomerOrderHistory({ orders }: { orders: CustomerDetail['orders'] }) { return <CustomerDetailSection title="Synced order history" icon={<CalendarDays size={16} />}>{orders.length === 0 ? <p className="customer-detail-empty">No qualifying dated orders were returned in synced history.</p> : <div className="customer-order-history">{orders.map((order) => <div key={order.id}><span><strong>{order.orderNumber}</strong><small>{formatDate(order.createdAt)}</small></span><strong>{customerMoney(order.total, order.currency)}</strong></div>)}</div>}</CustomerDetailSection> }
 export function ProductsBoughtList({ products }: { products: CustomerDetail['products'] }) { return <CustomerDetailSection title="Products bought" icon={<Package size={16} />}>{products.length === 0 ? <p className="customer-detail-empty">No products are available in qualifying synced orders.</p> : <div className="customer-products">{products.map((product, index) => <span key={product.productId ?? `${product.title}-${index}`}><Package size={13} /><strong>{product.title}</strong><small>{product.quantity} bought</small></span>)}</div>}</CustomerDetailSection> }
