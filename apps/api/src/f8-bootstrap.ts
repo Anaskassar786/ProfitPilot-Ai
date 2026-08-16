@@ -18,9 +18,11 @@ import type { OrderRouteDependencies } from './order-routes.js'
 import { PostgresCustomerRepository } from './customers.js'
 import { CustomerInsightsService, CustomerService, PostgresCustomerInsightAudit, PostgresCustomerInsightUsage } from './customer-insights.js'
 import type { CustomerRouteDependencies } from './customer-routes.js'
+import { PostgresInventoryRepository } from './inventory.js'
+import type { InventoryRouteDependencies } from './inventory-routes.js'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
-export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; jarvisProvider: OpenRouterClient }>
+export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; inventory: InventoryRouteDependencies; jarvisProvider: OpenRouterClient }>
 
 export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>, logger?: Logger): F8Bootstrap | null {
   const f7 = createF7Bootstrap(env)
@@ -63,7 +65,13 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
     ),
   }
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, orders: { repository: orderRepository, insights: orderInsights }, customers, jarvisProvider: provider }
+  const inventory: InventoryRouteDependencies = {
+    repository: new PostgresInventoryRepository(f7.database),
+    // Locked premium metadata must reflect the tenant's real plan, so the
+    // existing billing repository is the single source of truth here too.
+    plan: async (storeId) => (await f7.billing.repository.get(storeId))?.plan ?? 'trial',
+  }
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

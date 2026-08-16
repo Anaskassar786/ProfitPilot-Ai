@@ -3,6 +3,7 @@ import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, Jarvi
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
 import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderView } from './orders-model.js'
 import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, CustomerQuery, CustomersPageResult } from './customers-model.js'
+import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -137,6 +138,22 @@ export function fetchCustomerInsights(storeId: string, feature?: CustomerInsight
 
 export function queryCustomerInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<CustomerInsightsResult> {
   return requestJson<CustomerInsightsResult>('/customers/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher)
+}
+
+export type InventoryLocationsResult = Readonly<{ locations: readonly (InventoryLocation & { itemCount: number; totalUnits: number })[]; multiLocation: boolean; coverage: InventoryCoverage }>
+
+export function fetchInventory(storeId: string, query: InventoryQuery = {}, fetcher: Fetcher = fetch): Promise<InventoryPageResult> {
+  const parameters = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') parameters.set(key, String(value))
+  return requestJson<InventoryPageResult>(`/inventory?${parameters.toString()}`, {}, fetcher)
+}
+
+export function fetchInventoryItem(storeId: string, variantId: string, fetcher: Fetcher = fetch): Promise<InventoryItem> {
+  return requestJson<InventoryItem>(`/inventory/${encodeURIComponent(variantId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchInventoryLocations(storeId: string, fetcher: Fetcher = fetch): Promise<InventoryLocationsResult> {
+  return requestJson<InventoryLocationsResult>(`/inventory/locations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
 
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {

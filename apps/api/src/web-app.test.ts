@@ -81,7 +81,7 @@ describe('API-hosted web app', () => {
     expect(live.headers.get('x-frame-options')).toBe('DENY')
 
     expect((await fetch(`${base}/api/missing`)).status).toBe(404)
-    for (const path of ['/orders?storeId=store-1', '/customers?storeId=store-1']) {
+    for (const path of ['/orders?storeId=store-1', '/customers?storeId=store-1', '/inventory?storeId=store-1', '/inventory/locations?storeId=store-1']) {
       const apiResponse = await fetch(`${base}${path}`)
       expect(apiResponse.status).toBe(401)
       expect(apiResponse.headers.get('content-type')).toContain('application/json')

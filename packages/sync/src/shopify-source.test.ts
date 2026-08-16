@@ -86,6 +86,38 @@ describe('Shopify REST sync source', () => {
     expect(requested.some((url) => url.includes('location_ids=11'))).toBe(true)
     expect(page.records[0]?.id).toBe('11:99')
   })
+  it('persists real location metadata alongside the levels so the workspace can name a location', async () => {
+    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations: [{ id: 11, name: 'Morādābād Warehouse', city: 'Morādābād', province: 'Uttar Pradesh', country: 'IN', active: true }] }), { status: 200 })
+      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 99, location_id: 11, available: 6 }] }), { status: 200 })
+      return new Response(JSON.stringify({}), { status: 404 })
+    })
+    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
+    const location = page.records.find((record) => record.id === 'location:11')
+    expect(location).toMatchObject({ record_kind: 'location', location_id: '11', name: 'Morādābād Warehouse', city: 'Morādābād', country: 'IN', active: true, levels_queried: true })
+  })
+  it('does not duplicate location metadata on resumed inventory pages', async () => {
+    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations: [{ id: 11, name: 'HQ' }] }), { status: 200 })
+      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 100, location_id: 11, available: 2 }] }), { status: 200 })
+      return new Response(JSON.stringify({}), { status: 404 })
+    })
+    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', 'cursor-2')
+    expect(page.records.some((record) => String(record.id).startsWith('location:'))).toBe(false)
+    expect(page.records).toHaveLength(1)
+  })
+  it('marks locations beyond the Shopify location_ids cap as not queried instead of dropping them', async () => {
+    const locations = Array.from({ length: 52 }, (_value, index) => ({ id: index + 1, name: `Store ${index + 1}` }))
+    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
+      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations }), { status: 200 })
+      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [] }), { status: 200 })
+      return new Response(JSON.stringify({}), { status: 404 })
+    })
+    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
+    const locationRecords = page.records.filter((record) => String(record.id).startsWith('location:'))
+    expect(locationRecords).toHaveLength(52)
+    expect(locationRecords.filter((record) => record.levels_queried === false)).toHaveLength(2)
+  })
   it('returns an empty inventory page when the shop has no locations', async () => {
     const page = await routingSource({ '/locations.json': { locations: [] } }).fetchPage(storeId('s'), 'inventory', null)
     expect(page.records).toEqual([])
