@@ -18,3 +18,7 @@ scopes = "read_products,read_orders,read_customers"
 
 [webhooks]
 api_version = "2025-10"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/shopify/webhooks"

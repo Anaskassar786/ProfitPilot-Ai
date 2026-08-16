@@ -18,7 +18,7 @@ function billing(plan: PlanTier): Pick<BillingRepository, 'get'> { return { asyn
 function customer(marketingState: 'subscribed' | 'not_subscribed' = 'subscribed') { return normalizeCustomer('customer-1', { id: 'customer-1', first_name: 'Asha', last_name: 'Khan', email: 'asha@example.com', email_marketing_consent: { state: marketingState }, total_spent: '500', orders_count: 2 }, new Date('2026-08-16T00:00:00Z')) }
 function customerRepository(value = customer(), onRead: () => void = () => undefined): CustomerRepository { return { async list() { return { customers: [value], coverage: value.coverage } }, async get(_store, id) { onRead(); return id === value.id ? value : null } } }
 
-async function fixture(options: Readonly<{ plan?: PlanTier; customer?: ReturnType<typeof customer>; verified?: boolean; sends?: InMemoryCampaignSendStore }> = {}) {
+async function fixture(options: Readonly<{ plan?: PlanTier; customer?: ReturnType<typeof customer>; verified?: boolean; sends?: InMemoryCampaignSendStore; providerFailure?: boolean }> = {}) {
   const templates = new InMemoryTemplateRepository()
   await templates.put({ id: TEMPLATE_ID, storeId: TENANT, name: 'Retention review', kind: 'EMAIL', subject: 'Hello {{customer.first_name}}', body: '<p>We miss you, {{customer.first_name}}.</p><a href="{{unsubscribe.url}}">Unsubscribe</a>', variables: ['customer.first_name', 'unsubscribe.url'] })
   const verifier = new MerchantEmailVerifier('merchant-secret')
@@ -26,7 +26,7 @@ async function fixture(options: Readonly<{ plan?: PlanTier; customer?: ReturnTyp
   const config = { shopId: TENANT, merchantEmail: 'merchant@example.com', fromName: 'Real Store', verified: options.verified ?? true, verificationSentAt: 1, verifiedAt: options.verified === false ? null : 2 }
   await configs.put(config)
   const delivered: Array<Readonly<{ to: string; from: string; subject: string; html: string; headers?: Readonly<Record<string, string>> }>> = []
-  const transport = { async send(message: typeof delivered[number]) { delivered.push(message); return { messageId: 'provider-message-1' } } }
+  const transport = { async send(message: typeof delivered[number]) { delivered.push(message); if (options.providerFailure) throw new Error('provider unavailable'); return { messageId: 'provider-message-1' } } }
   const email = new CampaignEmailService(transport, transport, verifier, 'system@example.com', 'ProfitPilot', { physicalAddress: 'Real business address', supportEmail: 'support@example.com' })
   const sends = options.sends ?? new InMemoryCampaignSendStore()
   const audits: string[] = []
@@ -86,6 +86,26 @@ describe('targeted customer email safety', () => {
     await expect(service.send(input)).rejects.toMatchObject({ status: 403, details: { feature: 'email_sends_month', reason: 'QUOTA_REACHED' } })
   })
 
+  it('persists an honest failed outcome when the provider rejects delivery', async () => {
+    const item = await fixture({ providerFailure: true })
+    const result = await item.service.send(input)
+    expect(result).toMatchObject({ status: 'failed', providerMessageId: null, idempotent: false })
+    expect(result.reason).toBe('Email provider did not accept the message')
+    const replay = await item.service.send(input)
+    expect(replay).toMatchObject({ status: 'failed', idempotent: true })
+    expect(item.delivered).toHaveLength(1)
+  })
+
+  it('isolates templates by tenant and fails closed on unavailable variables', async () => {
+    const item = await fixture()
+    const otherTemplate = '22222222-2222-4222-8222-222222222222'
+    await item.templates.put({ id: otherTemplate, storeId: storeId('other-store'), name: 'Other tenant', kind: 'EMAIL', subject: 'Private', body: '<a href="{{unsubscribe.url}}">Unsubscribe</a>', variables: ['unsubscribe.url'] })
+    await expect(item.service.preview({ ...input, templateId: otherTemplate })).rejects.toMatchObject({ status: 404 })
+    const unavailable = '33333333-3333-4333-8333-333333333333'
+    await item.templates.put({ id: unavailable, storeId: TENANT, name: 'Unavailable data', kind: 'EMAIL', subject: '{{product.title}}', body: '<a href="{{unsubscribe.url}}">Unsubscribe</a>', variables: ['product.title', 'unsubscribe.url'] })
+    await expect(item.service.preview({ ...input, templateId: unavailable })).rejects.toMatchObject({ status: 400, details: { variable: 'product.title' } })
+  })
+
   it('turns the signed unsubscribe URL into a durable suppression', async () => {
     const item = await fixture()
     await item.service.send(input)
@@ -110,6 +130,13 @@ describe('targeted campaign HTTP contract', () => {
       expect(response.status).toBe(400)
       expect((await response.json()).error.message).toContain('Client-supplied')
       expect(item.delivered).toHaveLength(0)
+      await item.service.send(input)
+      const token = /token=([^>&]+)/.exec(item.delivered[0]?.headers?.['List-Unsubscribe'] ?? '')?.[1] ?? ''
+      const unsubscribed = await fetch(`http://127.0.0.1:${address.port}/campaigns/unsubscribe?token=${token}`)
+      expect(unsubscribed.status).toBe(200)
+      expect(await unsubscribed.text()).toContain('You are unsubscribed')
+      const invalid = await fetch(`http://127.0.0.1:${address.port}/campaigns/unsubscribe?token=invalid`)
+      expect(invalid.status).toBe(400)
     } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
   })
 })

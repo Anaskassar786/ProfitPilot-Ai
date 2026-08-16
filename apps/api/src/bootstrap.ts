@@ -1,9 +1,10 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from '@profitpilot/db'
 import type { StoreDirectory } from '@profitpilot/db'
-import { PostgresOAuthStateStore, PostgresTokenRecordStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault } from '@profitpilot/shopify'
+import { PostgresOAuthStateStore, PostgresTokenRecordStore, PostgresWebhookProcessingStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
+import { PostgresCustomerPrivacyRepository, ShopifyComplianceService } from './shopify-compliance.js'
 
 export type F1Bootstrap = Readonly<{
   shopify: ShopifyRouteDependencies
@@ -38,7 +39,16 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // Managed installation uses the same credentials to validate the id_token,
   // exchange it for a non-expiring offline token, and persist via this vault.
   const tokenExchange = new ShopifyTokenExchangeService(sessionToken, vault)
-  return { database, shopify: { installer, exchange }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
+  const webhookStore = new PostgresWebhookProcessingStore(database)
+  const webhookProcessor = new WebhookProcessor(new WebhookVerifier(env.SHOPIFY_WEBHOOK_SECRET?.trim() || sessionToken.apiSecret, webhookStore), webhookStore)
+  const compliance = new ShopifyComplianceService(new PostgresCustomerPrivacyRepository(database), vault)
+  const webhook = {
+    processor: webhookProcessor,
+    storeIdForShop: async (shop: string) => (await storeDirectory.getByShopDomain(shop))?.storeId ?? null,
+    handle: (event: Parameters<ShopifyComplianceService['handle']>[0]) => compliance.handle(event),
+    finalize: (event: Parameters<ShopifyComplianceService['finalize']>[0]) => compliance.finalize(event),
+  }
+  return { database, shopify: { installer, exchange, webhook }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {

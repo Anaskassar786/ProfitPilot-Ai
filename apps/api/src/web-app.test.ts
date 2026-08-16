@@ -81,9 +81,15 @@ describe('API-hosted web app', () => {
     expect(live.headers.get('x-frame-options')).toBe('DENY')
 
     expect((await fetch(`${base}/api/missing`)).status).toBe(404)
-    const ordersApi = await fetch(`${base}/orders?storeId=store-1`)
-    expect(ordersApi.status).toBe(401)
-    expect(ordersApi.headers.get('content-type')).toContain('application/json')
+    for (const path of ['/orders?storeId=store-1', '/customers?storeId=store-1']) {
+      const apiResponse = await fetch(`${base}${path}`)
+      expect(apiResponse.status).toBe(401)
+      expect(apiResponse.headers.get('content-type')).toContain('application/json')
+      expect(await apiResponse.text()).not.toContain('ProfitPilot web shell')
+    }
+    const campaignApi = await fetch(`${base}/campaigns/send`)
+    expect(campaignApi.status).toBe(404)
+    expect(await campaignApi.text()).not.toContain('ProfitPilot web shell')
     expect((await fetch(`${base}/assets/missing.js`)).status).toBe(404)
   }))
 })
