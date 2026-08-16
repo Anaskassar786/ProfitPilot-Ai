@@ -94,6 +94,7 @@ import { ProductsWorkspace } from './products.js'
 import { OrdersWorkspace } from './orders.js'
 import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
+import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -136,7 +137,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   orders: { title: 'Orders', description: 'Search, filter, inspect, and export real Shopify orders with plan-aware intelligence.', icon: ShoppingBag },
   customers: { title: 'Customers', description: 'Customer data stays tenant-scoped and minimized by default.', icon: Users },
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
-  analytics: { title: 'Analytics', description: 'Pre-aggregated metrics built from closed Shopify data.', icon: LineChart },
+  analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
   'command-center': { title: 'AI Command Center', description: 'Seven agents explain deterministic store evidence. They never invent numbers.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
@@ -411,7 +412,7 @@ function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, sync
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
   if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
-  if (active === 'analytics') return <AnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} />
+  if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage agents={data.agents} onRefresh={onRefresh} onPhaseGate={onPhaseGate} />
   if (active === 'recommendations') return <RecommendationsPage context={context} recommendations={data.recommendations} onEvidence={onEvidence} onDecide={onDecide} onRefresh={onRefresh} onToast={onToast} />
@@ -457,8 +458,6 @@ function ProductsPage({ context, catalog, analytics, onSync }: { context: Worksp
     <ProductsWorkspace context={context} catalog={catalog} analytics={analytics} onSync={onSync} />
   </PageLayout>
 }
-
-function AnalyticsPage({ context, snapshot, onSync }: { context: WorkspaceContext; snapshot: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void> }) { const revenue = sumRevenue(snapshot); const orders = sumOrders(snapshot); return <PageLayout eyebrow="Store analytics" title="Analytics" description="Four deterministic metric tables, rendered without client-side invented numbers." actions={<><button className="button secondary"><CalendarDays size={15} /> Closed periods</button><button className="button primary" onClick={() => void onSync('orders')}><RefreshCw size={15} /> Refresh data</button></>}><div className="metric-strip"><MiniMetric label="Revenue" value={formatMoney(revenue)} sub="analytics_revenue_daily" tone="gold" /><MiniMetric label="Orders" value={formatNumber(orders)} sub="analytics_orders_daily" tone="blue" /><MiniMetric label="Product sales rows" value={snapshot ? formatNumber(snapshot.productSales.length) : '—'} sub="Pre-aggregated" tone="purple" /><MiniMetric label="Cohort rows" value={snapshot ? formatNumber(snapshot.customerCohorts.length) : '—'} sub="Pre-aggregated" tone="green" /></div><div className="analytics-grid"><section className="card analytics-main-card"><CardHeading kicker="Revenue table" dot="blue" title="Revenue trend" action={<div className="chart-tabs"><button className="active">Revenue</button><button>Orders</button><button>COGS later</button></div>} />{snapshot && snapshot.revenue.length > 0 ? <AreaChart points={revenuePoints(snapshot, 'all')} /> : <EmptyChart onSync={() => void onSync('orders')} />}</section><section className="card channel-card"><CardHeading kicker="Attribution" dot="purple" title="AI attribution" /><div className="gated-panel"><LockKeyhole size={21} /><strong>Not available yet</strong><p>Attribution appears after approved AI actions generate tracked revenue.</p><span className="phase-tag">Coming next</span></div></section></div><section className="card insight-row-card"><CardHeading kicker="Data contracts" dot="green" title="What is real right now" /><div className="insight-row-list"><InsightItem icon={Database} title="Revenue daily" detail={snapshot?.revenue.length ? `${snapshot.revenue.length} rows returned` : 'No rows returned'} tone="blue" /><InsightItem icon={ShoppingBag} title="Orders daily" detail={snapshot?.orders.length ? `${snapshot.orders.length} rows returned` : 'Sync orders to populate'} tone="green" /><InsightItem icon={ShieldCheck} title="Tenant isolation" detail={context.storeId ? 'Scoped by storeId' : 'Store context required'} tone="purple" /></div></section></PageLayout> }
 
 function EmptyDataPage({ page, context, onSync }: { page: SectionId; context: WorkspaceContext; onSync: (module: string) => Promise<void> }) { const meta = pageMeta[page]; const Icon = meta.icon; return <PageLayout eyebrow="Store data" title={meta.title} description={meta.description}><EmptyState icon={Icon} title={`No ${meta.title.toLowerCase()} data yet`} description={context.storeId ? 'This section is wired to the foundation and will render once its source module has real rows.' : 'Connect Shopify first. ProfitPilot does not ship demo records.'} action={context.storeId ? `Sync ${meta.title}` : 'Connect Shopify'} onAction={() => void onSync(page)} /></PageLayout> }
 

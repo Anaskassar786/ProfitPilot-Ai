@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { AlertTriangle, CalendarClock, Check, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
+import { UpgradePlanButton } from './UpgradePlanButton.js'
 import { fetchInventoryHistory, queryInventoryInsights, submitReorderDecision } from './api.js'
 import {
   HISTORY_WINDOWS,
@@ -47,12 +48,12 @@ export function AIInventoryInsightsCard({ storeId, insights, loading, error, onU
   const [open, setOpen] = useState(true)
   if (error) {
     return <section className="card inventory-ai-card">
-      <InsightsHeader insights={insights} open={open} onToggle={() => setOpen((value) => !value)} />
+      <InsightsHeader insights={insights} open={open} onToggle={() => setOpen((value) => !value)} onUpgrade={onUpgrade} />
       <div className="inventory-ai-error"><AlertTriangle size={15} /><span>{error}</span><button className="button secondary" onClick={onRetry}>Retry</button></div>
     </section>
   }
   return <section className="card inventory-ai-card">
-    <InsightsHeader insights={insights} open={open} onToggle={() => setOpen((value) => !value)} />
+    <InsightsHeader insights={insights} open={open} onToggle={() => setOpen((value) => !value)} onUpgrade={onUpgrade} />
     {open && (loading && !insights ? <div className="inventory-ai-grid">{[1, 2, 3, 4].map((key) => <div key={key} className="inventory-skeleton-block" />)}</div> : <>
       <div className="inventory-ai-grid">
         <DeadStockCard insights={insights} onUpgrade={onUpgrade} />
@@ -72,7 +73,7 @@ export function AIInventoryInsightsCard({ storeId, insights, loading, error, onU
   </section>
 }
 
-function InsightsHeader({ insights, open, onToggle }: { insights: InventoryInsightsResult | null; open: boolean; onToggle: () => void }) {
+function InsightsHeader({ insights, open, onToggle, onUpgrade }: { insights: InventoryInsightsResult | null; open: boolean; onToggle: () => void; onUpgrade: () => void }) {
   return <header className="inventory-insights-header">
     <div className="inventory-insights-title">
       <span className="ai-insights-icon"><Sparkles size={18} /></span>
@@ -83,7 +84,7 @@ function InsightsHeader({ insights, open, onToggle }: { insights: InventoryInsig
       </div>
     </div>
     <div className="inventory-insights-head-actions">
-      {insights && <span className={`inventory-plan-badge ${insights.plan}`}>{insights.planLabel}</span>}
+      {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}
       <button type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Collapse inventory intelligence' : 'Expand inventory intelligence'}>{open ? '−' : '+'}</button>
     </div>
   </header>

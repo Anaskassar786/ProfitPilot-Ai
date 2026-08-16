@@ -28,6 +28,7 @@ import {
 import { fetchInventory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
+import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { SelectOption } from './CustomSelect.js'
 import { AIInventoryInsightsCard } from './inventory-insights.js'
 import type { InventoryInsightsResult } from './inventory-insights-model.js'
@@ -302,7 +303,7 @@ export function BasicInsightsCard({ data, onUpgrade }: { data: InventoryPageResu
           <p>Calculated from your synced Shopify inventory. Nothing here is estimated.</p>
         </div>
       </div>
-      <span className={`inventory-plan-badge ${data.plan}`}>{planLabel(data.plan)}</span>
+      <UpgradePlanButton plan={data.plan} onUpgrade={onUpgrade} />
     </header>
     <div className="inventory-basic-insights">
       <article className="inventory-basic-card">
@@ -360,13 +361,13 @@ function InventoryTabs({ counts, active, onSelect }: { counts: InventoryPageResu
 /** Sort choices. Days of cover only appears when the plan actually computes it. */
 export function inventorySortOptions(daysOfCoverUnlocked: boolean): readonly SelectOption<InventorySort>[] {
   const base: readonly SelectOption<InventorySort>[] = [
-    { value: 'name', label: 'Sort: Name' },
-    { value: 'stock', label: 'Sort: Stock' },
-    { value: 'value', label: 'Sort: Value' },
-    { value: 'category', label: 'Sort: Category' },
-    { value: 'updated', label: 'Sort: Updated' },
+    { value: 'name', label: 'Name' },
+    { value: 'stock', label: 'Stock' },
+    { value: 'value', label: 'Value' },
+    { value: 'category', label: 'Category' },
+    { value: 'updated', label: 'Updated' },
   ]
-  return daysOfCoverUnlocked ? [...base, { value: 'days_of_cover', label: 'Sort: Days of cover' }] : base
+  return daysOfCoverUnlocked ? [...base, { value: 'days_of_cover', label: 'Days of cover' }] : base
 }
 
 function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection, filters, onFilters, categories, vendors, locations, sortOptions }: {
@@ -397,7 +398,7 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
       {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
       {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
       <div className="inventory-sort-control">
-        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} />
+        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} triggerLabel="Sort" />
         <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? '↑' : '↓'}</button>
       </div>
     </div>

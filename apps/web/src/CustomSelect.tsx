@@ -28,6 +28,8 @@ export type CustomSelectProps<Value extends string> = Readonly<{
   className?: string
   /** Rendered when `value` matches no option (an empty filter, for example). */
   placeholder?: string
+  /** Keeps the selected check in the popup while showing a compact fixed trigger label. */
+  triggerLabel?: string
 }>
 
 /** Pure key handling so the interaction contract is unit-testable without a DOM. */
@@ -49,7 +51,7 @@ export function customSelectKeyAction(key: string, open: boolean, activeIndex: n
   return { type: 'none' }
 }
 
-export function CustomSelect<Value extends string>({ value, options, onChange, ariaLabel, label, icon, className, placeholder }: CustomSelectProps<Value>) {
+export function CustomSelect<Value extends string>({ value, options, onChange, ariaLabel, label, icon, className, placeholder, triggerLabel }: CustomSelectProps<Value>) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -105,7 +107,7 @@ export function CustomSelect<Value extends string>({ value, options, onChange, a
     >
       {icon}
       {label ? <span>{label}</span> : null}
-      <strong>{selectedLabel}</strong>
+      <strong>{triggerLabel ?? selectedLabel}</strong>
       <ChevronDown size={13} aria-hidden="true" />
     </button>
     {open && <ul className="custom-select-menu" id={listId} role="listbox" aria-label={ariaLabel}>
