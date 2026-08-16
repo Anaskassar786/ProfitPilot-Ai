@@ -6,6 +6,7 @@ import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, Cu
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { AnalyticsInsights } from './analytics-model.js'
+import { safeDayKey } from './safe-date.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -98,7 +99,43 @@ export function resetApiClientStateForTests(): void {
 }
 
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {
-  return requestJson<AnalyticsSnapshot>(`/analytics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+  return requestJson<AnalyticsSnapshot>(`/analytics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher).then(normalizeAnalyticsSnapshot)
+}
+
+/**
+ * Repair the analytics snapshot's date contract.
+ *
+ * `analytics_*_daily.day` are Postgres `date` columns. The `pg` driver parses
+ * OID 1082 into a JS `Date`, so the API emits `"2026-08-14T00:00:00.000Z"`
+ * while `RevenueMetric.day` and friends are typed (and consumed) as bare
+ * `YYYY-MM-DD` keys. Consumers that appended a time part to that value built
+ * `Invalid Date` and threw `RangeError: Invalid time value`.
+ *
+ * Normalising once, here at the boundary, means every page — Analytics,
+ * Dashboard, Products — receives the day-key shape its types promise.
+ * Rows with unusable dates are dropped rather than propagated as `NaN`.
+ */
+export function normalizeAnalyticsSnapshot(snapshot: AnalyticsSnapshot | null | undefined): AnalyticsSnapshot {
+  const empty: AnalyticsSnapshot = { revenue: [], orders: [], productSales: [], customerCohorts: [] }
+  if (!snapshot || typeof snapshot !== 'object') return empty
+  const rows = <T,>(value: unknown): readonly T[] => (Array.isArray(value) ? (value as readonly T[]) : [])
+  const byDay = <T extends { day: string }>(value: unknown): readonly T[] => {
+    const result: T[] = []
+    for (const row of rows<T>(value)) { const day = safeDayKey(row?.day); if (day) result.push({ ...row, day }) }
+    return result
+  }
+  const cohorts: AnalyticsSnapshot['customerCohorts'][number][] = []
+  for (const row of rows<AnalyticsSnapshot['customerCohorts'][number]>(snapshot.customerCohorts)) {
+    const cohortDay = safeDayKey(row?.cohortDay)
+    const activityDay = safeDayKey(row?.activityDay)
+    if (cohortDay && activityDay) cohorts.push({ ...row, cohortDay, activityDay })
+  }
+  return {
+    revenue: byDay<AnalyticsSnapshot['revenue'][number]>(snapshot.revenue),
+    orders: byDay<AnalyticsSnapshot['orders'][number]>(snapshot.orders),
+    productSales: byDay<AnalyticsSnapshot['productSales'][number]>(snapshot.productSales),
+    customerCohorts: cohorts,
+  }
 }
 export function fetchAnalyticsInsights(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsInsights> { return requestJson<AnalyticsInsights>(`/analytics/insights?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function fetchAnalyticsChannels(storeId: string, fetcher: Fetcher = fetch): Promise<NonNullable<AnalyticsInsights['channels']>> { return requestJson(`/analytics/channels?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
