@@ -2,6 +2,7 @@ import type { AgentStatus, AnalyticsSnapshot, BillingAccount, BillingPlan, Catal
 import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, ReportRun } from './f8-model.js'
 import type { MaintenanceState, MerchantFlags, OpsMetrics, QueueSnapshot } from './f9-model.js'
 import type { OrderInsightFeature, OrderInsightsResult, OrderQuery, OrdersPageResult, OrderView } from './orders-model.js'
+import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, CustomerQuery, CustomersPageResult } from './customers-model.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -118,6 +119,26 @@ export function fetchOrderInsights(storeId: string, options: Readonly<{ feature?
   return requestJson<OrderInsightsResult>(`/orders/insights?${parameters.toString()}`, {}, fetcher)
 }
 
+export function fetchCustomers(storeId: string, query: CustomerQuery = {}, fetcher: Fetcher = fetch): Promise<CustomersPageResult> {
+  const parameters = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') parameters.set(key, String(value))
+  return requestJson<CustomersPageResult>(`/customers?${parameters.toString()}`, {}, fetcher)
+}
+
+export function fetchCustomer(storeId: string, customerId: string, fetcher: Fetcher = fetch): Promise<CustomerDetail> {
+  return requestJson<CustomerDetail>(`/customers/${encodeURIComponent(customerId)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchCustomerInsights(storeId: string, feature?: CustomerInsightFeature, fetcher: Fetcher = fetch): Promise<CustomerInsightsResult> {
+  const parameters = new URLSearchParams({ storeId })
+  if (feature) parameters.set('feature', feature)
+  return requestJson<CustomerInsightsResult>(`/customers/insights?${parameters.toString()}`, {}, fetcher)
+}
+
+export function queryCustomerInsights(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<CustomerInsightsResult> {
+  return requestJson<CustomerInsightsResult>('/customers/insights/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, question }) }, fetcher)
+}
+
 export function requestSync(storeId: string, module: string, fetcher: Fetcher = fetch, idToken: string | null = embeddedSessionToken()): Promise<SyncResult> {
   const headers = new Headers({ 'content-type': 'application/json' })
   // Keep the short-lived Shopify id_token out of the JSON body. The API uses
@@ -160,7 +181,9 @@ export function fetchRecommendations(storeId: string, fetcher: Fetcher = fetch):
 }
 
 export type WorkflowRecord = Readonly<{ id: string; storeId: string; version: number; nodes: readonly Readonly<Record<string, unknown>>[]; status?: string; definitionHash?: string }>
-export type CampaignTemplateRecord = Readonly<{ id: string; name: string; kind: 'EMAIL' | 'SMS'; subject: string; body: string; variables: readonly string[] }>
+export type CampaignTemplateRecord = Readonly<{ id: string; storeId: string; name: string; kind: 'EMAIL' | 'SMS'; subject: string; body: string; variables: readonly string[] }>
+export type TargetedCampaignPreview = Readonly<{ templateId: string; templateName: string; subject: string; html: string; customerId: string; variables: readonly string[]; sender: Readonly<{ fromName: string; email: string }> }>
+export type TargetedCampaignResult = Readonly<{ status: 'sent' | 'suppressed' | 'failed'; jobId: string; campaignId: string; customerId: string; templateId: string; providerMessageId: string | null; idempotent: boolean; reason: string | null }>
 export type TicketRecord = Readonly<{ id: string; shopId: string; subject: string; description?: string; priority: string; status: string; version: number; createdAt: number; updatedAt: number }>
 
 export function decideRecommendation(storeId: string, id: string, expectedVersion: number, decision: 'approve' | 'reject', fetcher: Fetcher = fetch): Promise<Recommendation> {
@@ -170,8 +193,10 @@ export function decideRecommendation(storeId: string, id: string, expectedVersio
 export function fetchWorkflows(storeId: string, fetcher: Fetcher = fetch): Promise<readonly WorkflowRecord[]> { return requestJson<readonly WorkflowRecord[]>(`/automation/workflows?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function createWorkflow(workflow: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<WorkflowRecord> { return requestJson<WorkflowRecord>('/automation/workflows', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(workflow) }, fetcher) }
 export function activateWorkflow(id: string, fetcher: Fetcher = fetch): Promise<WorkflowRecord> { return requestJson<WorkflowRecord>(`/automation/workflows/${encodeURIComponent(id)}/activate`, { method: 'POST' }, fetcher) }
-export function fetchCampaignTemplates(fetcher: Fetcher = fetch): Promise<readonly CampaignTemplateRecord[]> { return requestJson<readonly CampaignTemplateRecord[]>('/campaigns/templates', {}, fetcher) }
+export function fetchCampaignTemplates(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CampaignTemplateRecord[]> { return requestJson<readonly CampaignTemplateRecord[]>(`/campaigns/templates?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function createCampaignTemplate(template: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<CampaignTemplateRecord> { return requestJson<CampaignTemplateRecord>('/campaigns/templates', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(template) }, fetcher) }
+export function previewTargetedCampaign(storeId: string, customerId: string, templateId: string, idempotencyKey: string, fetcher: Fetcher = fetch): Promise<TargetedCampaignPreview> { return requestJson<TargetedCampaignPreview>('/campaigns/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, customerId, templateId, idempotencyKey }) }, fetcher) }
+export function sendTargetedCampaign(storeId: string, customerId: string, templateId: string, idempotencyKey: string, fetcher: Fetcher = fetch): Promise<TargetedCampaignResult> { return requestJson<TargetedCampaignResult>('/campaigns/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, customerId, templateId, idempotencyKey, reviewed: true }) }, fetcher) }
 export function exportRows(format: 'CSV' | 'XLSX' | 'PDF', rows: readonly Readonly<Record<string, string | number | boolean | null>>[], fetcher: Fetcher = fetch, extras: Readonly<{ storeId?: string; dataset?: 'orders' | 'catalog' | 'audit' | 'revenue' }> = {}): Promise<Readonly<{ filename: string; contentType: string; bodyBase64: string; rows: number; ceiling?: number; ceilingNote?: string }>> { return requestJson(`/exports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format, rows, ...extras }) }, fetcher) }
 export function fetchTickets(storeId: string, fetcher: Fetcher = fetch): Promise<readonly TicketRecord[]> { return requestJson<readonly TicketRecord[]>(`/support/tickets?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function createTicket(shopId: string, subject: string, plan: 'start' | 'growth' | 'commander', fetcher: Fetcher = fetch, extras: Readonly<{ description?: string; priority?: string }> = {}): Promise<TicketRecord> { return requestJson<TicketRecord>('/support/tickets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId, subject, plan, ...extras }) }, fetcher) }

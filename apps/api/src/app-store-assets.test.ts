@@ -8,6 +8,8 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain('client_id = "public-client-id"')
     expect(toml).toContain('https://app.example/shopify/callback')
     expect(toml).toContain('scopes = "read_products,read_orders"')
+    expect(toml).toContain('compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]')
+    expect(toml).toContain('uri = "/shopify/webhooks"')
     expect(toml).not.toContain('client_secret')
   })
 

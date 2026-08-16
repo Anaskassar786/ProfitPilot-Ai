@@ -8,7 +8,7 @@ import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookP
 import { rawBodyFor } from './security.js'
 import { setSessionCookie } from './cookies.js'
 
-export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void> }>
+export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void>; finalize?: (event: WebhookEvent) => Promise<void> }>
 export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies }>
 
 export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencies): Router {
@@ -83,6 +83,7 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       if (!tenant) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404)
       const event: WebhookEvent = { storeId: tenant, webhookId, topic, rawBody, signature }
       const result = await dependencies.webhook.processor.process(event, async () => dependencies.webhook?.handle(event) ?? Promise.resolve())
+      if ((result.status === 'processed' || result.status === 'deduped') && dependencies.webhook.finalize) await dependencies.webhook.finalize(event)
       response.status(result.status === 'failed' ? 500 : result.status === 'retry' ? 202 : 200).json({ ok: result.status !== 'failed', status: result.status, payloadHash: result.payloadHash })
     } catch (error: unknown) {
       if (error instanceof Error && error.message.includes('HMAC')) { next(new AppError('UNAUTHORIZED', 'Invalid webhook signature', 401)); return }

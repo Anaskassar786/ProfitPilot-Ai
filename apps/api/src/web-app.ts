@@ -14,6 +14,7 @@ const API_PATH_PREFIXES = [
   '/campaigns',
   '/catalog',
   '/copilot',
+  '/customers',
   '/exports',
   '/forecasting',
   '/health',

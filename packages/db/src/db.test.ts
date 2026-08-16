@@ -20,7 +20,7 @@ describe('database configuration', () => {
 
 describe('F0 migrations', () => {
   it('contains core tenancy migrations', () => expect(F0_MIGRATIONS.map((migration) => migration.id)).toEqual(['0001', '0002']))
-  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014']))
+  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0016']))
   it('adds an explicit stores WITH CHECK policy for tenant-safe writes', () => {
     const sql = readFileSync('migrations/0013_stores_rls_with_check.sql', 'utf8')
     expect(sql).toContain('CREATE POLICY stores_tenant_isolation ON stores')
@@ -33,6 +33,13 @@ describe('F0 migrations', () => {
     expect(sql).toContain('content_base64')
     expect(sql).toContain('support_tickets')
     expect(sql).toContain('WITH CHECK')
+  })
+  it('registers durable campaign and Shopify privacy compliance migrations', () => {
+    const campaign = readFileSync('migrations/0015_targeted_campaign_safety.sql', 'utf8')
+    const privacy = readFileSync('migrations/0016_shopify_privacy_compliance.sql', 'utf8')
+    expect(campaign).toContain('idempotency_fingerprint')
+    expect(privacy).toContain('privacy_compliance_requests')
+    expect(privacy).toContain('WITH CHECK')
   })
   it('returns no work when current', () => expect(pendingMigrations(ALL_MIGRATIONS.map((migration) => migration.id))).toEqual([]))
 })

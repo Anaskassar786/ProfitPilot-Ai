@@ -91,6 +91,7 @@ import type { ChartPeriod } from './model.js'
 import { DashboardLayout } from './dashboard.js'
 import { ProductsWorkspace } from './products.js'
 import { OrdersWorkspace } from './orders.js'
+import { CustomersPage } from './customers.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -404,6 +405,7 @@ function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, sync
   if (active === 'dashboard') return <DashboardPage context={context} data={data} onNavigate={onNavigate} onSync={onSync} onSyncAll={onSyncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} />
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
   if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
+  if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'analytics') return <AnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'inventory') return <InventoryPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'command-center') return <CommandCenterPage agents={data.agents} onRefresh={onRefresh} onPhaseGate={onPhaseGate} />
@@ -497,8 +499,8 @@ function AutomationPage({ context, onToast }: { context: WorkspaceContext; onToa
 
 function CampaignsPage({ context, onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [templates, setTemplates] = useState<readonly import('./api.js').CampaignTemplateRecord[]>([])
-  const refresh = () => { void fetchCampaignTemplates().then(setTemplates).catch((error: unknown) => onToast(errorMessage(error), 'error')) }
-  useEffect(() => { refresh() }, [])
+  const refresh = () => { if (!context.storeId) { setTemplates([]); return }; void fetchCampaignTemplates(context.storeId).then(setTemplates).catch((error: unknown) => onToast(errorMessage(error), 'error')) }
+  useEffect(() => { refresh() }, [context.storeId])
   const create = async () => { try { await createCampaignTemplate({ id: crypto.randomUUID(), storeId: context.storeId ?? '', name: 'New compliant email', kind: 'EMAIL', subject: 'Hello {{customer.first_name}}', body: 'Your unsubscribe link: {{unsubscribe.url}}' }); onToast('Closed-variable template created.', 'success'); refresh() } catch (error: unknown) { onToast(errorMessage(error), 'error') } }
   return <PageLayout eyebrow="Marketing center" title="Campaigns" description="Closed 11-variable templates, suppression checks, HMAC tracking, and merchant-owned sending." actions={<><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Refresh templates</button><button className="button primary" onClick={() => void create()}><Plus size={15} /> New template</button></>}><div className="campaign-hero"><div><div className="section-kicker"><span className="kicker-dot purple" /> Two-layer email flow</div><h2>System mail and merchant campaigns never share a sender.</h2><p>{context.storeId ? 'Campaigns send approved emails to customers from your store address. Verify that address in Settings, then create a template and review it before send.' : 'Connect a store before creating merchant campaign templates.'}</p></div><div className="campaign-hero-art"><Mail size={28} /><span>Email</span></div></div><div className="sync-banner"><ShieldCheck size={15} /><span>Verify your merchant email in Settings before any campaign can send.</span><button onClick={() => onToast('Open Settings → Merchant campaign email to save and confirm your From address.', 'info')}>Open verification</button></div>{templates.length === 0 ? <EmptyState icon={Mail} title="No templates yet" description="Create a closed-variable email template. Invalid variables and missing unsubscribe links fail honestly on the server." action="Create template" onAction={() => void create()} /> : <div className="template-grid">{templates.map((template) => <div className="card template-card" key={template.id}><span className="export-icon purple"><Mail size={18} /></span><h3>{template.name}</h3><p>{template.subject}</p><div className="template-footer"><span>{template.variables.length} variables · {template.kind}</span><button className="button secondary" onClick={() => onToast('Verify merchant email in Settings, then return here to send this template.', 'info')}>Verify to send</button></div></div>)}</div>}</PageLayout>
 }
