@@ -20,6 +20,7 @@ const API_PATH_PREFIXES = [
   '/jarvis',
   '/legal',
   '/live',
+  '/orders',
   '/ready',
   '/recommendations',
   '/reports',

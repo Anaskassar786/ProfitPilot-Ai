@@ -13,9 +13,11 @@ import type { F7Bootstrap } from './f7-bootstrap.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
 import { CloudflareR2ObjectStore, ReportService } from '@profitpilot/reporting'
 import type { ReportDataProvider } from '@profitpilot/reporting'
+import { OrderInsightsService, PostgresOrderInsightAudit, PostgresOrderInsightUsage, PostgresOrderRepository } from './orders.js'
+import type { OrderRouteDependencies } from './order-routes.js'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
-export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; jarvisProvider: OpenRouterClient }>
+export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; orders: OrderRouteDependencies; jarvisProvider: OpenRouterClient }>
 
 export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>, logger?: Logger): F8Bootstrap | null {
   const f7 = createF7Bootstrap(env)
@@ -35,7 +37,16 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
   const reports = createReports(f7, env)
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, jarvisProvider: provider }
+  const orderRepository = new PostgresOrderRepository(f7.database)
+  const orderInsights = new OrderInsightsService(
+    orderRepository,
+    f7.billing.repository,
+    new PostgresOrderInsightUsage(f7.database),
+    new PostgresOrderInsightAudit(f7.database),
+    provider,
+    (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
+  )
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, orders: { repository: orderRepository, insights: orderInsights }, jarvisProvider: provider }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

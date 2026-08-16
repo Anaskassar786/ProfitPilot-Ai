@@ -90,6 +90,7 @@ import { averageOrderValue, formatMoney, formatNumber, latestSyncLabel, revenueP
 import type { ChartPeriod } from './model.js'
 import { DashboardLayout } from './dashboard.js'
 import { ProductsWorkspace } from './products.js'
+import { OrdersWorkspace } from './orders.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -129,7 +130,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
 const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: LucideIcon }>>> = {
   dashboard: { title: 'Dashboard', description: 'A clear view of the store data ProfitPilot is receiving.', icon: LayoutDashboard },
   products: { title: 'Products', description: 'Catalog records synced from Shopify, with no invented inventory.', icon: Package },
-  orders: { title: 'Orders', description: 'Order facts will appear here after a real sync completes.', icon: ShoppingBag },
+  orders: { title: 'Orders', description: 'Search, filter, inspect, and export real Shopify orders with plan-aware intelligence.', icon: ShoppingBag },
   customers: { title: 'Customers', description: 'Customer data stays tenant-scoped and minimized by default.', icon: Users },
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
   analytics: { title: 'Analytics', description: 'Pre-aggregated metrics built from closed Shopify data.', icon: LineChart },
@@ -157,7 +158,7 @@ const agents = [
 ] as const
 
 type NavItem = Readonly<{ id: SectionId; label: string; icon: LucideIcon; tag?: string }>
-type LoadState = 'idle' | 'loading' | 'ready' | 'offline'
+type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 type ToastState = Readonly<{ message: string; kind: ToastKind }>
 const syncModules = ['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'] as const
@@ -226,7 +227,7 @@ export default function App() {
     const agents = agentsResult.status === 'fulfilled' ? agentsResult.value : []
     const recommendations = recommendationsResult.status === 'fulfilled' ? recommendationsResult.value : []
     const errors = [analyticsResult, catalogResult].filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    setData({ analytics, catalog, agents, recommendations, loadState: errors.length === 2 ? 'offline' : 'ready', error: errors[0] ? errorMessage(errors[0].reason) : null })
+    setData({ analytics, catalog, agents, recommendations, loadState: errors.length === 2 ? 'offline' : errors.length > 0 ? 'partial' : 'ready', error: errors[0] ? `Some synced data could not be loaded: ${errorMessage(errors[0].reason)}` : null })
   }
 
   useEffect(() => { void loadData() }, [context.storeId])
@@ -281,8 +282,8 @@ export default function App() {
     if (!context.storeId) { setOnboardingOpen(true); return }
     try {
       await requestSync(context.storeId, module)
-      showToast(`${module} sync queued through the Shopify data.`, 'success')
-      void loadData()
+      showToast(`${module} synced from Shopify.`, 'success')
+      await loadData()
     } catch (error: unknown) {
       // A 503 with an open Shopify circuit is recoverable: close the breaker
       // and retry once so a burst of earlier failures does not keep the store
@@ -291,8 +292,8 @@ export default function App() {
         try {
           await resetSyncCircuit(context.storeId)
           await requestSync(context.storeId, module)
-          showToast(`${module} sync queued after clearing the Shopify circuit.`, 'success')
-          void loadData()
+          showToast(`${module} synced after clearing the Shopify circuit.`, 'success')
+          await loadData()
           return
         } catch (retryError: unknown) { showToast(errorMessage(retryError), 'error'); return }
       }
@@ -363,7 +364,7 @@ export default function App() {
       <main id="main-content" tabIndex={-1} className={`main-shell ${collapsed ? 'sidebar-is-collapsed' : ''}`}>
         <TopBar active={pageMeta[activePage]} onMenu={() => setMobileOpen(true)} onCommand={() => setCommandOpen(true)} onNotifications={() => setNotificationsOpen(true)} onProfile={() => setProfileOpen((value) => !value)} profileOpen={profileOpen} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onShortcuts={() => setShortcutsOpen(true)} />
         <div className="page-scroll">
-          {data.loadState === 'offline' && <OfflineBanner error={data.error} onRetry={() => void loadData()} />}
+          {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
           {!context.storeId && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
           <PageRouter active={activePage} context={context} data={data} onNavigate={navigate} onSync={sync} onSyncAll={syncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} onDecide={decide} onRefresh={() => void loadData()} onToast={showToast} onPhaseGate={phaseGate} onEvidence={() => setEvidenceOpen(true)} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} />
         </div>
@@ -402,6 +403,7 @@ function TopBar({ active, onMenu, onCommand, onNotifications, onProfile, profile
 function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, syncProgress, syncAllRunning, onDecide, onRefresh, onToast, onPhaseGate, onEvidence, lightMode, onTheme }: { active: SectionId; context: WorkspaceContext; data: WorkspaceData; onNavigate: (page: SectionId) => void; onSync: (module: string) => Promise<void>; onSyncAll: () => Promise<void>; syncProgress: readonly SyncModuleProgress[]; syncAllRunning: boolean; onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void>; onRefresh: () => void; onToast: (message: string, kind?: ToastKind) => void; onPhaseGate: (phase: string, capability: string) => void; onEvidence: () => void; lightMode: boolean; onTheme: () => void }) {
   if (active === 'dashboard') return <DashboardPage context={context} data={data} onNavigate={onNavigate} onSync={onSync} onSyncAll={onSyncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} />
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
+  if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'analytics') return <AnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'inventory') return <InventoryPage context={context} snapshot={data.analytics} onSync={onSync} />
   if (active === 'command-center') return <CommandCenterPage agents={data.agents} onRefresh={onRefresh} onPhaseGate={onPhaseGate} />
@@ -525,7 +527,7 @@ function ExportsPage({ context }: { context: WorkspaceContext }) {
     } catch (error: unknown) { setMessage(errorMessage(error)) }
   }
   const exportTypes: ReadonlyArray<{ title: string; icon: LucideIcon; format: 'CSV' | 'XLSX' | 'PDF'; dataset: 'orders' | 'catalog' | 'audit' | 'revenue'; detail: string }> = [
-    { title: 'Orders CSV', icon: ShoppingBag, format: 'CSV', dataset: 'orders', detail: 'Closed daily order counts from Shopify sync.' },
+    { title: 'Daily aggregate export', icon: ShoppingBag, format: 'CSV', dataset: 'orders', detail: 'Closed daily order counts from Shopify sync.' },
     { title: 'Catalog XLSX', icon: Package, format: 'XLSX', dataset: 'catalog', detail: 'Synced product titles and ids.' },
     { title: 'Audit log CSV', icon: ShieldCheck, format: 'CSV', dataset: 'audit', detail: 'Tenant-scoped operational events.' },
     { title: 'Revenue PDF', icon: FileBarChart, format: 'PDF', dataset: 'revenue', detail: 'Closed-period revenue rows.' },
@@ -631,7 +633,7 @@ function SettingRow({ label, description, children }: { label: string; descripti
 function SettingsPanel({ title, description, children }: { title: string; description: string; children: ReactNode }) { return <section className="card settings-panel"><div className="settings-panel-head"><h3>{title}</h3><p>{description}</p></div>{children}</section> }
 function DagNode({ title, detail, icon: Icon, tone }: { title: string; detail: string; icon: LucideIcon; tone: string }) { return <div className="dag-node"><span className={`dag-node-icon ${tone}`}><Icon size={17} /></span><strong>{title}</strong><small>{detail}</small></div> }
 function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><button onClick={onSettings}><Settings size={15} /> Settings</button><button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</button><button onClick={onClose}><LockKeyhole size={15} /> Security boundary</button></div> }
-function OfflineBanner({ error, onRetry }: { error: string | null; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>API unavailable</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><button onClick={onRetry}><RotateCcw size={14} /> Retry</button></div> }
+function OfflineBanner({ error, partial = false, onRetry }: { error: string | null; partial?: boolean; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>{partial ? 'Partial data load' : 'API unavailable'}</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><button onClick={onRetry}><RotateCcw size={14} /> Retry</button></div> }
 function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></button></div> }
 function EvidenceDrawer({ recommendation, jarvisEvidence, onClose }: { recommendation: Recommendation | null; jarvisEvidence: JarvisEvidence | null; onClose: () => void }) {
   const hash = recommendation && typeof recommendation.evidencePack.sha256 === 'string' ? recommendation.evidencePack.sha256 : null

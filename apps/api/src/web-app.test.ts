@@ -81,6 +81,9 @@ describe('API-hosted web app', () => {
     expect(live.headers.get('x-frame-options')).toBe('DENY')
 
     expect((await fetch(`${base}/api/missing`)).status).toBe(404)
+    const ordersApi = await fetch(`${base}/orders?storeId=store-1`)
+    expect(ordersApi.status).toBe(401)
+    expect(ordersApi.headers.get('content-type')).toContain('application/json')
     expect((await fetch(`${base}/assets/missing.js`)).status).toBe(404)
   }))
 })
