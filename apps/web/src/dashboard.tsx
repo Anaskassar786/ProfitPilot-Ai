@@ -153,6 +153,41 @@ export function DashboardLayout(props: DashboardLayoutProps) {
   const recentOrders = useMemo(() => buildRecentOrders(data.analytics), [data.analytics])
   const summary = useMemo(() => generateSummary(data.analytics, data.catalog), [data.analytics, data.catalog])
 
+  // PR #42 D1 — real weekly comparison: this week's daily revenue vs the same
+  // weekdays last week, computed from the synced revenue rows.
+  const weeklyComparison = useMemo(() => {
+    if (!data.analytics || data.analytics.revenue.length === 0) return []
+    const now = new Date()
+    const points: { label: string; current: number; previous: number | null }[] = []
+    for (let i = 6; i >= 0; i -= 1) {
+      const day = new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10)
+      const prevDay = new Date(now.getTime() - (i + 7) * 86_400_000).toISOString().slice(0, 10)
+      const current = data.analytics.revenue.find((row) => row.day === day)?.grossRevenue ?? 0
+      const previous = data.analytics.revenue.find((row) => row.day === prevDay)?.grossRevenue ?? null
+      points.push({ label: new Date(`${day}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), current, previous })
+    }
+    return points
+  }, [data.analytics])
+
+  const bestProductName = useMemo(() => {
+    if (!data.analytics || data.analytics.productSales.length === 0) return null
+    const top = [...data.analytics.productSales].sort((a, b) => b.grossRevenue - a.grossRevenue)[0]
+    if (!top) return null
+    const product = data.catalog.find((item) => item.productId === top.productId)
+    const title = product && typeof product.payload.title === 'string' ? product.payload.title : null
+    return title ?? `Product #${top.productId}`
+  }, [data.analytics, data.catalog])
+
+  const categoryFocus = useMemo(() => {
+    if (categoryData.length === 0) return null
+    const sorted = [...categoryData].sort((a, b) => b.value - a.value)
+    const total = sorted.reduce((sum, row) => sum + row.value, 0)
+    const top = sorted[0] ?? null
+    const second = sorted[1] ?? null
+    if (!top || total <= 0) return null
+    return { top, second, total, topSharePct: (top.value / total) * 100, secondSharePct: second ? (second.value / total) * 100 : 0 }
+  }, [categoryData])
+
   const loading = data.loadState === 'loading'
 
   // Recent Activity real orders fetch — Fix 1.5
@@ -280,6 +315,47 @@ export function DashboardLayout(props: DashboardLayoutProps) {
                   <Award size={16} />
                   <p>{summary}</p>
                 </div>
+                <div className="ai-summary-extras">
+                  <div className="ai-summary-growth-row">
+                    <div className={`ai-growth-metric ${revenueGrowthResult.direction === 'up' ? 'up' : revenueGrowthResult.direction === 'down' ? 'down' : 'flat'}`}><span className="ai-growth-icon"><TrendingUp size={14} /></span><span><b>{revenueGrowthResult.percent === null ? '—' : `${revenueGrowthResult.percent > 0 ? '+' : ''}${revenueGrowthResult.percent.toFixed(1)}%`}</b><small>Revenue · last 30d</small></span></div>
+                    <div className="ai-growth-metric flat"><span className="ai-growth-icon"><ShoppingBag size={14} /></span><span><b>{formatNumber(orders)}</b><small>Orders · all time</small></span></div>
+                    <div className="ai-growth-metric flat"><span className="ai-growth-icon"><Package size={14} /></span><span><b>{formatNumber(catalogCount)}</b><small>Products synced</small></span></div>
+                  </div>
+                  {weeklyComparison.length === 7 && (weeklyComparison.some((point) => point.current > 0) || weeklyComparison.some((point) => point.previous !== null)) && (
+                    <div className="ai-weekly-block">
+                      <div className="ai-weekly-head"><span>Weekly comparison</span><small>this week vs last week · daily revenue</small></div>
+                      <div className="ai-weekly-chart">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                          <RechartsBarChart data={weeklyComparison} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                            <XAxis dataKey="label" tick={{ fill: 'var(--text-tertiary)', fontSize: 9 }} axisLine={false} tickLine={false} interval={0} />
+                            <Tooltip content={<WeeklyTooltip />} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
+                            <Bar dataKey="current" name="This week" fill="#3B82F6" radius={[2, 2, 0, 0]} maxBarSize={10} />
+                            <Bar dataKey="previous" name="Last week" fill="#9CA3AF" fillOpacity={0.5} radius={[2, 2, 0, 0]} maxBarSize={10} />
+                          </RechartsBarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                  <div className="ai-summary-insights-list">
+                    {bestProductName && <p><Award size={13} /><span><b>Best seller</b>{bestProductName}</span></p>}
+                    {categoryFocus && <p><Target size={13} /><span><b>Top category</b>{categoryFocus.top.name} · {formatMoney(categoryFocus.top.value)}</span></p>}
+                    <p><TrendingUp size={13} /><span><b>Revenue trend</b>{revenueGrowthResult.percent === null ? 'Building baseline — sync more sales history' : `${revenueGrowthResult.direction === 'up' ? 'Up' : revenueGrowthResult.direction === 'down' ? 'Down' : 'Flat'} ${Math.abs(revenueGrowthResult.percent).toFixed(1)}% vs prior 30 days`}</span></p>
+                  </div>
+                  {(bestProductName || (categoryFocus && categoryFocus.second && categoryFocus.secondSharePct < 25)) && (
+                    <div className="ai-summary-recs">
+                      <strong>Recommended actions</strong>
+                      <ul>
+                        {bestProductName && <li>Consider promoting <b>{bestProductName}</b> — it leads product sales.</li>}
+                        {categoryFocus && categoryFocus.second && categoryFocus.secondSharePct < 25 && <li>Diversify revenue: <b>{categoryFocus.second.name}</b> holds only {categoryFocus.secondSharePct.toFixed(0)}% of category sales — expanding it lowers concentration risk.</li>}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="ai-summary-actions">
+                    <button type="button" onClick={() => onNavigate('analytics')}>View Full Report</button>
+                    <button type="button" onClick={() => onNavigate('products')}>See Product Analytics</button>
+                    <button type="button" onClick={() => onNavigate('analytics')}>Explore Trends</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -298,7 +374,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
               <h3>By Category</h3>
             </div>
           </div>
-          {loading ? <ChartSkeleton /> : categoryData.length > 0 ? <CategoryPieChart data={categoryData} /> : <EmptyChart onSync={() => void onSync('products')} message="Sync products to see category breakdown." />}
+          {loading ? <ChartSkeleton /> : categoryData.length > 0 ? <CategoryPieChart data={categoryData} onNavigate={onNavigate} /> : <EmptyChart onSync={() => void onSync('products')} message="Sync products to see category breakdown." />}
         </div>
 
         {/* Fix 1.5 Recent Activity timeline */}
@@ -384,6 +460,13 @@ function BarTooltip({ active, payload, label }: { active?: boolean; payload?: Ar
   return <div className="recharts-tooltip-custom"><strong>{point.isEmpty ? '$0' : formatMoney(point.value)}</strong><span>{point.isEmpty ? `${point.label} · no sales` : point.label}</span></div>
 }
 
+function WeeklyTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null
+  const rows = payload.filter((row) => typeof row.value === 'number' && row.value > 0)
+  if (rows.length === 0) return null
+  return <div className="recharts-tooltip-custom"><strong>{label}</strong>{rows.map((row) => <span key={row.name}>{row.name}: {formatMoney(row.value ?? null)}</span>)}</div>
+}
+
 function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
   const maxValue = data.reduce((max, point) => (point.value > max ? point.value : max), 0)
   const placeholder = maxValue > 0 ? Math.max(maxValue * 0.03, 1) : 1
@@ -407,10 +490,13 @@ function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
   )
 }
 
-function CategoryPieChart({ data }: { data: CategorySales[] }) {
+function CategoryPieChart({ data, onNavigate }: { data: CategorySales[]; onNavigate?: (page: string) => void }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const total = data.reduce((sum, item) => sum + item.value, 0)
   const topCategory = data.length > 0 ? [...data].sort((a, b) => b.value - a.value)[0] : null
+  const secondCategory = data.length > 1 ? [...data].sort((a, b) => b.value - a.value)[1] : null
+  const topSharePct = total > 0 && topCategory ? (topCategory.value / total) * 100 : 0
+  const secondSharePct = total > 0 && secondCategory ? (secondCategory.value / total) * 100 : 0
 
   if (data.length === 0) return null
   if (data.length === 1) {
@@ -478,6 +564,34 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
           )
         })}
       </div>
+      {topCategory && topSharePct > 0 && (
+        <div className="pie-extras">
+          <div className="category-insights">
+            <p><Award size={13} /><span><b>Top category: {topCategory.name}</b><small>{formatMoney(topCategory.value)} · {topSharePct.toFixed(0)}% of category revenue</small></span></p>
+            <p><Target size={13} /><span><b>Diversification</b><small>{data.length} active categor{data.length === 1 ? 'y' : 'ies'} — the top holds {topSharePct.toFixed(0)}% of sales</small></span></p>
+          </div>
+          {topSharePct >= 50 && secondCategory && (
+            <p className="category-action-note"><Lightbulb size={13} /><span><b>{topCategory.name} drives most revenue.</b> Consider expanding <b>{secondCategory.name}</b> ({secondSharePct.toFixed(0)}%) to reduce concentration risk.</span></p>
+          )}
+          <div className="category-compare">
+            {data.map((entry) => {
+              const pct = total > 0 ? (entry.value / total) * 100 : 0
+              return (
+                <div key={entry.name} className="category-compare-row">
+                  <span className="category-compare-name">{entry.name}</span>
+                  <div className="category-compare-track"><i style={{ width: `${pct}%`, background: entry.color } as CSSProperties} /></div>
+                  <strong>{pct.toFixed(0)}%</strong>
+                  <small>{formatMoney(entry.value)}</small>
+                </div>
+              )
+            })}
+          </div>
+          <div className="category-actions">
+            <button type="button" onClick={() => onNavigate?.('analytics')}>View Category Report</button>
+            <button type="button" onClick={() => onNavigate?.('products')}>Explore Products by Category</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
