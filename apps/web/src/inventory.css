@@ -414,6 +414,45 @@
 .inventory-health-bar { height: 6px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; width: 100%; }
 .inventory-health-bar .animated { display: block; height: 100%; border-radius: inherit; transition: width 600ms cubic-bezier(.4,0,.2,1); background: linear-gradient(90deg,var(--blue),var(--purple)); }
 
+/* PR #43: Inventory Health below-space — real trend, critical items, action */
+.health-divider { height: 1px; background: var(--border); }
+.health-trend-block { display: flex; flex-direction: column; gap: 8px; }
+.health-trend-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.health-trend-head > span { color: var(--text-secondary); font-size: 12px; font-weight: 700; letter-spacing: -.01em; }
+.health-trend-change { display: inline-flex; align-items: center; flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.health-trend-change.good { color: var(--green); }
+.health-trend-change.watch { color: var(--red); }
+.health-trend-change.neutral { color: var(--text-tertiary); }
+.health-trend-wrap { width: 100%; height: 44px; }
+.health-trend-sparkline { width: 100%; height: 100%; overflow: visible; }
+.health-trend-area { fill: rgba(37, 99, 235, .16); }
+.health-trend-line { fill: none; stroke: var(--blue); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.health-trend-dot { fill: var(--blue); stroke: var(--bg-surface); stroke-width: 1.5; }
+.health-trend-note { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.health-trend-skeleton { height: 44px; border-radius: 8px; background: linear-gradient(90deg, rgba(107,114,128,.06), rgba(107,114,128,.14), rgba(107,114,128,.06)); background-size: 200%; animation: shimmer 1.4s infinite; }
+.health-trend-empty { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px dashed var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
+.health-trend-empty strong { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.health-trend-empty small { color: var(--text-tertiary); font-size: 10.5px; line-height: 1.5; }
+.health-critical-head { color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.health-critical-list { display: flex; flex-direction: column; gap: 6px; list-style: none; padding: 0; margin: 2px 0 0; }
+.health-critical-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 9px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-surface-soft); transition: background 150ms ease, border-color 150ms ease; }
+.health-critical-list li:hover { background: var(--bg-hover); border-color: var(--border-default); }
+.health-critical-list li > i { width: 8px; height: 8px; flex: none; border-radius: 50%; }
+.health-critical-list li > i.out { background: var(--red); box-shadow: 0 0 7px rgba(239, 68, 68, .5); }
+.health-critical-list li > i.low { background: var(--amber); }
+.health-critical-list li > i.untracked { background: var(--text-tertiary); }
+.health-critical-list li > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text-secondary); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.health-critical-list li > strong { flex: none; color: var(--text); font-family: var(--font-mono); font-size: 11px; }
+.health-all-good { display: flex; align-items: center; gap: 7px; margin: 2px 0 0; color: var(--green); font-size: 12px; font-weight: 600; }
+.health-recs-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; align-self: flex-start; padding: 8px 11px; color: #93C5FD; border-radius: 8px; background: rgba(59, 130, 246, .09); font-size: 11.5px; font-weight: 700; transition: 150ms ease; }
+.health-recs-button:hover { color: #BFDBFE; background: rgba(59, 130, 246, .18); }
+.app-shell.light-mode .health-trend-empty { background: #F8FAFC !important; border-color: #E5E7EB !important; }
+.app-shell.light-mode .health-critical-list li { background: #F8FAFC !important; border-color: #E5E7EB !important; }
+.app-shell.light-mode .health-trend-line { stroke: #2563EB !important; }
+.app-shell.light-mode .health-trend-dot { fill: #2563EB !important; stroke: #FFFFFF !important; }
+.app-shell.light-mode .health-recs-button { color: #2563EB; background: rgba(59, 130, 246, .1); }
+.app-shell.light-mode .health-recs-button:hover { color: #1D4ED8; background: rgba(59, 130, 246, .16); }
+
 /* Stock Distribution Modern */
 .inventory-donut { position: relative; width: 100%; height: 180px; display: flex; justify-content: center; align-items: center; }
 .inventory-donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }

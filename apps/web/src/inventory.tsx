@@ -8,6 +8,7 @@ import {
   ArrowUpDown,
   Boxes,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -29,13 +30,13 @@ import {
   Truck,
   X,
 } from 'lucide-react'
-import { fetchInventory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
+import { fetchInventory, fetchInventoryHistory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { SelectOption } from './CustomSelect.js'
 import { AIInventoryInsightsCard } from './inventory-insights.js'
-import type { InventoryInsightsResult } from './inventory-insights-model.js'
+import type { InventoryHistoryResult, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { WorkspaceContext } from './model.js'
 import type { DaysOfCover, InventoryItem, InventoryPageResult, InventoryQuery, InventoryRowItem, InventorySort, InventoryTab, StockStatus } from './inventory-model.js'
 import { EMPTY_INVENTORY_PAGE, daysOfCoverLabel, daysOfCoverTone, distributionSegments, formatDateTime, formatMoney, formatUnits, locationBreakdown, locationLabel, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
@@ -150,7 +151,7 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
       <InventoryStatsGrid data={data} loading={loading} />
 
       <div className="inventory-overview-grid">
-        <InventoryHealthCard data={data} loading={loading} />
+        <InventoryHealthCard data={data} loading={loading} storeId={context.storeId} />
         <StockDistributionChart data={data} loading={loading} onSelectTab={setActiveTab} />
         <InventoryValueSummary data={data} loading={loading} />
       </div>
@@ -217,12 +218,31 @@ export function InventoryStatsGrid({ data, loading }: { data: InventoryPageResul
   </div>
 }
 
-export function InventoryHealthCard({ data, loading }: { data: InventoryPageResult; loading: boolean }) {
+export function InventoryHealthCard({ data, loading, storeId }: { data: InventoryPageResult; loading: boolean; storeId?: string }) {
   const { health } = data
+  const [history, setHistory] = useState<InventoryHistoryResult | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  useEffect(() => {
+    if (!storeId) { setHistory(null); setHistoryLoading(false); return }
+    let cancelled = false
+    setHistoryLoading(true)
+    void fetchInventoryHistory(storeId, 30)
+      .then((result) => { if (!cancelled) setHistory(result) })
+      .catch(() => { if (!cancelled) setHistory(null) })
+      .finally(() => { if (!cancelled) setHistoryLoading(false) })
+    return () => { cancelled = true }
+  }, [storeId])
   const unavailable = health.score === null
   const sweep = unavailable ? 0 : Math.max(8, Math.round(health.score * 2.4))
   const gradeColor = health.grade === 'A' || health.grade === 'A+' ? 'green' : health.grade === 'B' ? 'blue' : health.grade === 'C' ? 'amber' : health.grade === 'D' || health.grade === 'F' ? 'red' : 'muted'
   const labelText = unavailable ? 'No inventory data' : `${health.grade ? `${health.grade} · ` : ''}${health.label}`
+  const trendPoints = (history?.points ?? []).filter((point) => point && Number.isFinite(point.units)).map((point) => ({ date: point.date, units: point.units }))
+  const trendReady = trendPoints.length >= 2
+  const change = trendReady ? healthTrendChange(trendPoints) : null
+  const criticalItems = data.items
+    .filter((item) => item.status === 'out' || item.status === 'low' || item.status === 'untracked')
+    .sort((a, b) => criticalPriority(a.status) - criticalPriority(b.status))
+    .slice(0, 3)
   return <article className="card inventory-health-card modern">
     <div className="inventory-card-label"><HeartPulse size={16} /><span>Inventory Health</span><span className={`grade-badge ${gradeColor}`}>{health.grade}</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : <>
@@ -251,8 +271,65 @@ export function InventoryHealthCard({ data, loading }: { data: InventoryPageResu
         })}
         {health.components.length === 0 && <li className="inventory-health-empty">Health is calculated from your real stock levels once inventory is synced.</li>}
       </ul>
+      <div className="health-divider" />
+      <div className="health-trend-block">
+        <div className="health-trend-head">
+          <span>Health Score Trend (30d)</span>
+          {change && <em className={`health-trend-change ${change.tone}`} title={change.title}>{change.label}</em>}
+        </div>
+        {historyLoading ? <div className="health-trend-skeleton" /> : trendReady ? <>
+          <div className="health-trend-wrap"><HealthTrendSparkline points={trendPoints} /></div>
+          <small className="health-trend-note">Real stock snapshots · one recorded per inventory sync</small>
+        </> : <div className="health-trend-empty"><strong>Building history…</strong><small>Health snapshots are recorded per inventory sync — the 30-day trend appears as real sync history accumulates.</small></div>}
+      </div>
+      <div className="health-divider" />
+      <span className="health-critical-head">Needs Attention</span>
+      {criticalItems.length > 0 ? <ul className="health-critical-list">
+        {criticalItems.map((item) => <li key={item.variantId}>
+          <i className={item.status} />
+          <span title={item.title}>{item.title}</span>
+          <strong>{item.status === 'out' ? 'Out of stock' : item.status === 'untracked' ? 'Untracked' : quantityLabel(item)}</strong>
+        </li>)}
+      </ul> : <p className="health-all-good"><CheckCircle2 size={13} /> All items healthy</p>}
+      <button type="button" className="health-recs-button" onClick={() => document.querySelector('.inventory-ai-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View All Recommendations →</button>
     </>}
   </article>
+}
+
+function criticalPriority(status: StockStatus): number { return status === 'out' ? 0 : status === 'low' ? 1 : 2 }
+
+/** Real units-on-hand change over the trailing ~7 days of stock snapshots. */
+function healthTrendChange(points: readonly Readonly<{ date: string; units: number }>[]): Readonly<{ label: string; tone: 'good' | 'watch' | 'neutral'; title: string }> | null {
+  if (points.length < 2) return null
+  const last = points[points.length - 1]!
+  const lastDate = Date.parse(`${last.date}T00:00:00Z`)
+  const weekAgo = lastDate - 7 * 86_400_000
+  let reference = points[0]!
+  for (const point of points) {
+    const ts = Date.parse(`${point.date}T00:00:00Z`)
+    if (Number.isFinite(ts) && ts <= weekAgo) reference = point
+  }
+  const delta = last.units - reference.units
+  if (delta === 0) return { label: '— stable', tone: 'neutral', title: 'Stock level unchanged over the last 7 days' }
+  return { label: `${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} this week`, tone: delta > 0 ? 'good' : 'watch', title: 'Units on hand change over the last 7 days (real stock snapshots)' }
+}
+
+function HealthTrendSparkline({ points }: { points: readonly Readonly<{ date: string; units: number }>[] }) {
+  const width = 240
+  const height = 40
+  const values = points.map((point) => point.units)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const stepX = width / Math.max(1, values.length - 1)
+  const coords = values.map((value, index) => [index * stepX, height - 4 - ((value - min) / span) * (height - 8)] as const)
+  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const last = coords[coords.length - 1]!
+  return <svg className="health-trend-sparkline" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="Inventory health score trend over the last 30 days">
+    <polygon points={`0,${height} ${line} ${width},${height}`} className="health-trend-area" />
+    <polyline points={line} className="health-trend-line" />
+    <circle cx={last[0].toFixed(1)} cy={last[1].toFixed(1)} r={2.4} className="health-trend-dot" />
+  </svg>
 }
 
 export function StockDistributionChart({ data, loading, onSelectTab }: { data: InventoryPageResult; loading: boolean; onSelectTab?: (tab: InventoryTab) => void }) {
