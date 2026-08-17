@@ -432,14 +432,14 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
   return (
     <div className="dash-chart-container pie-container pie-enhanced">
       <div className="pie-chart-wrap">
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={210}>
           <PieChart>
             <Pie
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={55}
-              outerRadius={85}
+              innerRadius={60}
+              outerRadius={90}
               paddingAngle={3}
               dataKey="value"
               nameKey="name"
@@ -454,7 +454,7 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
                   fill={entry.color}
                   stroke={activeIndex === index ? '#fff' : 'transparent'}
                   strokeWidth={activeIndex === index ? 2 : 0}
-                  style={{ filter: activeIndex === index ? 'brightness(1.15)' : undefined, cursor: 'pointer', transition: 'all 150ms ease' } as CSSProperties}
+                  style={{ filter: activeIndex === index ? 'brightness(1.18)' : undefined, cursor: 'pointer', transition: 'all 150ms ease' } as CSSProperties}
                 />
               ))}
             </Pie>
@@ -465,7 +465,7 @@ function CategoryPieChart({ data }: { data: CategorySales[] }) {
           <span>Total</span>
         </div>
       </div>
-      <div className="pie-side-legend">
+      <div className="pie-side-legend pie-bottom-legend">
         {data.map((entry, index) => {
           const percent = total > 0 ? (entry.value / total) * 100 : 0
           const isTop = topCategory && entry.name === topCategory.name
