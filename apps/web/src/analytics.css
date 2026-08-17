@@ -111,3 +111,77 @@
   border-color: rgba(56,189,248,.12) !important;
 }
 
+
+
+/* ─── PR #42 Commit 1: Analytics light-theme visibility (logo, toolbar controls) ─── */
+.app-shell.light-mode .analytics-page-icon,
+.light-mode .analytics-page-icon {
+  color: #2563EB !important;
+  border-color: rgba(37, 99, 235, .28) !important;
+  background: radial-gradient(circle at 30% 20%, rgba(37, 99, 235, .14), rgba(37, 99, 235, .04)) !important;
+  box-shadow: 0 0 26px rgba(37, 99, 235, .12) !important;
+}
+
+.app-shell.light-mode .period-toggle,
+.light-mode .period-toggle {
+  background: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+}
+.app-shell.light-mode .period-toggle button,
+.light-mode .period-toggle button {
+  color: #374151 !important;
+}
+.app-shell.light-mode .period-toggle button:hover,
+.light-mode .period-toggle button:hover {
+  color: #111827 !important;
+  background: rgba(37, 99, 235, .08) !important;
+}
+.app-shell.light-mode .period-toggle button.active,
+.light-mode .period-toggle button.active {
+  color: #FFFFFF !important;
+  background: #2563EB !important;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .32) !important;
+}
+
+.app-shell.light-mode .analytics-tool-button,
+.light-mode .analytics-tool-button {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+.app-shell.light-mode .analytics-tool-button svg,
+.light-mode .analytics-tool-button svg { color: #374151 !important; }
+.app-shell.light-mode .analytics-tool-button:hover:not(:disabled),
+.light-mode .analytics-tool-button:hover:not(:disabled) {
+  color: #111827 !important;
+  border-color: #93C5FD !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, .12) !important;
+}
+.app-shell.light-mode .analytics-tool-button.primary,
+.light-mode .analytics-tool-button.primary {
+  color: #FFFFFF !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #2563EB, #4F46E5) !important;
+}
+.app-shell.light-mode .analytics-tool-button.primary svg,
+.light-mode .analytics-tool-button.primary svg { color: #FFFFFF !important; }
+.app-shell.light-mode .analytics-tool-button.primary:hover:not(:disabled),
+.light-mode .analytics-tool-button.primary:hover:not(:disabled) {
+  border-color: transparent !important;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, .28) !important;
+}
+
+.app-shell.light-mode .custom-range-popover,
+.light-mode .custom-range-popover {
+  background: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+  box-shadow: 0 15px 40px rgba(15, 23, 42, .16) !important;
+}
+.app-shell.light-mode .custom-range-popover label,
+.light-mode .custom-range-popover label { color: #4B5563 !important; }
+.app-shell.light-mode .custom-range-popover input,
+.light-mode .custom-range-popover input {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #F8FAFC !important;
+}
