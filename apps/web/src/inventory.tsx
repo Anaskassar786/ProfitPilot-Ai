@@ -342,24 +342,51 @@ export function InventoryValueSummary({ data, loading }: { data: InventoryPageRe
     if (row.variantId && row.imageUrl) imageMap.set(row.variantId, row.imageUrl)
   }
   const totalValue = stats.totalValue ?? 0
+  const topValue = topValueItems.reduce((sum, item) => sum + (item.value ?? 0), 0)
+  const topSharePct = totalValue > 0 ? Math.round((topValue / totalValue) * 100) : 0
+  const avgPerSku = stats.totalValue !== null && stats.valuedSkus > 0 ? stats.totalValue / stats.valuedSkus : null
+  const exportValuation = () => {
+    if (topValueItems.length === 0) return
+    const headers = ['Title', 'Variant', 'Quantity', 'Value', 'Share %']
+    const lines = topValueItems.map((item) => [item.title, item.variantTitle ?? '', item.quantity, item.value, totalValue > 0 ? Math.round((item.value / totalValue) * 100) : 0])
+    const csv = [headers, ...lines].map((row) => row.map(csvCell).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `profitpilot-inventory-valuation-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
   return <article className="card inventory-value-card modern">
     <div className="inventory-card-label"><Coins size={16} /><span>Inventory Value</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : <>
       <strong className="inventory-value-total">{formatMoney(stats.totalValue, stats.currency)}</strong>
       <small>{stats.totalValue === null ? 'No variant prices were returned by Shopify.' : `Retail value across ${formatUnits(stats.valuedSkus)} priced products`}</small>
-      {topValueItems.length > 0 && <ul className="inventory-top-value modern">
-        {topValueItems.map((item) => {
-          const img = imageMap.get(item.variantId) ?? null
-          const pct = totalValue > 0 && item.value ? Math.round((item.value / totalValue) * 100) : 0
-          return <li key={item.variantId}>
-            <div className="value-item-main">
-              {img ? <img src={img} alt="" className="value-item-thumb" /> : <span className="value-item-thumb placeholder"><PackageX size={14} /></span>}
-              <div><strong title={item.title}>{item.title}</strong>{item.variantTitle && <small>{item.variantTitle}</small>}<div className="value-distribution-bar"><i style={{ width: `${pct}%` }} /></div></div>
-            </div>
-            <div className="inventory-top-value-amount"><strong>{formatMoney(item.value, stats.currency)}</strong><small>{formatUnits(item.quantity)} units · {pct}%</small></div>
-          </li>
-        })}
-      </ul>}
+      {stats.totalValue !== null && <div className="value-metrics">
+        <div><strong>{formatMoney(avgPerSku, stats.currency)}</strong><span>Avg value / SKU</span></div>
+        <div><strong>{topValueItems.length > 0 ? `${topSharePct}%` : '—'}</strong><span>Top {topValueItems.length} product{topValueItems.length === 1 ? '' : 's'} hold</span></div>
+        <div><strong>{formatUnits(stats.valuedSkus)}</strong><span>Valued SKUs</span></div>
+      </div>}
+      {topValueItems.length > 0 && <>
+        <div className="value-insight-strip"><TrendingUp size={14} /><span>Top products hold <b>{topSharePct}%</b> of inventory value — concentrated stock means restock decisions matter more.</span></div>
+        <ul className="inventory-top-value modern">
+          {topValueItems.map((item) => {
+            const img = imageMap.get(item.variantId) ?? null
+            const pct = totalValue > 0 && item.value ? Math.round((item.value / totalValue) * 100) : 0
+            return <li key={item.variantId} title={`${item.title}${item.variantTitle ? ` · ${item.variantTitle}` : ''} — ${formatMoney(item.value, stats.currency)} (${pct}% of total value)`}>
+              <div className="value-item-main">
+                {img ? <img src={img} alt="" className="value-item-thumb" /> : <span className="value-item-thumb placeholder"><PackageX size={14} /></span>}
+                <div><strong title={item.title}>{item.title}</strong>{item.variantTitle && <small>{item.variantTitle}</small>}<div className="value-distribution-bar"><i style={{ width: `${pct}%` }} /><b>{pct}%</b></div></div>
+              </div>
+              <div className="inventory-top-value-amount"><strong>{formatMoney(item.value, stats.currency)}</strong><small>{formatUnits(item.quantity)} units</small></div>
+            </li>
+          })}
+        </ul>
+        <div className="value-actions">
+          <button type="button" onClick={() => document.querySelector('.inventory-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View Full Report</button>
+          <button type="button" onClick={exportValuation} disabled={topValueItems.length === 0}>Export Valuation</button>
+        </div>
+      </>}
     </>}
   </article>
 }

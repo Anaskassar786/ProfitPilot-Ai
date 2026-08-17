@@ -2347,3 +2347,35 @@
   .distribution-stats { grid-template-columns: 1fr; }
   .distribution-actions button { flex: 1; }
 }
+
+
+/* ─── PR #42 Commit 6: Inventory Value — verified & professional enhancement ─── */
+.value-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
+.value-metrics > div { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
+.value-metrics strong { font-size: 14px; letter-spacing: -.02em; color: var(--text); font-family: var(--font-mono); }
+.value-metrics span { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.value-insight-strip { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid rgba(251, 191, 36, .18); border-radius: 10px; background: rgba(251, 191, 36, .05); }
+.value-insight-strip svg { flex: none; color: var(--profit); margin-top: 1px; }
+.value-insight-strip span { color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+.value-insight-strip b { color: var(--text); }
+.inventory-top-value.modern li { transition: all 150ms ease; }
+.inventory-top-value.modern li:hover { background: var(--bg-hover); border-color: var(--border-default); }
+.value-distribution-bar { display: flex; align-items: center; gap: 6px; height: 6px; margin-top: 5px; border-radius: 99px; }
+.value-distribution-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--profit), var(--accent-amber)); }
+.value-distribution-bar b { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; font-weight: 700; line-height: 1; }
+.value-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.value-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.value-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
+.value-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.app-shell.light-mode .value-metrics > div {
+  background: #F8FAFC !important;
+  border-color: #E5E7EB !important;
+}
+.app-shell.light-mode .value-insight-strip {
+  background: rgba(217, 119, 6, .07) !important;
+  border-color: rgba(217, 119, 6, .22) !important;
+}
+@media (max-width: 640px) {
+  .value-metrics { grid-template-columns: 1fr; }
+  .value-actions button { flex: 1; }
+}
