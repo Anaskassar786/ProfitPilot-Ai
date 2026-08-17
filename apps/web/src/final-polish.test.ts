@@ -162,13 +162,19 @@ describe('PR #42 final polish contracts', () => {
       '.top-product-actions',
       '.orders-basic-card.rate-card',
       '.rate-donut',
-      '.rate-progress',
+      '.rate-divider',
+      '.rate-metrics',
+      '.rate-status-bar',
       '.ai-summary-extras',
       '.ai-weekly-chart',
       '.ai-summary-recs',
       '.pie-extras',
       '.category-compare',
     ]) expect(css).toContain(selector)
+    expect(source('./analytics.css')).toContain('.chart-summary')
+    expect(source('./inventory.css')).toContain('.health-trend-block')
+    expect(source('./inventory.css')).toContain('.health-critical-list')
+    expect(source('./inventory.css')).toContain('.health-recs-button')
   })
 
   it('keeps Recent Activity in the dashboard untouched apart from light-theme CSS', () => {

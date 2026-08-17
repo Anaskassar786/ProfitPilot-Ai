@@ -192,9 +192,11 @@ describe('PR #42 final-polish smoke (both themes)', () => {
     const cancellation: AvailableOrderInsight = { feature: 'cancellation_rate', name: 'Cancellation Rate', data: { status: 'available', canceled: 0, total: 5, rate: 0 } }
     const fulfillment: AvailableOrderInsight = { feature: 'fulfillment_rate', name: 'Fulfillment Rate', data: { status: 'available', fulfilled: 5, total: 5, rate: 100, basis: 'Shopify fulfillment status' } }
     const dark = renderToStaticMarkup(shell(false, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
-    for (const contract of ['Cancellation Rate', 'Excellent — no cancellations this period', 'rate-donut', 'completed', 'total orders', 'Fulfillment Rate', 'Excellent — every order fulfilled', 'rate-progress', 'fulfilled', 'Shopify fulfillment status', 'Industry comparison connects when benchmark data is available']) {
+    for (const contract of ['Cancellation Rate', 'Excellent — no cancellations this period', 'rate-donut', 'Cancelled', '0 of 5 orders cancelled', 'rate-divider', 'rate-metrics', 'Refunded', 'vs Last Period', 'rate-status-bar good', 'Fulfillment Rate', 'All orders fulfilled', 'Fulfilled', '5 of 5 orders fulfilled', 'Pending', 'Avg Fulfill Time']) {
       expect(dark).toContain(contract)
     }
+    expect(dark).not.toContain('rate-progress')
+    expect(dark).not.toContain('Industry comparison connects when benchmark data is available')
     const light = renderToStaticMarkup(shell(true, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('rate-card')

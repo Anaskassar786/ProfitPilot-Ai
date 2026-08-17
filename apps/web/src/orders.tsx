@@ -195,8 +195,8 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
         {!result.sufficientData && <div className="orders-insufficient"><Clock3 size={15} /><span><strong>Early signal mode</strong> — advanced insights are available after 5 real orders. Basic facts below remain exact.</span></div>}
         <div className="orders-basic-insights">
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
-          <CancellationRateCard insight={available('cancellation_rate')} />
-          <FulfillmentRateCard insight={available('fulfillment_rate')} />
+          <CancellationRateCard insight={available('cancellation_rate')} orders={orders ?? []} />
+          <FulfillmentRateCard insight={available('fulfillment_rate')} orders={orders ?? []} />
           <OrderHealthInsight insight={available('order_health_score')} />
         </div>
         <div className="orders-premium-insights">
@@ -306,50 +306,70 @@ export function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: 
     </div>
   </article>
 }
-export function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function CancellationRateCard({ insight, orders = [] }: { insight: ReturnType<typeof insightByFeature>; orders?: readonly OrderView[] }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const canceled = numberOrNull(data.canceled) ?? 0
   const total = numberOrNull(data.total) ?? 0
   const completed = Math.max(0, total - canceled)
   const tone = rate === null ? 'muted' : rate === 0 ? 'excellent' : rate < 5 ? 'good' : rate < 10 ? 'watch' : 'attention'
-  const label = rate === null ? 'Awaiting order data' : rate === 0 ? 'Excellent — no cancellations this period' : rate < 5 ? 'Good — below typical levels' : rate < 10 ? 'Watch — review cancellation reasons' : 'Attention — cancellations elevated'
-  const sweep = total > 0 ? Math.max(8, Math.round((completed / total) * 360)) : 0
+  const sweep = total > 0 ? Math.max(2, Math.round((completed / total) * 360)) : 360
+  const refunded = refundedAmount(orders)
+  const comparison = refundComparison(orders)
+  const status = cancellationStatus(rate)
   return <article className={`orders-basic-card rate-card cancellation ${tone}`}>
     <div className="orders-insight-label"><AlertTriangle size={16} /><span>Cancellation Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
-      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: `conic-gradient(var(--rate-color, var(--green)) ${sweep}deg, rgba(107,114,128,.14) 0)` }}>
-        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>canceled</span></div>
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#10B981 ${sweep}deg, #EF4444 0)` }}>
+        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Cancelled</span></div>
       </div>
-      <div className="rate-facts">
-        <p><strong>{canceled}</strong><span>canceled</span></p>
-        <p><strong>{completed}</strong><span>completed</span></p>
-        <p><strong>{total}</strong><span>total orders</span></p>
+      <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
+    </div>
+    <div className="rate-divider" />
+    <div className="rate-metrics">
+      <div className="rate-mini-stat" title="Sum of fully refunded order totals from loaded Shopify orders">
+        <span className="rate-mini-icon"><DollarSign size={13} /></span>
+        <div><small>Refunded</small><strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong></div>
+      </div>
+      <div className="rate-mini-stat" title={comparison.tooltip}>
+        <span className="rate-mini-icon"><TrendingUp size={13} /></span>
+        <div><small>vs Last Period</small><strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong></div>
       </div>
     </div>
-    <p className={`rate-status ${tone}`}><i />{label}</p>
-    <small className="rate-note">Industry comparison connects when benchmark data is available.</small>
+    <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
-export function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnType<typeof insightByFeature>; orders?: readonly OrderView[] }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const fulfilled = numberOrNull(data.fulfilled) ?? 0
   const total = numberOrNull(data.total) ?? 0
   const remaining = Math.max(0, total - fulfilled)
   const tone = rate === null ? 'muted' : rate === 100 ? 'excellent' : rate >= 80 ? 'good' : rate >= 50 ? 'watch' : 'attention'
-  const label = rate === null ? 'Awaiting order data' : rate === 100 ? 'Excellent — every order fulfilled' : rate >= 80 ? 'On track — most orders fulfilled' : rate >= 50 ? 'Watch — fulfillment backlog' : 'Attention — many orders unfulfilled'
+  const sweep = total > 0 ? Math.max(2, Math.round((fulfilled / total) * 360)) : 360
+  const restColor = rate === 0 && total > 0 ? '#EF4444' : '#F59E0B'
+  const avgDays = averageFulfillmentDays(orders)
+  const status = fulfillmentStatus(rate, total)
   return <article className={`orders-basic-card rate-card fulfillment ${tone}`}>
     <div className="orders-insight-label"><CheckCircle2 size={16} /><span>Fulfillment Rate</span><i className={`rate-dot ${tone}`} /></div>
-    <strong className="rate-big">{rate === null ? '—' : `${rate}%`}</strong>
-    <div className="rate-progress" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`}><i style={{ width: `${rate ?? 0}%` }} /></div>
-    <div className="rate-facts">
-      <p><strong>{fulfilled}</strong><span>fulfilled</span></p>
-      <p><strong>{remaining}</strong><span>remaining</span></p>
-      <p><strong>{total}</strong><span>total orders</span></p>
+    <div className="rate-card-body">
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#2563EB ${sweep}deg, ${restColor} 0)` }}>
+        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Fulfilled</span></div>
+      </div>
+      <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
     </div>
-    <p className={`rate-status ${tone}`}><i />{label}</p>
-    <small className="rate-note">{text(data.basis) ?? 'Shopify fulfillment status'} · industry comparison connects when benchmark data is available.</small>
+    <div className="rate-divider" />
+    <div className="rate-metrics">
+      <div className="rate-mini-stat" title="Unfulfilled orders from the current order data">
+        <span className="rate-mini-icon"><Package size={13} /></span>
+        <div><small>Pending</small><strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong></div>
+      </div>
+      <div className="rate-mini-stat" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
+        <span className="rate-mini-icon"><Clock3 size={13} /></span>
+        <div><small>Avg Fulfill Time</small><strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong></div>
+      </div>
+    </div>
+    <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
 function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
@@ -504,6 +524,63 @@ function OrdersErrorState({ message, onRetry }: { message: string; onRetry: () =
 export function OrdersEmptyState({ title, description, action, onAction, compact = false }: { title: string; description: string; action: string; onAction: () => void; compact?: boolean }) { return <div className={`orders-empty ${compact ? 'compact' : ''}`}><span><ShoppingBag size={23} /></span><strong>{title}</strong><p>{description}</p><button className="button secondary" onClick={onAction}>{action}</button></div> }
 
 function activeFilterCount(filters: FilterState): number { return Object.values(filters).filter(Boolean).length }
+/** Sum of fully refunded order totals from the loaded Shopify order rows. */
+function refundedAmount(orders: readonly OrderView[]): number | null {
+  if (orders.length === 0) return null
+  return orders.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
+}
+function currencyOf(orders: readonly OrderView[]): string | null { return orders[0]?.currency ?? null }
+/**
+ * Average time from order creation to its last Shopify update for fulfilled
+ * orders, in days. Only real timestamps are used; null when no fulfilled
+ * orders are loaded yet.
+ */
+function averageFulfillmentDays(orders: readonly OrderView[]): number | null {
+  const durations: number[] = []
+  for (const order of orders) {
+    if (order.status !== 'completed' || !order.createdAt || !order.updatedAt) continue
+    const created = Date.parse(order.createdAt)
+    const updated = Date.parse(order.updatedAt)
+    if (!Number.isFinite(created) || !Number.isFinite(updated)) continue
+    durations.push((updated - created) / 86_400_000)
+  }
+  if (durations.length === 0) return null
+  return durations.reduce((sum, days) => sum + days, 0) / durations.length
+}
+/** Real refunded-amount change between the trailing 30 days and the 30 days before it. */
+function refundComparison(orders: readonly OrderView[]): Readonly<{ label: string; tone: 'good' | 'worse' | 'neutral'; tooltip: string }> {
+  const dated = orders.filter((order) => order.createdAt && Number.isFinite(Date.parse(order.createdAt)))
+  const latest = dated.reduce((max, order) => Math.max(max, Date.parse(order.createdAt!)), Number.NEGATIVE_INFINITY)
+  if (!Number.isFinite(latest)) return { label: '—', tone: 'neutral', tooltip: 'Awaiting data' }
+  const currentStart = latest - 30 * 86_400_000
+  const previousStart = latest - 60 * 86_400_000
+  const refundedIn = (rows: readonly OrderView[]) => rows.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
+  const current = dated.filter((order) => Date.parse(order.createdAt!) >= currentStart)
+  const previous = dated.filter((order) => { const value = Date.parse(order.createdAt!); return value >= previousStart && value < currentStart })
+  const currentRefunded = refundedIn(current)
+  const previousRefunded = refundedIn(previous)
+  if (previous.length === 0) return { label: '—', tone: 'neutral', tooltip: 'Awaiting data — no orders in the prior 30 days' }
+  if (previousRefunded === 0 && currentRefunded === 0) return { label: 'Same', tone: 'neutral', tooltip: 'No refunds in either period' }
+  if (previousRefunded === 0) return { label: '↑ New', tone: 'worse', tooltip: 'Refunds appeared this period (from loaded orders)' }
+  const pct = Math.round(((currentRefunded - previousRefunded) / previousRefunded) * 100)
+  if (pct === 0) return { label: 'Same', tone: 'neutral', tooltip: 'Refunded amount unchanged vs the prior 30 days' }
+  return { label: `${pct > 0 ? '↑' : '↓'} ${Math.abs(pct)}%`, tone: pct > 0 ? 'worse' : 'good', tooltip: 'Refunded amount vs the prior 30 days (from loaded orders)' }
+}
+function cancellationStatus(rate: number | null): Readonly<{ tone: 'good' | 'watch' | 'attention' | 'neutral'; icon: ReactNode; label: string }> {
+  if (rate === null) return { tone: 'neutral', icon: <Clock3 size={13} />, label: 'Awaiting order data' }
+  if (rate === 0) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Excellent — no cancellations this period' }
+  if (rate < 2) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Healthy cancellation rate' }
+  if (rate <= 5) return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Monitor cancellation trends' }
+  return { tone: 'attention', icon: <AlertTriangle size={13} />, label: 'High cancellation rate — review orders' }
+}
+function fulfillmentStatus(rate: number | null, total: number): Readonly<{ tone: 'good' | 'watch' | 'attention' | 'neutral'; icon: ReactNode; label: string }> {
+  if (rate === null) return { tone: 'neutral', icon: <Clock3 size={13} />, label: 'Awaiting order data' }
+  if (rate === 100) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'All orders fulfilled' }
+  if (rate > 80) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Healthy fulfillment rate' }
+  if (rate >= 50) return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Fulfillment in progress' }
+  if (rate === 0 && total > 0) return { tone: 'attention', icon: <AlertTriangle size={13} />, label: 'Attention — orders need fulfillment' }
+  return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Many orders awaiting fulfillment' }
+}
 function shortId(value: string): string { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value }
 function formatDate(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date) : '—' }
 function formatTime(value: string | null): string { if (!value) return ''; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date) : '' }

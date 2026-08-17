@@ -1,6 +1,6 @@
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
-import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
 import { fetchAnalyticsInsights, fetchCustomers, queryAnalyticsInsights } from './api.js'
@@ -165,9 +165,15 @@ function KpiTooltip({ active, payload, format, label, total }: { active?: boolea
 }
 
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
-  const real = trend.some((row) => row.revenue > 0); const now = trend.filter((row) => row.forecast === null).reduce((sum, row) => sum + row.revenue, 0); const before = trend.reduce((sum, row) => sum + (row.previous ?? 0), 0); const growth = before > 0 ? (now - before) / before * 100 : null
+  const real = trend.some((row) => row.revenue > 0)
+  const realRows = trend.filter((row) => row.forecast === null)
+  const now = realRows.reduce((sum, row) => sum + row.revenue, 0)
+  const before = trend.reduce((sum, row) => sum + (row.previous ?? 0), 0)
+  const growth = before > 0 ? (now - before) / before * 100 : null
+  // Real revenue peak — only marked when the period contains actual sales rows.
+  const peak = realRows.filter((row) => row.revenue > 0).sort((a, b) => b.revenue - a.revenue)[0] ?? null
   return <Widget className="revenue-trend" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div>}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 12, right: 12, left: -12 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".38"/><stop offset="1" stopColor="#38bdf8" stopOpacity="0"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.09)" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>}/><Bar dataKey="revenue" fill="#38bdf8" opacity={.09} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#38bdf8" strokeWidth={2.8} dot={{r:2.4,fill:'#2563eb'}} activeDot={{r:4.5,strokeWidth:2.5,fill:'#ffffff',stroke:'#2563eb'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 16, right: 14, left: -8 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(37, 99, 235, .25)"/><stop offset="1" stopColor="rgba(37, 99, 235, .02)"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="#374151" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>} cursor={{ stroke:'#475569', strokeDasharray:'3 3' }}/><Bar dataKey="revenue" fill="#60A5FA" opacity={.08} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#60A5FA" strokeWidth={2.5} dot={{r:2.4,fill:'#60A5FA',strokeWidth:0}} activeDot={{r:4.5,strokeWidth:2.5,fill:'#ffffff',stroke:'#60A5FA'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/>{peak && <ReferenceLine x={peak.day} stroke="#f59e0b" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak: ${money(peak.revenue)}`} /> }} />}</ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div><div className="chart-summary"><div><small>Total</small><strong>{money(now)}</strong></div><i/><div><small>Average</small><strong>{money(now / Math.max(1, realRows.length))}</strong></div><i/><div><small>Peak Day</small><strong title={peak ? `${shortDay(peak.day)} — best revenue day of the period` : 'Awaiting sales data'}>{peak ? `${shortDay(peak.day)} · ${money(peak.revenue)}` : '—'}</strong></div><i/><div><small>Growth</small><strong className={growth === null ? '' : growth < 0 ? 'negative' : 'positive'} title={growth === null ? 'A previous-period baseline is still building' : 'Change vs the previous period'}>{growth === null ? '—' : `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`}</strong></div></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
   </Widget>
 }
 
@@ -554,11 +560,17 @@ function formatDateLabel(value: unknown): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
+/** Small inline annotation for the real peak revenue day inside the chart. */
+function PeakLabel({ value, x = 0 }: { value: string; x?: number }) {
+  return <g className="rev-peak-label" transform={`translate(${x}, 14)`}><circle r={2.5} /><text x={6} y={-5}>{value}</text></g>
+}
+
 function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
   const formattedDate = formatDateLabel(label ?? point?.day)
   const revenue = point?.revenue ?? Number(payload.find((p) => (p.dataKey === 'revenue' || p.name === 'Current'))?.value ?? 0)
+  const orders = point?.orders ?? 0
   const previous = point?.previous ?? null
   const forecast = point?.forecast ?? null
 
@@ -569,7 +581,12 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
         <strong>{money(revenue)}</strong>
       </div>
       <time className="tooltip-date">{formattedDate}</time>
-      {(previous !== null && previous > 0) || forecast !== null ? <div className="tooltip-metrics">
+      <div className="tooltip-metrics">
+        <div className="tooltip-row">
+          <i style={{ background: '#2563EB' }} />
+          <span>Orders</span>
+          <strong>{orders}</strong>
+        </div>
         {previous !== null && previous > 0 && (
           <div className="tooltip-row">
             <i style={{ background: '#64748b' }} />
@@ -584,7 +601,7 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
             <strong>{money(forecast)}</strong>
           </div>
         )}
-      </div> : null}
+      </div>
     </div>
   )
 }

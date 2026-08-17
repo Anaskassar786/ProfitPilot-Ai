@@ -97,11 +97,14 @@ const catalog = [
 ]
 
 const topProductInsight: AvailableOrderInsight = { feature: 'top_selling_product', name: 'Top Selling Product', data: { status: 'available', productId: 'p1', title: 'Burton Custom Snowboard', quantity: 6, revenue: 4199.7, currency: 'USD' } }
-const cancellationInsight: AvailableOrderInsight = { feature: 'cancellation_rate', name: 'Cancellation Rate', data: { status: 'available', canceled: 0, total: 5, rate: 0 } }
-const fulfillmentInsight: AvailableOrderInsight = { feature: 'fulfillment_rate', name: 'Fulfillment Rate', data: { status: 'available', fulfilled: 5, total: 5, rate: 100, basis: 'Shopify fulfillment status' } }
+const cancellationInsight: AvailableOrderInsight = { feature: 'cancellation_rate', name: 'Cancellation Rate', data: { status: 'available', canceled: 1, total: 5, rate: 20 } }
+const fulfillmentInsight: AvailableOrderInsight = { feature: 'fulfillment_rate', name: 'Fulfillment Rate', data: { status: 'available', fulfilled: 3, total: 5, rate: 60, basis: 'Shopify fulfillment status' } }
 const orderRows = [
-  { id: 'o1', orderNumber: '#1001', customer: { name: 'Anas Kassar' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 2, price: 649.99 }, { productId: 'p2', title: 'Ride Boots', quantity: 1, price: 289 }], status: 'completed', paymentStatus: 'paid', totalPrice: 1589 },
-  { id: 'o2', orderNumber: '#1002', customer: { name: 'Jane Doe' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 4, price: 649.99 }], status: 'completed', paymentStatus: 'paid', totalPrice: 2600 },
+  { id: 'o1', orderNumber: '#1001', createdAt: '2026-08-10T10:00:00Z', updatedAt: '2026-08-12T10:00:00Z', customer: { name: 'Anas Kassar' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 2, price: 649.99 }, { productId: 'p2', title: 'Ride Boots', quantity: 1, price: 289 }], status: 'completed', paymentStatus: 'paid', totalPrice: 1589, currency: 'USD' },
+  { id: 'o2', orderNumber: '#1002', createdAt: '2026-08-08T09:00:00Z', updatedAt: '2026-08-10T09:00:00Z', customer: { name: 'Jane Doe' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 4, price: 649.99 }], status: 'completed', paymentStatus: 'paid', totalPrice: 2600, currency: 'USD' },
+  { id: 'o3', orderNumber: '#1003', createdAt: '2026-08-05T12:00:00Z', updatedAt: '2026-08-06T12:00:00Z', customer: { name: 'Sam Lee' }, lineItems: [], status: 'completed', paymentStatus: 'paid', totalPrice: 649.99, currency: 'USD' },
+  { id: 'o4', orderNumber: '#1004', createdAt: '2026-07-15T11:00:00Z', updatedAt: '2026-07-15T12:00:00Z', customer: { name: 'Alex Kim' }, lineItems: [], status: 'canceled', paymentStatus: 'refunded', totalPrice: 289, currency: 'USD' },
+  { id: 'o5', orderNumber: '#1005', createdAt: '2026-07-10T11:00:00Z', updatedAt: '2026-07-11T11:00:00Z', customer: { name: 'Riley Chen' }, lineItems: [], status: 'canceled', paymentStatus: 'refunded', totalPrice: 60, currency: 'USD' },
 ] as never
 
 type Page = 'dashboard' | 'analytics' | 'inventory' | 'orders'
@@ -157,8 +160,8 @@ function Harness() {
               <div className="orders-insights-body">
                 <div className="orders-basic-insights">
                   <TopProductInsight insight={topProductInsight} orders={orderRows} ordersTotal={2} onNavigate={() => {}} />
-                  <CancellationRateCard insight={cancellationInsight} />
-                  <FulfillmentRateCard insight={fulfillmentInsight} />
+                  <CancellationRateCard insight={cancellationInsight} orders={orderRows} />
+                  <FulfillmentRateCard insight={fulfillmentInsight} orders={orderRows} />
                   <div className="orders-basic-card order-health-card modern">
                     <div className="orders-insight-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg><span>Order Health</span><span className="grade-badge green">A</span></div>
                     <div className="order-health-gauge-wrap large"><div className="health-gauge large healthy" style={{ background: 'conic-gradient(from 220deg, #34d399 216deg, rgba(107,114,128,.14) 0)' }}><div className="gauge-inner"><strong>90</strong><span>A · Excellent</span></div></div></div>
