@@ -1,10 +1,94 @@
-.customer-ai-heading-actions{display:flex!important;align-items:center;gap:7px}.customer-ai-heading-actions>button:last-child{display:grid;width:29px;height:29px;place-items:center;color:var(--text-tertiary);border:1px solid var(--border-soft);border-radius:8px;background:transparent}
+/* Global upgrade CTA contract. Keep this final in the stylesheet order so
+   feature-card button rules can never collapse or wrap the shared CTA. */
+.upgrade-plan-cta {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  gap: 8px !important;
+  min-width: 140px !important;
+  width: auto !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 16px !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(99, 102, 241, .46) !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 52%, #7C3AED 100%) !important;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, .24), inset 0 1px 0 rgba(255, 255, 255, .18) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: -.01em !important;
+  white-space: nowrap !important;
+}
+
+.upgrade-plan-cta > span,
+.upgrade-plan-cta > svg {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+
+.upgrade-plan-cta:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1D4ED8 0%, #4338CA 50%, #6D28D9 100%) !important;
+  box-shadow: 0 9px 24px rgba(37, 99, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .22) !important;
+  transform: translateY(-1px);
+}
+
+/* Every header that can host the shared CTA stays on one line. The title is
+   the flexible item; the CTA and collapse control always retain their size. */
+.orders-insights-header,
+.inventory-insights-header,
+.customer-ai-heading,
+.ai-intelligence > .widget-header {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  min-width: 0;
+}
+
+.orders-insights-title,
+.inventory-insights-title,
+.customer-ai-heading > span:first-child,
+.ai-intelligence .ai-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.orders-insights-head-actions,
+.inventory-insights-head-actions,
+.customer-ai-heading-actions,
+.ai-intelligence .widget-actions {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0;
+}
+
 /* Sort dropdowns show the selected option; widen + ellipsis instead of hiding the label. */
-.orders-sort-control .custom-select,.customers-sort .custom-select{min-width:118px;max-width:180px;min-height:32px;border:0;background:transparent}
-.orders-sort-control .custom-select-trigger,.customers-sort .custom-select-trigger{min-height:30px;padding-right:8px}
-.orders-sort-control .custom-select-trigger>strong,.customers-sort .custom-select-trigger>strong{min-width:48px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.inventory-sort-control{min-width:0}
-.inventory-sort-control .custom-select{min-width:140px;max-width:220px}
-.inventory-sort-control .custom-select-trigger>strong{min-width:60px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.products-controls .custom-select{min-width:148px;max-width:220px}
-.products-controls .custom-select-trigger>strong{min-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orders-sort-control .custom-select,
+.customers-sort .custom-select { min-width: 118px; max-width: 180px; min-height: 32px; border: 0; background: transparent; }
+.orders-sort-control .custom-select-trigger,
+.customers-sort .custom-select-trigger { min-height: 30px; padding-right: 8px; }
+.orders-sort-control .custom-select-trigger > strong,
+.customers-sort .custom-select-trigger > strong { min-width: 48px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-sort-control { min-width: 0; }
+.inventory-sort-control .custom-select { min-width: 140px; max-width: 220px; }
+.inventory-sort-control .custom-select-trigger > strong { min-width: 60px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.products-controls .custom-select { min-width: 148px; max-width: 220px; }
+.products-controls .custom-select-trigger > strong { min-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .upgrade-plan-cta {
+    min-width: 132px !important;
+    padding-inline: 13px !important;
+  }
+
+  .orders-insights-title p,
+  .inventory-insights-title p,
+  .ai-intelligence .ai-heading p {
+    display: none;
+  }
+}
