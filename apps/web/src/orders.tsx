@@ -195,7 +195,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
         {!result.sufficientData && <div className="orders-insufficient"><Clock3 size={15} /><span><strong>Early signal mode</strong> — advanced insights are available after 5 real orders. Basic facts below remain exact.</span></div>}
         <div className="orders-basic-insights">
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
-          <CancellationRateCard insight={available('cancellation_rate')} />
+          <CancellationRateCard insight={available('cancellation_rate')} orders={orders ?? []} />
           <FulfillmentRateCard insight={available('fulfillment_rate')} />
           <OrderHealthInsight insight={available('order_health_score')} />
         </div>
@@ -306,28 +306,24 @@ export function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: 
     </div>
   </article>
 }
-export function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function CancellationRateCard({ insight, orders = [] }: { insight: ReturnType<typeof insightByFeature>; orders?: readonly OrderView[] }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const canceled = numberOrNull(data.canceled) ?? 0
   const total = numberOrNull(data.total) ?? 0
   const completed = Math.max(0, total - canceled)
   const tone = rate === null ? 'muted' : rate === 0 ? 'excellent' : rate < 5 ? 'good' : rate < 10 ? 'watch' : 'attention'
-  const label = rate === null ? 'Awaiting order data' : rate === 0 ? 'Excellent — no cancellations this period' : rate < 5 ? 'Good — below typical levels' : rate < 10 ? 'Watch — review cancellation reasons' : 'Attention — cancellations elevated'
-  const sweep = total > 0 ? Math.max(8, Math.round((completed / total) * 360)) : 0
+  const sweep = total > 0 ? Math.max(2, Math.round((completed / total) * 360)) : 360
+  const refunded = refundedAmount(orders)
   return <article className={`orders-basic-card rate-card cancellation ${tone}`}>
     <div className="orders-insight-label"><AlertTriangle size={16} /><span>Cancellation Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
-      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: `conic-gradient(var(--rate-color, var(--green)) ${sweep}deg, rgba(107,114,128,.14) 0)` }}>
-        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>canceled</span></div>
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#10B981 ${sweep}deg, #EF4444 0)` }}>
+        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Cancelled</span></div>
       </div>
-      <div className="rate-facts">
-        <p><strong>{canceled}</strong><span>canceled</span></p>
-        <p><strong>{completed}</strong><span>completed</span></p>
-        <p><strong>{total}</strong><span>total orders</span></p>
-      </div>
+      <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
     </div>
-    <p className={`rate-status ${tone}`}><i />{label}</p>
+    <p className={`rate-status ${tone}`}><i />{rate === null ? 'Awaiting order data' : rate === 0 ? 'Excellent — no cancellations this period' : rate < 5 ? 'Good — below typical levels' : rate < 10 ? 'Watch — review cancellation reasons' : 'Attention — cancellations elevated'}</p>
     <small className="rate-note">Industry comparison connects when benchmark data is available.</small>
   </article>
 }
@@ -504,6 +500,11 @@ function OrdersErrorState({ message, onRetry }: { message: string; onRetry: () =
 export function OrdersEmptyState({ title, description, action, onAction, compact = false }: { title: string; description: string; action: string; onAction: () => void; compact?: boolean }) { return <div className={`orders-empty ${compact ? 'compact' : ''}`}><span><ShoppingBag size={23} /></span><strong>{title}</strong><p>{description}</p><button className="button secondary" onClick={onAction}>{action}</button></div> }
 
 function activeFilterCount(filters: FilterState): number { return Object.values(filters).filter(Boolean).length }
+/** Sum of fully refunded order totals from the loaded Shopify order rows. */
+function refundedAmount(orders: readonly OrderView[]): number | null {
+  if (orders.length === 0) return null
+  return orders.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
+}
 function shortId(value: string): string { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value }
 function formatDate(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date) : '—' }
 function formatTime(value: string | null): string { if (!value) return ''; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date) : '' }
