@@ -197,7 +197,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
           <CancellationRateCard insight={available('cancellation_rate')} orders={orders ?? []} />
           <FulfillmentRateCard insight={available('fulfillment_rate')} orders={orders ?? []} />
-          <OrderHealthInsight insight={available('order_health_score')} />
+          <OrderHealthInsight insight={available('order_health_score')} totalOrders={result.orderCount} />
         </div>
         <div className="orders-premium-insights">
           <InsightSlot feature="peak_times" title="Peak Order Times" icon={<Clock3 size={16} />} available={available('peak_times')} locked={locked('peak_times')} onUpgrade={onNavigateBilling}><PeakTimeContent insight={available('peak_times')} /></InsightSlot>
@@ -326,14 +326,14 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
     </div>
     <div className="rate-divider" />
-    <div className="rate-metrics">
-      <div className="rate-mini-stat" title="Sum of fully refunded order totals from loaded Shopify orders">
-        <span className="rate-mini-icon"><DollarSign size={13} /></span>
-        <div><small>Refunded</small><strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong></div>
+    <div className="rate-metrics" aria-label="Cancellation details">
+      <div className="rate-detail-row" title="Sum of fully refunded order totals from loaded Shopify orders">
+        <span className="rate-detail-label"><DollarSign size={15} /><span>Refunded</span></span>
+        <strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong>
       </div>
-      <div className="rate-mini-stat" title={comparison.tooltip}>
-        <span className="rate-mini-icon"><TrendingUp size={13} /></span>
-        <div><small>vs Last Period</small><strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong></div>
+      <div className="rate-detail-row" title={comparison.tooltip}>
+        <span className="rate-detail-label"><TrendingUp size={15} /><span>vs Last Period</span></span>
+        <strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong>
       </div>
     </div>
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
@@ -359,20 +359,20 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
     </div>
     <div className="rate-divider" />
-    <div className="rate-metrics">
-      <div className="rate-mini-stat" title="Unfulfilled orders from the current order data">
-        <span className="rate-mini-icon"><Package size={13} /></span>
-        <div><small>Pending</small><strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong></div>
+    <div className="rate-metrics" aria-label="Fulfillment details">
+      <div className="rate-detail-row" title="Unfulfilled orders from the current order data">
+        <span className="rate-detail-label"><Package size={15} /><span>Pending</span></span>
+        <strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong>
       </div>
-      <div className="rate-mini-stat" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
-        <span className="rate-mini-icon"><Clock3 size={13} /></span>
-        <div><small>Avg Fulfill Time</small><strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong></div>
+      <div className="rate-detail-row" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
+        <span className="rate-detail-label"><Clock3 size={15} /><span>Avg Fulfill Time</span></span>
+        <strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong>
       </div>
     </div>
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
-function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnType<typeof insightByFeature>; totalOrders: number }) {
   const data = record(insight?.data)
   const insufficient = data.status === 'insufficient_data'
   const score = numberOrNull(data.score)
@@ -380,61 +380,56 @@ function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByF
   const fulfilledRate = numberOrNull(data.fulfilledRate)
   const cancelledRate = numberOrNull(data.cancelledRate)
   const paidRate = numberOrNull(data.paidRate)
-  const tone = text(data.tone) === 'healthy' ? 'healthy' : text(data.tone) === 'warning' ? 'warning' : 'critical'
-  const sweep = score === null || insufficient ? 0 : Math.max(8, Math.round(score * 2.4))
   const gradeColor = grade === 'A' || grade === 'A+' ? 'green' : grade === 'B' ? 'blue' : grade === 'C' ? 'amber' : grade === 'D' || grade === 'F' ? 'red' : 'muted'
+  const statusLabel = score === null || insufficient ? 'Awaiting data' : score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 50 ? 'Fair' : 'Needs attention'
+  const insightMessage = orderHealthMessage({ insufficient, totalOrders, fulfilledRate, paidRate })
+  const metrics = [
+    { label: 'Fulfilled', value: fulfilledRate, color: 'green', icon: <CheckCircle2 size={13} /> },
+    { label: 'Cancelled', value: cancelledRate, color: 'red', icon: <XCircle size={13} /> },
+    { label: 'Paid', value: paidRate, color: 'blue', icon: <DollarSign size={13} /> },
+  ] as const
 
-  return <article className="orders-basic-card order-health-card modern">
+  return <article className={`orders-basic-card order-health-card horizontal ${gradeColor}`}>
     <div className="orders-insight-label">
       <HeartPulse size={16} />
       <span>Order Health</span>
       {!insufficient && grade !== '—' && <span className={`grade-badge ${gradeColor}`}>{grade}</span>}
     </div>
-    <div className="order-health-gauge-wrap large">
-      <div
-        className={`health-gauge large ${insufficient ? 'no-data' : tone}`}
-        style={!insufficient && score !== null ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties : undefined}
-      >
-        <div className="gauge-inner">
-          <strong>{insufficient ? '—' : score}</strong>
-          <span>{insufficient ? 'Insufficient data' : `${grade} · ${tone === 'healthy' ? 'Excellent' : tone === 'warning' ? 'Good' : 'Needs attention'}`}</span>
-        </div>
-      </div>
+    <div className="order-health-score">
+      <div className="order-health-score-value"><strong>{insufficient ? '—' : score}</strong>{!insufficient && score !== null && <span>/100</span>}</div>
+      <span className={`order-health-status ${gradeColor}`}>{statusLabel}</span>
     </div>
-    <ul className="order-health-components modern">
-      <li>
-        <div>
-          <span className="metric-row-icon green"><CheckCircle2 size={14} /></span>
-          <span>Fulfilled</span>
-          <strong>{fulfilledRate === null ? '—' : `${fulfilledRate}%`}</strong>
-        </div>
-        <div className="order-health-bar" role="presentation">
-          <i style={{ width: `${fulfilledRate ?? 0}%` }} className="animated green" />
-        </div>
-      </li>
-      <li>
-        <div>
-          <span className="metric-row-icon red"><XCircle size={14} /></span>
-          <span>Cancelled</span>
-          <strong>{cancelledRate === null ? '—' : `${cancelledRate}%`}</strong>
-        </div>
-        <div className="order-health-bar" role="presentation">
-          <i style={{ width: `${cancelledRate ?? 0}%` }} className="animated red" />
-        </div>
-      </li>
-      <li>
-        <div>
-          <span className="metric-row-icon blue"><DollarSign size={14} /></span>
-          <span>Paid</span>
-          <strong>{paidRate === null ? '—' : `${paidRate}%`}</strong>
-        </div>
-        <div className="order-health-bar" role="presentation">
-          <i style={{ width: `${paidRate ?? 0}%` }} className="animated blue" />
-        </div>
-      </li>
+    <div className="order-health-scale" role="img" aria-label={score === null ? 'Order health score awaiting data' : `Order health score ${score} out of 100, ${statusLabel}`}>
+      <div className="order-health-scale-track"><i style={{ width: `${score ?? 0}%` }} /></div>
+      <div className="order-health-scale-labels"><span>Poor</span><span>Fair</span><span>Good</span><span>Excellent</span></div>
+    </div>
+    <ul className="order-health-sliders">
+      {metrics.map((metric) => {
+        const percent = Math.max(0, Math.min(100, metric.value ?? 0))
+        return <li key={metric.label} className={metric.color}>
+          <div className="order-health-slider-label">
+            <span>{metric.icon}{metric.label}</span>
+            <strong>{metric.value === null ? '—' : `${metric.value}%`}</strong>
+          </div>
+          <div className="order-health-slider-track" role="img" aria-label={`${metric.label}: ${metric.value === null ? 'awaiting data' : `${metric.value}%`}`}>
+            <i style={{ width: `${percent}%` }} />
+            {metric.value !== null && <b style={{ left: `${percent}%` }} />}
+          </div>
+        </li>
+      })}
     </ul>
+    <div className={`order-health-insight ${gradeColor}`}><Lightbulb size={13} /><span>{insightMessage}</span></div>
   </article>
 }
+
+function orderHealthMessage(input: Readonly<{ insufficient: boolean; totalOrders: number; fulfilledRate: number | null; paidRate: number | null }>): string {
+  if (input.insufficient || input.paidRate === null || input.fulfilledRate === null) return 'More Shopify orders are needed to assess health'
+  if (input.paidRate === 100 && input.fulfilledRate === 100) return 'All orders paid and fulfilled — perfect'
+  if (input.paidRate === 100 && input.fulfilledRate === 0) return `${input.totalOrders} order${input.totalOrders === 1 ? '' : 's'} paid, awaiting fulfillment`
+  if (input.paidRate < 100) return 'Payment collection needs attention'
+  return 'Paid orders are moving through fulfillment'
+}
+
 function PeakTimeContent({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'available' ? <><strong>{text(data.day)} · {text(data.hourLabel)}</strong><p>{number(data.ordersAtPeakHour)} orders at the peak hour</p></> : <InsightUnavailable message={text(data.message)} /> }
 function RepeatContent({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'available' ? <><strong>{number(data.repeatCustomers)} repeat</strong><p>{number(data.newCustomers)} new · {number(data.guestOrders)} guest orders</p></> : <InsightUnavailable message={text(data.message)} /> }
 function AiSuggestionContent({ insight, usage }: { insight: ReturnType<typeof insightByFeature>; usage: OrderInsightsResult['usage'] }) { const data = record(insight?.data); return <>{data.status === 'generated' ? <p className="ai-suggestion-text">{text(data.text)}</p> : <InsightUnavailable message={text(data.message)} />}<small className="ai-usage-label">{usage.limitReached ? 'Daily limit reached, upgrade or wait' : usage.limit === null ? 'Unlimited AI insights' : `${usage.used}/${usage.limit} AI insights today`}</small></> }

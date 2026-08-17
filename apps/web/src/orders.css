@@ -112,7 +112,11 @@
 .order-details-drawer > footer { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 20px; border-top:1px solid var(--border); background:var(--card); }.order-details-drawer > footer > span { display:flex; align-items:center; gap:6px; color:var(--text-tertiary); font-size:7px; }.order-details-drawer > footer .button { text-decoration:none; }
 .drawer-skeleton { position:relative; display:flex; flex-direction:column; gap:18px; padding:72px 20px 20px; }.drawer-skeleton button { position:absolute; top:20px; right:20px; padding:7px; background:transparent; }.drawer-skeleton span { height:80px; border-radius:10px; background:linear-gradient(90deg,rgba(107,114,128,.06),rgba(107,114,128,.14),rgba(107,114,128,.06)); background-size:200%; animation:shimmer 1.4s infinite; }
 
-.order-health-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.order-health-card.horizontal { --health-accent: #6B7280; display: flex; flex-direction: column; gap: 10px; padding: 16px; overflow: hidden; }
+.order-health-card.horizontal.green { --health-accent: #10B981; }
+.order-health-card.horizontal.blue { --health-accent: #3B82F6; }
+.order-health-card.horizontal.amber { --health-accent: #F59E0B; }
+.order-health-card.horizontal.red { --health-accent: #EF4444; }
 .order-health-card .orders-insight-label { display: flex; align-items: center; gap: 8px; margin-bottom: 0; width: 100%; }
 .order-health-card .grade-badge { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 8px; font-size: 12px; font-weight: 800; border-radius: 6px; }
 .order-health-card .grade-badge.green { background: rgba(16,185,129,.16); color: #34D399; border: 1px solid rgba(16,185,129,.3); }
@@ -120,29 +124,33 @@
 .order-health-card .grade-badge.amber { background: rgba(245,158,11,.16); color: #FBBF24; border: 1px solid rgba(245,158,11,.3); }
 .order-health-card .grade-badge.red { background: rgba(239,68,68,.16); color: #F87171; border: 1px solid rgba(239,68,68,.3); }
 .order-health-card .grade-badge.muted { background: rgba(107,114,128,.16); color: #9CA3AF; border: 1px solid rgba(107,114,128,.3); }
-
-.order-health-gauge-wrap { display: flex; justify-content: center; margin: 4px 0 8px; }
-.order-health-gauge-wrap.large .health-gauge.large,
-.order-health-gauge-wrap .health-gauge { width: 120px; height: 120px; }
-.order-health-gauge-wrap.large .health-gauge.large::before,
-.order-health-gauge-wrap .health-gauge::before { inset: 8px; }
-.order-health-gauge-wrap .gauge-inner strong { font-size: 26px; font-weight: 800; letter-spacing: -.04em; color: var(--text); }
-.order-health-gauge-wrap .gauge-inner span { font-size: 10px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary); }
-
-.order-health-components.modern { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; width: 100%; }
-.order-health-components.modern li { display: flex; flex-direction: column; gap: 4px; }
-.order-health-components.modern li > div:first-child { display: flex; align-items: center; gap: 8px; }
-.order-health-components.modern li > div:first-child span { font-size: 12px; font-weight: 500; color: var(--text-secondary); flex: 1; }
-.order-health-components.modern li > div:first-child strong { font-size: 12px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
-.order-health-bar { height: 5px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; width: 100%; }
-.order-health-bar i.animated { display: block; height: 100%; border-radius: inherit; transition: width 600ms cubic-bezier(.4,0,.2,1); }
-.order-health-bar i.animated.green { background: linear-gradient(90deg, #10B981, #34D399); }
-.order-health-bar i.animated.red { background: linear-gradient(90deg, #EF4444, #F87171); }
-.order-health-bar i.animated.blue { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
-.metric-row-icon { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; flex: 0 0 auto; }
-.metric-row-icon.green { color: #10B981; background: rgba(16,185,129,.14); }
-.metric-row-icon.red { color: #EF4444; background: rgba(239,68,68,.14); }
-.metric-row-icon.blue { color: #3B82F6; background: rgba(59,130,246,.14); }
+.order-health-score { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.order-health-score-value { display: flex; align-items: baseline; gap: 4px; }
+.order-health-score-value strong { color: var(--text); font-family: var(--font-mono); font-size: 34px; line-height: 1; letter-spacing: -.055em; }
+.order-health-score-value span { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; }
+.order-health-status { font-size: 11px; font-weight: 750; }
+.order-health-status.green { color: #34D399; }.order-health-status.blue { color: #60A5FA; }.order-health-status.amber { color: #FBBF24; }.order-health-status.red { color: #F87171; }.order-health-status.muted { color: var(--text-tertiary); }
+.order-health-scale { display: flex; flex-direction: column; gap: 5px; }
+.order-health-scale-track { height: 9px; overflow: hidden; border-radius: 99px; background: var(--bg-secondary); box-shadow: inset 0 0 0 1px rgba(148,163,184,.08); }
+.order-health-scale-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--health-accent) 72%, #FFFFFF), var(--health-accent)); transition: width 600ms cubic-bezier(.4,0,.2,1); }
+.order-health-scale-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font-size: 7.5px; letter-spacing: .02em; }
+.order-health-sliders { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--border-soft); list-style: none; }
+.order-health-sliders li { display: flex; flex-direction: column; gap: 4px; }
+.order-health-slider-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.order-health-slider-label > span { display: inline-flex; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 10.5px; font-weight: 600; }
+.order-health-slider-label svg { flex: none; }
+.order-health-sliders li.green svg { color: #10B981; }.order-health-sliders li.red svg { color: #EF4444; }.order-health-sliders li.blue svg { color: #3B82F6; }
+.order-health-slider-label strong { color: var(--text); font-family: var(--font-mono); font-size: 10.5px; }
+.order-health-slider-track { position: relative; height: 3px; margin: 0 4px; border-radius: 99px; background: var(--bg-secondary); }
+.order-health-slider-track i { display: block; height: 100%; border-radius: inherit; opacity: .72; }
+.order-health-slider-track b { position: absolute; top: 50%; width: 7px; height: 7px; border: 2px solid var(--card); border-radius: 50%; transform: translate(-50%,-50%); box-shadow: 0 0 0 1px currentColor; }
+.order-health-sliders li.green .order-health-slider-track i, .order-health-sliders li.green .order-health-slider-track b { color: #10B981; background: #10B981; }
+.order-health-sliders li.red .order-health-slider-track i, .order-health-sliders li.red .order-health-slider-track b { color: #EF4444; background: #EF4444; }
+.order-health-sliders li.blue .order-health-slider-track i, .order-health-sliders li.blue .order-health-slider-track b { color: #3B82F6; background: #3B82F6; }
+.order-health-insight { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 7px 9px; color: var(--text-secondary); border-radius: 8px; background: color-mix(in srgb, var(--health-accent) 10%, transparent); font-size: 9.5px; line-height: 1.35; }
+.order-health-insight svg { flex: none; color: var(--health-accent); }
+.app-shell.light-mode .order-health-status.green { color: #047857; }.app-shell.light-mode .order-health-status.blue { color: #1D4ED8; }.app-shell.light-mode .order-health-status.amber { color: #B45309; }.app-shell.light-mode .order-health-status.red { color: #B91C1C; }
+.app-shell.light-mode .order-health-scale-track, .app-shell.light-mode .order-health-slider-track { background: #E5E7EB; }
 
 @keyframes shimmer { to { background-position:-200% 0; } }
 @media (max-width:1180px) { .orders-basic-insights { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-premium-insights { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-table { min-width:950px; } }
