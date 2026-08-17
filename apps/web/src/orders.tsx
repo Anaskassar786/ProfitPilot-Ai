@@ -196,7 +196,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
         <div className="orders-basic-insights">
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
           <CancellationRateCard insight={available('cancellation_rate')} orders={orders ?? []} />
-          <FulfillmentRateCard insight={available('fulfillment_rate')} />
+          <FulfillmentRateCard insight={available('fulfillment_rate')} orders={orders ?? []} />
           <OrderHealthInsight insight={available('order_health_score')} />
         </div>
         <div className="orders-premium-insights">
@@ -339,24 +339,25 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
-export function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnType<typeof insightByFeature>; orders?: readonly OrderView[] }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const fulfilled = numberOrNull(data.fulfilled) ?? 0
   const total = numberOrNull(data.total) ?? 0
   const remaining = Math.max(0, total - fulfilled)
   const tone = rate === null ? 'muted' : rate === 100 ? 'excellent' : rate >= 80 ? 'good' : rate >= 50 ? 'watch' : 'attention'
-  const label = rate === null ? 'Awaiting order data' : rate === 100 ? 'Excellent — every order fulfilled' : rate >= 80 ? 'On track — most orders fulfilled' : rate >= 50 ? 'Watch — fulfillment backlog' : 'Attention — many orders unfulfilled'
+  const sweep = total > 0 ? Math.max(2, Math.round((fulfilled / total) * 360)) : 360
+  const restColor = rate === 0 && total > 0 ? '#EF4444' : '#F59E0B'
+  const avgDays = averageFulfillmentDays(orders)
   return <article className={`orders-basic-card rate-card fulfillment ${tone}`}>
     <div className="orders-insight-label"><CheckCircle2 size={16} /><span>Fulfillment Rate</span><i className={`rate-dot ${tone}`} /></div>
-    <strong className="rate-big">{rate === null ? '—' : `${rate}%`}</strong>
-    <div className="rate-progress" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`}><i style={{ width: `${rate ?? 0}%` }} /></div>
-    <div className="rate-facts">
-      <p><strong>{fulfilled}</strong><span>fulfilled</span></p>
-      <p><strong>{remaining}</strong><span>remaining</span></p>
-      <p><strong>{total}</strong><span>total orders</span></p>
+    <div className="rate-card-body">
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#2563EB ${sweep}deg, ${restColor} 0)` }}>
+        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Fulfilled</span></div>
+      </div>
+      <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
     </div>
-    <p className={`rate-status ${tone}`}><i />{label}</p>
+    <p className={`rate-status ${tone}`}><i />{rate === null ? 'Awaiting order data' : rate === 100 ? 'Excellent — every order fulfilled' : rate >= 80 ? 'On track — most orders fulfilled' : rate >= 50 ? 'Watch — fulfillment backlog' : 'Attention — many orders unfulfilled'}</p>
     <small className="rate-note">{text(data.basis) ?? 'Shopify fulfillment status'} · industry comparison connects when benchmark data is available.</small>
   </article>
 }
@@ -518,6 +519,23 @@ function refundedAmount(orders: readonly OrderView[]): number | null {
   return orders.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
 }
 function currencyOf(orders: readonly OrderView[]): string | null { return orders[0]?.currency ?? null }
+/**
+ * Average time from order creation to its last Shopify update for fulfilled
+ * orders, in days. Only real timestamps are used; null when no fulfilled
+ * orders are loaded yet.
+ */
+function averageFulfillmentDays(orders: readonly OrderView[]): number | null {
+  const durations: number[] = []
+  for (const order of orders) {
+    if (order.status !== 'completed' || !order.createdAt || !order.updatedAt) continue
+    const created = Date.parse(order.createdAt)
+    const updated = Date.parse(order.updatedAt)
+    if (!Number.isFinite(created) || !Number.isFinite(updated)) continue
+    durations.push((updated - created) / 86_400_000)
+  }
+  if (durations.length === 0) return null
+  return durations.reduce((sum, days) => sum + days, 0) / durations.length
+}
 /** Real refunded-amount change between the trailing 30 days and the 30 days before it. */
 function refundComparison(orders: readonly OrderView[]): Readonly<{ label: string; tone: 'good' | 'worse' | 'neutral'; tooltip: string }> {
   const dated = orders.filter((order) => order.createdAt && Number.isFinite(Date.parse(order.createdAt)))
