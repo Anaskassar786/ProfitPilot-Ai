@@ -1,5 +1,5 @@
 /**
- * PR #42 visual verification harness — dev only, not part of the production
+ * PR #44 visual verification harness — dev only, not part of the production
  * build (vite builds index.html only; this mirrors preview.html). Run the dev
  * server and open /verify.html to inspect every affected surface in both
  * themes with realistic mock data. No backend required.
@@ -16,7 +16,7 @@ import './final-polish.css'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
 import { AnalyticsHero, RevenueTrendChart, OrdersAOVCorrelation, SalesByChannel, CategoryDistribution } from './analytics.js'
 import { InventoryStatsGrid, InventoryHealthCard, StockDistributionChart, InventoryValueSummary } from './inventory.js'
-import { CancellationRateCard, FulfillmentRateCard, TopProductInsight } from './orders.js'
+import { CancellationRateCard, FulfillmentRateCard, OrderHealthInsight, TopProductInsight } from './orders.js'
 import { DashboardLayout } from './dashboard.js'
 import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
@@ -99,6 +99,7 @@ const catalog = [
 const topProductInsight: AvailableOrderInsight = { feature: 'top_selling_product', name: 'Top Selling Product', data: { status: 'available', productId: 'p1', title: 'Burton Custom Snowboard', quantity: 6, revenue: 4199.7, currency: 'USD' } }
 const cancellationInsight: AvailableOrderInsight = { feature: 'cancellation_rate', name: 'Cancellation Rate', data: { status: 'available', canceled: 1, total: 5, rate: 20 } }
 const fulfillmentInsight: AvailableOrderInsight = { feature: 'fulfillment_rate', name: 'Fulfillment Rate', data: { status: 'available', fulfilled: 3, total: 5, rate: 60, basis: 'Shopify fulfillment status' } }
+const orderHealthInsight: AvailableOrderInsight = { feature: 'order_health_score', name: 'Order Health', data: { status: 'available', score: 80, grade: 'A', tone: 'healthy', fulfilledRate: 0, cancelledRate: 0, paidRate: 100 } }
 const orderRows = [
   { id: 'o1', orderNumber: '#1001', createdAt: '2026-08-10T10:00:00Z', updatedAt: '2026-08-12T10:00:00Z', customer: { name: 'Anas Kassar' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 2, price: 649.99 }, { productId: 'p2', title: 'Ride Boots', quantity: 1, price: 289 }], status: 'completed', paymentStatus: 'paid', totalPrice: 1589, currency: 'USD' },
   { id: 'o2', orderNumber: '#1002', createdAt: '2026-08-08T09:00:00Z', updatedAt: '2026-08-10T09:00:00Z', customer: { name: 'Jane Doe' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 4, price: 649.99 }], status: 'completed', paymentStatus: 'paid', totalPrice: 2600, currency: 'USD' },
@@ -116,7 +117,7 @@ function Harness() {
   return (
     <div className={`app-shell ${light ? 'light-mode' : ''}`} style={{ minHeight: '100vh' }}>
       <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--bg-secondary)', flexWrap: 'wrap' }}>
-        <strong style={{ fontSize: 13, color: 'var(--text)', marginRight: 6 }}>PR #42 verification</strong>
+        <strong style={{ fontSize: 13, color: 'var(--text)', marginRight: 6 }}>PR #44 verification</strong>
         {(['dashboard', 'analytics', 'inventory', 'orders'] as Page[]).map((id) => (
           <button key={id} onClick={() => setPage(id)} className={`period-toggle-btn ${page === id ? 'active' : ''}`} style={{ textTransform: 'capitalize' }}>
             {id}
@@ -162,14 +163,7 @@ function Harness() {
                   <TopProductInsight insight={topProductInsight} orders={orderRows} ordersTotal={2} onNavigate={() => {}} />
                   <CancellationRateCard insight={cancellationInsight} orders={orderRows} />
                   <FulfillmentRateCard insight={fulfillmentInsight} orders={orderRows} />
-                  <div className="orders-basic-card order-health-card modern">
-                    <div className="orders-insight-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg><span>Order Health</span><span className="grade-badge green">A</span></div>
-                    <div className="order-health-gauge-wrap large"><div className="health-gauge large healthy" style={{ background: 'conic-gradient(from 220deg, #34d399 216deg, rgba(107,114,128,.14) 0)' }}><div className="gauge-inner"><strong>90</strong><span>A · Excellent</span></div></div></div>
-                    <ul className="order-health-components modern">
-                      <li><div><span className="metric-row-icon green"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></svg></span><span>Fulfilled</span><strong>100%</strong></div><div className="order-health-bar"><i style={{ width: '100%' }} className="animated green" /></div></li>
-                      <li><div><span className="metric-row-icon red"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></span><span>Cancelled</span><strong>0%</strong></div><div className="order-health-bar"><i style={{ width: '0%' }} className="animated red" /></div></li>
-                    </ul>
-                  </div>
+                  <OrderHealthInsight insight={orderHealthInsight} totalOrders={5} />
                 </div>
               </div>
             </section>

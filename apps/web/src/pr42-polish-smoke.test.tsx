@@ -148,7 +148,7 @@ describe('PR #42 final-polish smoke (both themes)', () => {
 
   it('renders the Store Summary and By Category fills on the dashboard', () => {
     const dark = renderToStaticMarkup(shell(false, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))
-    for (const contract of ['ai-summary-card', 'ai-summary-extras', 'ai-growth-metric', 'Weekly comparison', 'ai-weekly-chart', 'Best seller', 'Top category', 'Revenue trend', 'Recommended actions', 'View Full Report', 'pie-extras', 'category-insights', 'Diversification', 'category-compare', 'View Category Report', 'Explore Products by Category', 'Recent Activity']) {
+    for (const contract of ['ai-summary-card', 'ai-summary-extras', 'ai-growth-metric', 'Weekly comparison', 'ai-weekly-chart', 'Best seller', 'Top category', 'Revenue trend', 'Recommended actions', 'View Full Report', 'pie-extras', 'category-insights', 'Diversification', 'category-breakdown', 'Category Breakdown', 'sold', 'View Category Report', 'Explore Products by Category', 'Recent Activity']) {
       expect(dark).toContain(contract)
     }
     const light = renderToStaticMarkup(shell(true, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))

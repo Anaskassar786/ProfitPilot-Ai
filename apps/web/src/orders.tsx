@@ -372,7 +372,7 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
-function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnType<typeof insightByFeature>; totalOrders: number }) {
+export function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnType<typeof insightByFeature>; totalOrders: number }) {
   const data = record(insight?.data)
   const insufficient = data.status === 'insufficient_data'
   const score = numberOrNull(data.score)

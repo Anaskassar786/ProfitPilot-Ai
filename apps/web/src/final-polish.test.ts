@@ -169,7 +169,8 @@ describe('PR #42 final polish contracts', () => {
       '.ai-weekly-chart',
       '.ai-summary-recs',
       '.pie-extras',
-      '.category-compare',
+      '.category-breakdown',
+      '.category-breakdown-row',
     ]) expect(css).toContain(selector)
     expect(source('./analytics.css')).toContain('.chart-summary')
     expect(source('./inventory.css')).toContain('.health-trend-block')
