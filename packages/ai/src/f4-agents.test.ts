@@ -11,7 +11,7 @@ describe('versioned AI agents', () => {
     const signal: RuleSignal = { ruleId: 'STOCKOUT_RISK', ruleVersion: '1.0.0', agent: 'INVENTORY_AGENT', title: 'Reorder', reason: 'Low cover', impactValue: 100, impactLabel: 'risk', currency: 'USD', confidence: .9, actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', entityKey: 'p1', evidence: [{ key: 'days', label: 'Days of cover', value: 4, source: 'inventory' }] }
     const snapshot = { currency: 'USD' } as StoreSnapshot
     const prompt = promptFor(signal, snapshot)
-    expect(prompt.system).toContain('1.0.0')
+    expect(prompt.system).toContain(`Prompt version: ${AGENT_PROMPTS.INVENTORY_AGENT.version}`)
     expect(prompt.user).toContain('Days of cover')
     expect(prompt.user).not.toContain('email')
   })

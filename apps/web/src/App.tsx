@@ -102,6 +102,7 @@ import {
 } from './model.js'
 import type { ChartPeriod } from './model.js'
 import { DashboardLayout } from './dashboard.js'
+import { CommandCenterWorkspace } from './command-center.js'
 import { ProductsWorkspace } from './products.js'
 import { OrdersWorkspace } from './orders.js'
 import { CustomersPage } from './customers.js'
@@ -162,16 +163,6 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   settings: { title: 'Settings', description: 'Store context, preferences, and security controls.', icon: Settings },
   'admin-ops': { title: 'Admin Ops', description: 'Launch controls, merchant flags, queue inspection, and retries.', icon: ShieldCheck },
 }
-
-const agents = [
-  ['Revenue Agent', TrendingUp, 'Read-only'],
-  ['Inventory Agent', Box, 'Read-only'],
-  ['Customer Agent', Users, 'Read-only'],
-  ['Pricing Agent', Tag, 'Read-only'],
-  ['Campaign Agent', Send, 'Read-only'],
-  ['Product Agent', Package, 'Read-only'],
-  ['Executive Agent', Briefcase, 'Read-only'],
-] as const
 
 type NavItem = Readonly<{ id: SectionId; label: string; icon: LucideIcon; tag?: string }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
@@ -536,7 +527,7 @@ function PageRouter({
   if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
-  if (active === 'command-center') return <CommandCenterPage agents={data.agents} onRefresh={onRefresh} onPhaseGate={onPhaseGate} />
+  if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
   if (active === 'recommendations') return <RecommendationsPage context={context} recommendations={data.recommendations} onEvidence={onEvidence} onDecide={onDecide} onRefresh={onRefresh} onToast={onToast} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns') return <CampaignsPage onPhaseGate={onPhaseGate} context={context} onToast={onToast} />
@@ -644,12 +635,9 @@ function ProductsPage({ context, catalog, analytics, onSync }: { context: Worksp
 
 function EmptyDataPage({ page, context, onSync }: { page: SectionId; context: WorkspaceContext; onSync: (module: string) => Promise<void> }) { const meta = pageMeta[page]; const Icon = meta.icon; return <PageLayout eyebrow="Store data" title={meta.title} description={meta.description}><EmptyState icon={Icon} title={`No ${meta.title.toLowerCase()} data yet`} description={context.storeId ? 'This section is wired to the foundation and will render once its source module has real rows.' : 'Connect Shopify first. ProfitPilot does not ship demo records.'} action={context.storeId ? `Sync ${meta.title}` : 'Connect Shopify'} onAction={() => void onSync(page)} /></PageLayout> }
 
-function CommandCenterPage({ agents: statuses, onRefresh, onPhaseGate }: { agents: readonly AgentStatus[]; onRefresh: () => void; onPhaseGate: (phase: string, capability: string) => void }) {
-  const ready = statuses.filter((agent) => agent.execution === 'READY').length
-  const gated = statuses.length === 0
-  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Seven agents explain deterministic store evidence. They never invent numbers." actions={<button className="button secondary" onClick={onRefresh} disabled={gated}><RefreshCw size={15} /> {gated ? 'Awaiting AI backend' : 'Refresh statuses'}</button>}>
-    <div className="command-health"><div><div className="section-kicker"><span className={`kicker-dot ${gated ? 'purple' : 'green'}`} /> {gated ? 'AI BACKEND NOT CONFIGURED' : 'AGENT CONTRACTS LOADED'}</div><h2>{gated ? 'AI status is waiting for the backend.' : 'Your AI employee is ready for analysis.'}</h2><p>Numbers remain deterministic; agents only explain evidence returned by the rule engine.</p></div><div className="command-health-stats"><div><strong>{gated ? '—' : `${ready}/7`}</strong><span>agents ready</span></div><div><strong>8</strong><span>deterministic rules</span></div><div><strong>$5</strong><span>daily AI API budget</span></div></div></div>
-    <div className="agent-grid">{agents.map(([name, Icon, phase]) => { const status = statuses.find((item) => item.label === name); const execution = status?.execution ?? 'UNCONFIGURED'; const readyAgent = execution === 'READY'; return <div className="card agent-card" key={name}><div className="agent-card-top"><span className={`agent-big-icon ${readyAgent ? 'green' : 'purple'}`}><Icon size={19} /></span><span className={`agent-status ${readyAgent ? 'ready' : 'gated'}`}><i />{execution}</span><MoreHorizontal size={17} className="muted-icon" /></div><h3>{name}</h3><p>Prompt {status?.promptVersion ?? '1.0.0'} · language only · no write access.</p><div className="agent-card-footer"><span><LockKeyhole size={13} /> Read-only</span><span className={`status-badge ${readyAgent ? 'green' : 'neutral'}`}>{status?.enabled === false ? 'Disabled' : execution}</span></div></div> })}</div>
+function CommandCenterPage({ context, onToast, onNavigate }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigate: (page: string) => void }) {
+  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your intelligent workforce, always on duty. Every number is deterministic evidence — agents only explain, never invent.">
+    <CommandCenterWorkspace context={context} onToast={onToast} onNavigate={onNavigate} />
   </PageLayout>
 }
 

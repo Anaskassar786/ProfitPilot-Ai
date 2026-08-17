@@ -10,7 +10,7 @@ export type Entitlement = Readonly<{
 export const PLAN_LIMITS: Readonly<Record<PlanTier, Readonly<Record<string, number | null>>>> = {
   trial: { aiRecommendations: 10, activeAgents: 2, jarvisMessages: 60 },
   start: { aiRecommendations: 30, activeAgents: 3, jarvisMessages: 200 },
-  growth: { aiRecommendations: 150, activeAgents: 6, jarvisMessages: 700 },
+  growth: { aiRecommendations: 150, activeAgents: 5, jarvisMessages: 700 },
   commander: { aiRecommendations: null, activeAgents: 7, jarvisMessages: null },
 }
 

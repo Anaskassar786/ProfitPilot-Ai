@@ -1,11 +1,15 @@
 import { AppError } from '@profitpilot/types'
 import type { PlanTier } from '@profitpilot/types'
 import type { BillingState, Subscription } from './billing.js'
-import type { EntitlementKey } from './plans.js'
-import { PLAN_DEFINITIONS } from './plans.js'
+import type { AgentName, EntitlementKey } from './plans.js'
+import { agentsForPlan, PLAN_DEFINITIONS, requiredPlanForAgent } from './plans.js'
 
 export class UpgradeRequiredError extends AppError {
-  public constructor(feature: EntitlementKey, plan: PlanTier) { super('PAYMENT_REQUIRED', `Upgrade required for ${feature}`, 402, { feature, plan, reason: 'UPGRADE_REQUIRED' }); this.name = 'UpgradeRequiredError' }
+  public constructor(feature: EntitlementKey | `agent:${string}`, plan: PlanTier, requiredPlan?: PlanTier) {
+    const isAgentGate = feature.startsWith('agent:')
+    super(isAgentGate ? 'FORBIDDEN' : 'PAYMENT_REQUIRED', `Upgrade required for ${feature}`, isAgentGate ? 403 : 402, { feature, plan, reason: 'UPGRADE_REQUIRED', ...(requiredPlan ? { requiredPlan } : {}) })
+    this.name = 'UpgradeRequiredError'
+  }
 }
 
 const TRIAL_LIMITS: Readonly<Record<EntitlementKey, number | null>> = { orders_sync_month: 100, products_sync: 100, customers_sync: 100, ai_recommendations_month: 10, active_agents: 2, jarvis_messages_month: 60, automation_workflows: 2, active_campaigns: 1, email_sends_month: 100, sms_sends_month: 0, team_members: 1, reports: 1, exports: 0, forecasting: 0, attribution: 0 }
@@ -30,6 +34,19 @@ export function accessGate(subscription: Subscription, context: GateContext): Ga
 export function assertAccess(subscription: Subscription, context: GateContext): void {
   const decision = accessGate(subscription, context)
   if (!decision.allowed) throw new UpgradeRequiredError(context.feature, subscription.plan)
+}
+
+export type AgentGateDecision = Readonly<{ allowed: boolean; requiredPlan: PlanTier }>
+
+/** Whether a plan tier unlocks a named agent, and the cheapest tier that would. */
+export function agentAccess(plan: PlanTier, agent: AgentName): AgentGateDecision {
+  return { allowed: agentsForPlan(plan).includes(agent), requiredPlan: requiredPlanForAgent(agent) }
+}
+
+/** Throws the standard upgrade error when a plan does not unlock the agent. */
+export function assertAgentAccess(plan: PlanTier, agent: AgentName): void {
+  const decision = agentAccess(plan, agent)
+  if (!decision.allowed) throw new UpgradeRequiredError(`agent:${agent}`, plan, decision.requiredPlan)
 }
 
 function isReadOnlyState(state: BillingState): boolean { return state === 'SUSPENDED' || state === 'PAST_DUE' || state === 'CANCELLED' }
