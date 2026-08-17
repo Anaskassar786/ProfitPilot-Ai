@@ -159,7 +159,14 @@ export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonl
   </Widget>
 }
 
-export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }) { const real = trend.some((row) => row.orders > 0); const orders = trend.reduce((sum,row)=>sum+row.orders,0); const avg = orders ? trend.reduce((sum,row)=>sum+row.revenue,0)/orders : 0; return <Widget eyebrow="" title="Orders & AOV correlation" badge={real ? `${orders} orders` : undefined}>{real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={trend.filter((row)=>row.forecast===null)} margin={{top:12,right:0,left:-20}}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{fill:'#728197',fontSize:8}} axisLine={false} tickLine={false}/><Tooltip/><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#6366f1" radius={[4,4,0,0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={false}/></ComposedChart></ResponsiveContainer></div><div className="insight-strip"><Brain size={14}/><span>Your average order value is <b>{money(avg)}</b>. Higher AOV means customers buy more per order.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}</Widget> }
+export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }) {
+  const real = trend.some((row) => row.orders > 0)
+  const orders = trend.reduce((sum, row) => sum + row.orders, 0)
+  const avg = orders ? trend.reduce((sum, row) => sum + row.revenue, 0) / orders : 0
+  return <Widget eyebrow="Volume & Value" title="Orders & AOV correlation" badge={real ? `${orders} orders` : undefined}>
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={trend.filter((row) => row.forecast === null)} margin={{ top: 12, right: 0, left: -20 }}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip />} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#818cf8" radius={[4, 4, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={false}/></ComposedChart></ResponsiveContainer></div><div className="insight-strip"><Brain size={14}/><span>Your average order value is <b>{money(avg)}</b>. Higher AOV means customers buy more per order.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
+  </Widget>
+}
 
 export function SalesByChannel({ channels }: { channels: NonNullable<AnalyticsInsights['channels']> }) { const max = Math.max(1,...channels.map((row)=>row.revenue)); return <Widget eyebrow="Traffic Sources" title="Sales by channel" badge={channels.length ? `${channels.length} active` : undefined}>{channels.length ? <div className="channel-list">{channels.map((row,index)=><div className="channel-row" key={row.channel}><div className="channel-label"><span className="channel-icon"><ShoppingBag size={13}/></span><div><b>{row.channel}</b><small>{row.orders} orders · {row.share.toFixed(1)}%</small></div><strong>{money(row.revenue)}</strong></div><div className="channel-track"><i style={{width:`${Math.max(4,row.revenue/max*100)}%`,background:COLORS[index%COLORS.length]}}/></div><em className={row.growth !== null && row.growth < 0 ? 'negative':'positive'}>{row.growth === null ? 'New baseline' : `${row.growth>=0?'↑':'↓'} ${Math.abs(row.growth).toFixed(1)}%`}</em></div>)}</div> : <RichEmpty icon={Target} title="Channel attribution is ready" message="Shopify order source data will separate Online Store, POS, mobile, and integrations after sync." progress={0} goal="Sync order source data" />}</Widget> }
 
@@ -246,29 +253,81 @@ function CardLabel({icon:Icon,text}:{icon:typeof Activity;text:string}) { return
 function RichEmpty({icon:Icon,title,message,progress,goal}:{icon:typeof Activity;title:string;message:string;progress:number;goal:string}) { return <div className="rich-empty"><span className="empty-visual"><Icon size={23}/><i/><i/><i/></span><strong>{title}</strong><p>{message}</p><div className="empty-progress"><span><i style={{width:`${Math.max(3,Math.min(100,progress/Math.max(1,parseInt(goal)||7)*100))}%`}}/></span><small>{progress?`${progress} collected · `:''}{goal}</small></div></div> }
 function EducationalState({title,message,current,total}:{title:string;message:string;current:number;total:number}) { return <div className="educational-state"><strong>{title}</strong><p>{message}</p><Progress current={current} total={total}/></div> }
 function Progress({current,total}:{current:number;total:number}) { const value=Math.min(total,current); return <div className="progress"><span><i style={{width:`${value/total*100}%`}}/></span><small>{value} of {total} days</small></div> }
-function RevenueTooltip({active,payload,label}:{active?:boolean;payload?:readonly {name?:string;value?:number|null;color?:string;dataKey?:string}[];label?:string}) {
-  if(!active||!payload?.length) return null
-  // Deduplicate by dataKey/name, keep only latest for each logical series
-  const seen = new Map<string, typeof payload[0]>()
-  for (const item of payload) {
-    if(item.value===null||item.value===undefined||!Number.isFinite(Number(item.value))) continue
-    const key = (item as any).dataKey || String(item.name)
-    // Prefer Current over bar revenue, Forecast over others
-    const existing = seen.get(key)
-    if(!existing) seen.set(key, item)
-    else {
-      // If duplicate revenue, keep Current
-      if(String(item.name).toLowerCase().includes('current')) seen.set(key, item)
-    }
-  }
-  // Special handling: if we have both 'revenue' bar and 'Current' line showing same value, show only Current
-  const rows = [...seen.values()].filter((item)=>{
-    const name = String(item.name||'').toLowerCase()
-    const dk = String((item as any).dataKey||'').toLowerCase()
-    if(dk==='revenue' && [...seen.values()].some(v=> String(v.name||'').toLowerCase().includes('current'))) return false
-    return true
-  })
-  return <div className="analytics-tooltip"><strong>{label}</strong>{rows.map((item)=><span key={String(item.name)+(item as any).dataKey}><i style={{background:item.color??'#38bdf8'}}/>{item.name}: {money(Number(item.value))}</span>)}</div>
+function formatDateLabel(value: unknown): string {
+  if (typeof value !== 'string' || !value) return ''
+  const date = safeDate(value)
+  if (!date) return String(value)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  const formattedDate = formatDateLabel(label ?? point?.day)
+  const revenue = point?.revenue ?? Number(payload.find((p) => (p.dataKey === 'revenue' || p.name === 'Current'))?.value ?? 0)
+  const previous = point?.previous ?? null
+  const forecast = point?.forecast ?? null
+
+  return (
+    <div className="analytics-tooltip">
+      <strong>{formattedDate}</strong>
+      <div className="tooltip-metrics">
+        <div className="tooltip-row">
+          <i style={{ background: '#38bdf8' }} />
+          <span>Revenue:</span>
+          <strong>{money(revenue)}</strong>
+        </div>
+        {previous !== null && previous > 0 && (
+          <div className="tooltip-row">
+            <i style={{ background: '#64748b' }} />
+            <span>vs Previous:</span>
+            <strong>{money(previous)}</strong>
+          </div>
+        )}
+        {forecast !== null && (
+          <div className="tooltip-row">
+            <i style={{ background: '#a78bfa' }} />
+            <span>AI Forecast:</span>
+            <strong>{money(forecast)}</strong>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OrdersAovTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  const formattedDate = formatDateLabel(label ?? point?.day)
+  const orders = point?.orders ?? Number(payload.find((p) => p.dataKey === 'orders')?.value ?? 0)
+  const aov = point?.aov ?? Number(payload.find((p) => p.dataKey === 'aov')?.value ?? 0)
+  const revenue = point?.revenue ?? orders * aov
+
+  return (
+    <div className="analytics-tooltip">
+      <strong>{formattedDate}</strong>
+      <div className="tooltip-metrics">
+        <div className="tooltip-row">
+          <i style={{ background: '#818cf8' }} />
+          <span>Orders:</span>
+          <strong>{orders}</strong>
+        </div>
+        <div className="tooltip-row">
+          <i style={{ background: '#2dd4bf' }} />
+          <span>AOV:</span>
+          <strong>{money(aov)}</strong>
+        </div>
+        {revenue > 0 && (
+          <div className="tooltip-row">
+            <i style={{ background: '#38bdf8' }} />
+            <span>Revenue:</span>
+            <strong>{money(revenue)}</strong>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 class Boundary extends Component<{label:string;children:ReactNode},{error:string|null}> { public state={error:null as string|null}; static getDerivedStateFromError(error:unknown){return{error:error instanceof Error?error.message:'Render error'}} componentDidCatch(error:unknown,info:ErrorInfo){console.error(`[analytics:${this.props.label}]`,error,info.componentStack)} render(){return this.state.error?<div className="section-fallback" role="alert"><AlertTriangle size={20}/><strong>{this.props.label} is taking a pause</strong><p>The rest of your analytics are still available.</p><button onClick={()=>this.setState({error:null})}>Retry section</button></div>:this.props.children} }
 export const AnalyticsSectionBoundary = Boundary
