@@ -2429,22 +2429,22 @@
 .rate-subtitle { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.45; text-align: center; }
 /* PR #43: below-donut content — divider, real mini metrics, status message bar */
 .rate-divider { height: 1px; background: var(--border); }
-.rate-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.rate-mini-stat { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 9px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
-.rate-mini-icon { width: 24px; height: 24px; display: grid; flex: none; place-items: center; border-radius: 7px; color: var(--text-tertiary); background: var(--bg-secondary); }
-.rate-mini-stat > div { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
-.rate-mini-stat small { color: var(--text-tertiary); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
-.rate-mini-stat strong { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.rate-mini-stat strong.cmp-good { color: var(--green); }
-.rate-mini-stat strong.cmp-worse { color: var(--red); }
-.rate-mini-stat strong.cmp-neutral { color: var(--text-secondary); }
+.rate-metrics { display: flex; flex-direction: column; padding: 0 2px; }
+.rate-detail-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 4px; }
+.rate-detail-row + .rate-detail-row { border-top: 1px solid var(--border); }
+.rate-detail-label { min-width: 0; display: inline-flex; align-items: center; gap: 9px; color: var(--text-secondary); font-size: 11.5px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.rate-detail-label svg { flex: none; color: var(--text-tertiary); }
+.rate-detail-row strong { flex: none; color: var(--text); font-family: var(--font-mono); font-size: 13px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+.rate-detail-row strong.cmp-good { color: var(--green); }
+.rate-detail-row strong.cmp-worse { color: var(--red); }
+.rate-detail-row strong.cmp-neutral { color: var(--text-secondary); }
 .rate-status-bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; font-size: 11px; line-height: 1.45; }
 .rate-status-bar svg { flex: none; }
 .rate-status-bar.good { color: #34D399; background: rgba(16, 185, 129, .1); }
 .rate-status-bar.watch { color: #FBBF24; background: rgba(245, 158, 11, .1); }
 .rate-status-bar.attention { color: #F87171; background: rgba(239, 68, 68, .1); }
 .rate-status-bar.neutral { color: var(--text-secondary); background: rgba(148, 163, 184, .09); }
-.app-shell.light-mode .rate-mini-stat { background: #F8FAFC !important; border-color: #E5E7EB !important; }
+.app-shell.light-mode .rate-detail-row + .rate-detail-row { border-color: #E5E7EB; }
 .app-shell.light-mode .rate-status-bar.good { color: #059669; background: rgba(16, 185, 129, .12); }
 .app-shell.light-mode .rate-status-bar.watch { color: #B45309; background: rgba(245, 158, 11, .12); }
 .app-shell.light-mode .rate-status-bar.attention { color: #DC2626; background: rgba(239, 68, 68, .12); }

@@ -326,14 +326,14 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
     </div>
     <div className="rate-divider" />
-    <div className="rate-metrics">
-      <div className="rate-mini-stat" title="Sum of fully refunded order totals from loaded Shopify orders">
-        <span className="rate-mini-icon"><DollarSign size={13} /></span>
-        <div><small>Refunded</small><strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong></div>
+    <div className="rate-metrics" aria-label="Cancellation details">
+      <div className="rate-detail-row" title="Sum of fully refunded order totals from loaded Shopify orders">
+        <span className="rate-detail-label"><DollarSign size={15} /><span>Refunded</span></span>
+        <strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong>
       </div>
-      <div className="rate-mini-stat" title={comparison.tooltip}>
-        <span className="rate-mini-icon"><TrendingUp size={13} /></span>
-        <div><small>vs Last Period</small><strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong></div>
+      <div className="rate-detail-row" title={comparison.tooltip}>
+        <span className="rate-detail-label"><TrendingUp size={15} /><span>vs Last Period</span></span>
+        <strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong>
       </div>
     </div>
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
