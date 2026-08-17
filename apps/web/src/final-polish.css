@@ -2309,3 +2309,41 @@
 .app-shell.light-mode .evidence-drawer h2 {
   color: #111827;
 }
+
+
+/* ─── PR #42 Commit 5: Stock Distribution — insight fill ─── */
+.inventory-distribution-legend.modern { margin-bottom: 2px; }
+.distribution-trend { font-size: 11px; font-style: normal; font-weight: 700; flex: none; }
+.distribution-trend.stable { color: var(--green); }
+.distribution-trend.watch { color: var(--amber); }
+.distribution-trend.action { color: var(--red); }
+.distribution-trend.muted { color: var(--text-tertiary); }
+.distribution-insights { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+.distribution-callouts { display: flex; flex-direction: column; gap: 8px; }
+.distribution-callouts p { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg-surface-soft); }
+.distribution-callouts p svg { flex: none; color: var(--amber); margin-top: 2px; }
+.distribution-callouts p:nth-child(2) svg { color: var(--purple); }
+.distribution-callouts p:nth-child(3) svg { color: var(--blue-bright); }
+.distribution-callouts span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.distribution-callouts b { color: var(--text); font-size: 13px; line-height: 1.4; }
+.distribution-callouts small { color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
+.distribution-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.distribution-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 11px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
+.distribution-stats strong { font-size: 16px; letter-spacing: -.02em; color: var(--text); }
+.distribution-stats span { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.distribution-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.distribution-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.distribution-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
+.distribution-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.app-shell.light-mode .distribution-callouts p,
+.app-shell.light-mode .distribution-stats > div {
+  background: #F8FAFC !important;
+  border-color: #E5E7EB !important;
+}
+.app-shell.light-mode .distribution-trend.stable { color: #059669 !important; }
+.app-shell.light-mode .distribution-trend.watch { color: #D97706 !important; }
+.app-shell.light-mode .distribution-trend.action { color: #DC2626 !important; }
+@media (max-width: 640px) {
+  .distribution-stats { grid-template-columns: 1fr; }
+  .distribution-actions button { flex: 1; }
+}
