@@ -298,3 +298,22 @@
 .light-mode .revenue-trend .chart-caption .positive { color: #059669 !important; }
 .app-shell.light-mode .revenue-trend .chart-caption .negative,
 .light-mode .revenue-trend .chart-caption .negative { color: #DC2626 !important; }
+
+
+/* ─── PR #42 Commit 4: Orders & AOV correlation — professional polish ─── */
+.chart-caption .legend.orders { width: 15px; height: 6px; border-radius: 2px; background: linear-gradient(180deg, #818cf8, rgba(129,140,248,.35)) !important; }
+.chart-caption .legend.aov { background: #2dd4bf !important; }
+.orders-aov .chart-caption b { margin-left: auto; color: var(--text-secondary); font-weight: 700; }
+.orders-aov .insight-strip { margin-top: 4px; }
+.app-shell.light-mode .orders-aov .recharts-cartesian-grid line,
+.light-mode .orders-aov .recharts-cartesian-grid line { stroke: #E5E7EB !important; }
+.app-shell.light-mode .orders-aov .recharts-cartesian-axis-tick-value,
+.light-mode .orders-aov .recharts-cartesian-axis-tick-value { fill: #4B5563 !important; }
+.app-shell.light-mode .orders-aov .recharts-line-curve[stroke="#2dd4bf"],
+.light-mode .orders-aov .recharts-line-curve[stroke="#2dd4bf"] { stroke: #0D9488 !important; }
+.app-shell.light-mode .orders-aov .recharts-line-dots .recharts-dot[fill="#2dd4bf"],
+.light-mode .orders-aov .recharts-line-dots .recharts-dot[fill="#2dd4bf"] { fill: #0D9488 !important; }
+.app-shell.light-mode .orders-aov .chart-caption span,
+.light-mode .orders-aov .chart-caption span { color: #374151 !important; }
+.app-shell.light-mode .orders-aov .chart-caption .legend.aov,
+.light-mode .orders-aov .chart-caption .legend.aov { background: #0D9488 !important; }

@@ -175,8 +175,11 @@ export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }
   const real = trend.some((row) => row.orders > 0)
   const orders = trend.reduce((sum, row) => sum + row.orders, 0)
   const avg = orders ? trend.reduce((sum, row) => sum + row.revenue, 0) / orders : 0
-  return <Widget eyebrow="Volume & Value" title="Orders & AOV correlation" badge={real ? `${orders} orders` : undefined}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={trend.filter((row) => row.forecast === null)} margin={{ top: 12, right: 0, left: -20 }}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip />} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#818cf8" radius={[4, 4, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={false}/></ComposedChart></ResponsiveContainer></div><div className="insight-strip"><Brain size={14}/><span>Your average order value is <b>{money(avg)}</b>. Higher AOV means customers buy more per order.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
+  const rows = trend.filter((row) => row.forecast === null)
+  const peakOrderDay = rows.length ? [...rows].sort((a, b) => b.orders - a.orders)[0] : null
+  const peakAovDay = rows.length ? [...rows].sort((a, b) => b.aov - a.aov)[0] : null
+  return <Widget className="orders-aov" eyebrow="Volume & Value" title="Orders & AOV correlation" action={<span className="scope-pill"><ShoppingBag size={12} />{real ? `${orders} orders · ${money(avg)} AOV` : 'Awaiting orders'}</span>}>
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={rows} margin={{ top: 12, right: 4, left: -20 }}><defs><linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#818cf8" stopOpacity=".5"/><stop offset="1" stopColor="#818cf8" stopOpacity=".06"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip average={avg} />} cursor={{ fill: 'rgba(148,163,184,.06)' }} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="url(#ordersFill)" radius={[5, 5, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={{ r: 2, fill: '#2dd4bf' }} activeDot={{ r: 4, strokeWidth: 2, fill: '#ffffff', stroke: '#2dd4bf' }}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend orders" />Orders</span><span><i className="legend aov" />AOV</span><b>{peakOrderDay ? `Busiest day ${shortDay(peakOrderDay.day)} · ${peakOrderDay.orders} orders` : 'Busiest day building…'}</b></div><div className="insight-strip"><Brain size={14}/><span>Average order value <b>{money(avg)}</b>{peakAovDay && peakAovDay.aov > avg ? <> with a peak of <b>{money(peakAovDay.aov)}</b> on {shortDay(peakAovDay.day)}</> : null}. When AOV climbs faster than order count, growth comes from bigger baskets — not just more buyers.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
   </Widget>
 }
 
@@ -586,13 +589,14 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
   )
 }
 
-function OrdersAovTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
+function OrdersAovTooltip({ active, payload, label, average }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string; average?: number }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
   const formattedDate = formatDateLabel(label ?? point?.day)
   const orders = point?.orders ?? Number(payload.find((p) => p.dataKey === 'orders')?.value ?? 0)
   const aov = point?.aov ?? Number(payload.find((p) => p.dataKey === 'aov')?.value ?? 0)
   const revenue = point?.revenue ?? orders * aov
+  const aovDelta = average && average > 0 && aov > 0 ? ((aov - average) / average) * 100 : null
 
   return (
     <div className="analytics-tooltip">
@@ -613,6 +617,13 @@ function OrdersAovTooltip({ active, payload, label }: { active?: boolean; payloa
             <i style={{ background: '#38bdf8' }} />
             <span>Revenue:</span>
             <strong>{money(revenue)}</strong>
+          </div>
+        )}
+        {aovDelta !== null && (
+          <div className="tooltip-row">
+            <i style={{ background: '#2dd4bf' }} />
+            <span>vs period avg:</span>
+            <strong className={aovDelta >= 0 ? 'positive' : 'negative'}>{aovDelta >= 0 ? '+' : ''}{aovDelta.toFixed(0)}%</strong>
           </div>
         )}
       </div>
