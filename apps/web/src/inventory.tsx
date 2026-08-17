@@ -3,6 +3,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   ArrowUpDown,
   Boxes,
   CalendarClock,
@@ -431,8 +433,8 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
       {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
       {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
       <div className="inventory-sort-control">
-        <CustomSelect className="inventory-select" ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} icon={<ArrowUpDown size={13} />} label="Sort" />
-        <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? '↑' : '↓'}</button>
+        <CustomSelect ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} label="Sort" />
+        <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button>
       </div>
     </div>
   </div>

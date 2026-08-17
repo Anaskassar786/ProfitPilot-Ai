@@ -412,6 +412,7 @@
 .inventory-top-value-amount small { font-size: 11px; color: var(--text-tertiary); }
 
 .inventory-sort-control { display: flex; align-items: center; gap: 6px; }
-.sort-dropdown-clean { display: flex; align-items: center; gap: 6px; }
-.sort-direction-toggle { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); }
+.inventory-sort-control .custom-select { min-width: 140px; }
+.inventory-sort-control button { width: 36px; height: 36px; display: grid; place-items: center; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; background: rgba(8,13,24,.28); font-size: 13px; cursor: pointer; transition: all 150ms ease; }
+.inventory-sort-control button:hover { background: var(--bg-hover); color: var(--text); }
 
