@@ -315,6 +315,8 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
   const tone = rate === null ? 'muted' : rate === 0 ? 'excellent' : rate < 5 ? 'good' : rate < 10 ? 'watch' : 'attention'
   const sweep = total > 0 ? Math.max(2, Math.round((completed / total) * 360)) : 360
   const refunded = refundedAmount(orders)
+  const comparison = refundComparison(orders)
+  const status = cancellationStatus(rate)
   return <article className={`orders-basic-card rate-card cancellation ${tone}`}>
     <div className="orders-insight-label"><AlertTriangle size={16} /><span>Cancellation Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
@@ -323,8 +325,18 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
       </div>
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
     </div>
-    <p className={`rate-status ${tone}`}><i />{rate === null ? 'Awaiting order data' : rate === 0 ? 'Excellent — no cancellations this period' : rate < 5 ? 'Good — below typical levels' : rate < 10 ? 'Watch — review cancellation reasons' : 'Attention — cancellations elevated'}</p>
-    <small className="rate-note">Industry comparison connects when benchmark data is available.</small>
+    <div className="rate-divider" />
+    <div className="rate-metrics">
+      <div className="rate-mini-stat" title="Sum of fully refunded order totals from loaded Shopify orders">
+        <span className="rate-mini-icon"><DollarSign size={13} /></span>
+        <div><small>Refunded</small><strong>{refunded === null ? '—' : money(refunded, currencyOf(orders))}</strong></div>
+      </div>
+      <div className="rate-mini-stat" title={comparison.tooltip}>
+        <span className="rate-mini-icon"><TrendingUp size={13} /></span>
+        <div><small>vs Last Period</small><strong className={`cmp-${comparison.tone}`}>{comparison.label}</strong></div>
+      </div>
+    </div>
+    <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
 export function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
@@ -504,6 +516,33 @@ function activeFilterCount(filters: FilterState): number { return Object.values(
 function refundedAmount(orders: readonly OrderView[]): number | null {
   if (orders.length === 0) return null
   return orders.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
+}
+function currencyOf(orders: readonly OrderView[]): string | null { return orders[0]?.currency ?? null }
+/** Real refunded-amount change between the trailing 30 days and the 30 days before it. */
+function refundComparison(orders: readonly OrderView[]): Readonly<{ label: string; tone: 'good' | 'worse' | 'neutral'; tooltip: string }> {
+  const dated = orders.filter((order) => order.createdAt && Number.isFinite(Date.parse(order.createdAt)))
+  const latest = dated.reduce((max, order) => Math.max(max, Date.parse(order.createdAt!)), Number.NEGATIVE_INFINITY)
+  if (!Number.isFinite(latest)) return { label: '—', tone: 'neutral', tooltip: 'Awaiting data' }
+  const currentStart = latest - 30 * 86_400_000
+  const previousStart = latest - 60 * 86_400_000
+  const refundedIn = (rows: readonly OrderView[]) => rows.reduce((sum, order) => sum + (order.paymentStatus === 'refunded' ? (order.totalPrice ?? 0) : 0), 0)
+  const current = dated.filter((order) => Date.parse(order.createdAt!) >= currentStart)
+  const previous = dated.filter((order) => { const value = Date.parse(order.createdAt!); return value >= previousStart && value < currentStart })
+  const currentRefunded = refundedIn(current)
+  const previousRefunded = refundedIn(previous)
+  if (previous.length === 0) return { label: '—', tone: 'neutral', tooltip: 'Awaiting data — no orders in the prior 30 days' }
+  if (previousRefunded === 0 && currentRefunded === 0) return { label: 'Same', tone: 'neutral', tooltip: 'No refunds in either period' }
+  if (previousRefunded === 0) return { label: '↑ New', tone: 'worse', tooltip: 'Refunds appeared this period (from loaded orders)' }
+  const pct = Math.round(((currentRefunded - previousRefunded) / previousRefunded) * 100)
+  if (pct === 0) return { label: 'Same', tone: 'neutral', tooltip: 'Refunded amount unchanged vs the prior 30 days' }
+  return { label: `${pct > 0 ? '↑' : '↓'} ${Math.abs(pct)}%`, tone: pct > 0 ? 'worse' : 'good', tooltip: 'Refunded amount vs the prior 30 days (from loaded orders)' }
+}
+function cancellationStatus(rate: number | null): Readonly<{ tone: 'good' | 'watch' | 'attention' | 'neutral'; icon: ReactNode; label: string }> {
+  if (rate === null) return { tone: 'neutral', icon: <Clock3 size={13} />, label: 'Awaiting order data' }
+  if (rate === 0) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Excellent — no cancellations this period' }
+  if (rate < 2) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Healthy cancellation rate' }
+  if (rate <= 5) return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Monitor cancellation trends' }
+  return { tone: 'attention', icon: <AlertTriangle size={13} />, label: 'High cancellation rate — review orders' }
 }
 function shortId(value: string): string { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value }
 function formatDate(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date) : '—' }
