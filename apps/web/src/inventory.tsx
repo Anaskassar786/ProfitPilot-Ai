@@ -227,10 +227,10 @@ export function InventoryHealthCard({ data, loading }: { data: InventoryPageResu
     {loading ? <div className="inventory-skeleton-block" /> : <>
       <div className="inventory-health-gauge-wrap large">
         <div
-          className={`health-gauge inventory-health-gauge ${unavailable ? 'no-data' : `large ${health.tone}`}`}
+          className={`health-gauge ${unavailable ? 'compact no-data' : `large ${health.tone}`} inventory-health-gauge`}
           style={unavailable ? undefined : { '--inventory-health-sweep': `${sweep}deg` } as CSSProperties}
           role="img"
-          aria-label={unavailable ? 'Inventory health unavailable' : `Inventory health ${health.score} out of 100, grade ${health.grade}, ${health.label}`}
+          aria-label={unavailable ? 'Inventory health unavailable' : `Inventory health score ${health.score}, grade ${health.grade}, ${health.label}`}
         >
           <div className="gauge-inner">
             <strong>{unavailable ? '—' : health.score}</strong>
