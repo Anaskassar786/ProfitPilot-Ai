@@ -478,16 +478,20 @@ td { font-size: var(--text-sm) !important; height: 64px !important; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 13px;
+  min-height: 38px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
   font-weight: 700;
   border-radius: 8px;
-  background: linear-gradient(135deg,#2968D3,#7C3AED);
+  background: linear-gradient(135deg,#2563EB,#7C3AED);
   color: white;
   border: 1px solid rgba(59,130,246,.4);
   box-shadow: 0 4px 12px rgba(59,130,246,.2);
   transition: 150ms ease;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  min-width: 136px;
 }
 .upgrade-plan-cta:hover {
   background: linear-gradient(135deg,#3B82F6,#8B5CF6);

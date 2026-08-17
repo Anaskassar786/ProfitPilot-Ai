@@ -21,6 +21,7 @@ export function UpgradePlanButton({
       className={`upgrade-plan-cta ${className}`}
       onClick={onUpgrade}
       aria-label="Upgrade plan"
+      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
     >
       <Zap size={14} fill="currentColor" />
       <span>Upgrade Plan</span>

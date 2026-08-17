@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Boxes, CalendarClock, Check, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
+import { AlertTriangle, Boxes, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -85,7 +85,7 @@ function InsightsHeader({ insights, open, onToggle, onUpgrade }: { insights: Inv
     </div>
     <div className="inventory-insights-head-actions">
       {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}
-      <button type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Collapse inventory intelligence' : 'Expand inventory intelligence'}>{open ? '−' : '+'}</button>
+      <button type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Collapse inventory intelligence' : 'Expand inventory intelligence'}>{open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</button>
     </div>
   </header>
 }
