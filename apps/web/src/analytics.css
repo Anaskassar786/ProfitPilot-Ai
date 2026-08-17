@@ -266,24 +266,37 @@
 
 
 /* ─── PR #42 Commit 3: Revenue Momentum chart — light theme saturation ─── */
+/* PR #43: Revenue momentum axis text follows the secondary text color. */
+.revenue-trend .recharts-cartesian-axis-tick-value { fill: var(--text-secondary); }
+/* PR #43: subtle glow under the current revenue line (both themes). */
+.revenue-trend .recharts-line-curve[stroke="#60A5FA"] { filter: drop-shadow(0 2px 6px rgba(37, 99, 235, .35)); }
+/* PR #43: peak day annotation — vertical dashed line + compact label. */
+.revenue-trend .rev-peak-label circle { fill: #F59E0B; }
+.revenue-trend .rev-peak-label text { fill: #F59E0B; font-size: 9px; font-weight: 700; }
+.app-shell.light-mode .revenue-trend .rev-peak-label text,
+.light-mode .revenue-trend .rev-peak-label text { fill: #B45309 !important; }
+.app-shell.light-mode .revenue-trend .rev-peak-label circle,
+.light-mode .revenue-trend .rev-peak-label circle { fill: #D97706 !important; }
 .app-shell.light-mode .revenue-trend .recharts-cartesian-grid line,
 .light-mode .revenue-trend .recharts-cartesian-grid line { stroke: #E5E7EB !important; }
 .app-shell.light-mode .revenue-trend .recharts-cartesian-axis-tick-value,
 .light-mode .revenue-trend .recharts-cartesian-axis-tick-value { fill: #4B5563 !important; }
 .app-shell.light-mode .revenue-trend #revFill stop:first-child,
 .light-mode .revenue-trend #revFill stop:first-child { stop-color: rgba(37, 99, 235, .15) !important; }
+.app-shell.light-mode .revenue-trend #revFill stop:last-child,
+.light-mode .revenue-trend #revFill stop:last-child { stop-color: rgba(37, 99, 235, .05) !important; }
 .app-shell.light-mode .revenue-trend #confidence stop:first-child,
 .light-mode .revenue-trend #confidence stop:first-child { stop-color: rgba(124, 58, 237, .14) !important; }
-.app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#38bdf8"],
-.light-mode .revenue-trend .recharts-line-curve[stroke="#38bdf8"] { stroke: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#60A5FA"],
+.light-mode .revenue-trend .recharts-line-curve[stroke="#60A5FA"] { stroke: #2563EB !important; filter: none !important; }
 .app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#64748b"],
 .light-mode .revenue-trend .recharts-line-curve[stroke="#64748b"] { stroke: #94A3B8 !important; }
 .app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#a78bfa"],
 .light-mode .revenue-trend .recharts-line-curve[stroke="#a78bfa"] { stroke: #7C3AED !important; }
-.app-shell.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#38bdf8"],
-.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#38bdf8"] { fill: #2563EB !important; }
-.app-shell.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#2563eb"],
-.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#2563eb"] { fill: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#60A5FA"],
+.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#60A5FA"] { fill: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#60A5FA"],
+.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#60A5FA"] { fill: #2563EB !important; }
 .app-shell.light-mode .revenue-trend .chart-caption span,
 .light-mode .revenue-trend .chart-caption span { color: #374151 !important; }
 .app-shell.light-mode .revenue-trend .chart-caption .legend,
