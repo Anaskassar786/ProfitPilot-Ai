@@ -33,6 +33,59 @@
   --shadow-md: 0 4px 6px rgba(0,0,0,.6);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.7);
   --shadow-glow: 0 0 20px rgba(59,130,246,.5);
+
+  /* ─── Design System Tokens — Typography Scale ── */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+  --text-3xl: 28px;
+  --text-4xl: 32px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-wider: 0.08em;
+
+  /* ─── Spacing Scale ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ─── Semantic Surface Tokens (dark) ── */
+  --bg-primary: #0F1117;
+  --bg-secondary: #171A23;
+  --bg-surface: #1A1D27;
+  --bg-surface-soft: rgba(26,29,39,.94);
+  --bg-hover: #22262F;
+  --border-default: #2A2E38;
+  --text-primary: #F9FAFB;
+  --accent-blue: #3B82F6;
+  --accent-blue-bright: #72A7FF;
+  --accent-green: #10B981;
+  --accent-amber: #F59E0B;
+  --accent-red: #EF4444;
+  --accent-profit: #FBBF24;
+  --accent-purple: #9B7CF6;
+  --accent-cyan: #57C6E9;
+
+  /* Elevation dark */
+  --elevation-card: linear-gradient(145deg,rgba(26,29,39,.94),rgba(20,23,32,.92));
+  --elevation-card-soft: rgba(8,13,24,.36);
+  --elevation-card-soft-2: rgba(26,29,39,.7);
+  --elevation-tabs: rgba(9,13,22,.34);
 }
 
 * { box-sizing: border-box; }
@@ -48,7 +101,51 @@ input, textarea { color: var(--text); }
 .skip-link:focus { transform: translateY(0); }
 
 .app-shell { min-height: 100vh; color: var(--text); background: radial-gradient(circle at 80% -12%, rgba(51,87,171,.16), transparent 32%), var(--background); }
-.app-shell.light-mode { --background: #FAFAFA; --card: #FFFFFF; --card-hover: #F3F5F8; --border: #E5E7EB; --border-soft: rgba(44,62,89,.12); --text: #111827; --text-secondary: #6B7280; --text-tertiary: #9CA3AF; --shadow-sm: 0 1px 2px rgba(17,24,39,.08); --shadow-md: 0 4px 8px rgba(17,24,39,.08); --shadow-lg: 0 10px 24px rgba(17,24,39,.1); background: radial-gradient(circle at 80% -12%, rgba(92,138,233,.16), transparent 33%), var(--background); }
+.app-shell.light-mode {
+  --background: #F8FAFC;
+  --card: #FFFFFF;
+  --card-hover: #F3F5F8;
+  --border: #E5E7EB;
+  --border-soft: rgba(17,24,39,.08);
+  --text: #111827;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+  --blue: #2563EB;
+  --blue-bright: #3B82F6;
+  --green: #059669;
+  --amber: #D97706;
+  --red: #DC2626;
+  --profit: #D97706;
+  --purple: #7C3AED;
+  --cyan: #0891B2;
+  --shadow-sm: 0 1px 2px rgba(17,24,39,.06);
+  --shadow-md: 0 4px 6px rgba(17,24,39,.07);
+  --shadow-lg: 0 10px 15px rgba(17,24,39,.08);
+  --shadow-glow: none;
+
+  /* Semantic Light Overrides */
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #F3F5F8;
+  --bg-surface: #FFFFFF;
+  --bg-surface-soft: #FFFFFF;
+  --bg-hover: #F3F5F8;
+  --border-default: #E5E7EB;
+  --text-primary: #111827;
+  --accent-blue: #2563EB;
+  --accent-blue-bright: #3B82F6;
+  --accent-green: #059669;
+  --accent-amber: #D97706;
+  --accent-red: #DC2626;
+  --accent-profit: #D97706;
+  --accent-purple: #7C3AED;
+  --accent-cyan: #0891B2;
+  --elevation-card: #FFFFFF;
+  --elevation-card-soft: #FFFFFF;
+  --elevation-card-soft-2: #F9FAFB;
+  --elevation-tabs: #F3F5F8;
+
+  background: radial-gradient(circle at 80% -12%, rgba(92,138,233,.12), transparent 33%), var(--background);
+}
 
 /* Navigation */
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: var(--sidebar); display: flex; flex-direction: column; padding: 18px 12px 14px; border-right: 1px solid var(--border-soft); background: rgba(15,17,23,.92); backdrop-filter: blur(18px); transition: width 250ms cubic-bezier(.4,0,.2,1), transform 250ms cubic-bezier(.4,0,.2,1); }
@@ -320,3 +417,226 @@ kbd { padding: 2px 5px; color: var(--text-tertiary); border: 1px solid var(--bor
   .product-row-metrics { grid-template-columns: 1fr; }
   .performance-cell { grid-template-columns: 1fr 48px; }
 }
+
+/* ─── PR #38 Commit 3: Typography & Spacing Bump ─────────── */
+.page-eyebrow { font-size: var(--text-xs) !important; letter-spacing: .06em; }
+.page-header h1 { font-size: clamp(28px,2.8vw,36px) !important; }
+.page-header p { font-size: var(--text-base) !important; line-height: 1.6 !important; max-width: 680px; }
+.page-content { padding: 28px 42px 80px; }
+@media (max-width: 640px) { .page-content { padding: 24px 20px 80px; } }
+
+/* Buttons & UI */
+.button { min-height: 40px !important; font-size: var(--text-base) !important; padding: 0 16px !important; gap: 8px !important; }
+.button.secondary { font-size: var(--text-sm) !important; }
+.text-button { font-size: var(--text-sm) !important; }
+
+/* Card headings */
+.card-heading h3 { font-size: var(--text-lg) !important; margin-top: 4px !important; }
+.section-kicker, .dash-kicker { font-size: var(--text-xs) !important; gap: 8px !important; }
+.kicker-dot { width: 8px !important; height: 8px !important; }
+
+/* Navigation */
+.nav-item { min-height: 40px !important; font-size: var(--text-sm) !important; gap: 12px !important; }
+.nav-group-label { font-size: var(--text-xs) !important; margin-bottom: 10px !important; }
+.nav-group { margin-bottom: 22px !important; }
+.workspace-switcher { min-height: 48px !important; padding: 8px 10px !important; }
+.workspace-copy strong { font-size: var(--text-xs) !important; }
+.workspace-copy small { font-size: var(--text-2xs) !important; }
+.command-trigger { height: 40px !important; font-size: var(--text-sm) !important; }
+
+/* Topbar */
+.breadcrumbs { font-size: var(--text-xs) !important; gap: 10px !important; }
+.breadcrumbs strong { font-size: var(--text-sm) !important; }
+.top-search { font-size: var(--text-sm) !important; width: 180px !important; }
+
+/* Badges / Status */
+.status-badge { font-size: var(--text-xs) !important; padding: 5px 9px !important; }
+.nav-tag, .phase-tag { font-size: var(--text-2xs) !important; height: 20px !important; min-width: 28px !important; }
+
+/* Tables generic */
+th { font-size: var(--text-2xs) !important; height: 42px !important; letter-spacing: .06em !important; }
+td { font-size: var(--text-sm) !important; height: 64px !important; }
+
+/* Sync banner */
+.sync-banner, .context-banner, .offline-banner { min-height: 40px !important; font-size: var(--text-sm) !important; padding: 0 14px !important; gap: 10px !important; }
+.sync-module strong { font-size: var(--text-xs) !important; }
+.sync-module small { font-size: var(--text-2xs) !important; }
+
+/* Spacing increase for grids */
+.stat-grid { gap: 16px !important; margin-bottom: 16px !important; }
+.dashboard-grid, .metric-strip, .inventory-grid, .analytics-grid, .billing-grid, .copilot-layout { gap: 20px !important; }
+.page-header { gap: 24px !important; margin-bottom: 28px !important; }
+
+/* Sidebar footer */
+.version-card strong { font-size: var(--text-sm) !important; }
+.version-card small { font-size: var(--text-xs) !important; line-height: 1.5 !important; }
+.help-link, .version-card button { font-size: var(--text-sm) !important; }
+
+/* Upgrade CTA new styling */
+.upgrade-plan-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  background: linear-gradient(135deg,#2968D3,#7C3AED);
+  color: white;
+  border: 1px solid rgba(59,130,246,.4);
+  box-shadow: 0 4px 12px rgba(59,130,246,.2);
+  transition: 150ms ease;
+}
+.upgrade-plan-cta:hover {
+  background: linear-gradient(135deg,#3B82F6,#8B5CF6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59,130,246,.3);
+}
+.light-mode .upgrade-plan-cta {
+  background: linear-gradient(135deg,#2563EB,#7C3AED);
+}
+.plan-locked-overlay small {
+  font-size: 12px !important;
+}
+
+/* Preserve Jarvis Orb - ensure no typography changes */
+.jarvis-orb-wrap, .jarvis-orb-wrap * { font-size: inherit !important; }
+
+
+/* ─── PR #38 Commit 4: Complete Light Theme Rebuild ─── */
+.app-shell.light-mode .card,
+.app-shell.light-mode .dash-card,
+.light-mode .card,
+.light-mode .dash-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.app-shell.light-mode .button.secondary,
+.light-mode .button.secondary {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-secondary) !important;
+}
+
+.app-shell.light-mode .sidebar {
+  background: rgba(248,250,252,.96) !important;
+  border-color: var(--border-soft) !important;
+}
+.app-shell.light-mode .topbar {
+  background: rgba(248,250,252,.9) !important;
+  border-color: var(--border-soft) !important;
+}
+
+.app-shell.light-mode .sync-banner {
+  background: linear-gradient(90deg,rgba(16,185,129,.08),rgba(16,185,129,.02)) !important;
+  border-color: rgba(16,185,129,.2) !important;
+}
+.app-shell.light-mode .sync-module {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .sync-module.succeeded {
+  background: rgba(16,185,129,.08) !important;
+  border-color: rgba(16,185,129,.2) !important;
+}
+.app-shell.light-mode .sync-module.failed {
+  background: rgba(239,68,68,.06) !important;
+}
+
+.app-shell.light-mode .stat-card,
+.app-shell.light-mode .mini-metric,
+.app-shell.light-mode .inventory-hero,
+.app-shell.light-mode .campaign-hero,
+.app-shell.light-mode .export-intro,
+.app-shell.light-mode .support-hero,
+.app-shell.light-mode .report-banner,
+.app-shell.light-mode .billing-current,
+.app-shell.light-mode .automation-mode,
+.app-shell.light-mode .command-health,
+.app-shell.light-mode .recommendation-summary,
+.app-shell.light-mode .canvas-card,
+.app-shell.light-mode .copilot-main {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* Products light visibility fix (allowed) */
+.app-shell.light-mode .product-stat-card,
+.light-mode .product-stat-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .product-stat-card::after { display: none !important; }
+.app-shell.light-mode .products-toolbar,
+.app-shell.light-mode .products-search,
+.app-shell.light-mode .product-metric,
+.app-shell.light-mode .product-thumb,
+.app-shell.light-mode .products-empty-state {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* Custom select light */
+.app-shell.light-mode .custom-select-trigger,
+.light-mode .custom-select-trigger {
+  color: var(--text-secondary) !important;
+}
+.app-shell.light-mode .custom-select-menu,
+.light-mode .custom-select-menu {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.app-shell.light-mode .custom-select-menu li:hover,
+.light-mode .custom-select-menu li.highlighted {
+  background: var(--bg-hover) !important;
+}
+
+/* Table generic light */
+.app-shell.light-mode th {
+  background: var(--bg-secondary) !important;
+  color: var(--text-tertiary) !important;
+  border-color: var(--border-soft) !important;
+}
+.app-shell.light-mode td {
+  border-color: var(--border-soft) !important;
+  color: var(--text-secondary) !important;
+}
+.app-shell.light-mode tbody tr:hover {
+  background: rgba(59,130,246,.04) !important;
+}
+
+/* Chart tooltips light */
+.app-shell.light-mode .recharts-tooltip-custom,
+.app-shell.light-mode .chart-tooltip,
+.light-mode .recharts-tooltip-custom,
+.light-mode .chart-tooltip {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.app-shell.light-mode .recharts-text {
+  fill: var(--text-tertiary) !important;
+}
+
+/* Preserve Jarvis Orb - never override */
+.jarvis-orb-wrap,
+.jarvis-particle-orb,
+.jarvis-orb-wrap *,
+.jarvis-particle-orb * {
+  /* keep original dark theme colors and animations */
+}
+
+/* Fade out animation for sync progress auto-dismiss */
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+.sync-all-progress.dismissing {
+  animation: fadeOut 400ms ease forwards;
+}
+

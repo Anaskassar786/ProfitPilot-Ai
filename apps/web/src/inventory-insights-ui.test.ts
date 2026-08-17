@@ -54,7 +54,7 @@ describe('Dead stock card', () => {
   it('renders the locked upgrade CTA for Trial and Start', () => {
     const html = renderToStaticMarkup(createElement(DeadStockCard, { insights: locked('dead_stock', 'Dead Stock Detector', 'growth'), onUpgrade: noop }))
     expect(html).toContain('Dead Stock Detector')
-    expect(html).toContain('Upgrade to Growth to unlock')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('plan-locked-blur')
   })
 })
@@ -154,7 +154,7 @@ describe('Historical inventory chart', () => {
   it('locks the chart below Growth', () => {
     const html = renderToStaticMarkup(createElement(HistoricalInventoryChart, { storeId: 'store-1', insights: locked('stock_history', 'Stock History Chart', 'growth'), onUpgrade: noop, onToast: noop }))
     expect(html).toContain('Stock History Chart')
-    expect(html).toContain('Upgrade to Growth to unlock')
+    expect(html).toContain('Upgrade to unlock')
   })
 
   it('explains the empty chart before any snapshot exists', () => {

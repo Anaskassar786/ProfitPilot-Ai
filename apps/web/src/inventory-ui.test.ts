@@ -55,7 +55,7 @@ function page(overrides: Partial<InventoryPageResult> = {}): InventoryPageResult
 describe('Inventory KPI and health rendering', () => {
   it('renders real synced numbers rather than the old em-dash placeholders', () => {
     const html = renderToStaticMarkup(createElement(InventoryStatsGrid, { data: page(), loading: false }))
-    expect(html).toContain('Total SKUs')
+    expect(html).toContain('Total Products')
     expect(html).toContain('Units in Stock')
     expect(html).toContain('Low Stock Alerts')
     expect(html).toContain('Out of Stock')
@@ -125,7 +125,7 @@ describe('Inventory insights and gating', () => {
 
   it('keeps the free Days of Cover slot locked for a Trial plan with an upgrade CTA', () => {
     const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page({ lockedFeatures: [{ locked: true, feature: 'days_of_cover', name: 'Days of Cover', required_plan: 'growth' }] }), onUpgrade: vi.fn() }))
-    expect(html).toContain('Upgrade to Growth to unlock')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('plan-locked-blur')
   })
 

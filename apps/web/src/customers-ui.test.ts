@@ -52,7 +52,7 @@ describe('Customers UI safety regressions', () => {
     expect(disabled).toContain('Customer opted out')
     expect(disabled).toContain('disabled')
     const locked = renderToStaticMarkup(createElement(CustomerEmailAction, { customer, premium: false, onEmail: vi.fn(), onUpgrade: vi.fn() }))
-    expect(locked).toContain('Growth plan required')
+    expect(locked).toContain('Upgrade to unlock')
   })
 
   it('renders empty state without demo customer identities or fake money', () => {
@@ -108,13 +108,13 @@ describe('Customer detail drawer premium sections', () => {
   it('locks every premium feature individually for a Trial plan instead of leaving blank sections', () => {
     const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'trial', insights, insightsLoading: false, onUpgrade: vi.fn() }))
     expect(html).toContain('Purchase intelligence')
-    expect(html).toContain('Upgrade to Growth to unlock purchase patterns and cadence analysis')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Predicted next order')
-    expect(html).toContain('Upgrade to Commander to unlock predicted next order date')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Predictive LTV')
-    expect(html).toContain('Upgrade to Commander to unlock 12-month LTV forecast')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Retention recommendation')
-    expect(html).toContain('Upgrade to Growth to unlock AI retention suggestions')
+    expect(html).toContain('Upgrade to unlock')
     // Each locked feature renders the reusable PR #30 locked card (a button → billing).
     expect(html.match(/plan-locked-feature/g)?.length).toBe(4)
     // Real intelligence is never leaked to a locked plan.
@@ -127,8 +127,8 @@ describe('Customer detail drawer premium sections', () => {
     expect(html).toContain('Average cadence')
     expect(html).toContain('27 days')
     expect(html).toContain('Re-engage VIPs')
-    expect(html).toContain('Upgrade to Commander to unlock predicted next order date')
-    expect(html).toContain('Upgrade to Commander to unlock 12-month LTV forecast')
+    expect(html).toContain('Upgrade to unlock')
+    expect(html).toContain('Upgrade to unlock')
     expect(html.match(/plan-locked-feature/g)?.length).toBe(2)
   })
 

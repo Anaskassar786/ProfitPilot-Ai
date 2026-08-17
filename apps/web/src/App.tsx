@@ -87,7 +87,18 @@ import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
 import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
 import { PASSIVE_RECOMMENDATION_INTERVAL_MS, PASSIVE_SNOOZE_MS, passiveRecommendationsAllowed, selectPassiveRecommendation } from './passive-jarvis.js'
-import { averageOrderValue, formatMoney, formatNumber, latestSyncLabel, revenuePoints, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
+import {
+  averageOrderValue,
+  formatMoney,
+  formatNumber,
+  formatStoreDisplayName,
+  latestSyncLabel,
+  revenuePoints,
+  storeHealthView,
+  sumOrders,
+  sumRevenue,
+  workspaceContext,
+} from './model.js'
 import type { ChartPeriod } from './model.js'
 import { DashboardLayout } from './dashboard.js'
 import { ProductsWorkspace } from './products.js'
@@ -188,7 +199,20 @@ export default function App() {
   const snoozedRecommendations = useRef<Readonly<Record<string, number>>>({})
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [lightMode, setLightMode] = useState(false)
+  const [lightMode, setLightMode] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('profitpilot:theme')
+      if (stored === 'light') return true
+      if (stored === 'dark') return false
+      // Fallback to prefers-color-scheme for first-time visitors
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: light)').matches
+      }
+      return false
+    } catch {
+      return false
+    }
+  })
   const [toast, setToast] = useState<ToastState | null>(null)
   const [syncProgress, setSyncProgress] = useState<readonly SyncModuleProgress[]>([])
   const [syncAllRunning, setSyncAllRunning] = useState(false)
@@ -273,6 +297,36 @@ export default function App() {
     if (next) shownRecommendationIds.current.add(next.id)
     setPassiveRecommendation(next)
   }, [context.storeId, data.recommendations, jarvisPreference, passiveRecommendation])
+
+  // Theme persistence — Q9
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('profitpilot:theme', lightMode ? 'light' : 'dark')
+    } catch {
+      // localStorage may be disabled
+    }
+  }, [lightMode])
+
+  // Sync All auto-dismiss — Fix 1.2: 3.5s success, 6s failure with fade
+  const [syncDismissing, setSyncDismissing] = useState(false)
+  useEffect(() => {
+    if (syncProgress.length === 0) {
+      setSyncDismissing(false)
+      return
+    }
+    const hasFailed = syncProgress.some((m) => m.status === 'failed')
+    const delay = hasFailed ? 6000 : 3500
+    // Start fade a bit before clearing
+    const fadeTimer = window.setTimeout(() => setSyncDismissing(true), delay - 400)
+    const clearTimer = window.setTimeout(() => {
+      setSyncProgress([])
+      setSyncDismissing(false)
+    }, delay)
+    return () => {
+      window.clearTimeout(fadeTimer)
+      window.clearTimeout(clearTimer)
+    }
+  }, [syncProgress])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -373,7 +427,24 @@ export default function App() {
         <div className="page-scroll">
           {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
           {!context.storeId && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
-          <PageRouter active={activePage} context={context} data={data} onNavigate={navigate} onSync={sync} onSyncAll={syncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} onDecide={decide} onRefresh={() => void loadData()} onToast={showToast} onPhaseGate={phaseGate} onEvidence={() => setEvidenceOpen(true)} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} />
+          <PageRouter
+            active={activePage}
+            context={context}
+            data={data}
+            onNavigate={navigate}
+            onSync={sync}
+            onSyncAll={syncAll}
+            syncProgress={syncProgress}
+            syncAllRunning={syncAllRunning}
+            syncDismissing={syncDismissing}
+            onDecide={decide}
+            onRefresh={() => void loadData()}
+            onToast={showToast}
+            onPhaseGate={phaseGate}
+            onEvidence={() => setEvidenceOpen(true)}
+            lightMode={lightMode}
+            onTheme={() => setLightMode((value) => !value)}
+          />
         </div>
       </main>
       <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} />
@@ -407,8 +478,54 @@ function TopBar({ active, onMenu, onCommand, onNotifications, onProfile, profile
   return <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></button><button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></button><div className="topbar-divider" /><button className="icon-button notification-button" onClick={onNotifications} aria-label="Open notifications"><Bell size={18} /><i /></button><button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</button><button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></button></div></header>
 }
 
-function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, syncProgress, syncAllRunning, onDecide, onRefresh, onToast, onPhaseGate, onEvidence, lightMode, onTheme }: { active: SectionId; context: WorkspaceContext; data: WorkspaceData; onNavigate: (page: SectionId) => void; onSync: (module: string) => Promise<void>; onSyncAll: () => Promise<void>; syncProgress: readonly SyncModuleProgress[]; syncAllRunning: boolean; onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void>; onRefresh: () => void; onToast: (message: string, kind?: ToastKind) => void; onPhaseGate: (phase: string, capability: string) => void; onEvidence: () => void; lightMode: boolean; onTheme: () => void }) {
-  if (active === 'dashboard') return <DashboardPage context={context} data={data} onNavigate={onNavigate} onSync={onSync} onSyncAll={onSyncAll} syncProgress={syncProgress} syncAllRunning={syncAllRunning} />
+function PageRouter({
+  active,
+  context,
+  data,
+  onNavigate,
+  onSync,
+  onSyncAll,
+  syncProgress,
+  syncAllRunning,
+  syncDismissing,
+  onDecide,
+  onRefresh,
+  onToast,
+  onPhaseGate,
+  onEvidence,
+  lightMode,
+  onTheme,
+}: {
+  active: SectionId
+  context: WorkspaceContext
+  data: WorkspaceData
+  onNavigate: (page: SectionId) => void
+  onSync: (module: string) => Promise<void>
+  onSyncAll: () => Promise<void>
+  syncProgress: readonly SyncModuleProgress[]
+  syncAllRunning: boolean
+  syncDismissing?: boolean
+  onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void>
+  onRefresh: () => void
+  onToast: (message: string, kind?: ToastKind) => void
+  onPhaseGate: (phase: string, capability: string) => void
+  onEvidence: () => void
+  lightMode: boolean
+  onTheme: () => void
+}) {
+  if (active === 'dashboard')
+    return (
+      <DashboardPage
+        context={context}
+        data={data}
+        onNavigate={onNavigate}
+        onSync={onSync}
+        onSyncAll={onSyncAll}
+        syncProgress={syncProgress}
+        syncAllRunning={syncAllRunning}
+        syncDismissing={!!syncDismissing}
+      />
+    )
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
   if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
@@ -428,29 +545,90 @@ function PageRouter({ active, context, data, onNavigate, onSync, onSyncAll, sync
   return <EmptyDataPage page={active} context={context} onSync={onSync} />
 }
 
-function DashboardPage({ context, data, onNavigate, onSync, onSyncAll, syncProgress, syncAllRunning }: { context: WorkspaceContext; data: WorkspaceData; onNavigate: (page: SectionId) => void; onSync: (module: string) => Promise<void>; onSyncAll: () => Promise<void>; syncProgress: readonly SyncModuleProgress[]; syncAllRunning: boolean }) {
-  return <PageLayout eyebrow="Store intelligence" title={context.shop ? `Good morning, ${context.shop}` : 'Connect your Shopify store'} description={context.storeId ? 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.' : 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'} actions={<><button className="button secondary" onClick={() => onNavigate('analytics')}><LineChart size={15} /> Open analytics</button><button className="button primary" disabled={syncAllRunning} onClick={() => void onSyncAll()}><RotateCcw size={15} className={syncAllRunning ? 'spin' : ''} /> {syncAllRunning ? 'Syncing all…' : 'Sync all'}</button></>}>
-    <div className="sync-banner"><span className="sync-pulse"><span /></span><span><strong>{context.storeId ? 'Shopify data plane ready' : 'No store context'}</strong> · {latestSyncLabel(data.analytics)}</span><button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></button></div>
-    {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} />}
-    <DashboardLayout
-      data={{ analytics: data.analytics, catalog: data.catalog as unknown as Array<{ productId: string; payload: Record<string, unknown> }>, loadState: data.loadState }}
-      onSync={onSync}
-      onSyncAll={onSyncAll}
-      syncAllRunning={syncAllRunning}
-      onNavigate={onNavigate as (page: string) => void}
-      storeName={context.shop}
-      storeId={context.storeId}
-    />
-  </PageLayout>
+function DashboardPage({
+  context,
+  data,
+  onNavigate,
+  onSync,
+  onSyncAll,
+  syncProgress,
+  syncAllRunning,
+  syncDismissing,
+}: {
+  context: WorkspaceContext
+  data: WorkspaceData
+  onNavigate: (page: SectionId) => void
+  onSync: (module: string) => Promise<void>
+  onSyncAll: () => Promise<void>
+  syncProgress: readonly SyncModuleProgress[]
+  syncAllRunning: boolean
+  syncDismissing?: boolean
+}) {
+  const displayName = formatStoreDisplayName(context.shop)
+  const greetingTitle = context.storeId ? 'Good morning' : 'Connect your Shopify store'
+  const greetingDescription = context.storeId
+    ? displayName
+      ? `Welcome back, ${displayName} — your workspace is ready for real Shopify data.`
+      : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.'
+    : 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
+
+  return (
+    <PageLayout
+      eyebrow="Store intelligence"
+      title={greetingTitle}
+      description={greetingDescription}
+      actions={
+        <>
+          <button className="button secondary" onClick={() => onNavigate('analytics')}>
+            <LineChart size={15} /> Open analytics
+          </button>
+          <button className="button primary" disabled={syncAllRunning} onClick={() => void onSyncAll()}>
+            <RotateCcw size={15} className={syncAllRunning ? 'spin' : ''} /> {syncAllRunning ? 'Syncing all…' : 'Sync all'}
+          </button>
+        </>
+      }
+    >
+      <div className="sync-banner">
+        <span className="sync-pulse">
+          <span />
+        </span>
+        <span>
+          <strong>{context.storeId ? 'Shopify data plane ready' : 'No store context'}</strong> · {latestSyncLabel(data.analytics)}
+        </span>
+        <button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></button>
+      </div>
+      {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} dismissing={!!syncDismissing} />}
+      <DashboardLayout
+        data={{
+          analytics: data.analytics,
+          catalog: data.catalog as unknown as Array<{ productId: string; payload: Record<string, unknown> }>,
+          loadState: data.loadState,
+        }}
+        onSync={onSync}
+        onSyncAll={onSyncAll}
+        syncAllRunning={syncAllRunning}
+        onNavigate={onNavigate as (page: string) => void}
+        storeName={context.shop}
+        storeId={context.storeId}
+      />
+    </PageLayout>
+  )
 }
 
-function SyncAllProgress({ modules }: { modules: readonly SyncModuleProgress[] }) {
-  return <section className="sync-all-progress" aria-live="polite" aria-label="Shopify sync progress">
-    {modules.map((item) => <div key={item.module} className={`sync-module ${item.status}`} title={item.detail}>
-      {item.status === 'succeeded' ? <CheckCircle2 size={13} /> : item.status === 'failed' ? <AlertCircle size={13} /> : <RefreshCw className="spin" size={13} />}
-      <span><strong>{item.module}</strong><small>{item.detail}</small></span>
-    </div>)}
-  </section>
+function SyncAllProgress({ modules, dismissing }: { modules: readonly SyncModuleProgress[]; dismissing?: boolean }) {
+  return (
+    <section className={`sync-all-progress ${dismissing ? 'dismissing' : ''}`} aria-live="polite" aria-label="Shopify sync progress">
+      {modules.map((item) => (
+        <div key={item.module} className={`sync-module ${item.status}`} title={item.detail}>
+          {item.status === 'succeeded' ? <CheckCircle2 size={13} /> : item.status === 'failed' ? <AlertCircle size={13} /> : <RefreshCw className="spin" size={13} />}
+          <span>
+            <strong>{item.module}</strong>
+            <small>{item.detail}</small>
+          </span>
+        </div>
+      ))}
+    </section>
+  )
 }
 
 function ProductsPage({ context, catalog, analytics, onSync }: { context: WorkspaceContext; catalog: readonly CatalogProduct[]; analytics: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void> }) {

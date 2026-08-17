@@ -10,3 +10,102 @@
 @media(max-width:1100px){.customers-table th:nth-child(3),.customers-table td:nth-child(3){display:none}.customers-table th:nth-child(2){width:22%}.customer-prediction-grid{grid-template-columns:1fr}.customer-ai-query{grid-template-columns:1fr}}
 @media(max-width:800px){.customers-heading-actions{margin-top:0}.customer-stats-grid{grid-template-columns:1fr}.customer-insight-grid{grid-template-columns:1fr}.customers-toolbar{align-items:stretch;flex-direction:column}.customers-search{width:100%}.customers-toolbar-actions{justify-content:space-between}.customers-table-wrap{padding:9px}.customers-table,.customers-table tbody{display:block}.customers-table thead{display:none}.customers-table tbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.customers-table tr{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px;border:1px solid var(--border-soft);border-radius:10px;background:rgba(8,13,24,.2)}.customers-table td{display:flex!important;min-width:0;align-items:center;justify-content:space-between;gap:7px;padding:0;border:0}.customers-table td::before{color:var(--text-tertiary);font-family:var(--font-mono);font-size:6px;text-transform:uppercase;content:attr(data-label)}.customers-table td:nth-child(1){position:absolute;justify-self:end}.customers-table td:nth-child(2){grid-column:1/-1;padding-right:23px}.customers-table td:nth-child(2)::before{display:none}.customers-table td:nth-child(3){grid-column:1/-1}.customers-table td:nth-child(3)>strong{max-width:70%}.customer-identity{width:100%}.customer-identity>span{flex:1}.customer-bulk-bar{flex-wrap:wrap}.customer-bulk-bar>span{width:100%;margin:0}.customer-detail-drawer{width:min(570px,100vw)}.customer-products{grid-template-columns:1fr}}
 @media(max-width:560px){.customers-table tbody{grid-template-columns:1fr}.customers-toolbar-actions{align-items:stretch;flex-direction:column}.customers-sort{width:100%}.customers-sort select{flex:1}.compact-export{justify-content:center}.customer-segment-filter{padding-inline:9px}.customer-ai-query>div:first-child{align-items:flex-start}.customer-detail-grid{grid-template-columns:1fr}.customer-detail-drawer>footer{align-items:flex-start;flex-direction:column}.customer-detail-drawer>footer .customer-email-action{width:100%;justify-content:center}.customer-coverage{align-items:flex-start}.customer-coverage time{display:none}.targeted-email-layer{padding:0}.targeted-email-modal{width:100vw;max-height:100vh;height:100vh;border:0;border-radius:0}.targeted-email-modal>footer{flex-direction:column-reverse}.targeted-email-modal>footer .button{justify-content:center}}
+
+/* ─── PR #38 Commit 3: Customers Typography & Spacing Bump ─── */
+.customers-workspace { gap: 20px !important; }
+.customer-stats-grid { gap: 16px !important; }
+.customer-stat-card { min-height: 110px !important; padding: 18px !important; gap: 14px !important; }
+.customer-stat-card small { font-size: 11px !important; }
+.customer-stat-card strong { font-size: 20px !important; }
+.customer-stat-card p { font-size: 12px !important; }
+.customer-ai-heading { padding: 16px 18px !important; }
+.customer-ai-heading strong { font-size: 14px !important; }
+.customer-ai-heading small { font-size: 11px !important; }
+.customer-insight-grid article { padding: 14px !important; }
+.customer-insight-grid strong { font-size: 18px !important; }
+.customer-insight-grid p, .customer-insight-grid small { font-size: 12px !important; }
+.customers-toolbar { padding: 16px 18px !important; gap: 14px !important; }
+.customers-search input { font-size: 14px !important; height: 38px !important; }
+.customers-table th { font-size: 11px !important; padding: 12px 10px !important; }
+.customers-table td { font-size: 13px !important; padding: 12px 10px !important; }
+.customer-identity strong { font-size: 13px !important; }
+.customer-identity small { font-size: 11px !important; }
+.customer-activity, .customer-behavior { font-size: 11px !important; padding: 5px 9px !important; }
+.customer-inline-lock { padding: 6px 8px !important; font-size: 11px !important; }
+.customers-pagination { font-size: 12px !important; }
+.customer-bulk-bar { padding: 12px 18px !important; }
+.customer-bulk-bar > span { font-size: 12px !important; }
+.customer-segment-filter button { font-size: 12px !important; padding: 8px 12px !important; }
+
+
+/* ─── PR #38 Commit 4: Light Theme Rebuild — Customers ─── */
+.app-shell.light-mode .customer-stat-card,
+.light-mode .customer-stat-card,
+.app-shell.light-mode .customers-table-card,
+.light-mode .customers-table-card,
+.app-shell.light-mode .customer-ai-card,
+.light-mode .customer-ai-card,
+.app-shell.light-mode .customer-coverage,
+.light-mode .customer-coverage {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.app-shell.light-mode .customer-stat-card.premium,
+.light-mode .customer-stat-card.premium {
+  background: var(--bg-surface) !important;
+  border-color: rgba(124,58,237,.15) !important;
+}
+.app-shell.light-mode .customers-toolbar,
+.app-shell.light-mode .customers-search,
+.app-shell.light-mode .customers-sort,
+.app-shell.light-mode .customer-segment-filter,
+.light-mode .customers-toolbar,
+.light-mode .customers-search,
+.light-mode .customers-sort,
+.light-mode .customer-segment-filter {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .customers-toolbar {
+  background: var(--bg-surface) !important;
+}
+.app-shell.light-mode .customer-segment-filter button.active,
+.light-mode .customer-segment-filter button.active {
+  background: rgba(37,99,235,.08) !important;
+  border-color: rgba(37,99,235,.15) !important;
+  color: var(--accent-blue) !important;
+}
+.app-shell.light-mode .customers-table th,
+.light-mode .customers-table th {
+  background: var(--bg-secondary) !important;
+}
+.app-shell.light-mode .customer-bulk-bar,
+.light-mode .customer-bulk-bar {
+  background: rgba(37,99,235,.05) !important;
+  border-color: rgba(37,99,235,.12) !important;
+}
+.app-shell.light-mode .customer-inline-lock,
+.light-mode .customer-inline-lock {
+  background: rgba(124,58,237,.08) !important;
+}
+.app-shell.light-mode .customers-empty,
+.app-shell.light-mode .customers-error,
+.light-mode .customers-empty,
+.light-mode .customers-error {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+
+
+/* ─── PR #38 Commit 7: Customers fixes ─── */
+.customers-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.customers-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.customers-sort { min-width: 180px; }
+.customers-sort .custom-select { min-width: 180px; }
+.compact-export { min-height: 36px !important; min-width: 80px !important; }
+.customer-inline-lock { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; padding: 0; border-radius: 6px; background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.15); color: #A78BFA; cursor: pointer; }
+.customer-inline-lock:hover { background: rgba(124,58,237,.18); }
+.customer-ai-heading-actions { display: flex; align-items: center; gap: 12px; }
+.customer-ai-heading-actions .upgrade-plan-cta { min-height: 32px; font-size: 12px; }
+

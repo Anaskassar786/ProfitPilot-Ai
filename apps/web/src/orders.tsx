@@ -185,7 +185,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
 
   return <section className={`card orders-insights ${collapsed ? 'collapsed' : ''}`}>
     <header className="orders-insights-header">
-      <div className="orders-insights-title"><span className="ai-insights-icon"><Sparkles size={18} /></span><div><div className="section-kicker">AI ORDER INTELLIGENCE</div><h2>AI Insights</h2><p>Deterministic Shopify analysis with plan-enforced premium intelligence.</p></div></div>
+      <div className="orders-insights-title"><span className="ai-insights-icon"><ShoppingBag size={18} /></span><div><div className="section-kicker">ORDER INTELLIGENCE</div><h2>AI Insights</h2><p>Smart analysis from your Shopify orders.</p></div></div>
       <div className="orders-insights-head-actions">{result && <UpgradePlanButton plan={result.plan} onUpgrade={onNavigateBilling} />}<button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand AI insights' : 'Collapse AI insights'}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}</button></div>
     </header>
     {!collapsed && <div className="orders-insights-body">
@@ -206,20 +206,46 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
         <div className="orders-commander-row">
           <CommanderCapability title="Anomaly alerts" icon={<AlertTriangle size={15} />} insight={available('anomaly_alerts')} locked={locked('anomaly_alerts')} onUpgrade={onNavigateBilling} />
           <CommanderCapability title="Auto-action suggestions" icon={<Bot size={15} />} insight={available('auto_action_suggestions')} locked={locked('auto_action_suggestions')} onUpgrade={onNavigateBilling} />
-          <CommanderCapability title="Custom AI queries" icon={<Sparkles size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
+          <CommanderCapability title="Custom AI queries" icon={<ShoppingBag size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
         </div>
-        {available('custom_ai_queries') && <div className="orders-custom-query"><div><Sparkles size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
+        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
       </>}
     </div>}
   </section>
 }
 
-export function PlanLockedFeature({ featureName, requiredPlan, description, children, onUpgrade }: { featureName: string; requiredPlan: 'growth' | 'commander'; description?: string; children: ReactNode; onUpgrade: () => void }) {
-  const tagline = description?.trim() ? description : `Upgrade to ${titleCase(requiredPlan)} to unlock`
-  return <button className="plan-locked-feature" onClick={onUpgrade} aria-label={`Upgrade to ${titleCase(requiredPlan)} to unlock ${featureName}`}>
-    <span className="plan-locked-blur" aria-hidden="true">{children}</span>
-    <span className="plan-locked-overlay"><LockKeyhole size={17} /><strong>{featureName}</strong><small>{tagline}</small></span>
-  </button>
+export function PlanLockedFeature({
+  featureName,
+  requiredPlan: _requiredPlan,
+  description: _description,
+  children,
+  onUpgrade,
+}: {
+  featureName: string
+  requiredPlan: 'growth' | 'commander'
+  description?: string
+  children: ReactNode
+  onUpgrade: () => void
+}) {
+  // Global Fix 2 — unified CTA: no plan names, just "Upgrade to unlock"
+  const tagline = 'Upgrade to unlock'
+  return (
+    <button
+      className="plan-locked-feature"
+      onClick={onUpgrade}
+      aria-label={`Upgrade to unlock ${featureName}`}
+      title="Upgrade to unlock"
+    >
+      <span className="plan-locked-blur" aria-hidden="true">
+        {children}
+      </span>
+      <span className="plan-locked-overlay">
+        <LockKeyhole size={17} />
+        <strong>{featureName}</strong>
+        <small>{tagline}</small>
+      </span>
+    </button>
+  )
 }
 
 function InsightSlot({ title, icon, available, locked, children, onUpgrade }: { feature: OrderInsightFeature; title: string; icon: ReactNode; available: unknown; locked: ReturnType<typeof lockedInsightByFeature>; children: ReactNode; onUpgrade: () => void }) {
@@ -277,7 +303,7 @@ function CommanderCapability({ title, icon, insight, locked, onUpgrade }: { titl
   const summary = data.status === 'ready' ? 'Ready for a grounded question' : data.status === 'insufficient_data' ? text(data.message) : Array.isArray(data.alerts) ? `${data.alerts.length} alert${data.alerts.length === 1 ? '' : 's'}` : Array.isArray(data.suggestions) ? `${data.suggestions.length} review suggestion${data.suggestions.length === 1 ? '' : 's'}` : 'Unlocked'
   return <article className="commander-capability"><span>{icon}</span><div><strong>{title}</strong><small>{summary}</small></div></article>
 }
-function CustomQueryAnswer({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'generated' && text(data.text) ? <p className="custom-query-answer"><Sparkles size={13} />{text(data.text)}</p> : null }
+function CustomQueryAnswer({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'generated' && text(data.text) ? <p className="custom-query-answer"><ShoppingBag size={13} />{text(data.text)}</p> : null }
 function InsightMask({ compact = false }: { compact?: boolean }) { return <span className={`insight-mask ${compact ? 'compact' : ''}`}><i /><i /><i /></span> }
 function InsightUnavailable({ message = 'Insights available after more orders.' }: { message?: string | null }) { return <div className="insight-unavailable"><span>—</span><small>{message ?? 'Insight unavailable'}</small></div> }
 function InsightsSkeleton() { return <div className="insights-skeleton">{[1, 2, 3, 4, 5, 6].map((value) => <span key={value} />)}</div> }

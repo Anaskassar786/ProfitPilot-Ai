@@ -126,3 +126,24 @@ function nonEmpty(value: string | null): string | null {
   const normalized = value?.trim() ?? ''
   return normalized.length > 0 ? normalized : null
 }
+
+/**
+ * Format a Shopify shop domain into a human-friendly display name.
+ * e.g. "commander-pilot.myshopify.com" => "Commander Pilot"
+ * Frontend-only per Q2 — no backend change.
+ */
+export function formatStoreDisplayName(domain: string | null): string | null {
+  if (!domain) return null
+  const trimmed = domain.trim().toLowerCase()
+  if (!trimmed) return null
+  // Strip .myshopify.com suffix
+  const withoutSuffix = trimmed.replace(/\.myshopify\.com$/, '')
+  if (!withoutSuffix) return null
+  // Replace hyphens/underscores with spaces, split, Title Case each word
+  const words = withoutSuffix
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+  if (words.length === 0) return null
+  return words.join(' ')
+}

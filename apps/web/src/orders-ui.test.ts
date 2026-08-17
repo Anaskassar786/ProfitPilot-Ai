@@ -17,7 +17,7 @@ describe('Orders UI regressions', () => {
 
   it('renders reusable locked metadata with the exact upgrade CTA', () => {
     const html = renderToStaticMarkup(createElement(PlanLockedFeature, { featureName: 'Peak Order Times', requiredPlan: 'growth', onUpgrade: vi.fn(), children: createElement('span', null, 'masked') }))
-    expect(html).toContain('Upgrade to Growth to unlock')
+    expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Peak Order Times')
     expect(html).toContain('plan-locked-blur')
   })

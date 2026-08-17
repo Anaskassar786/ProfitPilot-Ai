@@ -1,6 +1,30 @@
 import { ArrowUpRight, Zap } from 'lucide-react'
-export function UpgradePlanButton({ plan, onUpgrade, className = '' }: { plan: 'trial' | 'start' | 'growth' | 'commander'; onUpgrade: () => void; className?: string }) {
+
+/**
+ * Global Upgrade CTA — single clean button "Upgrade Plan" across all pages.
+ * No Trial/Start/Growth label, no overlapping text.
+ * Commander returns null (already top tier).
+ */
+export function UpgradePlanButton({
+  plan,
+  onUpgrade,
+  className = '',
+}: {
+  plan: 'trial' | 'start' | 'growth' | 'commander'
+  onUpgrade: () => void
+  className?: string
+}) {
   if (plan === 'commander') return null
-  const label = plan === 'trial' ? 'Trial' : plan === 'start' ? 'Start' : 'Growth'
-  return <button type="button" className={`upgrade-plan-cta ${className}`} onClick={onUpgrade} aria-label={`${label} plan. Upgrade plan`}><Zap size={12} fill="currentColor" /><span><small>{label}</small> · Upgrade</span><ArrowUpRight size={12} /></button>
+  return (
+    <button
+      type="button"
+      className={`upgrade-plan-cta ${className}`}
+      onClick={onUpgrade}
+      aria-label="Upgrade plan"
+    >
+      <Zap size={14} fill="currentColor" />
+      <span>Upgrade Plan</span>
+      <ArrowUpRight size={14} />
+    </button>
+  )
 }

@@ -984,3 +984,135 @@
     justify-content: flex-start;
   }
 }
+/* ─── PR #38 Commit 3: Dashboard Typography & Spacing Bump ─── */
+.dashboard-modern { gap: 20px !important; }
+.dash-row { gap: 20px !important; }
+.dash-card { padding: 22px 24px !important; }
+.three-col-row > .dash-card { padding: 20px 22px !important; }
+.dash-card-header { margin-bottom: 18px !important; gap: 14px !important; }
+.dash-card-header h3 { font-size: 16px !important; }
+.dash-kicker { font-size: 11px !important; }
+.dash-chart-legend { font-size: 12px !important; gap: 14px !important; margin-bottom: 12px !important; }
+.metric-card-enhanced { min-height: 140px !important; gap: 10px !important; padding: 20px !important; }
+.metric-label { font-size: 13px !important; }
+.metric-growth-label { font-size: 11px !important; }
+.metric-detail { font-size: 12px !important; }
+.growth-badge { font-size: 11px !important; padding: 5px 10px !important; }
+.metric-value { font-size: 28px !important; }
+.period-toggle-btn { font-size: 12px !important; padding: 6px 12px !important; }
+.range-picker input[type="date"] { font-size: 13px !important; min-height: 36px !important; }
+.health-card-compact, .calendar-card-compact { padding: 20px !important; }
+.health-row { font-size: 13px !important; }
+.health-value { font-size: 12px !important; }
+.dash-text-link { font-size: 13px !important; margin-top: 14px !important; }
+.ai-summary-card .ai-summary-body p { font-size: 14px !important; line-height: 1.6 !important; }
+.ai-summary-footer { font-size: 12px !important; }
+.order-row { padding: 12px 10px !important; }
+.order-id { font-size: 13px !important; }
+.order-customer { font-size: 12px !important; }
+.order-amount { font-size: 13px !important; }
+.order-date { font-size: 11px !important; }
+.cal-month-label { font-size: 14px !important; }
+.cal-day-name { font-size: 10px !important; }
+.cal-day-number { font-size: 12px !important; }
+.cal-hover-line strong { font-size: 14px !important; }
+.cal-hover-line > span { font-size: 12px !important; }
+.cal-legend { font-size: 11px !important; }
+.cal-total-label { font-size: 11px !important; }
+.cal-total-value { font-size: 22px !important; }
+.cal-total-sub { font-size: 12px !important; }
+.chart-empty-note { font-size: 11px !important; }
+.single-category-name { font-size: 16px !important; }
+.single-category-note { font-size: 12px !important; }
+.order-row-detail span { font-size: 12px !important; }
+.order-row-detail em { font-size: 10px !important; }
+.orders-cta { font-size: 13px !important; padding: 12px !important; }
+
+
+/* ─── PR #38 Commit 4: Light Theme Rebuild — Dashboard ─── */
+.app-shell.light-mode .dash-card,
+.light-mode .dash-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.app-shell.light-mode .metric-card-enhanced,
+.light-mode .metric-card-enhanced {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .period-toggle-group,
+.light-mode .period-toggle-group {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .cal-cell,
+.light-mode .cal-cell {
+  border-color: transparent !important;
+}
+.app-shell.light-mode .cal-cell.has-data,
+.light-mode .cal-cell.has-data {
+  background-color: rgba(16,185,129,.15) !important;
+}
+.app-shell.light-mode .ai-summary-card,
+.light-mode .ai-summary-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .order-row:hover,
+.light-mode .order-row:hover {
+  background: rgba(59,130,246,.05) !important;
+}
+.app-shell.light-mode .order-row.detailed,
+.light-mode .order-row.detailed {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-soft) !important;
+}
+.app-shell.light-mode .single-category-ring {
+  border-color: var(--accent-blue) !important;
+}
+.app-shell.light-mode .chart-skeleton span {
+  background: linear-gradient(180deg,rgba(59,130,246,.12),rgba(59,130,246,.04)) !important;
+}
+
+
+/* ─── PR #38 Commit 5: Dashboard New Designs ─── */
+.ai-summary-modern { display: flex; flex-direction: column; gap: 14px; }
+.ai-summary-highlights { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.summary-pill { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg-surface); }
+.summary-pill svg { color: var(--blue-bright); flex: 0 0 auto; }
+.summary-pill > span { display: flex; flex-direction: column; gap: 2px; }
+.summary-pill strong { font-size: 14px; color: var(--text); }
+.summary-pill small { font-size: 11px; color: var(--text-tertiary); }
+.ai-summary-insight { display: flex; gap: 10px; padding: 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(155,124,246,.06); }
+.ai-summary-insight svg { color: var(--purple); margin-top: 2px; flex: 0 0 auto; }
+.ai-summary-insight p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+
+.pie-enhanced { display: flex; gap: 16px; align-items: center; }
+.pie-chart-wrap { position: relative; flex: 1; min-width: 0; }
+.pie-center-total { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.pie-center-total strong { font-size: 18px; color: var(--text); letter-spacing: -.04em; }
+.pie-center-total span { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; }
+.pie-side-legend { display: flex; flex-direction: column; gap: 8px; flex: 0 0 160px; }
+.legend-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 120ms ease; }
+.legend-row:hover, .legend-row.active { background: var(--bg-hover); }
+.legend-row .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.legend-name { flex: 1; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-value { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+.top-badge { display: inline-flex; align-items: center; padding: 2px 6px; margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--green); background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.2); border-radius: 999px; }
+
+.activity-timeline { position: relative; display: flex; flex-direction: column; gap: 0; padding-left: 20px; }
+.activity-timeline::before { content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(to bottom, var(--border-soft), transparent); border-radius: 2px; }
+.activity-timeline-row { position: relative; display: flex; gap: 12px; padding: 12px 0; }
+.activity-timeline-row + .activity-timeline-row { border-top: 1px solid var(--border-soft); }
+.timeline-dot { position: absolute; left: -20px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); border: 2px solid var(--card); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+.timeline-content { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.timeline-top { display: flex; align-items: center; gap: 8px; }
+.customer-avatar-timeline { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--bg-hover); color: var(--text-secondary); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+.timeline-customer { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-middle { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.timeline-product { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-amount { font-size: 13px; font-weight: 600; color: var(--text); }
+.timeline-bottom { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-tertiary); }
+.timeline-id { font-family: var(--font-mono); }
+

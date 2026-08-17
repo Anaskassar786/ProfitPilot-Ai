@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, CalendarClock, Check, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
+import { AlertTriangle, Boxes, CalendarClock, Check, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -76,7 +76,7 @@ export function AIInventoryInsightsCard({ storeId, insights, loading, error, onU
 function InsightsHeader({ insights, open, onToggle, onUpgrade }: { insights: InventoryInsightsResult | null; open: boolean; onToggle: () => void; onUpgrade: () => void }) {
   return <header className="inventory-insights-header">
     <div className="inventory-insights-title">
-      <span className="ai-insights-icon"><Sparkles size={18} /></span>
+      <span className="ai-insights-icon"><Boxes size={18} /></span>
       <div>
         <div className="section-kicker">AI INVENTORY INTELLIGENCE</div>
         <h2>Stock Intelligence</h2>
@@ -193,7 +193,7 @@ export function StockTurnoverCard({ insights, onUpgrade }: { insights: Inventory
 }
 
 export function AISuggestionCard({ insights, onUpgrade }: { insights: InventoryInsightsResult | null; onUpgrade: () => void }) {
-  return <InsightSlot insights={insights} feature="ai_suggestion" title="AI Suggestion" icon={<Sparkles size={16} />} onUpgrade={onUpgrade} className="wide">
+  return <InsightSlot insights={insights} feature="ai_suggestion" title="AI Suggestion" icon={<Boxes size={16} />} onUpgrade={onUpgrade} className="wide">
     {(data) => {
       const value = record(data)
       return <>
@@ -356,7 +356,7 @@ export function CustomInventoryQueryInput({ storeId, insights, onUpgrade, onToas
   }
 
   return <article className="inventory-ai-tile query">
-    <div className="inventory-card-label"><Sparkles size={16} /><span>Ask about your inventory</span></div>
+    <div className="inventory-card-label"><Boxes size={16} /><span>Ask about your inventory</span></div>
     <div className="inventory-query-row">
       <input
         value={question}
