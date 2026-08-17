@@ -561,8 +561,8 @@ function formatDateLabel(value: unknown): string {
 }
 
 /** Small inline annotation for the real peak revenue day inside the chart. */
-function PeakLabel({ value, x = 0, y = 0 }: { value: string; x?: number; y?: number }) {
-  return <g className="rev-peak-label" transform={`translate(${x}, ${y})`}><circle r={2.5} /><text x={6} y={-6}>{value}</text></g>
+function PeakLabel({ value, x = 0 }: { value: string; x?: number }) {
+  return <g className="rev-peak-label" transform={`translate(${x}, 14)`}><circle r={2.5} /><text x={6} y={-5}>{value}</text></g>
 }
 
 function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
