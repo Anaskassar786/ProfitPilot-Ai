@@ -218,18 +218,19 @@ export function InventoryHealthCard({ data, loading }: { data: InventoryPageResu
   const { health } = data
   const unavailable = health.score === null
   const sweep = unavailable ? 0 : Math.max(8, Math.round(health.score * 2.4))
-  const gradeColor = health.grade === 'A' || health.grade === 'A+' ? 'green' : health.grade === 'B' ? 'blue' : health.grade === 'C' ? 'amber' : health.grade === 'D' ? 'red' : 'muted'
+  const gradeColor = health.grade === 'A' || health.grade === 'A+' ? 'green' : health.grade === 'B' ? 'blue' : health.grade === 'C' ? 'amber' : health.grade === 'D' || health.grade === 'F' ? 'red' : 'muted'
+  const labelText = unavailable ? 'No inventory data' : `${health.grade ? `${health.grade} · ` : ''}${health.label}`
   return <article className="card inventory-health-card modern">
     <div className="inventory-card-label"><HeartPulse size={16} /><span>Inventory Health</span><span className={`grade-badge ${gradeColor}`}>{health.grade}</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : <>
       <div className="inventory-health-gauge-wrap large">
         <div
-          className={`health-gauge large ${unavailable ? 'no-data' : health.tone}`}
+          className={`health-gauge ${unavailable ? 'compact no-data' : `large ${health.tone}`}`}
           style={unavailable ? undefined : { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties}
         >
           <div className="gauge-inner">
             <strong>{unavailable ? '—' : health.score}</strong>
-            <span>{unavailable ? 'No inventory data' : health.label}</span>
+            <span>{labelText}</span>
           </div>
         </div>
       </div>
@@ -252,29 +253,43 @@ export function InventoryHealthCard({ data, loading }: { data: InventoryPageResu
 export function StockDistributionChart({ data, loading }: { data: InventoryPageResult; loading: boolean }) {
   const segments = distributionSegments(data.distribution)
   const total = segments.reduce((sum, segment) => sum + segment.value, 0)
-  return <article className="card inventory-distribution-card">
+  return <article className="card inventory-distribution-card modern">
     <div className="inventory-card-label"><LineChart size={16} /><span>Stock Distribution</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : total === 0 ? (
       <p className="inventory-card-empty">No stock levels to chart yet.</p>
     ) : <>
       <div className="inventory-donut">
-        <ResponsiveContainer width="100%" height={168}>
+        <ResponsiveContainer width="100%" height={180}>
           <PieChart>
-            <Pie data={segments as unknown as Record<string, unknown>[]} dataKey="value" nameKey="label" innerRadius={52} outerRadius={78} paddingAngle={2} stroke="none">
+            <Pie
+              data={segments as unknown as Record<string, unknown>[]}
+              dataKey="value"
+              nameKey="label"
+              innerRadius={55}
+              outerRadius={82}
+              paddingAngle={3}
+              stroke="none"
+            >
               {segments.map((segment) => <Cell key={segment.key} fill={segment.color} />)}
             </Pie>
-            <Tooltip contentStyle={{ background: 'rgba(15,23,42,.96)', border: '1px solid rgba(148,163,184,.25)', borderRadius: 10, color: '#E2E8F0' }} formatter={(value: unknown, name: unknown) => [`${String(value)} SKUs`, String(name)]} />
+            <Tooltip
+              contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13 }}
+              formatter={(value: unknown, name: unknown) => [`${String(value)} SKUs`, String(name)]}
+            />
           </PieChart>
         </ResponsiveContainer>
         <div className="inventory-donut-center"><strong>{formatUnits(total)}</strong><span>SKUs</span></div>
       </div>
-      <ul className="inventory-distribution-legend">
-        {segments.map((segment) => <li key={segment.key}>
-          <span className="legend-dot" style={{ background: segment.color }} />
-          <span>{segment.label}</span>
-          <strong>{segment.value}</strong>
-          <small>{Math.round((segment.value / total) * 100)}%</small>
-        </li>)}
+      <ul className="inventory-distribution-legend modern">
+        {segments.map((segment) => {
+          const pct = total > 0 ? Math.round((segment.value / total) * 100) : 0
+          return <li key={segment.key}>
+            <span className="legend-dot" style={{ background: segment.color }} />
+            <span className="legend-status">{segment.label}</span>
+            <strong className="legend-count">{segment.value}</strong>
+            <small className="legend-pct">{pct}%</small>
+          </li>
+        })}
       </ul>
     </>}
   </article>
