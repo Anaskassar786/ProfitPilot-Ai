@@ -110,50 +110,58 @@ function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: bo
   const data = kpi.sparkline.filter(Number.isFinite).map((value, point) => ({ point, value }))
   const icons = [BarChart3, ShoppingBag, Target, Activity, Users, Zap]; const Icon = icons[index] ?? Activity
   if (loading) return <article className="analytics-kpi skeleton-card"><div className="skeleton-line short" /><div className="skeleton-line value" /><div className="skeleton-line" /></article>
-  const toneColor = COLORS[index % COLORS.length] ?? '#38bdf8'
+  const toneColor = 'var(--accent)'
   const isFlat = data.length >= 2 && data.every((d) => d.value === data[0]?.value)
   const chartData = data.map((d, i) => ({
     ...d,
     plotValue: isFlat ? d.value * (1 + (i % 2 === 0 ? -0.04 : 0.04)) : d.value,
   }))
-  return <article className={`analytics-kpi tone-${index}`}>
+  // Per-KPI chart type: an area for revenue, bars for orders and customers, a
+  // trend line for AOV, and a professional data-pending panel for metrics whose
+  // source (visitor sessions, repeat history) is not connected yet.
+  const variant: 'area' | 'bars' | 'line' | 'pending' = index === 1 || index === 4 ? 'bars' : index === 2 ? 'line' : index === 3 || index === 5 ? 'pending' : 'area'
+  const gradientId = `kpi-grad-${index}`
+  return <article className={`analytics-kpi premium tone-${index} variant-${variant}`}>
     <header>
       <span className="kpi-icon"><Icon size={14} /></span>
       <small>{kpi.label}</small>
       {kpi.change !== null ? <b className={`kpi-trend-badge ${kpi.change >= 0 ? 'positive' : 'negative'}`} title="Change versus the previous period">{kpi.change >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}<span>{Math.abs(kpi.change).toFixed(1)}%</span><small>vs prev</small></b> : <b className="kpi-trend-badge neutral" title="A previous-period baseline is still building"><Activity size={12} /><span>New</span></b>}
     </header>
     <strong>{formatKpi(kpi)}</strong>
-    <p>{kpi.detail}</p>
-    <div className="sparkline" aria-label={`${kpi.label} recent trend`}>
-      {data.length >= 2 ? (
-        <ResponsiveContainer width="100%" height={52} minWidth={0} minHeight={0}>
-          <ComposedChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+    <p className="kpi-detail-line">{kpi.detail}</p>
+    <span className="kpi-compare">{kpi.change !== null ? <><i className={kpi.change >= 0 ? 'up' : 'down'} />vs. prior 28 days</> : 'Awaiting prior-period baseline'}</span>
+    {variant === 'pending' || data.length < 2 ? (
+      <div className="kpi-pending" aria-label={`${kpi.label} visualization pending`}>
+        <span className="kpi-pending-icon"><Icon size={15} /></span>
+        <div><strong>Visualization pending</strong><small>{data.length === 0 ? 'This metric needs a data source not connected yet' : 'More daily points unlock the trend chart'}</small></div>
+      </div>
+    ) : (
+      <div className="kpi-chart" aria-label={`${kpi.label} recent trend`}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
             <defs>
-              <linearGradient id={`kpi-grad-${index}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={toneColor} stopOpacity={0.52} />
-                <stop offset="55%" stopColor={toneColor} stopOpacity={0.20} />
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={toneColor} stopOpacity={0.55} />
+                <stop offset="55%" stopColor={toneColor} stopOpacity={0.16} />
                 <stop offset="100%" stopColor={toneColor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <YAxis domain={['dataMin - 1', 'dataMax + 1']} hide />
-            <Area
-              type="monotone"
-              dataKey="plotValue"
-              stroke={toneColor}
-              strokeWidth={2.75}
-              fill={`url(#kpi-grad-${index})`}
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 2, fill: toneColor }}
-              isAnimationActive={true}
-              animationDuration={650}
-            />
+            <Tooltip content={<KpiTooltip format={kpi.format} label={kpi.label} total={data.length} />} cursor={false} />
+            {variant === 'area' && <Area type="monotone" dataKey="plotValue" stroke={toneColor} strokeWidth={2.6} fill={`url(#${gradientId})`} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, fill: toneColor }} isAnimationActive={true} animationDuration={650} />}
+            {variant === 'bars' && <Bar dataKey="plotValue" fill={toneColor} fillOpacity={0.5} radius={[3, 3, 0, 0]} maxBarSize={9} isAnimationActive={true} animationDuration={650} />}
+            {variant === 'line' && <Line type="monotone" dataKey="plotValue" stroke={toneColor} strokeWidth={2.6} dot={{ r: 2, fill: toneColor }} activeDot={{ r: 4, strokeWidth: 2, fill: toneColor }} isAnimationActive={true} animationDuration={650} />}
           </ComposedChart>
         </ResponsiveContainer>
-      ) : (
-        <div className="sparkline-guide"><i /><i /><i /></div>
-      )}
-    </div>
+      </div>
+    )}
   </article>
+}
+function KpiTooltip({ active, payload, format, label, total }: { active?: boolean; payload?: Array<{ payload?: { point: number; value: number } }>; format: Kpi['format']; label: string; total: number }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point || typeof point.value !== 'number' || !Number.isFinite(point.value)) return null
+  return <div className="kpi-tooltip"><span>{label}</span><strong>{formatKpiValue(point.value, format)}</strong><small>day {point.point + 1} of {total}</small></div>
 }
 
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
@@ -615,7 +623,8 @@ class Boundary extends Component<{label:string;children:ReactNode},{error:string
 export const AnalyticsSectionBoundary = Boundary
 function hasPlan(insights:AnalyticsInsights|null,required:'growth'|'commander'){return Boolean(insights&&PLAN_RANK[insights.plan]>=PLAN_RANK[required])}
 function normalizeInsights(value:AnalyticsInsights|null|undefined):AnalyticsInsights|null { if(!value||typeof value!=='object')return null; return {...value,categories:Array.isArray(value.categories)?value.categories:[],topProducts:Array.isArray(value.topProducts)?value.topProducts:[],weekdays:Array.isArray(value.weekdays)?value.weekdays:[],peakHours:Array.isArray(value.peakHours)?value.peakHours:null,anomalies:Array.isArray(value.anomalies)?value.anomalies:value.anomalies===null?null:[],channels:Array.isArray(value.channels)?value.channels:[],geography:Array.isArray(value.geography)?value.geography:value.geography===null?null:[],cohorts:Array.isArray(value.cohorts)?value.cohorts:value.cohorts===null?null:[],comparisons:Array.isArray(value.comparisons)?value.comparisons:value.comparisons===null?null:[],opportunities:Array.isArray(value.opportunities)?value.opportunities:value.opportunities===null?null:[],locked:Array.isArray(value.locked)?value.locked:[],available:Array.isArray(value.available)?value.available:[],forecast:value.forecast??{status:'insufficient_data',message:'Connect your first sales days to begin forecasting.',points:[],standardDeviation:0}} }
-function formatKpi(kpi:Kpi){if(kpi.value===null||!Number.isFinite(kpi.value))return '—';if(kpi.format==='money')return money(kpi.value);if(kpi.format==='percent')return `${kpi.value.toFixed(1)}%`;return Math.round(kpi.value).toLocaleString()}
+function formatKpiValue(value: number, format: Kpi['format']): string { if (!Number.isFinite(value)) return '—'; if (format === 'money') return money(value); if (format === 'percent') return `${value.toFixed(1)}%`; return Math.round(value).toLocaleString() }
+function formatKpi(kpi: Kpi) { if (kpi.value === null || !Number.isFinite(kpi.value)) return '—'; return formatKpiValue(kpi.value, kpi.format) }
 const safe=(value:unknown)=>{const number=typeof value==='number'?value:Number(value);return Number.isFinite(number)?number:0}
 const money=(value:number)=>new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:Math.abs(value)>=1000?0:2}).format(safe(value))
 const compactMoney=(value:number)=>`$${Intl.NumberFormat(undefined,{notation:'compact',maximumFractionDigits:1}).format(safe(value))}`
