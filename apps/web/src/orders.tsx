@@ -254,7 +254,7 @@ function InsightSlot({ title, icon, available, locked, children, onUpgrade }: { 
   return <article className="orders-premium-card"><div className="orders-insight-label">{icon}<span>{title}</span></div>{available ? children : <InsightUnavailable />}</article>
 }
 
-function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: { insight: ReturnType<typeof insightByFeature>; orders: readonly OrderView[]; ordersTotal: number; onNavigate: ((page: 'billing' | 'products' | 'orders') => void) | undefined }) {
+export function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: { insight: ReturnType<typeof insightByFeature>; orders: readonly OrderView[]; ordersTotal: number; onNavigate: ((page: 'billing' | 'products' | 'orders') => void) | undefined }) {
   const data = record(insight?.data)
   if (data.status !== 'available') return <article className="orders-basic-card top-product"><div className="orders-insight-label"><Package size={16} /><span>Top Selling Product</span></div><InsightUnavailable /></article>
   const title = text(data.title) ?? 'Product title unavailable'
@@ -306,7 +306,7 @@ function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: { insig
     </div>
   </article>
 }
-function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const canceled = numberOrNull(data.canceled) ?? 0
@@ -331,7 +331,7 @@ function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightB
     <small className="rate-note">Industry comparison connects when benchmark data is available.</small>
   </article>
 }
-function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+export function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
   const data = record(insight?.data)
   const rate = numberOrNull(data.rate)
   const fulfilled = numberOrNull(data.fulfilled) ?? 0
