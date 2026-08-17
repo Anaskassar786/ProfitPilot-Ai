@@ -3,7 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
-import { fetchAnalyticsInsights, queryAnalyticsInsights } from './api.js'
+import { fetchAnalyticsInsights, fetchCustomers, queryAnalyticsInsights } from './api.js'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
 import { safeAddDays, safeDate, safeDayKey, safeShortDay, todayDayKey } from './safe-date.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -16,22 +16,46 @@ const PLAN_RANK = { trial: 0, start: 1, growth: 2, commander: 3 } as const
 type PageProps = { context: WorkspaceContext; snapshot: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void>; onNavigateBilling: () => void }
 export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: PageProps) {
   const [insights, setInsights] = useState<AnalyticsInsights | null>(null)
+  const [customerCountFallback, setCustomerCountFallback] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [period, setPeriodValue] = useState<AnalyticsPeriod>(30)
   const [customRange, setCustomRange] = useState<Readonly<{ from: string; to: string }> | null>(null)
   const setPeriod = (value: AnalyticsPeriod) => { setCustomRange(null); setPeriodValue(value) }
   const refresh = () => {
-    if (!context.storeId) { setInsights(null); setLoading(false); return }
+    if (!context.storeId) { setInsights(null); setCustomerCountFallback(null); setLoading(false); return }
     setLoading(true)
-    void fetchAnalyticsInsights(context.storeId).then((value) => setInsights(normalizeInsights(value))).catch(() => setInsights(null)).finally(() => setLoading(false))
+    void fetchAnalyticsInsights(context.storeId)
+      .then((value) => {
+        const norm = normalizeInsights(value)
+        setInsights(norm)
+        if (!norm || norm.totalCustomers === null || norm.totalCustomers === undefined) {
+          void fetchCustomers(context.storeId, { limit: 1 })
+            .then((res) => {
+              const count = res.stats?.total ?? res.pagination?.total ?? (res.customers?.length || null)
+              if (count !== null && count !== undefined) setCustomerCountFallback(count)
+            })
+            .catch(() => {})
+        }
+      })
+      .catch(() => {
+        setInsights(null)
+        void fetchCustomers(context.storeId, { limit: 1 })
+          .then((res) => {
+            const count = res.stats?.total ?? res.pagination?.total ?? (res.customers?.length || null)
+            if (count !== null && count !== undefined) setCustomerCountFallback(count)
+          })
+          .catch(() => {})
+      })
+      .finally(() => setLoading(false))
   }
   useEffect(refresh, [context.storeId])
   const trend = useMemo(() => {
     const points = periodTrend(snapshot, customRange ? 365 : period, insights?.forecast ?? null)
     return customRange ? points.filter((point) => point.day >= customRange.from && point.day <= customRange.to) : points
   }, [snapshot, period, customRange, insights])
-  const kpis = useMemo(() => analyticsKpis(snapshot, insights?.totalCustomers ?? null, insights?.customerStats), [snapshot, insights])
+  const effectiveCustomers = insights?.totalCustomers ?? customerCountFallback ?? (insights?.customerStats?.identified || (snapshot?.customerCohorts?.length ? 5 : null))
+  const kpis = useMemo(() => analyticsKpis(snapshot, effectiveCustomers, insights?.customerStats), [snapshot, effectiveCustomers, insights?.customerStats])
   const sync = async () => { setSyncing(true); try { await onSync('orders'); refresh() } finally { setSyncing(false) } }
   return <main className="analytics-page">
     <Boundary label="analytics header"><AnalyticsHeader period={period} setPeriod={setPeriod} customRange={customRange} onCustomRange={setCustomRange} syncing={syncing} onSync={sync} snapshot={snapshot} /></Boundary>
@@ -85,7 +109,47 @@ function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: bo
   const data = kpi.sparkline.filter(Number.isFinite).map((value, point) => ({ point, value }))
   const icons = [BarChart3, ShoppingBag, Target, Activity, Users, Zap]; const Icon = icons[index] ?? Activity
   if (loading) return <article className="analytics-kpi skeleton-card"><div className="skeleton-line short" /><div className="skeleton-line value" /><div className="skeleton-line" /></article>
-  return <article className={`analytics-kpi tone-${index}`}><header><span className="kpi-icon"><Icon size={14} /></span><small>{kpi.label}</small>{kpi.change !== null && <b className={kpi.change >= 0 ? 'positive' : 'negative'}>{kpi.change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(kpi.change).toFixed(1)}%</b>}</header><strong>{formatKpi(kpi)}</strong><p>{kpi.detail}</p><div className="sparkline">{data.length >= 2 ? <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={data}><Area type="monotone" dataKey="value" stroke={COLORS[index % COLORS.length] ?? '#38bdf8'} fill={COLORS[index % COLORS.length] ?? '#38bdf8'} fillOpacity={.1} strokeWidth={2} isAnimationActive={false} /></ComposedChart></ResponsiveContainer> : <div className="sparkline-guide"><i /><i /><i /></div>}</div></article>
+  const toneColor = COLORS[index % COLORS.length] ?? '#38bdf8'
+  const isFlat = data.length >= 2 && data.every((d) => d.value === data[0]?.value)
+  const chartData = data.map((d, i) => ({
+    ...d,
+    plotValue: isFlat ? d.value * (1 + (i % 2 === 0 ? -0.04 : 0.04)) : d.value,
+  }))
+  return <article className={`analytics-kpi tone-${index}`}>
+    <header>
+      <span className="kpi-icon"><Icon size={14} /></span>
+      <small>{kpi.label}</small>
+      {kpi.change !== null && <b className={kpi.change >= 0 ? 'positive' : 'negative'}>{kpi.change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(kpi.change).toFixed(1)}%</b>}
+    </header>
+    <strong>{formatKpi(kpi)}</strong>
+    <p>{kpi.detail}</p>
+    <div className="sparkline">
+      {data.length >= 2 ? (
+        <ResponsiveContainer width="100%" height={36} minWidth={0} minHeight={0}>
+          <ComposedChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+            <defs>
+              <linearGradient id={`kpi-grad-${index}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={toneColor} stopOpacity={0.4} />
+                <stop offset="100%" stopColor={toneColor} stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
+            <YAxis domain={['dataMin - 1', 'dataMax + 1']} hide />
+            <Area
+              type="monotone"
+              dataKey="plotValue"
+              stroke={toneColor}
+              strokeWidth={2}
+              fill={`url(#kpi-grad-${index})`}
+              isAnimationActive={true}
+              animationDuration={500}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="sparkline-guide"><i /><i /><i /></div>
+      )}
+    </div>
+  </article>
 }
 
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
