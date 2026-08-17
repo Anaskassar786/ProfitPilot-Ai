@@ -195,8 +195,8 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
         {!result.sufficientData && <div className="orders-insufficient"><Clock3 size={15} /><span><strong>Early signal mode</strong> — advanced insights are available after 5 real orders. Basic facts below remain exact.</span></div>}
         <div className="orders-basic-insights">
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
-          <RateInsight feature="cancellation_rate" title="Cancellation Rate" icon={<AlertTriangle size={16} />} insight={available('cancellation_rate')} />
-          <RateInsight feature="fulfillment_rate" title="Fulfillment Rate" icon={<CheckCircle2 size={16} />} insight={available('fulfillment_rate')} />
+          <CancellationRateCard insight={available('cancellation_rate')} />
+          <FulfillmentRateCard insight={available('fulfillment_rate')} />
           <OrderHealthInsight insight={available('order_health_score')} />
         </div>
         <div className="orders-premium-insights">
@@ -306,9 +306,51 @@ function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: { insig
     </div>
   </article>
 }
-function RateInsight({ title, icon, insight }: { feature: string; title: string; icon: ReactNode; insight: ReturnType<typeof insightByFeature> }) {
-  const data = record(insight?.data); const rate = numberOrNull(data.rate)
-  return <article className="orders-basic-card"><div className="orders-insight-label">{icon}<span>{title}</span></div><strong>{rate === null ? '—' : `${rate}%`}</strong><p>{number(data.canceled ?? data.fulfilled)} of {number(data.total)} orders</p></article>
+function CancellationRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+  const data = record(insight?.data)
+  const rate = numberOrNull(data.rate)
+  const canceled = numberOrNull(data.canceled) ?? 0
+  const total = numberOrNull(data.total) ?? 0
+  const completed = Math.max(0, total - canceled)
+  const tone = rate === null ? 'muted' : rate === 0 ? 'excellent' : rate < 5 ? 'good' : rate < 10 ? 'watch' : 'attention'
+  const label = rate === null ? 'Awaiting order data' : rate === 0 ? 'Excellent — no cancellations this period' : rate < 5 ? 'Good — below typical levels' : rate < 10 ? 'Watch — review cancellation reasons' : 'Attention — cancellations elevated'
+  const sweep = total > 0 ? Math.max(8, Math.round((completed / total) * 360)) : 0
+  return <article className={`orders-basic-card rate-card cancellation ${tone}`}>
+    <div className="orders-insight-label"><AlertTriangle size={16} /><span>Cancellation Rate</span><i className={`rate-dot ${tone}`} /></div>
+    <div className="rate-card-body">
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: `conic-gradient(var(--rate-color, var(--green)) ${sweep}deg, rgba(107,114,128,.14) 0)` }}>
+        <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>canceled</span></div>
+      </div>
+      <div className="rate-facts">
+        <p><strong>{canceled}</strong><span>canceled</span></p>
+        <p><strong>{completed}</strong><span>completed</span></p>
+        <p><strong>{total}</strong><span>total orders</span></p>
+      </div>
+    </div>
+    <p className={`rate-status ${tone}`}><i />{label}</p>
+    <small className="rate-note">Industry comparison connects when benchmark data is available.</small>
+  </article>
+}
+function FulfillmentRateCard({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+  const data = record(insight?.data)
+  const rate = numberOrNull(data.rate)
+  const fulfilled = numberOrNull(data.fulfilled) ?? 0
+  const total = numberOrNull(data.total) ?? 0
+  const remaining = Math.max(0, total - fulfilled)
+  const tone = rate === null ? 'muted' : rate === 100 ? 'excellent' : rate >= 80 ? 'good' : rate >= 50 ? 'watch' : 'attention'
+  const label = rate === null ? 'Awaiting order data' : rate === 100 ? 'Excellent — every order fulfilled' : rate >= 80 ? 'On track — most orders fulfilled' : rate >= 50 ? 'Watch — fulfillment backlog' : 'Attention — many orders unfulfilled'
+  return <article className={`orders-basic-card rate-card fulfillment ${tone}`}>
+    <div className="orders-insight-label"><CheckCircle2 size={16} /><span>Fulfillment Rate</span><i className={`rate-dot ${tone}`} /></div>
+    <strong className="rate-big">{rate === null ? '—' : `${rate}%`}</strong>
+    <div className="rate-progress" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`}><i style={{ width: `${rate ?? 0}%` }} /></div>
+    <div className="rate-facts">
+      <p><strong>{fulfilled}</strong><span>fulfilled</span></p>
+      <p><strong>{remaining}</strong><span>remaining</span></p>
+      <p><strong>{total}</strong><span>total orders</span></p>
+    </div>
+    <p className={`rate-status ${tone}`}><i />{label}</p>
+    <small className="rate-note">{text(data.basis) ?? 'Shopify fulfillment status'} · industry comparison connects when benchmark data is available.</small>
+  </article>
 }
 function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
   const data = record(insight?.data)
