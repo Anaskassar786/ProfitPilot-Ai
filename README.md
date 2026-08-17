@@ -6,6 +6,42 @@ ProfitPilot is an autonomous AI employee for Shopify merchants. The repository i
 
 F0 through F9 are complete. F9 adds persisted maintenance mode with critical endpoint exemptions, per-merchant AI/automation/suspension flags, audited admin controls, live queue/dead-letter inspection and retry, four-dependency readiness probes, optional Sentry grouping/release/performance monitoring, startup environment validation with Cloudflare R2 alias normalization, migration-on-start support, worker health on port 3100, production logging/shutdown behavior, Docker/Railway deployment files, and launch/security/runbook documentation. F9 is the final blueprint phase; deployment and Shopify App Store submission are operational follow-up steps, not a new product phase.
 
+## AI Command Center (PR45 overhaul)
+
+The AI Command Center is a plan-aware AI workforce dashboard backed entirely by
+deterministic evidence — agents explain numbers, they never invent them.
+
+**The seven agents and the plans that unlock them**
+
+| Agent | Rules routed to it | Unlocked from |
+|---|---|---|
+| Revenue Agent | `REVENUE_SPIKE`, `REVENUE_DROP` | Trial |
+| Inventory Agent | `STOCKOUT_RISK`, `DEAD_STOCK` | Trial |
+| Customer Agent | `CHURN_RISK`, `REPEAT_PURCHASE` | Start ($49/mo) |
+| Pricing Agent | `PRICING_UPLIFT` | Growth ($149/mo) |
+| Campaign Agent | `CART_ABANDONMENT`, `NEW_CUSTOMER_WELCOME` | Growth ($149/mo) |
+| Product Agent | `CROSS_SELL` | Commander ($349/mo) |
+| Executive Agent | `WEEKLY_HEALTH_DIGEST` | Commander ($349/mo) |
+
+Trial unlocks 2 agents, Start 3, Growth 5, Commander all 7 — enforced
+server-side (`agentsForPlan` / `assertAgentAccess` in `@profitpilot/billing`)
+and rendered as aspirational locked cards with upgrade CTAs in the UI. An
+expired trial must upgrade to a paid plan to keep using agents.
+
+**Engine guarantees**
+
+- All 11 deterministic rules are fed real data: velocity and dead-stock
+  windows derive from `analytics_product_sales`, unit cost from variant cost
+  fields, and cross-sell pairs from synced order line co-occurrence.
+- Re-running analysis refreshes still-pending `(rule, entity)` recommendations
+  instead of duplicating them.
+- AI spend is metered durably in `ai_cost_ledger` (per agent and model) with a
+  shared daily cap; approve/reject decisions persist to
+  `ai_calibration_samples` and calibrate per-agent confidence.
+- Identical evidence hits a 24h tenant-versioned explanation cache instead of
+  a second AI call; `run-all` executes with bounded concurrency and streams
+  SSE progress.
+
 ### Workspace projects
 
 **Apps**

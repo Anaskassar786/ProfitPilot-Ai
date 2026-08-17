@@ -1,4 +1,7 @@
-import { CalibrationLedger, CostMeter, DecisionEngine, OpenRouterClient, PostgresRecommendationRepository } from '@profitpilot/ai'
+import { CalibrationLedger, DecisionEngine, OpenRouterClient, PersistentCostMeter, PostgresAgentSettingsRepository, PostgresCalibrationStore, PostgresCostLedgerStore, PostgresRecommendationRepository } from '@profitpilot/ai'
+import type { ExplanationCache } from '@profitpilot/ai'
+import { InMemoryCacheStore, TenantVersionedCache, UpstashCacheStore } from '@profitpilot/cache'
+import type { StoreId } from '@profitpilot/types'
 import { createF2Bootstrap } from './f2-bootstrap.js'
 import type { F2Bootstrap } from './f2-bootstrap.js'
 import type { AiRouteDependencies } from './ai-routes.js'
@@ -10,10 +13,30 @@ export function createF4Bootstrap(env: Readonly<Record<string, string | undefine
   const f2 = createF2Bootstrap(env)
   if (!f2) return null
   const provider = new OpenRouterClient({ keys: [env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string'), models: [env.AI_MODEL_PRIMARY, env.AI_MODEL_FALLBACK1, env.AI_MODEL_FALLBACK2].filter((model): model is string => typeof model === 'string' && model.trim().length > 0), timeoutMs: numberEnv(env, 'AI_TIMEOUT_MS', 25_000), maxRetries: numberEnv(env, 'AI_MAX_RETRIES', 1), temperature: numberEnv(env, 'AI_TEMPERATURE', .3), maxTokens: numberEnv(env, 'AI_MAX_TOKENS', 2_000) })
-  const costs = new CostMeter(numberEnv(env, 'AI_DAILY_COST_CAP_USD', 5))
+  // PR45: the daily budget is now durable (ai_cost_ledger) so restarts and
+  // horizontal scaling share one cap instead of each getting a fresh $5.
+  const costs = new PersistentCostMeter(new PostgresCostLedgerStore(f2.database), numberEnv(env, 'AI_DAILY_COST_CAP_USD', 5))
   const recommendations = new PostgresRecommendationRepository(f2.database)
-  const engine = new DecisionEngine(provider, costs, new CalibrationLedger(), recommendations, { inputRateMicroDollars: numberEnv(env, 'AI_INPUT_MICRO_DOLLARS', 0), outputRateMicroDollars: numberEnv(env, 'AI_OUTPUT_MICRO_DOLLARS', 0) })
-  return { ...f2, ai: { engine, recommendations, costs } }
+  const calibration = new CalibrationLedger(new PostgresCalibrationStore(f2.database))
+  const settings = new PostgresAgentSettingsRepository(f2.database)
+  const cache = explanationCache(env)
+  const engine = new DecisionEngine(provider, costs, calibration, recommendations, { inputRateMicroDollars: numberEnv(env, 'AI_INPUT_MICRO_DOLLARS', 0), outputRateMicroDollars: numberEnv(env, 'AI_OUTPUT_MICRO_DOLLARS', 0), concurrency: numberEnv(env, 'AI_RUN_CONCURRENCY', 3), signalCap: numberEnv(env, 'AI_RUN_SIGNAL_CAP', 100) }, () => Date.now(), cache)
+  // PR45: /recommendations/analyze previously returned 503 in production —
+  // the snapshot builder existed but was never wired into the dependencies.
+  const snapshot = (tenant: StoreId) => buildStoreSnapshot(tenant, f2.dataPlane.analytics, f2.database)
+  return { ...f2, ai: { engine, recommendations, costs, calibration, settings, snapshot } }
+}
+
+/** AI explanations are cached per tenant: same evidence ⇒ no second AI bill. */
+function explanationCache(env: Readonly<Record<string, string | undefined>>): ExplanationCache {
+  const store = env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN
+    ? new UpstashCacheStore(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN)
+    : new InMemoryCacheStore()
+  const cache = new TenantVersionedCache(store)
+  return {
+    get: async (tenant, key) => cache.get<{ text: string; model: string }>(tenant, key),
+    set: async (tenant, key, value, ttlSeconds) => cache.set(tenant, key, value, ttlSeconds),
+  }
 }
 
 function numberEnv(env: Readonly<Record<string, string | undefined>>, key: string, fallback: number): number {

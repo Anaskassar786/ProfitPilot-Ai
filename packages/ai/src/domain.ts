@@ -3,7 +3,7 @@ import type { StoreId } from '@profitpilot/types'
 export const AGENT_IDS = ['REVENUE_AGENT', 'INVENTORY_AGENT', 'CUSTOMER_AGENT', 'PRICING_AGENT', 'CAMPAIGN_AGENT', 'PRODUCT_AGENT', 'EXECUTIVE_AGENT'] as const
 export type AgentId = (typeof AGENT_IDS)[number]
 
-export const RULE_IDS = ['STOCKOUT_RISK', 'DEAD_STOCK', 'CHURN_RISK', 'PRICING_UPLIFT', 'REPEAT_PURCHASE', 'CART_ABANDONMENT', 'CROSS_SELL', 'NEW_CUSTOMER_WELCOME'] as const
+export const RULE_IDS = ['STOCKOUT_RISK', 'DEAD_STOCK', 'CHURN_RISK', 'PRICING_UPLIFT', 'REPEAT_PURCHASE', 'CART_ABANDONMENT', 'CROSS_SELL', 'NEW_CUSTOMER_WELCOME', 'REVENUE_SPIKE', 'REVENUE_DROP', 'WEEKLY_HEALTH_DIGEST'] as const
 export type RuleId = (typeof RULE_IDS)[number]
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 export type AutomationMode = 'MANUAL' | 'SEMI_AUTOMATIC' | 'FULLY_AUTOMATIC'
@@ -103,6 +103,7 @@ export type Recommendation = Readonly<{
   storeId: StoreId
   agent: AgentId
   ruleId: RuleId
+  entityKey?: string | null
   title: string
   reason: string
   impactValue: number

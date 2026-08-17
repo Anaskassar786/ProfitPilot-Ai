@@ -1,10 +1,33 @@
 import type { RuleSignal, StoreSnapshot } from './domain.js'
 import { actionRisk } from './domain.js'
+import { calculateStoreHealth } from './health.js'
 
-export const RULE_VERSION = '1.0.0'
-export type RuleConfig = Readonly<{ stockoutDays: number; deadStockDays: number; highLtvThreshold: number; churnDays: number; repeatPurchaseDays: number; cartRecoveryRate: number; crossSellRate: number; welcomeDays: number; minimumMargin: number }>
+export const RULE_VERSION = '1.1.0'
+export type RuleConfig = Readonly<{ stockoutDays: number; deadStockDays: number; highLtvThreshold: number; churnDays: number; repeatPurchaseDays: number; cartRecoveryRate: number; crossSellRate: number; welcomeDays: number; minimumMargin: number; momentumThreshold: number; healthDigestDay: number }>
 
-const DEFAULTS: RuleConfig = { stockoutDays: 7, deadStockDays: 120, highLtvThreshold: 250, churnDays: 75, repeatPurchaseDays: 45, cartRecoveryRate: .11, crossSellRate: .08, welcomeDays: 7, minimumMargin: .55 }
+const DEFAULTS: RuleConfig = { stockoutDays: 7, deadStockDays: 120, highLtvThreshold: 250, churnDays: 75, repeatPurchaseDays: 45, cartRecoveryRate: .11, crossSellRate: .08, welcomeDays: 7, minimumMargin: .55, momentumThreshold: .15, healthDigestDay: 1 }
+
+/**
+ * Machine-readable catalog of every deterministic rule, so the UI renders
+ * real rule data instead of a hard-coded "8 deterministic rules" string.
+ */
+export type RuleCatalogEntry = Readonly<{ id: string; name: string; agent: string; purpose: string; threshold: string; inputs: readonly string[]; impact: string }>
+export function ruleCatalog(config: Partial<RuleConfig> = {}): readonly RuleCatalogEntry[] {
+  const options = { ...DEFAULTS, ...config }
+  return [
+    { id: 'STOCKOUT_RISK', name: 'Stockout risk', agent: 'INVENTORY_AGENT', purpose: 'Flags products that will sell out at current velocity', threshold: `≤ ${options.stockoutDays} days of cover`, inputs: ['products.inventory_units', 'products.average_daily_units', 'products.unit_price'], impact: 'Revenue at risk before restock' },
+    { id: 'DEAD_STOCK', name: 'Dead stock', agent: 'INVENTORY_AGENT', purpose: 'Finds inventory with zero sales locking up cash', threshold: `${options.deadStockDays} days without a sale`, inputs: ['products.units_sold_120d', 'products.last_sold_at', 'products.inventory_units'], impact: 'Inventory value at risk' },
+    { id: 'CHURN_RISK', name: 'Churn risk', agent: 'CUSTOMER_AGENT', purpose: 'Detects high-value customers going quiet', threshold: `LTV ≥ ${options.highLtvThreshold} and ${options.churnDays}+ days inactive`, inputs: ['customers.lifetime_value', 'customers.last_order_at'], impact: 'Customer LTV at risk' },
+    { id: 'PRICING_UPLIFT', name: 'Pricing uplift', agent: 'PRICING_AGENT', purpose: 'Spots margin-safe price test candidates', threshold: `margin ≥ ${Math.round(options.minimumMargin * 100)}% with active demand`, inputs: ['products.unit_price', 'products.unit_cost', 'products.average_daily_units'], impact: 'Modeled 30-day uplift' },
+    { id: 'REPEAT_PURCHASE', name: 'Repeat purchase', agent: 'CUSTOMER_AGENT', purpose: 'Times reorder nudges for returning customers', threshold: `${options.repeatPurchaseDays}+ days past reorder window`, inputs: ['customers.order_count', 'customers.last_order_at'], impact: 'Modeled next order value' },
+    { id: 'CART_ABANDONMENT', name: 'Cart abandonment', agent: 'CAMPAIGN_AGENT', purpose: 'Recovers checkouts inside the winnable window', threshold: '1–48 hours old, not recovered', inputs: ['checkouts.total', 'checkouts.created_at'], impact: `Expected recovery at ${Math.round(options.cartRecoveryRate * 100)}%` },
+    { id: 'CROSS_SELL', name: 'Cross-sell pairs', agent: 'PRODUCT_AGENT', purpose: 'Pairs products customers already buy together', threshold: `co-purchase rate ≥ ${Math.round(options.crossSellRate * 100)}%`, inputs: ['orders.product_pairs'], impact: 'Modeled basket value' },
+    { id: 'NEW_CUSTOMER_WELCOME', name: 'New customer welcome', agent: 'CAMPAIGN_AGENT', purpose: 'Welcomes first orders while they are fresh', threshold: `first order within ${options.welcomeDays} days`, inputs: ['customers.order_count', 'customers.last_order_at'], impact: 'First-order value' },
+    { id: 'REVENUE_SPIKE', name: 'Revenue spike', agent: 'REVENUE_AGENT', purpose: 'Explains positive revenue momentum so it can be doubled down on', threshold: `30-day revenue up ≥ ${Math.round(options.momentumThreshold * 100)}%`, inputs: ['analytics.last_30d_revenue', 'analytics.previous_30d_revenue'], impact: 'Period-over-period gain' },
+    { id: 'REVENUE_DROP', name: 'Revenue drop', agent: 'REVENUE_AGENT', purpose: 'Flags negative revenue momentum before it compounds', threshold: `30-day revenue down ≥ ${Math.round(options.momentumThreshold * 100)}%`, inputs: ['analytics.last_30d_revenue', 'analytics.previous_30d_revenue'], impact: 'Period-over-period loss' },
+    { id: 'WEEKLY_HEALTH_DIGEST', name: 'Weekly health digest', agent: 'EXECUTIVE_AGENT', purpose: 'Summarizes the deterministic store health score for the merchant', threshold: 'Health score computable from closed periods', inputs: ['health.score', 'health.components'], impact: 'Store health awareness' },
+  ]
+}
 
 export function runDeterministicRules(snapshot: StoreSnapshot, config: Partial<RuleConfig> = {}): readonly RuleSignal[] {
   const options = { ...DEFAULTS, ...config }
@@ -17,9 +40,46 @@ export function runDeterministicRules(snapshot: StoreSnapshot, config: Partial<R
     ...cartSignals(snapshot, options),
     ...crossSellSignals(snapshot, options),
     ...welcomeSignals(snapshot, options),
+    ...revenueMomentumSignals(snapshot, options),
+    ...healthDigestSignals(snapshot),
   ]
   return signals.sort((left, right) => right.impactValue - left.impactValue)
 }
+
+function revenueMomentumSignals(snapshot: StoreSnapshot, config: RuleConfig): RuleSignal[] {
+  if (snapshot.previous30dRevenue <= 0 || snapshot.last30dRevenue < 0) return []
+  const change = (snapshot.last30dRevenue - snapshot.previous30dRevenue) / snapshot.previous30dRevenue
+  const evidence = [
+    { key: 'last_30d_revenue', label: 'Last 30-day revenue', value: round(snapshot.last30dRevenue), source: 'analytics.revenue_daily' },
+    { key: 'previous_30d_revenue', label: 'Previous 30-day revenue', value: round(snapshot.previous30dRevenue), source: 'analytics.revenue_daily' },
+    { key: 'change_percent', label: 'Period change percent', value: round(change * 100), source: 'analytics.revenue_daily' },
+    { key: 'last_30d_orders', label: 'Last 30-day orders', value: snapshot.last30dOrders, source: 'analytics.orders_daily' },
+  ] as const
+  if (change >= config.momentumThreshold) {
+    return [signal('REVENUE_SPIKE', 'REVENUE_AGENT', 'Revenue is accelerating — protect the streak', `Closed-period revenue is up ${format(change * 100)}% versus the previous 30 days.`, snapshot.last30dRevenue - snapshot.previous30dRevenue, 'period-over-period gain', snapshot.currency, .85, 'CREATE_RECOMMENDATION', 'revenue:30d', [...evidence])]
+  }
+  if (change <= -config.momentumThreshold) {
+    return [signal('REVENUE_DROP', 'REVENUE_AGENT', 'Revenue momentum is slipping', `Closed-period revenue is down ${format(Math.abs(change) * 100)}% versus the previous 30 days.`, snapshot.previous30dRevenue - snapshot.last30dRevenue, 'period-over-period loss', snapshot.currency, .85, 'INTERNAL_ALERT', 'revenue:30d', [...evidence])]
+  }
+  return []
+}
+
+function healthDigestSignals(snapshot: StoreSnapshot): RuleSignal[] {
+  const health = calculateStoreHealth(snapshot)
+  if (health.score === null) return []
+  const componentEvidence = health.components.filter((component) => component.score !== null).map((component) => ({ key: component.key, label: component.reason, value: component.score, source: `health.${component.key}` }))
+  return [signal('WEEKLY_HEALTH_DIGEST', 'EXECUTIVE_AGENT', 'Weekly store health digest', `The deterministic health score for this store is ${health.score} out of 100.`, health.score, 'health score out of 100', snapshot.currency, .8, 'INTERNAL_ALERT', `health:${weekKey(snapshot.asOf)}`, [{ key: 'health_score', label: 'Store health score', value: health.score, source: 'health.deterministic-v1' }, ...componentEvidence])]
+}
+
+function weekKey(asOf: string): string {
+  const date = new Date(asOf)
+  const day = Number.isFinite(date.valueOf()) ? date : new Date()
+  const year = day.getUTCFullYear()
+  const start = Date.UTC(year, 0, 1)
+  const week = Math.floor((day.valueOf() - start) / (7 * 86_400_000))
+  return `${year}-w${week}`
+}
+
 
 function stockoutSignals(snapshot: StoreSnapshot, config: RuleConfig): RuleSignal[] {
   return snapshot.products.filter((product) => product.averageDailyUnits > 0 && product.inventoryUnits / product.averageDailyUnits <= config.stockoutDays).map((product) => {
@@ -29,7 +89,12 @@ function stockoutSignals(snapshot: StoreSnapshot, config: RuleConfig): RuleSigna
 }
 
 function deadStockSignals(snapshot: StoreSnapshot, config: RuleConfig): RuleSignal[] {
-  return snapshot.products.filter((product) => product.unitsSold120d === 0 && (product.daysSinceLastSale ?? config.deadStockDays) >= config.deadStockDays).map((product) => signal('DEAD_STOCK', 'INVENTORY_AGENT', `Unlock cash in ${product.title}`, `${product.title} has had zero sales across the last ${config.deadStockDays} days.`, product.inventoryUnits * product.unitPrice, 'inventory value at risk', snapshot.currency, .86, 'CREATE_RECOMMENDATION', product.productId, [{ key: 'days_without_sale', label: 'Days without sale', value: product.daysSinceLastSale ?? config.deadStockDays, source: 'products.last_sold_at' }, { key: 'units_on_hand', label: 'Units on hand', value: product.inventoryUnits, source: 'products.inventory_units' }]))
+  // Guard against data starvation: a store with no sales evidence at all must
+  // not flag its entire catalog as dead stock. Require observed sales history
+  // somewhere in the store and units actually on hand for the product.
+  const storeHasSalesEvidence = snapshot.products.some((product) => product.unitsSold120d > 0) || snapshot.last30dOrders > 0 || snapshot.previous30dOrders > 0
+  if (!storeHasSalesEvidence) return []
+  return snapshot.products.filter((product) => product.inventoryUnits > 0 && product.unitsSold120d === 0 && (product.daysSinceLastSale ?? config.deadStockDays) >= config.deadStockDays).map((product) => signal('DEAD_STOCK', 'INVENTORY_AGENT', `Unlock cash in ${product.title}`, `${product.title} has had zero sales across the last ${config.deadStockDays} days.`, product.inventoryUnits * product.unitPrice, 'inventory value at risk', snapshot.currency, .86, 'CREATE_RECOMMENDATION', product.productId, [{ key: 'days_without_sale', label: 'Days without sale', value: product.daysSinceLastSale ?? config.deadStockDays, source: 'products.last_sold_at' }, { key: 'units_on_hand', label: 'Units on hand', value: product.inventoryUnits, source: 'products.inventory_units' }]))
 }
 
 function churnSignals(snapshot: StoreSnapshot, config: RuleConfig): RuleSignal[] {

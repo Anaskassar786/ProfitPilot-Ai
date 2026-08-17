@@ -24,6 +24,43 @@ A `503 DEPENDENCY_ERROR` from `/sync` carries `details.reason`:
 `SHOPIFY_CIRCUIT_OPEN` (retry after `retryAfterMs`, or reset) or
 `SHOPIFY_TOKEN_MISSING` (hard refresh the embedded app).
 
+## AI Command Center (PR45)
+
+Every endpoint is tenant-scoped by `storeId` and plan-gated: agents a store's
+plan does not unlock return `403` with `details.reason = UPGRADE_REQUIRED` and
+`details.requiredPlan` set to the cheapest tier that unlocks them.
+
+- `GET /ai/agents` — legacy global status contract (all seven agents).
+- `GET /ai/agents?storeId=` — plan-aware overview: `{ plan, unlockedCount,
+  totalCount, agents[] }` where each agent carries `locked`, `requiredPlan`,
+  `paused`, `execution`, `tagline`, and `sampleInsight`.
+- `PATCH /ai/agents/:agentId?storeId=` — body `{ paused: boolean }`; persists
+  pause/resume to `ai_agent_settings` (unlocked agents only).
+- `POST /ai/agents/:agentId/run?storeId=` — run one agent on demand. `409` when
+  the agent is paused, `403` when locked.
+- `GET /ai/agents/:agentId/activity?storeId=` — the agent's last 20
+  recommendations (runs, outcomes, impact).
+- `POST /ai/run-all?storeId=` — runs every unlocked, unpaused agent with
+  bounded concurrency and streams `text/event-stream` frames: `start`
+  (`runnable`, `skipped` with `LOCKED`/`PAUSED` reasons), `progress`
+  (`agent`, `completed`, `total`), `done` (`recommendations`, `deduplicated`,
+  `cacheHits`, `health`), `error`.
+- `GET /ai/rules` — the deterministic rule catalog (name, owning agent,
+  purpose, live thresholds, inputs, impact semantics).
+- `GET /ai/health?storeId=` — the deterministic store health score and its
+  weighted components.
+- `GET /ai/cost?storeId=` — today's AI spend vs. the daily cap, read from the
+  durable `ai_cost_ledger` (survives restarts, shared across instances).
+- `GET /ai/cost/breakdown?storeId=` — today's spend grouped per agent and
+  model with token counts.
+- `POST /recommendations/analyze?storeId=` — full analysis across the plan's
+  unlocked agents. Re-runs refresh still-`PENDING` recommendations for the
+  same `(rule, entity)` instead of duplicating them; the response reports
+  `deduplicated` and `cacheHits`.
+- `POST /recommendations/:id/approve|reject` — CAS decision by
+  `expectedVersion`; outcomes now feed the per-agent calibration ledger
+  (`ai_calibration_samples`), so confidence caps learn from merchant feedback.
+
 ## Inventory
 
 - `GET /inventory?storeId=&q=&status=&category=&vendor=&locationId=&sort=&direction=&page=&limit=&lowStockThreshold=`
