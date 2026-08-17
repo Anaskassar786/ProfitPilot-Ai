@@ -236,6 +236,57 @@
   border-color: var(--border-default) !important;
 }
 
+.app-shell.light-mode .payment-paid,
+.app-shell.light-mode .status-completed,
+.light-mode .payment-paid,
+.light-mode .status-completed {
+  color: #047857 !important;
+  background: rgba(16,185,129,.12) !important;
+  border-color: rgba(16,185,129,.25) !important;
+}
+.app-shell.light-mode .payment-pending,
+.app-shell.light-mode .status-pending,
+.light-mode .payment-pending,
+.light-mode .status-pending {
+  color: #B45309 !important;
+  background: rgba(245,158,11,.12) !important;
+  border-color: rgba(245,158,11,.25) !important;
+}
+.app-shell.light-mode .payment-not_paid,
+.app-shell.light-mode .status-canceled,
+.light-mode .payment-not_paid,
+.light-mode .status-canceled {
+  color: #B91C1C !important;
+  background: rgba(239,68,68,.12) !important;
+  border-color: rgba(239,68,68,.25) !important;
+}
+.app-shell.light-mode .status-new,
+.light-mode .status-new {
+  color: #1D4ED8 !important;
+  background: rgba(37,99,235,.12) !important;
+  border-color: rgba(37,99,235,.25) !important;
+}
+.app-shell.light-mode .order-id,
+.light-mode .order-id {
+  color: #2563EB !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .order-customer > span,
+.light-mode .order-customer > span {
+  background: rgba(37,99,235,.1) !important;
+  color: #1D4ED8 !important;
+  border-color: rgba(37,99,235,.25) !important;
+}
+.app-shell.light-mode .order-details-drawer,
+.light-mode .order-details-drawer {
+  background: #FFFFFF !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .order-details-drawer > header,
+.light-mode .order-details-drawer > header {
+  background: linear-gradient(145deg, rgba(37,99,235,.06), transparent) !important;
+}
+
 
 /* ─── PR #38 Commit 6: Orders fixes ─── */
 .orders-insights-head-actions { gap: 12px !important; }

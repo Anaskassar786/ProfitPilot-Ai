@@ -1049,10 +1049,24 @@
 .app-shell.light-mode .cal-cell,
 .light-mode .cal-cell {
   border-color: transparent !important;
+  background-color: #F1F5F9;
 }
 .app-shell.light-mode .cal-cell.has-data,
 .light-mode .cal-cell.has-data {
-  background-color: rgba(16,185,129,.15) !important;
+  background-color: rgba(16,185,129,.18) !important;
+}
+.app-shell.light-mode .cal-day-number,
+.light-mode .cal-day-number {
+  color: #111827 !important;
+}
+.app-shell.light-mode .cal-cell.other .cal-day-number,
+.light-mode .cal-cell.other .cal-day-number {
+  color: #9CA3AF !important;
+}
+.app-shell.light-mode .customer-avatar-timeline,
+.light-mode .customer-avatar-timeline {
+  background: rgba(37,99,235,.1) !important;
+  color: #1D4ED8 !important;
 }
 .app-shell.light-mode .ai-summary-card,
 .light-mode .ai-summary-card {

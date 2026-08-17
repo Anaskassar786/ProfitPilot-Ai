@@ -38,6 +38,28 @@
 .f8-thread { width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 10px; color: var(--text-secondary); border-radius: 7px; background: transparent; font-size: 9px; text-align: left; }
 .f8-thread:hover, .f8-thread.active { color: var(--text); background: var(--card-hover); }
 .f8-thread small { color: var(--text-tertiary); font-size: 8px; }
+
+/* Light mode overrides for F8 */
+.light-mode .f8-answer,
+.app-shell.light-mode .f8-answer {
+  background: rgba(37,99,235,.04);
+  border-color: var(--border-default);
+}
+.light-mode .f8-answer p,
+.app-shell.light-mode .f8-answer p {
+  color: var(--text-primary);
+}
+.light-mode .f8-thread,
+.app-shell.light-mode .f8-thread {
+  color: var(--text-secondary);
+}
+.light-mode .f8-thread:hover,
+.light-mode .f8-thread.active,
+.app-shell.light-mode .f8-thread:hover,
+.app-shell.light-mode .f8-thread.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 .f8-report-grid { margin-top: 15px; }
 .report-generate-controls { display: flex; align-items: center; gap: 7px; }
 .report-generate-controls select { min-height: 32px; padding: 0 8px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 7px; background: var(--card); font-size: 9px; }

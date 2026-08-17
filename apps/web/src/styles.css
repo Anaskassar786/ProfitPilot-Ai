@@ -104,35 +104,35 @@ input, textarea { color: var(--text); }
 .app-shell.light-mode {
   --background: #F8FAFC;
   --card: #FFFFFF;
-  --card-hover: #F3F5F8;
-  --border: #E5E7EB;
-  --border-soft: rgba(17,24,39,.08);
+  --card-hover: #F1F5F9;
+  --border: #E2E8F0;
+  --border-soft: #E2E8F0;
   --text: #111827;
-  --text-secondary: #4B5563;
-  --text-tertiary: #6B7280;
+  --text-secondary: #374151;
+  --text-tertiary: #4B5563;
   --blue: #2563EB;
-  --blue-bright: #3B82F6;
+  --blue-bright: #2563EB;
   --green: #059669;
   --amber: #D97706;
   --red: #DC2626;
   --profit: #D97706;
   --purple: #7C3AED;
   --cyan: #0891B2;
-  --shadow-sm: 0 1px 2px rgba(17,24,39,.06);
-  --shadow-md: 0 4px 6px rgba(17,24,39,.07);
-  --shadow-lg: 0 10px 15px rgba(17,24,39,.08);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
   --shadow-glow: none;
 
   /* Semantic Light Overrides */
   --bg-primary: #F8FAFC;
-  --bg-secondary: #F3F5F8;
+  --bg-secondary: #F1F5F9;
   --bg-surface: #FFFFFF;
   --bg-surface-soft: #FFFFFF;
-  --bg-hover: #F3F5F8;
-  --border-default: #E5E7EB;
+  --bg-hover: #F1F5F9;
+  --border-default: #E2E8F0;
   --text-primary: #111827;
   --accent-blue: #2563EB;
-  --accent-blue-bright: #3B82F6;
+  --accent-blue-bright: #2563EB;
   --accent-green: #059669;
   --accent-amber: #D97706;
   --accent-red: #DC2626;
@@ -141,8 +141,8 @@ input, textarea { color: var(--text); }
   --accent-cyan: #0891B2;
   --elevation-card: #FFFFFF;
   --elevation-card-soft: #FFFFFF;
-  --elevation-card-soft-2: #F9FAFB;
-  --elevation-tabs: #F3F5F8;
+  --elevation-card-soft-2: #F8FAFC;
+  --elevation-tabs: #F1F5F9;
 
   background: radial-gradient(circle at 80% -12%, rgba(92,138,233,.12), transparent 33%), var(--background);
 }
@@ -584,6 +584,49 @@ td { font-size: var(--text-sm) !important; height: 64px !important; }
   border-color: var(--border-default) !important;
 }
 
+/* Performance badges light mode */
+.app-shell.light-mode .performance-badge.excellent,
+.light-mode .performance-badge.excellent {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .performance-badge.good,
+.light-mode .performance-badge.good {
+  color: #1D4ED8 !important;
+  background: rgba(37, 99, 235, 0.14) !important;
+  border-color: rgba(37, 99, 235, 0.3) !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .performance-badge.bad,
+.light-mode .performance-badge.bad {
+  color: #B91C1C !important;
+  background: rgba(220, 38, 38, 0.14) !important;
+  border-color: rgba(220, 38, 38, 0.3) !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .performance-badge.new,
+.app-shell.light-mode .performance-badge.muted,
+.light-mode .performance-badge.new,
+.light-mode .performance-badge.muted {
+  color: #4B5563 !important;
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .performance-gauge::after,
+.light-mode .performance-gauge::after,
+.app-shell.light-mode .average-performance-meter::after,
+.light-mode .average-performance-meter::after {
+  background: #FFFFFF !important;
+}
+.app-shell.light-mode .performance-gauge span,
+.light-mode .performance-gauge span {
+  color: #111827 !important;
+  font-weight: 700 !important;
+}
+
 /* Custom select light */
 .app-shell.light-mode .custom-select-trigger,
 .light-mode .custom-select-trigger {
@@ -611,7 +654,25 @@ td { font-size: var(--text-sm) !important; height: 64px !important; }
   color: var(--text-secondary) !important;
 }
 .app-shell.light-mode tbody tr:hover {
-  background: rgba(59,130,246,.04) !important;
+  background: rgba(37,99,235,.04) !important;
+}
+
+/* Form inputs light */
+.app-shell.light-mode input,
+.app-shell.light-mode textarea,
+.app-shell.light-mode select,
+.light-mode input,
+.light-mode textarea,
+.light-mode select {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.app-shell.light-mode .settings-panel,
+.light-mode .settings-panel,
+.app-shell.light-mode .setting-row,
+.light-mode .setting-row {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
 }
 
 /* Chart tooltips light */
@@ -625,6 +686,9 @@ td { font-size: var(--text-sm) !important; height: 64px !important; }
 }
 .app-shell.light-mode .recharts-text {
   fill: var(--text-tertiary) !important;
+}
+.app-shell.light-mode .recharts-cartesian-grid line {
+  stroke: var(--border-default) !important;
 }
 
 /* Preserve Jarvis Orb - never override */

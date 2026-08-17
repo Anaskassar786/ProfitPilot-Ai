@@ -345,6 +345,40 @@
   color: var(--text-primary) !important;
 }
 
+.app-shell.light-mode .inventory-badge.status-in_stock,
+.light-mode .inventory-badge.status-in_stock {
+  color: #047857 !important;
+  background: rgba(16,185,129,.12) !important;
+  border-color: rgba(16,185,129,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-low,
+.light-mode .inventory-badge.status-low {
+  color: #B45309 !important;
+  background: rgba(245,158,11,.12) !important;
+  border-color: rgba(245,158,11,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-out,
+.light-mode .inventory-badge.status-out {
+  color: #B91C1C !important;
+  background: rgba(239,68,68,.12) !important;
+  border-color: rgba(239,68,68,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-untracked,
+.light-mode .inventory-badge.status-untracked {
+  color: #4B5563 !important;
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+}
+.app-shell.light-mode .inventory-details-drawer,
+.light-mode .inventory-details-drawer {
+  background: #FFFFFF !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .inventory-details-drawer > header,
+.light-mode .inventory-details-drawer > header {
+  background: linear-gradient(145deg, rgba(37,99,235,.06), transparent) !important;
+}
+
 
 /* ─── PR #38 Commit 8: Inventory modern redesign ─── */
 .inventory-overview-grid { gap: 16px !important; }
