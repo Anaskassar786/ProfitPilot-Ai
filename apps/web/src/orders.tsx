@@ -359,14 +359,14 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
     </div>
     <div className="rate-divider" />
-    <div className="rate-metrics">
-      <div className="rate-mini-stat" title="Unfulfilled orders from the current order data">
-        <span className="rate-mini-icon"><Package size={13} /></span>
-        <div><small>Pending</small><strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong></div>
+    <div className="rate-metrics" aria-label="Fulfillment details">
+      <div className="rate-detail-row" title="Unfulfilled orders from the current order data">
+        <span className="rate-detail-label"><Package size={15} /><span>Pending</span></span>
+        <strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong>
       </div>
-      <div className="rate-mini-stat" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
-        <span className="rate-mini-icon"><Clock3 size={13} /></span>
-        <div><small>Avg Fulfill Time</small><strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong></div>
+      <div className="rate-detail-row" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
+        <span className="rate-detail-label"><Clock3 size={15} /><span>Avg Fulfill Time</span></span>
+        <strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong>
       </div>
     </div>
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
