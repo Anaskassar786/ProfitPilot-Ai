@@ -111,12 +111,10 @@ function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | un
  */
 function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, JarvisActionTool>>> {
   const decide = async (storeId: string, recommendationId: string, status: 'APPROVED' | 'REJECTED') => {
-    // Recommendations use optimistic concurrency via version; Jarvis confirms
-    // the current pending version before applying the decision.
-    const result = await f7.database.query<{ version: number }>('SELECT version FROM ai_recommendations WHERE store_id = $1 AND id = $2 AND status = $3 LIMIT 1', [storeId, recommendationId, 'PENDING'])
-    const current = result.rows[0]
-    if (!current) throw new Error('That recommendation is not pending or could not be found.')
-    await f7.ai.recommendations.decide(storeId as import('@profitpilot/types').StoreId, recommendationId, current.version, status)
+    // PR #46: single atomic UPDATE guarded by status = 'PENDING'. The old
+    // SELECT-version-then-UPDATE pattern had a race window that could clobber
+    // a concurrent merchant decision.
+    await f7.ai.recommendations.decidePending(storeId as import('@profitpilot/types').StoreId, recommendationId, status, { decidedBy: 'jarvis' })
     return status === 'APPROVED' ? 'Recommendation approved — its workflow is now cleared to run.' : 'Recommendation rejected.'
   }
   return {

@@ -7,9 +7,11 @@ export const RULE_IDS = ['STOCKOUT_RISK', 'DEAD_STOCK', 'CHURN_RISK', 'PRICING_U
 export type RuleId = (typeof RULE_IDS)[number]
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 export type AutomationMode = 'MANUAL' | 'SEMI_AUTOMATIC' | 'FULLY_AUTOMATIC'
-export type RecommendationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED'
+export type RecommendationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED'
 export type ActionType = 'CREATE_RECOMMENDATION' | 'TAG_CUSTOMER' | 'SEND_EMAIL' | 'CREATE_DISCOUNT' | 'INTERNAL_ALERT'
 export type ActionRisk = 'SAFE' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY'
+export type RejectReason = 'WRONG_DATA' | 'NOT_RELEVANT' | 'BAD_TIMING' | 'ALREADY_HANDLED' | 'OTHER'
+export const REJECT_REASONS = ['WRONG_DATA', 'NOT_RELEVANT', 'BAD_TIMING', 'ALREADY_HANDLED', 'OTHER'] as const
 
 export type ProductContext = Readonly<{
   productId: string
@@ -119,6 +121,17 @@ export type Recommendation = Readonly<{
   model: string | null
   version: number
   createdAt: string
+  /** The product/customer/checkout the rule fired on. Null for store-wide signals. */
+  entityKey: string | null
+  /** ISO timestamp after which a PENDING recommendation is stale. Null = evergreen. */
+  expiresAt: string | null
+  /** Populated when the recommendation leaves PENDING (approve/reject/expire). */
+  decidedAt: string | null
+  /** Opaque user id of the approver/rejecter; 'system' for automatic expiry. */
+  decidedBy: string | null
+  rejectReason: RejectReason | null
+  /** Server-side snooze; a snoozed rec is hidden from passive surfaces until then. */
+  snoozedUntil: string | null
 }>
 
 export function confidenceLevel(value: number): ConfidenceLevel {
@@ -131,4 +144,38 @@ export function actionRisk(actionType: ActionType): ActionRisk {
   if (actionType === 'CREATE_RECOMMENDATION' || actionType === 'INTERNAL_ALERT' || actionType === 'TAG_CUSTOMER') return 'SAFE'
   if (actionType === 'SEND_EMAIL' || actionType === 'CREATE_DISCOUNT') return 'APPROVAL_REQUIRED'
   return 'MANUAL_ONLY'
+}
+
+/**
+ * Time sensitivity derived from rule semantics (PR #46). Returns the ISO
+ * expiry for a signal generated at `generatedAt`, or null for evergreen rules.
+ * - CART_ABANDONMENT: recovery window closes 48h after checkout creation, so
+ *   the remaining window is 48h minus the checkout's current age.
+ * - STOCKOUT_RISK: the recommendation is moot once the projected days of
+ *   cover have elapsed.
+ * - NEW_CUSTOMER_WELCOME: welcome emails stop being "welcome" after 7 days.
+ * - REPEAT_PURCHASE / CHURN_RISK: re-evaluated on each analysis run; a 14-day
+ *   expiry keeps stale copies from lingering between runs.
+ */
+export function deriveExpiry(ruleId: RuleId, evidence: readonly Readonly<{ key: string; value: string | number | boolean | null }>[], generatedAt: string): string | null {
+  const generated = Date.parse(generatedAt)
+  if (!Number.isFinite(generated)) return null
+  const hours = (count: number): string => new Date(generated + count * 3_600_000).toISOString()
+  if (ruleId === 'CART_ABANDONMENT') {
+    const age = numericEvidence(evidence, 'age_hours')
+    const remaining = Math.max(1, 48 - (age ?? 0))
+    return hours(remaining)
+  }
+  if (ruleId === 'STOCKOUT_RISK') {
+    const cover = numericEvidence(evidence, 'days_of_cover')
+    return cover !== null ? hours(Math.max(6, cover * 24)) : hours(7 * 24)
+  }
+  if (ruleId === 'NEW_CUSTOMER_WELCOME') return hours(7 * 24)
+  if (ruleId === 'REPEAT_PURCHASE' || ruleId === 'CHURN_RISK') return hours(14 * 24)
+  return null
+}
+
+function numericEvidence(evidence: readonly Readonly<{ key: string; value: string | number | boolean | null }>[], key: string): number | null {
+  const field = evidence.find((item) => item.key === key)
+  return typeof field?.value === 'number' && Number.isFinite(field.value) ? field.value : null
 }

@@ -7,7 +7,7 @@ import { CalibrationLedger } from './calibration.js'
 import { calculateStoreHealth } from './health.js'
 import { CostCapExceededError, CostMeter } from './cost.js'
 import type { AgentStatus, Recommendation, RuleSignal, StoreSnapshot } from './domain.js'
-import { confidenceLevel } from './domain.js'
+import { confidenceLevel, deriveExpiry } from './domain.js'
 import { runDeterministicRules } from './rules.js'
 import { AiUnavailableError, OpenRouterClient } from './provider.js'
 import { validateLanguageResponse } from './language.js'
@@ -39,9 +39,16 @@ export class DecisionEngine {
     return agentStatuses(this.provider.configured, enabledAgents)
   }
 
-  public async run(snapshot: StoreSnapshot): Promise<DecisionRun> {
+  /**
+   * `maxRecommendations` lets the caller respect the tenant's remaining plan
+   * quota: signals are already sorted by impact, so trimming keeps the most
+   * valuable ones (PR #46).
+   */
+  public async run(snapshot: StoreSnapshot, options: Readonly<{ maxRecommendations?: number }> = {}): Promise<DecisionRun> {
     const health = calculateStoreHealth(snapshot)
-    const signals = runDeterministicRules(snapshot)
+    const allSignals = runDeterministicRules(snapshot)
+    const max = options.maxRecommendations
+    const signals = typeof max === 'number' && Number.isFinite(max) ? allSignals.slice(0, Math.max(0, Math.floor(max))) : allSignals
     const generatedAt = new Date(this.now()).toISOString()
     const recommendations: Recommendation[] = []
     for (const signal of signals) {
@@ -71,6 +78,6 @@ export class DecisionEngine {
         explanationStatus = error instanceof AppError && error.code === 'VALIDATION_ERROR' ? 'AI_REJECTED' : 'AI_UNAVAILABLE'
       }
     }
-    return { id: randomUUID(), storeId: snapshot.storeId, agent: signal.agent, ruleId: signal.ruleId, title: signal.title, reason: signal.reason, impactValue: signal.impactValue, impactLabel: signal.impactLabel, currency: signal.currency, confidence: calibrated.score, confidenceLevel: confidenceLevel(calibrated.score), actionType: signal.actionType, actionRisk: signal.actionRisk, status: 'PENDING', evidencePack, explanation, explanationStatus, model, version: 0, createdAt: generatedAt }
+    return { id: randomUUID(), storeId: snapshot.storeId, agent: signal.agent, ruleId: signal.ruleId, title: signal.title, reason: signal.reason, impactValue: signal.impactValue, impactLabel: signal.impactLabel, currency: signal.currency, confidence: calibrated.score, confidenceLevel: confidenceLevel(calibrated.score), actionType: signal.actionType, actionRisk: signal.actionRisk, status: 'PENDING', evidencePack, explanation, explanationStatus, model, version: 0, createdAt: generatedAt, entityKey: signal.entityKey, expiresAt: deriveExpiry(signal.ruleId, signal.evidence, generatedAt), decidedAt: null, decidedBy: null, rejectReason: null, snoozedUntil: null }
   }
 }
