@@ -13,6 +13,8 @@ export const SHOPIFY_WEBHOOK_TOPICS = [
   'orders/cancelled',
   'orders/fulfilled',
   'orders/edited',
+  'customers/create',
+  'customers/update',
   'products/create',
   'products/update',
   'products/delete',

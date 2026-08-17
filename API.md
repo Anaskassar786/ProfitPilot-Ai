@@ -1,4 +1,6 @@
-# ProfitPilot API reference
+# ProfitPilot API
+
+> Professional Automation endpoint and safety documentation: [`docs/AUTOMATION.md`](docs/AUTOMATION.md). reference
 
 All successful responses use `{ ok: true, data, meta }`; failures use a typed error envelope. Browser clients use relative URLs.
 

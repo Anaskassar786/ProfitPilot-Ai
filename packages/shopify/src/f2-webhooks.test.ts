@@ -7,7 +7,7 @@ const body = '{"id":1}'
 const event = (id = 'webhook-1') => ({ storeId: storeId('store-1'), webhookId: id, topic: 'orders/create', rawBody: body, signature: createHmac('sha256', 'secret').update(body).digest('base64') })
 
 describe('Shopify F2 webhook topics and retry ledger', () => {
-  it('registers all eighteen required topics', () => expect(SHOPIFY_WEBHOOK_TOPICS).toHaveLength(18))
+  it('registers all twenty required topics', () => expect(SHOPIFY_WEBHOOK_TOPICS).toHaveLength(20))
   it('claims a webhook receipt once', async () => {
     const ledger = new InMemoryWebhookProcessingLedger()
     expect(await ledger.begin(event(), 100)).toBe(true)
