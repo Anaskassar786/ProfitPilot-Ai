@@ -68,7 +68,10 @@ describe('PR45 snapshot integration', () => {
     }
     const database = {
       query: async (text: string, values?: readonly unknown[]) => {
-        if (values?.[1] === 'orders') return { rows: [{ payload: { line_items: [{ product_id: 'p1' }, { product_id: 'p2' }] } }], rowCount: 1 }
+        if (values?.[1] === 'orders') return { rows: [
+          { payload: { id: 'o1', line_items: [{ product_id: 'p1' }, { product_id: 'p2' }] } },
+          { payload: { id: 'o2', line_items: [{ product_id: 'p1' }, { product_id: 'p2' }] } },
+        ], rowCount: 2 }
         return { rows: [], rowCount: 0 }
       },
     }

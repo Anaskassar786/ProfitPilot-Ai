@@ -194,8 +194,8 @@ describe('PR45 run-all SSE stream', () => {
 describe('PR45 calibration feedback on decisions', () => {
   it('records approve/reject outcomes into the calibration ledger', async () => await withServer(async ({ base, deps }) => {
     await fetch(`${base}/ai/agents/REVENUE_AGENT/run?storeId=s`, { method: 'POST', body: '{}' })
-    const list = (await (await fetch(`${base}/recommendations?storeId=s`)).json()).data as readonly { id: string; version: number }[]
-    const target = list[0]
+    const page = (await (await fetch(`${base}/recommendations?storeId=s`)).json()).data as { items: readonly { id: string; version: number }[] }
+    const target = page.items[0]
     if (!target) throw new Error('expected a recommendation')
     const approve = await fetch(`${base}/recommendations/${target.id}/approve?storeId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedVersion: target.version }) })
     expect(approve.status).toBe(200)

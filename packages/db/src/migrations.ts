@@ -66,7 +66,15 @@ export const AUTOMATION_PROFESSIONAL_MIGRATIONS: readonly Migration[] = [
   { id: '0018', filename: '0018_professional_automation.sql', sql: 'professional workflows, immutable versions, runs, approvals, and notifications' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS]
+export const AI_COMMAND_CENTER_MIGRATIONS: readonly Migration[] = [
+  { id: '0019', filename: '0019_ai_command_center.sql', sql: 'AI cost attribution, recommendation dedupe, and agent settings' },
+]
+
+export const RECOMMENDATION_LIFECYCLE_MIGRATIONS: readonly Migration[] = [
+  { id: '0020', filename: '0020_recommendation_lifecycle.sql', sql: 'recommendation decision audit, entity linkage, expiry, and snooze state' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

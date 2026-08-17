@@ -1,4 +1,4 @@
-import { AppError } from '@profitpilot/types'
+import { AppError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
 import type { PlanTier } from '@profitpilot/types'
 import type { BillingState, Subscription } from './billing.js'
 import type { AgentName, EntitlementKey } from './plans.js'
@@ -12,14 +12,11 @@ export class UpgradeRequiredError extends AppError {
   }
 }
 
-const TRIAL_LIMITS: Readonly<Record<EntitlementKey, number | null>> = { orders_sync_month: 100, products_sync: 100, customers_sync: 100, ai_recommendations_month: 10, active_agents: 2, jarvis_messages_month: 60, automation_workflows: 2, active_campaigns: 1, email_sends_month: 100, sms_sends_month: 0, team_members: 1, reports: 1, exports: 0, forecasting: 0, attribution: 0 }
-
 export type GateContext = Readonly<{ feature: EntitlementKey; used: number; billingPage?: boolean; support?: boolean; legal?: boolean }>
 export type GateDecision = Readonly<{ allowed: boolean; readOnly: boolean; limit: number | null; remaining: number | null; reason: string | null }>
 
 export function limitForPlan(plan: PlanTier, feature: EntitlementKey): number | null {
-  if (plan === 'trial') return TRIAL_LIMITS[feature]
-  return PLAN_DEFINITIONS[plan === 'start' ? 'START' : plan === 'growth' ? 'GROWTH' : 'COMMANDER'].limits[feature]
+  return PLAN_ENTITLEMENT_LIMITS[plan][feature]
 }
 
 export function accessGate(subscription: Subscription, context: GateContext): GateDecision {

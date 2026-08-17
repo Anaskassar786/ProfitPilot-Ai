@@ -326,8 +326,54 @@ export async function runAllAgents(storeId: string, onEvent: (event: RunAllEvent
 }
 
 
+/**
+ * PR #46: the list endpoint returns a page envelope. This wrapper keeps the
+ * older array-shaped call sites (passive Jarvis card) working.
+ */
 export function fetchRecommendations(storeId: string, fetcher: Fetcher = fetch): Promise<readonly Recommendation[]> {
-  return requestJson<readonly Recommendation[]>(`/recommendations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+  return fetchRecommendationPage(storeId, {}, fetcher).then((page) => page.items as unknown as readonly Recommendation[])
+}
+
+export function fetchRecommendationPage(storeId: string, filters: import('./recommendations-model.js').RecommendationListFilters = {}, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationPage> {
+  const params = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && String(value).length > 0) params.set(key, String(value))
+  }
+  return requestJson(`/recommendations?${params.toString()}`, {}, fetcher)
+}
+
+export function fetchRecommendationSummary(storeId: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationSummary> {
+  return requestJson(`/recommendations/summary?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchRecommendation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function verifyRecommendationEvidence(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').EvidenceVerification> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/evidence/verify?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function undoRecommendationDecision(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/undo?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, fetcher)
+}
+
+export function snoozeRecommendation(storeId: string, id: string, hours: number, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/snooze?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ hours }) }, fetcher)
+}
+
+export function executeRecommendation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ recommendation: import('./recommendations-model.js').RecommendationView; execution: Readonly<Record<string, unknown>> }>> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/execute?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, fetcher)
+}
+
+export function bulkDecideRecommendations(storeId: string, decisions: readonly Readonly<{ id: string; expectedVersion: number; decision: 'approve' | 'reject'; reason?: string }>[], fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').BulkDecisionResult> {
+  return requestJson(`/recommendations/bulk-decide?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, decisions }) }, fetcher)
+}
+
+export function decideRecommendationWithReason(storeId: string, id: string, expectedVersion: number, decision: 'approve' | 'reject', reason: string | null, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  const body: Record<string, unknown> = { expectedVersion }
+  if (decision === 'reject' && reason) body.reason = reason
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/${decision}?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, fetcher)
 }
 
 export type WorkflowRecord = Readonly<{ id: string; storeId: string; version: number; nodes: readonly Readonly<Record<string, unknown>>[]; status?: string; definitionHash?: string }>

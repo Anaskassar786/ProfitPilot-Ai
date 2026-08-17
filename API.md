@@ -95,6 +95,58 @@ Every velocity-derived insight requires at least 30 days of sales history in
 `{ status: 'insufficient_data', message }` explaining how many days are still
 missing instead of an estimate.
 
+## AI recommendations (PR #46)
+
+All recommendation numbers are computed by deterministic rules over real synced
+data; the optional AI layer only writes language and is validated against the
+evidence. Generation is metered monthly per plan
+(`ai_recommendations_month`: Trial 10, Start 30, Growth 150, Commander
+unlimited — single source of truth in `packages/types/src/plans.ts`).
+
+- `GET /ai/agents` — seven agent status contracts.
+- `GET /ai/cost?storeId=` — daily AI spend against the per-store cap.
+- `GET /recommendations?storeId=&status=&agent=&ruleId=&minImpact=&maxImpact=&dateFrom=&dateTo=&sort=impact|confidence|created|decided&direction=&cursor=&limit=`
+  — paginated page envelope `{ items, total, cursor, limit, hasMore }`.
+  `limit` is capped at 50. Stale PENDING rows past `expiresAt` are marked
+  `EXPIRED` before listing.
+- `GET /recommendations/summary?storeId=` — server-computed stats: per-status
+  counts, pending impact grouped by currency (currencies are never summed
+  together), approved-this-month, per-agent and per-rule breakdowns, approval
+  rate (30d and all-time), average time-to-decision, recent decisions, a 30-day
+  generated/approved trend, and `{ plan, usage: { used, limit, remaining } }`.
+- `GET /recommendations/:id?storeId=` — single recommendation (deep links).
+- `POST /recommendations/analyze` — `{ storeId }`. Runs the rule engine on a
+  fresh store snapshot. Enforces the monthly plan limit: at the cap it returns
+  `403 FORBIDDEN` with `details.reason = 'UPGRADE_REQUIRED'`; near the cap it
+  trims generation to the remaining quota (highest-impact signals first) and
+  increments `billing_usage`.
+- `POST /recommendations/:id/approve` — `{ expectedVersion }` (CAS). Records
+  `decidedAt`/`decidedBy`, appends a calibration sample, writes an audit entry.
+  Approving a non-SAFE action requires an owner/admin role.
+- `POST /recommendations/:id/reject` — `{ expectedVersion, reason? }` with
+  `reason ∈ WRONG_DATA|NOT_RELEVANT|BAD_TIMING|ALREADY_HANDLED|OTHER`. The
+  reason feeds the calibration ledger.
+- `POST /recommendations/bulk-decide` — `{ decisions: [{ id, expectedVersion,
+  decision: 'approve'|'reject', reason? }] }` (max 20). Returns per-item
+  results; individual CAS conflicts surface as `{ ok: false, error }` rows.
+- `POST /recommendations/:id/undo` — reverts a decision to PENDING within a
+  30-second grace window and appends a compensating calibration sample.
+- `POST /recommendations/:id/snooze` — `{ hours }` (max 7 days), server-side
+  so snoozes follow the merchant across devices.
+- `GET /recommendations/:id/evidence/verify?storeId=` — server re-computes the
+  evidence pack SHA-256; returns `{ verified, sha256, ruleVersion, generatedAt }`.
+- `POST /recommendations/:id/execute` — bridges an APPROVED recommendation to
+  the idempotent `ActionExecutor` (owner/admin for non-SAFE actions). Actions
+  produce reviewable drafts (e.g. `SEND_EMAIL` creates a draft campaign
+  template) — nothing contacts a customer directly. Marks `EXECUTED`/`FAILED`
+  and records the execution in `ai_executions`; executed customer-facing
+  actions are later matched to synced orders (7-day window) into
+  `ai_attribution_events`, which `/billing/roi` sums.
+
+Confidence calibration persists in `ai_calibration_samples`: each agent is
+capped at .75 confidence until 10 merchant decisions exist, then the cap tracks
+the agent's real acceptance rate — HIGH confidence (≥ .9) is earned.
+
 ## Jarvis
 
 - `GET /jarvis/preferences?storeId=`

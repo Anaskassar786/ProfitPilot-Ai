@@ -8,7 +8,7 @@ import { calculateStoreHealth } from './health.js'
 import { CostCapExceededError } from './cost.js'
 import type { AnyCostMeter } from './cost.js'
 import type { AgentId, AgentStatus, Recommendation, RuleSignal, StoreSnapshot } from './domain.js'
-import { AGENT_IDS, confidenceLevel } from './domain.js'
+import { AGENT_IDS, confidenceLevel, deriveExpiry } from './domain.js'
 import { runDeterministicRules } from './rules.js'
 import { AiUnavailableError, OpenRouterClient } from './provider.js'
 import { validateLanguageResponse } from './language.js'
@@ -17,7 +17,7 @@ import type { RecommendationRepository } from './repository.js'
 export type DecisionRun = Readonly<{ storeId: StoreId; health: ReturnType<typeof calculateStoreHealth>; recommendations: readonly Recommendation[]; generatedAt: string; deduplicated: number; cacheHits: number }>
 export type DecisionEngineConfig = Readonly<{ inputRateMicroDollars?: number; outputRateMicroDollars?: number; concurrency?: number; signalCap?: number }>
 export type RunProgressEvent = Readonly<{ agent: AgentId; completed: number; total: number; recommendationId?: string }>
-export type RunOptions = Readonly<{ agents?: readonly AgentId[]; onProgress?: (event: RunProgressEvent) => void }>
+export type RunOptions = Readonly<{ agents?: readonly AgentId[]; maxRecommendations?: number; onProgress?: (event: RunProgressEvent) => void }>
 
 /** Minimal cache port so identical evidence never pays for a second AI call. */
 export interface ExplanationCache {
@@ -63,7 +63,9 @@ export class DecisionEngine {
     await this.calibration.hydrate()
     const health = calculateStoreHealth(snapshot)
     const agentFilter = options.agents ?? AGENT_IDS
-    const signals = runDeterministicRules(snapshot).filter((signal) => agentFilter.includes(signal.agent)).slice(0, this.signalCap)
+    const filtered = runDeterministicRules(snapshot).filter((signal) => agentFilter.includes(signal.agent)).slice(0, this.signalCap)
+    const max = options.maxRecommendations
+    const signals = typeof max === 'number' && Number.isFinite(max) ? filtered.slice(0, Math.max(0, Math.floor(max))) : filtered
     const generatedAt = new Date(this.now()).toISOString()
     const results: Array<Recommendation | null> = new Array(signals.length).fill(null)
     let deduplicated = 0
@@ -118,6 +120,11 @@ export class DecisionEngine {
       model: explanationResult.model,
       version: existing?.version ?? 0,
       createdAt: existing?.createdAt ?? generatedAt,
+      expiresAt: deriveExpiry(signal.ruleId, signal.evidence, generatedAt),
+      decidedAt: null,
+      decidedBy: null,
+      rejectReason: null,
+      snoozedUntil: null,
     }
     if (existing) await this.repository.refresh(recommendation)
     else await this.repository.put(recommendation)

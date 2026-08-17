@@ -5,7 +5,7 @@ import { InMemoryRecommendationRepository, PostgresRecommendationRepository } fr
 import type { Recommendation } from './domain.js'
 import { storeId } from '@profitpilot/types'
 
-const recommendation: Recommendation = { id: 'r1', storeId: storeId('s'), agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Reorder', reason: 'Low cover', impactValue: 100, impactLabel: 'at risk', currency: 'USD', confidence: .75, confidenceLevel: 'MEDIUM', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { sha256: 'hash' }, explanation: null, explanationStatus: 'AI_UNAVAILABLE', model: null, version: 0, createdAt: '2024-06-12T00:00:00.000Z' }
+const recommendation: Recommendation = { id: 'r1', storeId: storeId('s'), agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Reorder', reason: 'Low cover', impactValue: 100, impactLabel: 'at risk', currency: 'USD', confidence: .75, confidenceLevel: 'MEDIUM', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { sha256: 'hash' }, explanation: null, explanationStatus: 'AI_UNAVAILABLE', model: null, version: 0, createdAt: '2024-06-12T00:00:00.000Z', entityKey: 'p1', expiresAt: null, decidedAt: null, decidedBy: null, rejectReason: null, snoozedUntil: null }
 
 describe('recommendation repositories', () => {
   it('stores and lists tenant recommendations', async () => {

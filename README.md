@@ -41,6 +41,16 @@ expired trial must upgrade to a paid plan to keep using agents.
 - Identical evidence hits a 24h tenant-versioned explanation cache instead of
   a second AI call; `run-all` executes with bounded concurrency and streams
   SSE progress.
+### Recommendations (PR #46)
+
+The Recommendations page is a dedicated workspace (`apps/web/src/recommendations.tsx` + `recommendations-model.ts` + `recommendations.css`) backed by the full lifecycle API in `apps/api/src/ai-routes.ts`. Highlights:
+
+- **Working generation** — `POST /recommendations/analyze` runs eight deterministic rules over a real store snapshot (currency from synced orders; product velocity from `analytics_product_sales_daily`; co-purchase pairs from real order line items).
+- **Plan metering** — `ai_recommendations_month` (Trial 10 / Start 30 / Growth 150 / Commander unlimited) is enforced server-side via `billing_usage`, with a usage ring, near-limit warning, and hard-block upgrade CTA in the UI. Plan limits live in one place: `packages/types/src/plans.ts` (`PLAN_ENTITLEMENT_LIMITS`).
+- **Trust surfaces** — the evidence drawer renders every evidence fact with its source column, server-verifies the pack's SHA-256, and shows the decision trail. A "How it works" modal explains rules, sealing, calibration, and impact modeling.
+- **Decision lifecycle** — CAS approve/reject with optional reject reasons, 30-second undo, bulk decide (max 20), server-side snooze, rule-derived expiry (`EXPIRED` status), `decided_at`/`decided_by` audit fields, `audit_log` entries, and RBAC (owner/admin required for non-SAFE approvals; Jarvis decisions are atomic).
+- **Feedback loop** — every decision appends to `ai_calibration_samples`; agent confidence caps hydrate from history at boot, so HIGH confidence is earned after 10+ merchant decisions.
+- **Execution bridge** — `POST /recommendations/:id/execute` runs the idempotent `ActionExecutor` (drafts only — `SEND_EMAIL` creates a reviewable campaign template), records `ai_executions`, and feeds the time-window attribution matcher that populates `ai_attribution_events` for `/billing/roi`.
 
 ### Workspace projects
 

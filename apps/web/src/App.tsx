@@ -108,6 +108,7 @@ import { OrdersWorkspace } from './orders.js'
 import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
+import { RecommendationsWorkspace } from './recommendations.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -174,7 +175,10 @@ type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; statu
 type WorkspaceData = Readonly<{ analytics: AnalyticsSnapshot | null; catalog: readonly CatalogProduct[]; agents: readonly AgentStatus[]; recommendations: readonly Recommendation[]; inventory: InventoryPageResult | null; loadState: LoadState; error: string | null }>
 
 export default function App() {
-  const [activePage, setActivePage] = useState<SectionId>('dashboard')
+  // PR #46: a #/recommendations deep link (with optional /:id) opens the
+  // Recommendations page directly, so shared links and refreshes land where
+  // the user expects instead of resetting to the dashboard.
+  const [activePage, setActivePage] = useState<SectionId>(() => (window.location.hash.startsWith('#/recommendations') ? 'recommendations' : 'dashboard'))
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -191,6 +195,7 @@ export default function App() {
   const snoozedRecommendations = useRef<Readonly<Record<string, number>>>({})
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [readNotificationIds, setReadNotificationIds] = useState<ReadonlySet<string>>(new Set())
   const [lightMode, setLightMode] = useState(() => {
     try {
       const stored = window.localStorage.getItem('profitpilot:theme')
@@ -254,6 +259,14 @@ export default function App() {
   }
 
   useEffect(() => { void loadData() }, [context.storeId])
+
+  // PR #46: notification read-state is per store and survives reloads.
+  useEffect(() => {
+    if (!context.storeId) { setReadNotificationIds(new Set()); return }
+    setReadNotificationIds(new Set(readStoredStringArray(`profitpilot:notifications:read:${context.storeId}`)))
+  }, [context.storeId])
+  const persistReadNotifications = (ids: readonly string[]) => { if (context.storeId) storeStringArray(`profitpilot:notifications:read:${context.storeId}`, [...new Set(ids)]) }
+  const unreadNotificationIds = useMemo(() => new Set(data.recommendations.filter((item) => item.status === 'PENDING' && !readNotificationIds.has(item.id)).map((item) => item.id)), [data.recommendations, readNotificationIds])
 
   useEffect(() => {
     if (!context.storeId) { setJarvisPreference(null); setPassiveRecommendation(null); return }
@@ -333,8 +346,28 @@ export default function App() {
   const navigate = (page: SectionId) => {
     if (page === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (page !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
-    setActivePage(page); setMobileOpen(false); setCommandOpen(false)
+    setActivePage(page)
+    setMobileOpen(false)
+    setCommandOpen(false)
+    // Leaving Recommendations clears its hash route so a later refresh does
+    // not bounce back; entering it establishes the base route for deep links.
+    try {
+      if (page === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
+      else if (window.location.hash.startsWith('#/recommendations')) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    } catch { /* embedded browsers may restrict history access */ }
   }
+
+  // Browser back/forward between the recommendations hash route and other
+  // pages keeps the visible page in sync.
+  useEffect(() => {
+    const onHashNavigation = () => {
+      const onRecommendations = window.location.hash.startsWith('#/recommendations')
+      setActivePage((current) => (onRecommendations ? 'recommendations' : current === 'recommendations' ? 'dashboard' : current))
+    }
+    window.addEventListener('popstate', onHashNavigation)
+    window.addEventListener('hashchange', onHashNavigation)
+    return () => { window.removeEventListener('popstate', onHashNavigation); window.removeEventListener('hashchange', onHashNavigation) }
+  }, [])
   const sync = async (module: string) => {
     if (!context.storeId) { setOnboardingOpen(true); return }
     try {
@@ -380,14 +413,6 @@ export default function App() {
       setSyncAllRunning(false)
     }
   }
-  const decide = async (id: string, decision: 'approve' | 'reject', expectedVersion: number) => {
-    if (!context.storeId) { setOnboardingOpen(true); return }
-    try {
-      await decideRecommendation(context.storeId, id, expectedVersion, decision)
-      showToast(`Recommendation ${decision === 'approve' ? 'approved' : 'rejected'}.`, decision === 'approve' ? 'success' : 'info')
-      void loadData()
-    } catch (error: unknown) { showToast(errorMessage(error), 'error') }
-  }
   const phaseGate = (phase: string, capability: string) => {
     try { throw new PhaseNotImplementedError(phase, capability) } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'This capability is phase-gated.', 'info') }
   }
@@ -419,7 +444,7 @@ export default function App() {
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <Sidebar activePage={activePage} collapsed={collapsed} mobileOpen={mobileOpen} context={context} onNavigate={navigate} onCollapse={() => setCollapsed((value) => !value)} onClose={() => setMobileOpen(false)} onOpenCommand={() => setCommandOpen(true)} onOnboarding={() => setOnboardingOpen(true)} />
       <main id="main-content" tabIndex={-1} className={`main-shell ${collapsed ? 'sidebar-is-collapsed' : ''}`}>
-        <TopBar active={pageMeta[activePage]} onMenu={() => setMobileOpen(true)} onCommand={() => setCommandOpen(true)} onNotifications={() => setNotificationsOpen(true)} onProfile={() => setProfileOpen((value) => !value)} profileOpen={profileOpen} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onShortcuts={() => setShortcutsOpen(true)} />
+        <TopBar active={pageMeta[activePage]} unreadCount={unreadNotificationIds.size} onMenu={() => setMobileOpen(true)} onCommand={() => setCommandOpen(true)} onNotifications={() => setNotificationsOpen(true)} onProfile={() => setProfileOpen((value) => !value)} profileOpen={profileOpen} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onShortcuts={() => setShortcutsOpen(true)} />
         <div className="page-scroll">
           {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
           {!context.storeId && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
@@ -433,11 +458,9 @@ export default function App() {
             syncProgress={syncProgress}
             syncAllRunning={syncAllRunning}
             syncDismissing={syncDismissing}
-            onDecide={decide}
             onRefresh={() => void loadData()}
             onToast={showToast}
             onPhaseGate={phaseGate}
-            onEvidence={() => setEvidenceOpen(true)}
             lightMode={lightMode}
             onTheme={() => setLightMode((value) => !value)}
           />
@@ -445,9 +468,12 @@ export default function App() {
       </main>
       <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} />
       {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />}
-      {notificationsOpen && <NotificationDrawer onClose={() => setNotificationsOpen(false)} />}
+      {notificationsOpen && <NotificationDrawer recommendations={data.recommendations} unreadIds={unreadNotificationIds} onOpenRecommendation={(id) => { setReadNotificationIds((current) => new Set([...current, id])); persistReadNotifications([...readNotificationIds, id]); setNotificationsOpen(false); navigate('recommendations') }} onMarkAllRead={() => { const all = data.recommendations.filter((item) => item.status === 'PENDING').map((item) => item.id); setReadNotificationIds(new Set([...readNotificationIds, ...all])); persistReadNotifications([...readNotificationIds, ...all]) }} onClose={() => setNotificationsOpen(false)} />}
       {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
-      {evidenceOpen && <EvidenceDrawer recommendation={selectedRecommendation ?? data.recommendations[0] ?? null} jarvisEvidence={jarvisEvidence} onClose={() => { setEvidenceOpen(false); setJarvisEvidence(null); setSelectedRecommendation(null) }} />}
+      {/* PR #46: the global drawer only ever shows an explicitly selected
+          recommendation (passive Jarvis review) or Jarvis page evidence — the
+          old `?? data.recommendations[0]` fallback showed the wrong record. */}
+      {evidenceOpen && <EvidenceDrawer recommendation={selectedRecommendation} jarvisEvidence={jarvisEvidence} onClose={() => { setEvidenceOpen(false); setJarvisEvidence(null); setSelectedRecommendation(null) }} />}
       {onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
@@ -469,9 +495,9 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCol
   </>
 }
 
-function TopBar({ active, onMenu, onCommand, onNotifications, onProfile, profileOpen, lightMode, onTheme, onShortcuts }: { active: Readonly<{ title: string; icon: LucideIcon }>; onMenu: () => void; onCommand: () => void; onNotifications: () => void; onProfile: () => void; profileOpen: boolean; lightMode: boolean; onTheme: () => void; onShortcuts: () => void }) {
+function TopBar({ active, unreadCount, onMenu, onCommand, onNotifications, onProfile, profileOpen, lightMode, onTheme, onShortcuts }: { active: Readonly<{ title: string; icon: LucideIcon }>; unreadCount: number; onMenu: () => void; onCommand: () => void; onNotifications: () => void; onProfile: () => void; profileOpen: boolean; lightMode: boolean; onTheme: () => void; onShortcuts: () => void }) {
   const ActiveIcon = active.icon
-  return <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></button><button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></button><div className="topbar-divider" /><button className="icon-button notification-button" onClick={onNotifications} aria-label="Open notifications"><Bell size={18} /><i /></button><button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</button><button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></button></div></header>
+  return <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></button><button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></button><div className="topbar-divider" /><button className="icon-button notification-button" onClick={onNotifications} aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} new)` : 'Open notifications'}><Bell size={18} />{unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button><button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</button><button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></button></div></header>
 }
 
 function PageRouter({
@@ -484,11 +510,9 @@ function PageRouter({
   syncProgress,
   syncAllRunning,
   syncDismissing,
-  onDecide,
   onRefresh,
   onToast,
   onPhaseGate,
-  onEvidence,
   lightMode,
   onTheme,
 }: {
@@ -501,11 +525,9 @@ function PageRouter({
   syncProgress: readonly SyncModuleProgress[]
   syncAllRunning: boolean
   syncDismissing?: boolean
-  onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void>
   onRefresh: () => void
   onToast: (message: string, kind?: ToastKind) => void
   onPhaseGate: (phase: string, capability: string) => void
-  onEvidence: () => void
   lightMode: boolean
   onTheme: () => void
 }) {
@@ -528,7 +550,7 @@ function PageRouter({
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
-  if (active === 'recommendations') return <RecommendationsPage context={context} recommendations={data.recommendations} onEvidence={onEvidence} onDecide={onDecide} onRefresh={onRefresh} onToast={onToast} />
+  if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns') return <CampaignsPage onPhaseGate={onPhaseGate} context={context} onToast={onToast} />
   if (active === 'copilot') return <PageLayout eyebrow="Grounded questions" title="Copilot" description="A closed ten-intent grammar answers from tenant-scoped evidence packs."><CopilotWorkspace context={context} /></PageLayout>
@@ -811,7 +833,16 @@ function PassiveRecommendationCard({ recommendation, onReview, onDismiss, onSnoo
   return <aside className="passive-recommendation-card" aria-live="polite"><div className="passive-card-heading"><span className="passive-card-icon"><Sparkles size={15} /></span><span><small>JARVIS RECOMMENDATION</small><strong>{recommendation.title}</strong></span><button onClick={onDismiss} aria-label="Dismiss recommendation"><X size={14} /></button></div><p>{recommendation.reason}</p><div className="passive-card-meta"><span className={`status-badge ${recommendation.confidenceLevel === 'HIGH' ? 'green' : 'amber'}`}>{recommendation.confidenceLevel} confidence</span><span>Already in your recommendations</span></div><div className="passive-card-actions"><button className="button primary" onClick={onReview}><Eye size={13} /> Review evidence</button><button className="button secondary" onClick={onSnooze}><Clock3 size={13} /> Snooze 1 hour</button></div></aside>
 }
 
-function NotificationDrawer({ onClose }: { onClose: () => void }) { return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>No new notifications</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>Real sync and F2 notifications will appear here. Nothing is fabricated.</span></div><button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></> }
+/**
+ * PR #46: the bell now shows real pending recommendations. "New" means a
+ * PENDING recommendation whose id has not been marked read on this device;
+ * opening the drawer and clicking a row (or "Mark all read") clears it.
+ */
+function NotificationDrawer({ recommendations, unreadIds, onOpenRecommendation, onMarkAllRead, onClose }: { recommendations: readonly Recommendation[]; unreadIds: ReadonlySet<string>; onOpenRecommendation: (id: string) => void; onMarkAllRead: () => void; onClose: () => void }) {
+  const pending = recommendations.filter((item) => item.status === 'PENDING').slice(0, 10)
+  const unreadCount = pending.filter((item) => unreadIds.has(item.id)).length
+  return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><WandSparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</button>)}{unreadCount > 0 && <button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></button>}</div>}<button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></>
+}
 function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = navGroups.flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span>{item.tag && <small>{item.tag}</small>}<ChevronRight size={15} /></button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
 function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></button></div></div></div> }
 function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><button className="button primary full-width" onClick={onClose}>Done</button></div></div> }
