@@ -120,18 +120,19 @@ function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: bo
     <header>
       <span className="kpi-icon"><Icon size={14} /></span>
       <small>{kpi.label}</small>
-      {kpi.change !== null && <b className={kpi.change >= 0 ? 'positive' : 'negative'}>{kpi.change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(kpi.change).toFixed(1)}%</b>}
+      {kpi.change !== null ? <b className={`kpi-trend-badge ${kpi.change >= 0 ? 'positive' : 'negative'}`} title="Change versus the previous period">{kpi.change >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}<span>{Math.abs(kpi.change).toFixed(1)}%</span><small>vs prev</small></b> : <b className="kpi-trend-badge neutral" title="A previous-period baseline is still building"><Activity size={12} /><span>New</span></b>}
     </header>
     <strong>{formatKpi(kpi)}</strong>
     <p>{kpi.detail}</p>
-    <div className="sparkline">
+    <div className="sparkline" aria-label={`${kpi.label} recent trend`}>
       {data.length >= 2 ? (
-        <ResponsiveContainer width="100%" height={36} minWidth={0} minHeight={0}>
+        <ResponsiveContainer width="100%" height={52} minWidth={0} minHeight={0}>
           <ComposedChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
             <defs>
               <linearGradient id={`kpi-grad-${index}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={toneColor} stopOpacity={0.4} />
-                <stop offset="100%" stopColor={toneColor} stopOpacity={0.0} />
+                <stop offset="0%" stopColor={toneColor} stopOpacity={0.52} />
+                <stop offset="55%" stopColor={toneColor} stopOpacity={0.20} />
+                <stop offset="100%" stopColor={toneColor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <YAxis domain={['dataMin - 1', 'dataMax + 1']} hide />
@@ -139,10 +140,12 @@ function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: bo
               type="monotone"
               dataKey="plotValue"
               stroke={toneColor}
-              strokeWidth={2}
+              strokeWidth={2.75}
               fill={`url(#kpi-grad-${index})`}
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 2, fill: toneColor }}
               isAnimationActive={true}
-              animationDuration={500}
+              animationDuration={650}
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -373,7 +376,33 @@ export function CohortAnalysis({ insights,onUpgrade }:{insights:AnalyticsInsight
 
 export function GeographicDistribution({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget icon={Globe2} title="Geographic distribution" eyebrow="Geographic Sales" plan="Growth" message="See where your sales come from." onUpgrade={onUpgrade}/>; const geo=insights?.geography??[]; return <Widget eyebrow="Geographic Sales" title="Geographic distribution" badge={geo.length?`${geo.length} markets`:undefined}>{geo.length?<div className="geo-layout"><div className="geo-orb"><Globe2 size={80}/><span className="geo-ping p1"/><span className="geo-ping p2"/><span className="geo-ping p3"/></div><div className="geo-list">{geo.slice(0,6).map((row,index)=><div key={row.country}><b>{index+1}</b><span><strong>{row.country}</strong><small>{row.orders} orders · {row.share.toFixed(1)}%</small></span><em>{money(row.revenue)}</em></div>)}</div></div>:<RichEmpty icon={MapPin} title="Building your geographic sales map" message="Sync orders with shipping addresses to see where your customers are." progress={0} goal="Sync orders with addresses" />}</Widget> }
 
-export function ProductPerformance({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const products=insights?.topProducts??[]; return <section className="product-performance"><Widget className="products-table-card" eyebrow="Top Products" title="Top products by revenue" badge={products.length?`Top ${Math.min(15,products.length)}`:undefined}>{products.length?<div className="products-scroll"><table><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th>Units</th><th>Revenue</th><th>Share</th><th>Momentum</th></tr></thead><tbody>{products.map((product,index)=><tr key={product.productId}><td><b className={index<3?'rank':''}>{index+1}</b></td><td><div className="product-cell">{product.image?<img src={product.image} alt=""/>:<span>{product.name.slice(0,1)}</span>}<strong>{product.name}</strong></div></td><td>{product.category??'Uncategorized'}</td><td>{product.units.toLocaleString()}</td><td><strong>{money(product.revenue)}</strong></td><td>{product.share.toFixed(1)}%</td><td className={product.trend}>{product.trend==='up'?<ArrowUpRight size={15}/>:product.trend==='down'?<ArrowDownRight size={15}/>:<Activity size={14}/>} {product.growth!=null?`${Math.abs(product.growth).toFixed(0)}%`:'Building'}</td></tr>)}</tbody></table></div>:<RichEmpty icon={PackageSearch} title="Top products will appear here" message="Sync product sales to see your bestsellers ranked by revenue and units." progress={0} goal="Sync orders to build product rankings" />}</Widget><Widget className="product-insights" eyebrow="Product Insights" title="Product insights">{!hasPlan(insights,'growth')?<LockedInline plan="Growth" message="Discover trending products and categories." onUpgrade={onUpgrade}/>:products.length?<div className="merch-list"><MerchSignal icon={ArrowUpRight} tone="green" label="Rising star" value={products.find((p)=>p.trend==='up')?.name??'No rising product yet'} /><MerchSignal icon={ArrowDownRight} tone="red" label="Needs attention" value={products.find((p)=>p.trend==='down')?.name??'No decline detected'} /><MerchSignal icon={Trophy} tone="amber" label="Revenue leader" value={products[0]?.name??'Building'} /></div>:<EducationalState title="Building product insights" message="Sync more sales to see trending products." current={insights?.salesHistoryDays??0} total={14}/>}</Widget></section> }
+export function ProductPerformance({ insights, onUpgrade }: { insights: AnalyticsInsights | null; onUpgrade: () => void }) {
+  const products = insights?.topProducts ?? []
+  const growthUnlocked = hasPlan(insights, 'growth')
+
+  if (!growthUnlocked) {
+    return <section className="product-performance">
+      <Widget className="products-table-card locked-products-widget" eyebrow="Top Products" title="Top products by revenue">
+        <div className="locked-product-preview" aria-hidden="true">
+          {(products.length ? products.slice(0, 3) : [{ productId: 'preview', name: 'Product revenue ranking', image: null, units: 0, revenue: 0, share: 0, trend: 'flat' as const }]).map((product, index) => <div key={product.productId}><b>{index + 1}</b><span>{product.name}</span><strong>{money(product.revenue)}</strong></div>)}
+        </div>
+        <div className="locked-products-overlay"><LockedInline plan="Growth" message="Rank products by verified revenue, units sold, share, and momentum." onUpgrade={onUpgrade} /></div>
+      </Widget>
+      <Widget className="product-insights" eyebrow="Product Insights" title="Product insights">
+        <LockedInline plan="Growth" message="Discover trending products and categories." onUpgrade={onUpgrade} />
+      </Widget>
+    </section>
+  }
+
+  return <section className="product-performance">
+    <Widget className="products-table-card" eyebrow="Top Products" title="Top products by revenue" badge={products.length ? `Top ${Math.min(15, products.length)}` : undefined}>
+      {products.length ? <div className="products-scroll"><table><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th>Units</th><th>Revenue</th><th>Share</th><th>Momentum</th></tr></thead><tbody>{products.map((product, index) => <tr key={product.productId}><td><b className={index < 3 ? 'rank' : ''}>{index + 1}</b></td><td><div className="product-cell">{product.image ? <img src={product.image} alt="" /> : <span>{product.name.slice(0, 1)}</span>}<strong>{product.name}</strong></div></td><td>{product.category ?? 'Uncategorized'}</td><td>{product.units.toLocaleString()}</td><td><strong>{money(product.revenue)}</strong></td><td>{product.share.toFixed(1)}%</td><td className={product.trend}>{product.trend === 'up' ? <ArrowUpRight size={15} /> : product.trend === 'down' ? <ArrowDownRight size={15} /> : <Activity size={14} />} {product.growth != null ? `${Math.abs(product.growth).toFixed(0)}%` : 'Building'}</td></tr>)}</tbody></table></div> : <RichEmpty icon={PackageSearch} title="Top products will appear here" message="Sync product sales to see your bestsellers ranked by revenue and units." progress={0} goal="Sync orders to build product rankings" />}
+    </Widget>
+    <Widget className="product-insights" eyebrow="Product Insights" title="Product insights">
+      {products.length ? <div className="merch-list"><MerchSignal icon={ArrowUpRight} tone="green" label="Rising star" value={products.find((product) => product.trend === 'up')?.name ?? 'No rising product yet'} /><MerchSignal icon={ArrowDownRight} tone="red" label="Needs attention" value={products.find((product) => product.trend === 'down')?.name ?? 'No decline detected'} /><MerchSignal icon={Trophy} tone="amber" label="Revenue leader" value={products[0]?.name ?? 'Building'} /></div> : <EducationalState title="Building product insights" message="Sync more sales to see trending products." current={insights?.salesHistoryDays ?? 0} total={14} />}
+    </Widget>
+  </section>
+}
 function MerchSignal({icon:Icon,tone,label,value}:{icon:typeof Activity;tone:string;label:string;value:string}) { return <div className={`merch-signal ${tone}`}><span><Icon size={15}/></span><p><small>{label}</small><strong>{value}</strong></p><ChevronUp size={14}/></div> }
 
 export function TemporalPatterns({ insights }: { insights: AnalyticsInsights | null }) {
@@ -441,7 +470,7 @@ export function ConversionFunnel({insights,onUpgrade}:{insights:AnalyticsInsight
 
 export function Benchmarks({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={BarChart3} title="Benchmarks & advanced comparisons" eyebrow="Executive Overview" plan="Commander" message="Compare your performance across different time periods." onUpgrade={onUpgrade}/>; const comparisons=insights?.comparisons??[]; return <Widget eyebrow="Executive Overview" title="Benchmarks & advanced comparisons" badge="Commander">{comparisons.length?<div className="comparison-grid">{comparisons.map((row)=><div key={row.metric}><small>{row.metric}</small><strong>{row.metric==='Revenue'?money(row.current):row.current.toLocaleString()}</strong><span>Previous: {row.metric==='Revenue'?money(row.previous):row.previous.toLocaleString()}</span><b className={row.change!==null&&row.change<0?'negative':'positive'}>{row.change===null?'Baseline needed':`${row.change>=0?'↑':'↓'} ${Math.abs(row.change).toFixed(1)}%`}</b></div>)}{insights?.advancedForecast?.status==='available'&&<div><small>30-day predictive revenue</small><strong>{money(insights.advancedForecast.points.reduce((sum,row)=>sum+row.value,0))}</strong><span>Confidence range included</span><b className="positive">AI projection</b></div>}<div className="benchmark-pending"><Globe2 size={18}/><p><strong>Industry comparison</strong><small>Available when industry data is connected.</small></p></div></div>:<RichEmpty icon={BarChart3} title="Building comparison data" message="Sync more sales to compare different time periods." progress={Math.min(60,insights?.salesHistoryDays??0)} goal="60 sales days" />}</Widget> }
 
-export function CustomAIQuery({context,insights,onUpgrade}:{context:WorkspaceContext;insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const [question,setQuestion]=useState(''); const [answer,setAnswer]=useState(''); const [asking,setAsking]=useState(false); if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={Brain} title="Ask your AI business analyst" eyebrow="AI Assistant" plan="Commander" message="Ask AI anything about your store data." onUpgrade={onUpgrade}/>; const ask=async(value=question)=>{if(!context.storeId||!value.trim())return;setQuestion(value);setAsking(true);try{const result=await queryAnalyticsInsights(context.storeId,value);setAnswer(result.text)}catch{setAnswer('AI is temporarily unavailable. Your dashboard data is still current.')}finally{setAsking(false)}}; const suggestions=['Which products should I promote this weekend?','Why did revenue change last period?','What is my strongest growth opportunity?']; return <Widget className="ai-query-widget" eyebrow="AI Assistant" title="Ask your AI business analyst" badge={insights?.usage.limit===null?'Unlimited':`${insights?.usage.remaining??0} left today`}><div className="query-shell">{answer?<div className="analyst-answer"><span><Brain size={17}/></span><p>{answer}</p></div>:<div className="query-welcome"><Brain size={28}/><div><strong>Ask anything about your store</strong><p>AI uses only your store totals, never customer details.</p></div></div>}<div className="query-suggestions">{suggestions.map((item)=><button key={item} onClick={()=>void ask(item)}>{item}</button>)}</div><div className="query-input"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void ask()}} placeholder="Ask about revenue, products, customers, or timing…"/><button onClick={()=>void ask()} disabled={!question.trim()||asking}>{asking?<RefreshCw size={16} className="spin"/>:<Send size={16}/>}</button></div></div></Widget> }
+export function CustomAIQuery({context,insights,onUpgrade}:{context:WorkspaceContext;insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const [question,setQuestion]=useState(''); const [answer,setAnswer]=useState(''); const [asking,setAsking]=useState(false); if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={Brain} title="Commander Copilot" eyebrow="AI Assistant" plan="Commander" message="Ask AI anything about your store data." onUpgrade={onUpgrade}/>; const ask=async(value=question)=>{if(!context.storeId||!value.trim())return;setQuestion(value);setAsking(true);try{const result=await queryAnalyticsInsights(context.storeId,value);setAnswer(result.text)}catch{setAnswer('AI is temporarily unavailable. Your dashboard data is still current.')}finally{setAsking(false)}}; const suggestions=['Which products should I promote this weekend?','Why did revenue change last period?','What is my strongest growth opportunity?']; return <Widget className="ai-query-widget" eyebrow="AI Assistant" title="Commander Copilot" badge={insights?.usage.limit===null?'Unlimited':`${insights?.usage.remaining??0} left today`}><div className="query-shell">{answer?<div className="analyst-answer"><span><Brain size={17}/></span><p>{answer}</p></div>:<div className="query-welcome"><Brain size={28}/><div><strong>Ask anything about your store</strong><p>AI uses only your store totals, never customer details.</p></div></div>}<div className="query-suggestions">{suggestions.map((item)=><button key={item} onClick={()=>void ask(item)}>{item}</button>)}</div><div className="query-input"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void ask()}} placeholder="Ask about revenue, products, customers, or timing…"/><button onClick={()=>void ask()} disabled={!question.trim()||asking}>{asking?<RefreshCw size={16} className="spin"/>:<Send size={16}/>}</button></div></div></Widget> }
 
 function Widget({eyebrow,title,badge,action,className='',children}:{eyebrow:string;title:string;badge?:ReactNode;action?:ReactNode;className?:string;children:ReactNode}) {
   return <article className={`analytics-widget ${className}`}><header className="widget-header"><div className="widget-title">{eyebrow ? <small>{eyebrow}</small> : null}<h2>{title}</h2></div>{action??(badge?<span className="widget-badge">{badge}</span>:null)}</header><div className="widget-body">{children}</div></article>
@@ -450,7 +479,7 @@ function LockedWidget({
   icon: Icon,
   title,
   eyebrow,
-  plan: _plan,
+  plan,
   message,
   onUpgrade,
   wide = false,
@@ -471,10 +500,10 @@ function LockedWidget({
           <LockKeyhole size={12} />
         </span>
         <div>
-          <b>Premium feature</b>
+          <b>{plan} feature</b>
           <p>{message}</p>
         </div>
-        <button onClick={onUpgrade}>
+        <button type="button" onClick={onUpgrade}>
           Upgrade to unlock <ArrowUpRight size={13} />
         </button>
       </div>
@@ -482,7 +511,7 @@ function LockedWidget({
   )
 }
 function LockedInline({
-  plan: _plan,
+  plan,
   message,
   onUpgrade,
 }: {
@@ -495,9 +524,9 @@ function LockedInline({
       <span>
         <LockKeyhole size={17} />
       </span>
-      <strong>Premium insight</strong>
+      <strong>{plan} insight</strong>
       <p>{message}</p>
-      <button onClick={onUpgrade}>
+      <button type="button" onClick={onUpgrade}>
         Upgrade to unlock <ArrowUpRight size={12} />
       </button>
     </div>
@@ -523,29 +552,28 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
   const forecast = point?.forecast ?? null
 
   return (
-    <div className="analytics-tooltip">
-      <strong>{formattedDate}</strong>
-      <div className="tooltip-metrics">
-        <div className="tooltip-row">
-          <i style={{ background: '#38bdf8' }} />
-          <span>Revenue:</span>
-          <strong>{money(revenue)}</strong>
-        </div>
+    <div className="analytics-tooltip revenue-tooltip">
+      <div className="tooltip-primary-value">
+        <span>Revenue</span>
+        <strong>{money(revenue)}</strong>
+      </div>
+      <time className="tooltip-date">{formattedDate}</time>
+      {(previous !== null && previous > 0) || forecast !== null ? <div className="tooltip-metrics">
         {previous !== null && previous > 0 && (
           <div className="tooltip-row">
             <i style={{ background: '#64748b' }} />
-            <span>vs Previous:</span>
+            <span>vs Previous</span>
             <strong>{money(previous)}</strong>
           </div>
         )}
         {forecast !== null && (
           <div className="tooltip-row">
             <i style={{ background: '#a78bfa' }} />
-            <span>AI Forecast:</span>
+            <span>AI Forecast</span>
             <strong>{money(forecast)}</strong>
           </div>
         )}
-      </div>
+      </div> : null}
     </div>
   )
 }

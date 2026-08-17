@@ -14,6 +14,7 @@ import './customers.css'
 import './inventory.css'
 import './analytics.css'
 import './upgrade-overrides.css'
+import './final-polish.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
 
 const root = document.getElementById('root')

@@ -502,9 +502,10 @@ function CompactCalendar({ month, loading }: { month: CalendarMonth; loading?: b
       <div className="cal-grid">
         {month.days.map((day, index) => {
           const intensity = day.value !== null && maxVal > 0 ? day.value / maxVal : 0
+          const intensityLevel = day.value === null ? 0 : Math.max(1, Math.min(4, Math.ceil(intensity * 4)))
           const isHovered = hoveredDay?.date === day.date
           return (
-            <div key={index} className={`cal-cell ${day.isCurrentMonth ? 'current' : 'other'} ${day.value !== null ? 'has-data' : ''} ${day.date === today ? 'today' : ''} ${isHovered ? 'hovered' : ''}`} style={{ backgroundColor: day.value !== null ? `rgba(16, 185, 129, ${0.12 + intensity * 0.75})` : 'rgba(107,114,128,.06)', borderColor: isHovered ? 'rgba(59,130,246,.5)' : 'transparent' } as CSSProperties} onMouseEnter={() => setHoveredDay(day)} onMouseLeave={() => setHoveredDay(null)} title={day.value !== null ? `${day.date}: ${formatMoney(day.value)}` : day.date}>
+            <div key={index} className={`cal-cell ${day.isCurrentMonth ? 'current' : 'other'} ${day.value !== null ? `has-data intensity-${intensityLevel}` : ''} ${day.date === today ? 'today' : ''} ${isHovered ? 'hovered' : ''}`} style={{ backgroundColor: day.value !== null ? `rgba(16, 185, 129, ${0.12 + intensity * 0.75})` : 'rgba(107,114,128,.06)', borderColor: isHovered ? 'rgba(59,130,246,.5)' : 'transparent' } as CSSProperties} onMouseEnter={() => setHoveredDay(day)} onMouseLeave={() => setHoveredDay(null)} title={day.value !== null ? `${day.date}: ${formatMoney(day.value)}` : day.date}>
               <span className="cal-day-number">{day.day}</span>
             </div>
           )
@@ -581,10 +582,14 @@ function OrderRow({ order, detailed }: { order: RecentOrder; detailed?: boolean 
 }
 
 function HealthGaugeWidget({ health, loading }: { health: StoreHealthView; loading?: boolean }) {
-  const sweep = health.score === null ? 0 : Math.max(8, Math.round(health.score * 2.4))
+  const hasScore = health.score !== null && !loading
+  const sweep = hasScore ? Math.max(8, Math.round((health.score ?? 0) * 2.4)) : 0
+  const gaugeStyle = hasScore ? { '--health-sweep': `${sweep}deg` } as CSSProperties : undefined
+  const accessibleLabel = loading ? 'Store health loading' : health.score === null ? 'Store health unavailable' : `Store health ${health.score} out of 100, grade ${health.grade}, ${health.label}`
+
   return (
     <div className="health-gauge-wrap">
-      <div className={`health-gauge ${health.tone} compact`} style={health.score !== null && !loading ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties : undefined}>
+      <div className={`health-gauge performance-gauge-premium ${health.tone} compact ${hasScore ? 'has-score' : 'no-data'}`} style={gaugeStyle} role="img" aria-label={accessibleLabel}>
         <div className="gauge-inner">
           {loading ? <><strong>—</strong><span>Loading</span></> : <><strong>{health.score === null ? '—' : health.score}{health.score !== null && <small>/100</small>}</strong><span>{health.score === null ? 'NO DATA' : `${health.grade} · ${health.label}`}</span></>}
         </div>
