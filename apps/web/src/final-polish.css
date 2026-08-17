@@ -2504,13 +2504,18 @@
 .category-action-note { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 9px 11px; color: var(--text-secondary); border: 1px solid rgba(251, 191, 36, .2); border-radius: 9px; background: rgba(251, 191, 36, .05); font-size: 11.5px; line-height: 1.55; }
 .category-action-note svg { flex: none; color: var(--profit); margin-top: 2px; }
 .category-action-note b { color: var(--text); }
-.category-compare { display: flex; flex-direction: column; gap: 6px; }
-.category-compare-row { display: grid; grid-template-columns: minmax(70px, .9fr) 1.4fr 34px 64px; align-items: center; gap: 8px; }
-.category-compare-name { overflow: hidden; color: var(--text-secondary); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.category-compare-track { height: 7px; border-radius: 99px; background: rgba(148, 163, 184, .12); overflow: hidden; }
-.category-compare-track i { display: block; height: 100%; border-radius: 99px; }
-.category-compare-row strong { color: var(--text); font-family: var(--font-mono); font-size: 11px; text-align: right; }
-.category-compare-row small { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 10px; text-align: right; }
+.category-breakdown { border-top: 1px solid var(--border-soft); }
+.category-breakdown-heading { padding: 11px 2px 7px; }
+.category-breakdown-heading span { color: var(--text-tertiary); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.category-breakdown-rows { display: flex; flex-direction: column; }
+.category-breakdown-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 46px; padding: 8px 9px; border-radius: 8px; transition: background 150ms ease; }
+.category-breakdown-row + .category-breakdown-row { border-top: 1px solid var(--border-soft); border-top-left-radius: 0; border-top-right-radius: 0; }
+.category-breakdown-row:hover { background: rgba(148, 163, 184, .06); }
+.category-breakdown-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 10%, transparent); }
+.category-breakdown-row > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.category-breakdown-row strong { overflow: hidden; color: var(--text); font-size: 11.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.category-breakdown-row p { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0; color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+.category-breakdown-row p i { color: var(--text-tertiary); font-style: normal; }
 .category-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .category-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .category-actions button:hover { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
@@ -2518,10 +2523,9 @@
 .app-shell.light-mode .category-insights p { background: #F8FAFC !important; border-color: #E5E7EB !important; }
 .app-shell.light-mode .ai-summary-insights-list p { background: rgba(124, 58, 237, .06) !important; border-color: rgba(124, 58, 237, .14) !important; }
 .app-shell.light-mode .category-action-note { background: rgba(217, 119, 6, .07) !important; border-color: rgba(217, 119, 6, .22) !important; }
-.app-shell.light-mode .category-compare-track { background: rgba(148, 163, 184, .2) !important; }
+.app-shell.light-mode .category-breakdown-row:hover { background: #F8FAFC; }
+.app-shell.light-mode .category-breakdown-row + .category-breakdown-row { border-color: #E5E7EB; }
 @media (max-width: 640px) {
   .ai-summary-growth-row { grid-template-columns: 1fr; }
-  .category-compare-row { grid-template-columns: minmax(60px, .8fr) 1.2fr 32px; }
-  .category-compare-row small { display: none; }
   .ai-summary-actions button, .category-actions button { flex: 1; }
 }

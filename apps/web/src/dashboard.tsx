@@ -64,6 +64,15 @@ type DashboardData = {
   loadState: LoadState
 }
 
+type CategoryBreakdown = Readonly<{
+  name: string
+  color: string
+  products: number
+  sold: number
+  orderCount: number | null
+  aov: number | null
+}>
+
 const BAR_COLOR = '#3B82F6'
 const BAR_CURRENT_COLOR = '#72A7FF'
 const BAR_EMPTY_COLOR = '#6B7280'
@@ -214,6 +223,32 @@ export function DashboardLayout(props: DashboardLayoutProps) {
       cancelled = true
     }
   }, [storeId])
+
+  // Category AOV needs distinct real orders, not a benchmark or an estimate.
+  const [categoryOrders, setCategoryOrders] = useState<readonly OrderView[] | null>(null)
+  useEffect(() => {
+    if (!storeId) {
+      setCategoryOrders(null)
+      return
+    }
+    let cancelled = false
+    setCategoryOrders(null)
+    void fetchOrders(storeId, { sort: 'date', direction: 'desc', page: 1, limit: 100 })
+      .then(async (first) => {
+        const remainingPages = Array.from({ length: Math.max(0, first.pagination.pages - 1) }, (_, index) => index + 2)
+        const rest = await Promise.all(remainingPages.map((page) => fetchOrders(storeId, { sort: 'date', direction: 'desc', page, limit: 100 })))
+        if (!cancelled) setCategoryOrders([first, ...rest].flatMap((result) => result.orders))
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryOrders(null)
+      })
+    return () => { cancelled = true }
+  }, [storeId])
+
+  const categoryBreakdown = useMemo(
+    () => buildCategoryBreakdown(categoryData, data.analytics, data.catalog, categoryOrders),
+    [categoryData, data.analytics, data.catalog, categoryOrders],
+  )
 
   return (
     <div className="dashboard-modern">
@@ -374,7 +409,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
               <h3>By Category</h3>
             </div>
           </div>
-          {loading ? <ChartSkeleton /> : categoryData.length > 0 ? <CategoryPieChart data={categoryData} onNavigate={onNavigate} /> : <EmptyChart onSync={() => void onSync('products')} message="Sync products to see category breakdown." />}
+          {loading ? <ChartSkeleton /> : categoryData.length > 0 ? <CategoryPieChart data={categoryData} breakdown={categoryBreakdown} onNavigate={onNavigate} /> : <EmptyChart onSync={() => void onSync('products')} message="Sync products to see category breakdown." />}
         </div>
 
         {/* Fix 1.5 Recent Activity timeline */}
@@ -490,7 +525,46 @@ function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
   )
 }
 
-function CategoryPieChart({ data, onNavigate }: { data: CategorySales[]; onNavigate?: (page: string) => void }) {
+function buildCategoryBreakdown(
+  categories: readonly CategorySales[],
+  analytics: AnalyticsSnapshot | null,
+  catalog: readonly { productId: string; payload: Record<string, unknown> }[],
+  orders: readonly OrderView[] | null,
+): CategoryBreakdown[] {
+  const categoryByProduct = new Map(catalog.map((product) => [product.productId, productCategory(product.payload)]))
+  const visibleNames = new Set(categories.filter((category) => category.name !== 'Others').map((category) => category.name))
+  const otherNames = new Set((analytics?.productSales ?? [])
+    .map((sale) => categoryByProduct.get(sale.productId) ?? 'Uncategorized')
+    .filter((name) => !visibleNames.has(name)))
+
+  return categories.map((category) => {
+    const belongs = (productId: string): boolean => {
+      const name = categoryByProduct.get(productId) ?? 'Uncategorized'
+      return category.name === 'Others' ? otherNames.has(name) : name === category.name
+    }
+    const productIds = new Set(catalog.filter((product) => belongs(product.productId)).map((product) => product.productId))
+    const categorySales = (analytics?.productSales ?? []).filter((sale) => belongs(sale.productId))
+    const sold = Math.round(categorySales.reduce((sum, sale) => sum + sale.unitsSold, 0))
+    const revenue = categorySales.reduce((sum, sale) => sum + sale.grossRevenue, 0)
+    const orderCount = orders === null ? null : orders.filter((order) => order.lineItems.some((line) => line.productId !== null && productIds.has(line.productId))).length
+    return {
+      name: category.name,
+      color: category.color,
+      products: productIds.size,
+      sold,
+      orderCount,
+      aov: orderCount === null ? null : orderCount > 0 ? revenue / orderCount : 0,
+    }
+  })
+}
+
+function productCategory(payload: Record<string, unknown>): string {
+  if (typeof payload.product_type === 'string' && payload.product_type.trim()) return payload.product_type.trim()
+  if (typeof payload.type === 'string' && payload.type.trim()) return payload.type.trim()
+  return 'Uncategorized'
+}
+
+function CategoryPieChart({ data, breakdown, onNavigate }: { data: CategorySales[]; breakdown: readonly CategoryBreakdown[]; onNavigate?: (page: string) => void }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const total = data.reduce((sum, item) => sum + item.value, 0)
   const topCategory = data.length > 0 ? [...data].sort((a, b) => b.value - a.value)[0] : null
@@ -573,19 +647,24 @@ function CategoryPieChart({ data, onNavigate }: { data: CategorySales[]; onNavig
           {topSharePct >= 50 && secondCategory && (
             <p className="category-action-note"><Lightbulb size={13} /><span><b>{topCategory.name} drives most revenue.</b> Consider expanding <b>{secondCategory.name}</b> ({secondSharePct.toFixed(0)}%) to reduce concentration risk.</span></p>
           )}
-          <div className="category-compare">
-            {data.map((entry) => {
-              const pct = total > 0 ? (entry.value / total) * 100 : 0
-              return (
-                <div key={entry.name} className="category-compare-row">
-                  <span className="category-compare-name">{entry.name}</span>
-                  <div className="category-compare-track"><i style={{ width: `${pct}%`, background: entry.color } as CSSProperties} /></div>
-                  <strong>{pct.toFixed(0)}%</strong>
-                  <small>{formatMoney(entry.value)}</small>
+          <section className="category-breakdown" aria-label="Category breakdown">
+            <div className="category-breakdown-heading"><span>Category Breakdown</span></div>
+            <div className="category-breakdown-rows">
+              {breakdown.map((entry) => (
+                <div key={entry.name} className="category-breakdown-row">
+                  <span className="category-breakdown-dot" style={{ background: entry.color } as CSSProperties} />
+                  <div>
+                    <strong>{entry.name}</strong>
+                    <p>
+                      <span>{entry.products} product{entry.products === 1 ? '' : 's'}</span><i>·</i>
+                      <span>{entry.sold} sold</span><i>·</i>
+                      <span>{entry.aov === null ? 'Awaiting order data' : `${formatMoney(entry.aov)} AOV`}</span>
+                    </p>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          </section>
           <div className="category-actions">
             <button type="button" onClick={() => onNavigate?.('analytics')}>View Category Report</button>
             <button type="button" onClick={() => onNavigate?.('products')}>Explore Products by Category</button>
