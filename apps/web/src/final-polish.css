@@ -1836,3 +1836,476 @@
 .app-shell.light-mode .locked-products-overlay {
   background: linear-gradient(180deg, rgba(255, 255, 255, .48), rgba(250, 245, 255, .94));
 }
+
+/* ── Complete light-theme coverage for remaining workspaces ─────── */
+.app-shell.light-mode .product-stat-card,
+.app-shell.light-mode .products-list-card,
+.app-shell.light-mode .products-toolbar,
+.app-shell.light-mode .product-metric,
+.app-shell.light-mode .products-empty-state {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 9px 24px rgba(15, 23, 42, .045) !important;
+}
+
+.app-shell.light-mode .product-row:hover {
+  background: #F9FAFB;
+}
+
+.app-shell.light-mode .product-title-block h3,
+.app-shell.light-mode .product-metric strong,
+.app-shell.light-mode .winning-product-main strong {
+  color: #111827 !important;
+}
+
+.app-shell.light-mode .product-title-block p,
+.app-shell.light-mode .product-metric small,
+.app-shell.light-mode .product-stat-card > small,
+.app-shell.light-mode .winning-product-main small {
+  color: #4B5563 !important;
+}
+
+.app-shell.light-mode .product-thumb,
+.app-shell.light-mode .product-thumb.fallback {
+  border-color: #E5E7EB !important;
+  background: radial-gradient(circle at 50% 0%, #DBEAFE, #FFFFFF 70%) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .08);
+}
+
+.app-shell.light-mode .performance-badge.excellent {
+  color: #FFFFFF !important;
+  border-color: #047857 !important;
+  background: #059669 !important;
+}
+
+.app-shell.light-mode .performance-badge.good {
+  color: #FFFFFF !important;
+  border-color: #1D4ED8 !important;
+  background: #2563EB !important;
+}
+
+.app-shell.light-mode .performance-badge.bad {
+  color: #FFFFFF !important;
+  border-color: #B91C1C !important;
+  background: #DC2626 !important;
+}
+
+.app-shell.light-mode .product-status.active {
+  color: #065F46;
+  border-color: #6EE7B7;
+  background: #D1FAE5;
+}
+
+.app-shell.light-mode .product-status.draft {
+  color: #92400E;
+  border-color: #FCD34D;
+  background: #FEF3C7;
+}
+
+/* AI Command Center */
+.app-shell.light-mode .command-health,
+.app-shell.light-mode .agent-card {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 8px 22px rgba(15, 23, 42, .045);
+}
+
+.app-shell.light-mode .command-health h2,
+.app-shell.light-mode .agent-card h3 {
+  color: #111827;
+}
+
+.app-shell.light-mode .command-health p,
+.app-shell.light-mode .agent-card p,
+.app-shell.light-mode .agent-card-footer {
+  color: #4B5563 !important;
+}
+
+.app-shell.light-mode .agent-big-icon.green {
+  color: #FFFFFF;
+  border: 1px solid #047857;
+  background: #059669;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, .20);
+}
+
+.app-shell.light-mode .agent-big-icon.purple {
+  color: #FFFFFF;
+  border: 1px solid #6D28D9;
+  background: #7C3AED;
+}
+
+.app-shell.light-mode .agent-status.ready {
+  padding: 4px 8px;
+  color: #FFFFFF;
+  border: 1px solid #047857;
+  border-radius: 999px;
+  background: #059669;
+  font-weight: 800;
+}
+
+/* Shared status saturation */
+.app-shell.light-mode .status-badge.green {
+  color: #065F46 !important;
+  border-color: #6EE7B7 !important;
+  background: #D1FAE5 !important;
+  font-weight: 750;
+}
+
+.app-shell.light-mode .status-badge.amber {
+  color: #92400E !important;
+  border-color: #FCD34D !important;
+  background: #FEF3C7 !important;
+  font-weight: 750;
+}
+
+.app-shell.light-mode .status-badge.red {
+  color: #991B1B !important;
+  border-color: #FCA5A5 !important;
+  background: #FEE2E2 !important;
+  font-weight: 750;
+}
+
+.app-shell.light-mode .status-badge.blue {
+  color: #1E40AF !important;
+  border-color: #93C5FD !important;
+  background: #DBEAFE !important;
+  font-weight: 750;
+}
+
+.app-shell.light-mode .status-badge.purple,
+.app-shell.light-mode .phase-tag {
+  color: #5B21B6 !important;
+  border-color: #C4B5FD !important;
+  background: #EDE9FE !important;
+  font-weight: 750;
+}
+
+/* Recommendations */
+.app-shell.light-mode .recommendation-summary,
+.app-shell.light-mode .recommendation-card,
+.app-shell.light-mode .evidence-stack,
+.app-shell.light-mode .evidence-line {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .recommendation-card {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+}
+
+.app-shell.light-mode .recommendation-card:hover {
+  border-color: #93C5FD !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .07);
+}
+
+.app-shell.light-mode .recommendation-card h3,
+.app-shell.light-mode .evidence-line strong {
+  color: #111827;
+}
+
+.app-shell.light-mode .recommendation-card p,
+.app-shell.light-mode .evidence-snippets span,
+.app-shell.light-mode .evidence-line > span {
+  color: #4B5563;
+}
+
+.app-shell.light-mode .button.approve {
+  color: #FFFFFF;
+  border-color: #047857;
+  background: #059669;
+}
+
+.app-shell.light-mode .button.reject {
+  color: #FFFFFF;
+  border-color: #B91C1C;
+  background: #DC2626;
+}
+
+/* Automation, campaigns, support, exports, and billing */
+.app-shell.light-mode .automation-mode,
+.app-shell.light-mode .canvas-card,
+.app-shell.light-mode .workflow-list-card,
+.app-shell.light-mode .campaign-hero,
+.app-shell.light-mode .template-card,
+.app-shell.light-mode .support-hero,
+.app-shell.light-mode .ticket-form,
+.app-shell.light-mode .ticket-list-card,
+.app-shell.light-mode .export-intro,
+.app-shell.light-mode .export-card,
+.app-shell.light-mode .billing-current,
+.app-shell.light-mode .usage-panel,
+.app-shell.light-mode .roi-panel,
+.app-shell.light-mode .plan-card,
+.app-shell.light-mode .gift-panel {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06) !important;
+}
+
+.app-shell.light-mode .campaign-hero {
+  background: radial-gradient(circle at 88% 45%, rgba(124, 58, 237, .13), transparent 34%), #FFFFFF !important;
+}
+
+.app-shell.light-mode .campaign-hero-art {
+  color: #7C3AED;
+  border-color: #C4B5FD;
+  background: #F5F3FF;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, .10);
+}
+
+.app-shell.light-mode .automation-mode-icon,
+.app-shell.light-mode .support-hero-icon,
+.app-shell.light-mode .report-banner-icon,
+.app-shell.light-mode .plan-icon,
+.app-shell.light-mode .export-icon,
+.app-shell.light-mode .workflow-icon,
+.app-shell.light-mode .ticket-icon {
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, .7);
+  background: #2563EB;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .18);
+}
+
+.app-shell.light-mode .automation-mode-icon,
+.app-shell.light-mode .plan-icon { background: #7C3AED; }
+.app-shell.light-mode .ticket-icon { background: #0891B2; }
+
+.app-shell.light-mode .workflow-copy strong,
+.app-shell.light-mode .ticket-row strong,
+.app-shell.light-mode .template-card h3,
+.app-shell.light-mode .export-card h3,
+.app-shell.light-mode .plan-card h3 {
+  color: #111827;
+}
+
+.app-shell.light-mode .workflow-copy small,
+.app-shell.light-mode .ticket-row small,
+.app-shell.light-mode .template-card p,
+.app-shell.light-mode .export-card p,
+.app-shell.light-mode .plan-card p {
+  color: #4B5563;
+}
+
+.app-shell.light-mode .ticket-form input,
+.app-shell.light-mode .ticket-form textarea,
+.app-shell.light-mode .ticket-form select,
+.app-shell.light-mode .gift-input input {
+  color: #111827;
+  border-color: #D1D5DB;
+  background: #FFFFFF;
+}
+
+/* Copilot: explicitly white chat and evidence surfaces. */
+.app-shell.light-mode .f8-copilot-layout .copilot-main,
+.app-shell.light-mode .f8-copilot-layout .copilot-sidebar,
+.app-shell.light-mode .f8-answer {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+}
+
+.app-shell.light-mode .f8-answer {
+  background: #F8FAFC !important;
+}
+
+.app-shell.light-mode .f8-answer p,
+.app-shell.light-mode .f8-evidence-table strong,
+.app-shell.light-mode .copilot-welcome h2,
+.app-shell.light-mode .copilot-empty strong {
+  color: #111827 !important;
+}
+
+.app-shell.light-mode .f8-answer-head,
+.app-shell.light-mode .f8-evidence-table span,
+.app-shell.light-mode .f8-evidence-table small,
+.app-shell.light-mode .copilot-welcome p,
+.app-shell.light-mode .copilot-empty span,
+.app-shell.light-mode .f8-thread small {
+  color: #4B5563 !important;
+}
+
+.app-shell.light-mode .f8-copilot-form textarea,
+.app-shell.light-mode .copilot-composer textarea {
+  color: #111827;
+  border-color: #D1D5DB;
+  background: #FFFFFF;
+  caret-color: #2563EB;
+}
+
+.app-shell.light-mode .f8-copilot-form textarea::placeholder,
+.app-shell.light-mode .copilot-composer textarea::placeholder {
+  color: #6B7280;
+  opacity: 1;
+}
+
+.app-shell.light-mode .suggested-prompts button,
+.app-shell.light-mode .f8-thread {
+  color: #374151;
+  border-color: #E5E7EB;
+  background: #FFFFFF;
+}
+
+.app-shell.light-mode .suggested-prompts button:hover,
+.app-shell.light-mode .f8-thread:hover,
+.app-shell.light-mode .f8-thread.active {
+  color: #111827;
+  background: #F3F4F6;
+}
+
+/* Reports */
+.app-shell.light-mode .report-banner,
+.app-shell.light-mode .f8-report-grid > .card,
+.app-shell.light-mode .forecast-card,
+.app-shell.light-mode .report-run {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+}
+
+.app-shell.light-mode .forecast-card {
+  border-color: #A7F3D0 !important;
+  background: #ECFDF5 !important;
+}
+
+.app-shell.light-mode .forecast-card strong { color: #059669; }
+.app-shell.light-mode .forecast-card span,
+.app-shell.light-mode .report-run strong { color: #111827; }
+.app-shell.light-mode .forecast-card small,
+.app-shell.light-mode .report-run small,
+.app-shell.light-mode .method-row { color: #4B5563; }
+
+.app-shell.light-mode .report-generate-controls select {
+  color: #111827;
+  border-color: #D1D5DB;
+  background: #FFFFFF;
+}
+
+/* Settings */
+.app-shell.light-mode .settings-nav,
+.app-shell.light-mode .settings-panel,
+.app-shell.light-mode .setting-row,
+.app-shell.light-mode .settings-save {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .settings-nav-item {
+  color: #374151;
+}
+
+.app-shell.light-mode .settings-nav-item:hover,
+.app-shell.light-mode .settings-nav-item.active {
+  color: #1D4ED8;
+  background: #EFF6FF;
+}
+
+.app-shell.light-mode .settings-panel-head h3,
+.app-shell.light-mode .setting-row strong,
+.app-shell.light-mode .setting-readonly {
+  color: #111827;
+}
+
+.app-shell.light-mode .settings-panel-head p,
+.app-shell.light-mode .setting-row small,
+.app-shell.light-mode .settings-save {
+  color: #4B5563;
+}
+
+.app-shell.light-mode .setting-input,
+.app-shell.light-mode .theme-choice {
+  color: #111827;
+  border-color: #D1D5DB;
+  background: #FFFFFF;
+}
+
+.app-shell.light-mode .theme-choice button.selected {
+  color: #1D4ED8;
+  background: #DBEAFE;
+}
+
+/* Admin operations */
+.app-shell.light-mode .f9-admin-login,
+.app-shell.light-mode .f9-ops-grid > .card,
+.app-shell.light-mode .f9-metric,
+.app-shell.light-mode .f9-job-card,
+.app-shell.light-mode .f9-message {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+}
+
+.app-shell.light-mode .f9-admin-login p,
+.app-shell.light-mode .f9-ops-head p,
+.app-shell.light-mode .f9-maintenance p,
+.app-shell.light-mode .f9-flag,
+.app-shell.light-mode .f9-job-row small {
+  color: #4B5563;
+}
+
+.app-shell.light-mode .f9-card-title,
+.app-shell.light-mode .f9-job-row strong,
+.app-shell.light-mode .f9-metric strong {
+  color: #111827;
+}
+
+.app-shell.light-mode .f9-admin-login input {
+  color: #111827;
+  border-color: #D1D5DB;
+  background: #FFFFFF;
+}
+
+/* Global light inputs, popovers, and utility surfaces */
+.app-shell.light-mode .table-search,
+.app-shell.light-mode .products-search,
+.app-shell.light-mode .orders-search,
+.app-shell.light-mode .customers-search,
+.app-shell.light-mode .inventory-search,
+.app-shell.light-mode .custom-select,
+.app-shell.light-mode .modal-card,
+.app-shell.light-mode .profile-menu,
+.app-shell.light-mode .notification-drawer,
+.app-shell.light-mode .evidence-drawer,
+.app-shell.light-mode .toast {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .table-search input,
+.app-shell.light-mode .products-search input,
+.app-shell.light-mode .orders-search input,
+.app-shell.light-mode .customers-search input,
+.app-shell.light-mode .inventory-search input,
+.app-shell.light-mode .modal-card input,
+.app-shell.light-mode .modal-card textarea {
+  color: #111827 !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode :is(.table-search, .products-search, .orders-search, .customers-search, .inventory-search, .modal-card) input::placeholder,
+.app-shell.light-mode .modal-card textarea::placeholder {
+  color: #6B7280 !important;
+  opacity: 1;
+}
+
+.app-shell.light-mode .modal-card > p,
+.app-shell.light-mode .profile-menu small,
+.app-shell.light-mode .notification-empty,
+.app-shell.light-mode .drawer-kicker {
+  color: #4B5563;
+}
+
+.app-shell.light-mode .modal-card h2,
+.app-shell.light-mode .profile-menu strong,
+.app-shell.light-mode .notification-drawer h2,
+.app-shell.light-mode .evidence-drawer h2 {
+  color: #111827;
+}
