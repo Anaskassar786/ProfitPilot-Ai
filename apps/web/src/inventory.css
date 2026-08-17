@@ -345,8 +345,52 @@
   color: var(--text-primary) !important;
 }
 
+.app-shell.light-mode .inventory-badge.status-in_stock,
+.light-mode .inventory-badge.status-in_stock {
+  color: #047857 !important;
+  background: rgba(16,185,129,.12) !important;
+  border-color: rgba(16,185,129,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-low,
+.light-mode .inventory-badge.status-low {
+  color: #B45309 !important;
+  background: rgba(245,158,11,.12) !important;
+  border-color: rgba(245,158,11,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-out,
+.light-mode .inventory-badge.status-out {
+  color: #B91C1C !important;
+  background: rgba(239,68,68,.12) !important;
+  border-color: rgba(239,68,68,.25) !important;
+}
+.app-shell.light-mode .inventory-badge.status-untracked,
+.light-mode .inventory-badge.status-untracked {
+  color: #4B5563 !important;
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+}
+.app-shell.light-mode .inventory-details-drawer,
+.light-mode .inventory-details-drawer {
+  background: #FFFFFF !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .inventory-details-drawer > header,
+.light-mode .inventory-details-drawer > header {
+  background: linear-gradient(145deg, rgba(37,99,235,.06), transparent) !important;
+}
+
 
 /* ─── PR #38 Commit 8: Inventory modern redesign ─── */
+.inventory-overview-grid { gap: 16px !important; }
+.inventory-health-card.modern,
+.inventory-distribution-card.modern,
+.inventory-value-card.modern {
+  min-height: 320px !important;
+  padding: 24px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .inventory-health-card.modern .grade-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 800; margin-left: auto; }
 .grade-badge.green { color: #059669; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.2); }
 .grade-badge.blue { color: #2563EB; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.2); }
@@ -354,22 +398,55 @@
 .grade-badge.red { color: #DC2626; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.2); }
 .grade-badge.muted { color: var(--text-tertiary); background: var(--bg-secondary); border: 1px solid var(--border-default); }
 
+.inventory-health-gauge-wrap.large { display: flex; justify-content: center; align-items: center; padding: 4px 0 8px; }
 .inventory-health-gauge-wrap.large .health-gauge.large { width: 140px; height: 140px; }
 .inventory-health-gauge-wrap.large .health-gauge.large::before { inset: 10px; }
-.inventory-health-gauge-wrap.large .gauge-inner strong { font-size: 32px; }
+.inventory-health-gauge-wrap.large .gauge-inner strong { font-size: 32px; font-weight: 800; }
+.inventory-health-gauge-wrap.large .gauge-inner span { font-size: 11px; font-weight: 600; }
 
-.inventory-health-components.modern { gap: 12px; }
+.inventory-health-components.modern { display: flex; flex-direction: column; gap: 12px; list-style: none; padding: 0; margin: 0; width: 100%; }
+.inventory-health-components.modern li { display: flex; flex-direction: column; gap: 6px; }
+.inventory-health-components.modern li > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inventory-health-components.modern li > div:first-child span { font-size: 13px; font-weight: 500; color: var(--text-secondary); flex: 1; }
+.inventory-health-components.modern li > div:first-child strong { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.inventory-health-components.modern small { font-size: 11px; color: var(--text-tertiary); }
 .metric-row-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; background: var(--bg-secondary); color: var(--text-tertiary); flex: 0 0 auto; }
-.inventory-health-bar .animated { transition: width 600ms cubic-bezier(.4,0,.2,1); background: linear-gradient(90deg,var(--blue),var(--purple)); }
+.inventory-health-bar { height: 6px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; width: 100%; }
+.inventory-health-bar .animated { display: block; height: 100%; border-radius: inherit; transition: width 600ms cubic-bezier(.4,0,.2,1); background: linear-gradient(90deg,var(--blue),var(--purple)); }
 
-.inventory-value-card.modern .inventory-top-value.modern { gap: 8px; }
+/* Stock Distribution Modern */
+.inventory-donut { position: relative; width: 100%; height: 180px; display: flex; justify-content: center; align-items: center; }
+.inventory-donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.inventory-donut-center strong { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.04em; }
+.inventory-donut-center span { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+.inventory-distribution-legend.modern { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 0; width: 100%; }
+.inventory-distribution-legend.modern li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--elevation-card-soft-2); border: 1px solid var(--border-soft); transition: all 150ms ease; }
+.inventory-distribution-legend.modern li:hover { background: var(--bg-hover); border-color: var(--border-default); }
+.inventory-distribution-legend.modern .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.inventory-distribution-legend.modern .legend-status { font-size: 12px; font-weight: 500; color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-distribution-legend.modern .legend-count { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.inventory-distribution-legend.modern .legend-pct { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+
+/* Inventory Value Modern */
+.inventory-value-card.modern .inventory-value-total { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -0.04em; display: block; }
+.inventory-value-card.modern > small { font-size: 12px; color: var(--text-tertiary); margin-top: -6px; margin-bottom: 4px; display: block; }
+.inventory-value-card.modern .inventory-top-value.modern { display: flex; flex-direction: column; gap: 8px; list-style: none; padding: 0; margin: 0; width: 100%; }
+.inventory-value-card.modern .inventory-top-value.modern li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--elevation-card-soft-2); border: 1px solid var(--border-soft); transition: all 150ms ease; }
+.inventory-value-card.modern .inventory-top-value.modern li:hover { background: var(--bg-hover); border-color: var(--border-default); transform: translateY(-1px); }
 .value-item-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-.value-item-thumb { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-soft); flex: 0 0 auto; }
+.value-item-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-soft); flex: 0 0 auto; }
 .value-item-thumb.placeholder { display: grid; place-items: center; background: var(--bg-secondary); color: var(--text-tertiary); }
-.value-distribution-bar { height: 4px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; margin-top: 4px; width: 100%; }
+.value-item-main > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.value-item-main strong { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.value-item-main small { font-size: 11px; color: var(--text-tertiary); }
+.value-distribution-bar { height: 4px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; margin-top: 3px; width: 100%; }
 .value-distribution-bar i { display: block; height: 100%; background: linear-gradient(90deg,var(--blue),var(--profit)); border-radius: inherit; }
+.inventory-top-value-amount { text-align: right; display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+.inventory-top-value-amount strong { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.inventory-top-value-amount small { font-size: 11px; color: var(--text-tertiary); }
 
 .inventory-sort-control { display: flex; align-items: center; gap: 6px; }
-.sort-dropdown-clean { display: flex; align-items: center; gap: 6px; }
-.sort-direction-toggle { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); }
+.inventory-sort-control .custom-select { min-width: 140px; }
+.inventory-sort-control button { width: 36px; height: 36px; display: grid; place-items: center; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; background: rgba(8,13,24,.28); font-size: 13px; cursor: pointer; transition: all 150ms ease; }
+.inventory-sort-control button:hover { background: var(--bg-hover); color: var(--text); }
 

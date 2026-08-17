@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock3,
+  DollarSign,
   Download,
   ExternalLink,
   Filter,
@@ -38,6 +39,7 @@ import {
   UserRound,
   Users,
   X,
+  XCircle,
 } from 'lucide-react'
 import { fetchOrder, fetchOrderInsights, fetchOrders } from './api.js'
 import { CustomSelect } from './CustomSelect.js'
@@ -217,24 +219,23 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
 export function PlanLockedFeature({
   featureName,
   requiredPlan: _requiredPlan,
-  description: _description,
+  description,
   children,
   onUpgrade,
 }: {
   featureName: string
-  requiredPlan: 'growth' | 'commander'
+  requiredPlan?: 'growth' | 'commander'
   description?: string
   children: ReactNode
   onUpgrade: () => void
 }) {
-  // Global Fix 2 — unified CTA: no plan names, just "Upgrade to unlock"
-  const tagline = 'Upgrade to unlock'
+  const tagline = description ?? (_requiredPlan === 'commander' ? 'Upgrade to Commander to unlock' : 'Upgrade to unlock')
   return (
     <button
       className="plan-locked-feature"
       onClick={onUpgrade}
       aria-label={`Upgrade to unlock ${featureName}`}
-      title="Upgrade to unlock"
+      title={tagline}
     >
       <span className="plan-locked-blur" aria-hidden="true">
         {children}
@@ -271,12 +272,17 @@ function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByF
   const paidRate = numberOrNull(data.paidRate)
   const tone = text(data.tone) === 'healthy' ? 'healthy' : text(data.tone) === 'warning' ? 'warning' : 'critical'
   const sweep = score === null || insufficient ? 0 : Math.max(8, Math.round(score * 2.4))
+  const gradeColor = grade === 'A' || grade === 'A+' ? 'green' : grade === 'B' ? 'blue' : grade === 'C' ? 'amber' : grade === 'D' || grade === 'F' ? 'red' : 'muted'
 
-  return <article className="orders-basic-card order-health-card">
-    <div className="orders-insight-label"><HeartPulse size={16} /><span>Order Health</span></div>
-    <div className="order-health-gauge-wrap">
+  return <article className="orders-basic-card order-health-card modern">
+    <div className="orders-insight-label">
+      <HeartPulse size={16} />
+      <span>Order Health</span>
+      {!insufficient && grade !== '—' && <span className={`grade-badge ${gradeColor}`}>{grade}</span>}
+    </div>
+    <div className="order-health-gauge-wrap large">
       <div
-        className={`health-gauge compact ${insufficient ? 'no-data' : tone}`}
+        className={`health-gauge large ${insufficient ? 'no-data' : tone}`}
         style={!insufficient && score !== null ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties : undefined}
       >
         <div className="gauge-inner">
@@ -285,11 +291,38 @@ function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByF
         </div>
       </div>
     </div>
-    <div className="order-health-stats">
-      <div><span>✅ Fulfilled</span><strong>{fulfilledRate === null ? '—' : `${fulfilledRate}%`}</strong></div>
-      <div><span>⏳ Cancelled</span><strong>{cancelledRate === null ? '—' : `${cancelledRate}%`}</strong></div>
-      <div><span>💰 Paid</span><strong>{paidRate === null ? '—' : `${paidRate}%`}</strong></div>
-    </div>
+    <ul className="order-health-components modern">
+      <li>
+        <div>
+          <span className="metric-row-icon green"><CheckCircle2 size={14} /></span>
+          <span>Fulfilled</span>
+          <strong>{fulfilledRate === null ? '—' : `${fulfilledRate}%`}</strong>
+        </div>
+        <div className="order-health-bar" role="presentation">
+          <i style={{ width: `${fulfilledRate ?? 0}%` }} className="animated green" />
+        </div>
+      </li>
+      <li>
+        <div>
+          <span className="metric-row-icon red"><XCircle size={14} /></span>
+          <span>Cancelled</span>
+          <strong>{cancelledRate === null ? '—' : `${cancelledRate}%`}</strong>
+        </div>
+        <div className="order-health-bar" role="presentation">
+          <i style={{ width: `${cancelledRate ?? 0}%` }} className="animated red" />
+        </div>
+      </li>
+      <li>
+        <div>
+          <span className="metric-row-icon blue"><DollarSign size={14} /></span>
+          <span>Paid</span>
+          <strong>{paidRate === null ? '—' : `${paidRate}%`}</strong>
+        </div>
+        <div className="order-health-bar" role="presentation">
+          <i style={{ width: `${paidRate ?? 0}%` }} className="animated blue" />
+        </div>
+      </li>
+    </ul>
   </article>
 }
 function PeakTimeContent({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'available' ? <><strong>{text(data.day)} · {text(data.hourLabel)}</strong><p>{number(data.ordersAtPeakHour)} orders at the peak hour</p></> : <InsightUnavailable message={text(data.message)} /> }

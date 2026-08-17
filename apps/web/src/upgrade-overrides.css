@@ -4,7 +4,7 @@
 .orders-sort-control .custom-select-trigger,.customers-sort .custom-select-trigger{min-height:30px;padding-right:8px}
 .orders-sort-control .custom-select-trigger>strong,.customers-sort .custom-select-trigger>strong{min-width:48px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inventory-sort-control{min-width:0}
-.inventory-sort-control .custom-select{min-width:132px;max-width:200px}
-.inventory-sort-control .custom-select-trigger>strong{min-width:56px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inventory-sort-control .custom-select{min-width:140px;max-width:220px}
+.inventory-sort-control .custom-select-trigger>strong{min-width:60px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .products-controls .custom-select{min-width:148px;max-width:220px}
 .products-controls .custom-select-trigger>strong{min-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

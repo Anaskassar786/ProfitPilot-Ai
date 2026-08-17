@@ -112,16 +112,37 @@
 .order-details-drawer > footer { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 20px; border-top:1px solid var(--border); background:var(--card); }.order-details-drawer > footer > span { display:flex; align-items:center; gap:6px; color:var(--text-tertiary); font-size:7px; }.order-details-drawer > footer .button { text-decoration:none; }
 .drawer-skeleton { position:relative; display:flex; flex-direction:column; gap:18px; padding:72px 20px 20px; }.drawer-skeleton button { position:absolute; top:20px; right:20px; padding:7px; background:transparent; }.drawer-skeleton span { height:80px; border-radius:10px; background:linear-gradient(90deg,rgba(107,114,128,.06),rgba(107,114,128,.14),rgba(107,114,128,.06)); background-size:200%; animation:shimmer 1.4s infinite; }
 
-.order-health-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px; }
-.order-health-card .orders-insight-label { justify-content:center; margin-bottom:4px; }
-.order-health-gauge-wrap { display:flex; justify-content:center; margin:2px 0 4px; }
-.order-health-gauge-wrap .health-gauge { width:78px; height:78px; }
-.order-health-gauge-wrap .gauge-inner strong { font-size:20px; letter-spacing:-.06em; }
-.order-health-gauge-wrap .gauge-inner span { font-size:7px; letter-spacing:.06em; }
-.order-health-stats { width:100%; display:flex; flex-direction:column; gap:3px; }
-.order-health-stats > div { display:flex; justify-content:space-between; align-items:center; font-size:7px; color:var(--text-secondary); }
-.order-health-stats > div span { color:var(--text-tertiary); font-size:7px; }
-.order-health-stats > div strong { font-family:var(--font-mono); color:var(--text); font-size:8px; }
+.order-health-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.order-health-card .orders-insight-label { display: flex; align-items: center; gap: 8px; margin-bottom: 0; width: 100%; }
+.order-health-card .grade-badge { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 8px; font-size: 12px; font-weight: 800; border-radius: 6px; }
+.order-health-card .grade-badge.green { background: rgba(16,185,129,.16); color: #34D399; border: 1px solid rgba(16,185,129,.3); }
+.order-health-card .grade-badge.blue { background: rgba(59,130,246,.16); color: #60A5FA; border: 1px solid rgba(59,130,246,.3); }
+.order-health-card .grade-badge.amber { background: rgba(245,158,11,.16); color: #FBBF24; border: 1px solid rgba(245,158,11,.3); }
+.order-health-card .grade-badge.red { background: rgba(239,68,68,.16); color: #F87171; border: 1px solid rgba(239,68,68,.3); }
+.order-health-card .grade-badge.muted { background: rgba(107,114,128,.16); color: #9CA3AF; border: 1px solid rgba(107,114,128,.3); }
+
+.order-health-gauge-wrap { display: flex; justify-content: center; margin: 4px 0 8px; }
+.order-health-gauge-wrap.large .health-gauge.large,
+.order-health-gauge-wrap .health-gauge { width: 120px; height: 120px; }
+.order-health-gauge-wrap.large .health-gauge.large::before,
+.order-health-gauge-wrap .health-gauge::before { inset: 8px; }
+.order-health-gauge-wrap .gauge-inner strong { font-size: 26px; font-weight: 800; letter-spacing: -.04em; color: var(--text); }
+.order-health-gauge-wrap .gauge-inner span { font-size: 10px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary); }
+
+.order-health-components.modern { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; width: 100%; }
+.order-health-components.modern li { display: flex; flex-direction: column; gap: 4px; }
+.order-health-components.modern li > div:first-child { display: flex; align-items: center; gap: 8px; }
+.order-health-components.modern li > div:first-child span { font-size: 12px; font-weight: 500; color: var(--text-secondary); flex: 1; }
+.order-health-components.modern li > div:first-child strong { font-size: 12px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.order-health-bar { height: 5px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; width: 100%; }
+.order-health-bar i.animated { display: block; height: 100%; border-radius: inherit; transition: width 600ms cubic-bezier(.4,0,.2,1); }
+.order-health-bar i.animated.green { background: linear-gradient(90deg, #10B981, #34D399); }
+.order-health-bar i.animated.red { background: linear-gradient(90deg, #EF4444, #F87171); }
+.order-health-bar i.animated.blue { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
+.metric-row-icon { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; flex: 0 0 auto; }
+.metric-row-icon.green { color: #10B981; background: rgba(16,185,129,.14); }
+.metric-row-icon.red { color: #EF4444; background: rgba(239,68,68,.14); }
+.metric-row-icon.blue { color: #3B82F6; background: rgba(59,130,246,.14); }
 
 @keyframes shimmer { to { background-position:-200% 0; } }
 @media (max-width:1180px) { .orders-basic-insights { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-premium-insights { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.orders-table { min-width:950px; } }
@@ -213,6 +234,57 @@
 .app-shell.light-mode .orders-error {
   background: var(--bg-surface) !important;
   border-color: var(--border-default) !important;
+}
+
+.app-shell.light-mode .payment-paid,
+.app-shell.light-mode .status-completed,
+.light-mode .payment-paid,
+.light-mode .status-completed {
+  color: #047857 !important;
+  background: rgba(16,185,129,.12) !important;
+  border-color: rgba(16,185,129,.25) !important;
+}
+.app-shell.light-mode .payment-pending,
+.app-shell.light-mode .status-pending,
+.light-mode .payment-pending,
+.light-mode .status-pending {
+  color: #B45309 !important;
+  background: rgba(245,158,11,.12) !important;
+  border-color: rgba(245,158,11,.25) !important;
+}
+.app-shell.light-mode .payment-not_paid,
+.app-shell.light-mode .status-canceled,
+.light-mode .payment-not_paid,
+.light-mode .status-canceled {
+  color: #B91C1C !important;
+  background: rgba(239,68,68,.12) !important;
+  border-color: rgba(239,68,68,.25) !important;
+}
+.app-shell.light-mode .status-new,
+.light-mode .status-new {
+  color: #1D4ED8 !important;
+  background: rgba(37,99,235,.12) !important;
+  border-color: rgba(37,99,235,.25) !important;
+}
+.app-shell.light-mode .order-id,
+.light-mode .order-id {
+  color: #2563EB !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .order-customer > span,
+.light-mode .order-customer > span {
+  background: rgba(37,99,235,.1) !important;
+  color: #1D4ED8 !important;
+  border-color: rgba(37,99,235,.25) !important;
+}
+.app-shell.light-mode .order-details-drawer,
+.light-mode .order-details-drawer {
+  background: #FFFFFF !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .order-details-drawer > header,
+.light-mode .order-details-drawer > header {
+  background: linear-gradient(145deg, rgba(37,99,235,.06), transparent) !important;
 }
 
 
