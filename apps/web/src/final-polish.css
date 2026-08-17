@@ -403,3 +403,100 @@
     min-height: 0;
   }
 }
+
+/* ── Search workspace and command palette light surfaces ────────── */
+.app-shell.light-mode .search-workspace,
+.app-shell.light-mode .command-trigger {
+  color: #6B7280 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.app-shell.light-mode .search-workspace:hover,
+.app-shell.light-mode .command-trigger:hover {
+  color: #111827 !important;
+  border-color: #CBD5E1 !important;
+  background: #F9FAFB !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .08);
+}
+
+.app-shell.light-mode .search-workspace > span,
+.app-shell.light-mode .command-trigger > span {
+  color: #6B7280 !important;
+}
+
+.app-shell.light-mode .search-workspace kbd,
+.app-shell.light-mode .command-trigger kbd,
+.app-shell.light-mode .command-palette kbd {
+  color: #4B5563 !important;
+  border-color: #D1D5DB !important;
+  background: #F3F4F6 !important;
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, .06);
+}
+
+.app-shell.light-mode .command-palette,
+.app-shell.light-mode .command-panel {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .18), 0 0 0 1px rgba(255, 255, 255, .8) !important;
+}
+
+.app-shell.light-mode .command-input-wrap {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .command-input-wrap input {
+  color: #111827 !important;
+  background: #FFFFFF !important;
+  caret-color: #2563EB;
+}
+
+.app-shell.light-mode .command-input-wrap input::placeholder {
+  color: #6B7280 !important;
+  opacity: 1;
+}
+
+.app-shell.light-mode .command-results,
+.app-shell.light-mode .command-footer {
+  color: #4B5563 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .command-section-label {
+  color: #6B7280 !important;
+}
+
+.app-shell.light-mode .command-result {
+  color: #374151 !important;
+  background: transparent !important;
+}
+
+.app-shell.light-mode .command-result:hover,
+.app-shell.light-mode .command-result:focus-visible {
+  color: #111827 !important;
+  background: #F3F4F6 !important;
+}
+
+.app-shell.light-mode .command-result-icon {
+  color: #2563EB !important;
+  background: #DBEAFE !important;
+}
+
+.app-shell.light-mode .command-result > small {
+  color: #7C3AED !important;
+}
+
+.app-shell.light-mode .command-result > svg,
+.app-shell.light-mode .command-empty,
+.app-shell.light-mode .command-footer {
+  color: #6B7280 !important;
+}
+
+.app-shell.light-mode .command-empty strong {
+  color: #111827 !important;
+}
