@@ -349,6 +349,7 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
   const sweep = total > 0 ? Math.max(2, Math.round((fulfilled / total) * 360)) : 360
   const restColor = rate === 0 && total > 0 ? '#EF4444' : '#F59E0B'
   const avgDays = averageFulfillmentDays(orders)
+  const status = fulfillmentStatus(rate, total)
   return <article className={`orders-basic-card rate-card fulfillment ${tone}`}>
     <div className="orders-insight-label"><CheckCircle2 size={16} /><span>Fulfillment Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
@@ -357,8 +358,18 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
       </div>
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
     </div>
-    <p className={`rate-status ${tone}`}><i />{rate === null ? 'Awaiting order data' : rate === 100 ? 'Excellent — every order fulfilled' : rate >= 80 ? 'On track — most orders fulfilled' : rate >= 50 ? 'Watch — fulfillment backlog' : 'Attention — many orders unfulfilled'}</p>
-    <small className="rate-note">{text(data.basis) ?? 'Shopify fulfillment status'} · industry comparison connects when benchmark data is available.</small>
+    <div className="rate-divider" />
+    <div className="rate-metrics">
+      <div className="rate-mini-stat" title="Unfulfilled orders from the current order data">
+        <span className="rate-mini-icon"><Package size={13} /></span>
+        <div><small>Pending</small><strong>{total === 0 ? '—' : `${remaining} order${remaining === 1 ? '' : 's'}`}</strong></div>
+      </div>
+      <div className="rate-mini-stat" title={avgDays === null ? 'Awaiting fulfillment data' : 'Average of Shopify order timestamps (created → last updated) for fulfilled orders'}>
+        <span className="rate-mini-icon"><Clock3 size={13} /></span>
+        <div><small>Avg Fulfill Time</small><strong>{avgDays === null ? '—' : `${avgDays.toFixed(1)} days`}</strong></div>
+      </div>
+    </div>
+    <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
 function OrderHealthInsight({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
@@ -561,6 +572,14 @@ function cancellationStatus(rate: number | null): Readonly<{ tone: 'good' | 'wat
   if (rate < 2) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Healthy cancellation rate' }
   if (rate <= 5) return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Monitor cancellation trends' }
   return { tone: 'attention', icon: <AlertTriangle size={13} />, label: 'High cancellation rate — review orders' }
+}
+function fulfillmentStatus(rate: number | null, total: number): Readonly<{ tone: 'good' | 'watch' | 'attention' | 'neutral'; icon: ReactNode; label: string }> {
+  if (rate === null) return { tone: 'neutral', icon: <Clock3 size={13} />, label: 'Awaiting order data' }
+  if (rate === 100) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'All orders fulfilled' }
+  if (rate > 80) return { tone: 'good', icon: <CheckCircle2 size={13} />, label: 'Healthy fulfillment rate' }
+  if (rate >= 50) return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Fulfillment in progress' }
+  if (rate === 0 && total > 0) return { tone: 'attention', icon: <AlertTriangle size={13} />, label: 'Attention — orders need fulfillment' }
+  return { tone: 'watch', icon: <AlertTriangle size={13} />, label: 'Many orders awaiting fulfillment' }
 }
 function shortId(value: string): string { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value }
 function formatDate(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.valueOf()) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date) : '—' }

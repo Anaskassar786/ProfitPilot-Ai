@@ -2427,13 +2427,6 @@
 .rate-donut strong { color: var(--text); font-family: var(--font-mono); font-size: 21px; letter-spacing: -.03em; line-height: 1; }
 .rate-donut span { color: var(--text-tertiary); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .rate-subtitle { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.45; text-align: center; }
-.rate-status { display: flex; align-items: center; gap: 7px; margin: 0 !important; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
-.rate-status i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--text-tertiary); }
-.rate-status.excellent i { background: var(--green); }
-.rate-status.good i { background: var(--blue); }
-.rate-status.watch i { background: var(--amber); }
-.rate-status.attention i { background: var(--red); }
-.rate-note { color: var(--text-tertiary); font-size: 10px; line-height: 1.45; margin-top: auto; }
 /* PR #43: below-donut content — divider, real mini metrics, status message bar */
 .rate-divider { height: 1px; background: var(--border); }
 .rate-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
