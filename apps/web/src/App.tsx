@@ -527,7 +527,7 @@ function PageRouter({
       />
     )
   if (active === 'products') return <ProductsPage context={context} catalog={data.catalog} analytics={data.analytics} onSync={onSync} />
-  if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
+  if (active === 'orders') return <PageLayout eyebrow="Order operations" title="Orders" description="Search, filter, inspect, and export real Shopify orders with plan-enforced intelligence."><OrdersWorkspace context={context} onSync={onSync} onNavigate={(page) => { if (page === 'billing') onNavigate('billing'); else onNavigate(page) }} onToast={onToast} /></PageLayout>
   if (active === 'customers') return <PageLayout eyebrow="Customer intelligence" title="Customers" description="Real Shopify customers, honest order-history coverage, and plan-enforced retention intelligence."><CustomersPage context={context} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>

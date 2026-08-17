@@ -89,10 +89,18 @@ describe('PR #41 final polish contracts', () => {
     expect(tooltip).toContain('AI Forecast')
   })
 
-  it('preserves the working Volume and Value implementation byte-for-byte', () => {
+  it('preserves the working Volume and Value data logic (PR #42 restyles the visuals only)', () => {
     const analytics = source('./analytics.tsx')
     const correlation = functionSource(analytics, 'export function OrdersAOVCorrelation', 'export function SalesByChannel')
-    expect(sha256(correlation)).toBe('2e1613dfa9fb3ef5552b21eb423f94bee7465619893b6289333acb7d880aba17')
+    // PR #42 (A6) enhanced the chart's visuals, legend, and tooltip, so the
+    // byte-for-byte snapshot is replaced by a data-logic contract: every
+    // calculation that powers the chart must remain untouched.
+    expect(correlation).toContain("const real = trend.some((row) => row.orders > 0)")
+    expect(correlation).toContain("const orders = trend.reduce((sum, row) => sum + row.orders, 0)")
+    expect(correlation).toContain("const avg = orders ? trend.reduce((sum, row) => sum + row.revenue, 0) / orders : 0")
+    expect(correlation).toContain('dataKey="orders"')
+    expect(correlation).toContain('dataKey="aov"')
+    expect(sha256(correlation)).toBe('456c86839d754511c8816fbad148a979f77fa9e7ccda1565241e2f34128868c4')
   })
 
   it('preserves Jarvis orb and Products functionality source byte-for-byte', () => {
@@ -100,5 +108,85 @@ describe('PR #41 final polish contracts', () => {
     expect(sha256(source('./jarvis-orb.css'))).toBe('529cf7cdc543bd0fee5607f00ebf35547dc957c6dd08f53e56f67b47c7faa1b9')
     expect(sha256(source('./products.tsx'))).toBe('e6fc73ca1ad4a6f7be7ec237c7100adaec919101803d1757c8aa4829b19a41d1')
     expect(sha256(source('./products-model.ts'))).toBe('5a74f7e0ab08bce2a0b3a88af516a022a61ac36d4d077bb6f80bb959feaeb44f')
+  })
+})
+
+describe('PR #42 final polish contracts', () => {
+  it('ships light-theme visibility for every Analytics header control', () => {
+    const css = source('./analytics.css')
+    expect(css).toContain('.light-mode .analytics-page-icon')
+    expect(css).toContain('color: #2563EB !important')
+    expect(css).toContain('.light-mode .period-toggle button.active')
+    expect(css).toContain('background: #2563EB !important')
+    expect(css).toContain('.light-mode .analytics-tool-button')
+    expect(css).toContain('color: #111827 !important')
+    expect(css).toContain('.light-mode .custom-range-popover')
+  })
+
+  it('keeps the Revenue Momentum chart readable in light mode', () => {
+    const css = source('./analytics.css')
+    for (const contract of [
+      '.light-mode .revenue-trend .recharts-cartesian-grid line',
+      '.light-mode .revenue-trend .recharts-cartesian-axis-tick-value',
+      'stop-color: rgba(37, 99, 235, .15)',
+      '.light-mode .revenue-trend .chart-caption .legend.current',
+    ]) expect(css).toContain(contract)
+  })
+
+  it('ships the premium KPI card redesign', () => {
+    const analytics = source('./analytics.tsx')
+    expect(analytics).toContain('analytics-kpi premium')
+    expect(analytics).toContain('kpi-compare')
+    expect(analytics).toContain('vs. prior 28 days')
+    expect(analytics).toContain('Visualization pending')
+    expect(analytics).toContain('function KpiTooltip')
+    expect(analytics).toContain('function formatKpiValue')
+    expect(source('./analytics.css')).toContain('.analytics-kpi.premium')
+    expect(source('./analytics.css')).toContain('.kpi-chart')
+    expect(source('./analytics.css')).toContain('.light-mode .analytics-kpi.tone-0')
+  })
+
+  it('ships the empty-space fills for inventory, orders and dashboard cards', () => {
+    const css = source('./final-polish.css')
+    for (const selector of [
+      '.distribution-insights',
+      '.distribution-callouts',
+      '.distribution-stats',
+      '.distribution-actions',
+      '.value-metrics',
+      '.value-insight-strip',
+      '.value-actions',
+      '.top-product-layout',
+      '.top-product-stats',
+      '.top-product-insights',
+      '.top-product-actions',
+      '.orders-basic-card.rate-card',
+      '.rate-donut',
+      '.rate-progress',
+      '.ai-summary-extras',
+      '.ai-weekly-chart',
+      '.ai-summary-recs',
+      '.pie-extras',
+      '.category-compare',
+    ]) expect(css).toContain(selector)
+  })
+
+  it('keeps Recent Activity in the dashboard untouched apart from light-theme CSS', () => {
+    const dashboard = source('./dashboard.tsx')
+    expect(dashboard).toContain('activity-timeline')
+    expect(dashboard).toContain('RealOrderRow')
+    expect(dashboard).toContain('Sync more orders')
+  })
+
+  it('preserves the working dashboard charts and KPI data logic', () => {
+    const dashboard = source('./dashboard.tsx')
+    expect(dashboard).toContain('function RevenueBarChart')
+    expect(dashboard).toContain('function CompactCalendar')
+    expect(dashboard).toContain('aggregateRevenueByPeriod(data.analytics, periodView')
+    expect(dashboard).toContain('buildCalendarMonth(data.analytics, calYear, calMonth)')
+    const utils = source('./dashboard-utils.ts')
+    expect(utils).toContain('export function aggregateByCategory')
+    expect(utils).toContain('export function calculateGrowth')
+    expect(utils).toContain('export function generateSummary')
   })
 })

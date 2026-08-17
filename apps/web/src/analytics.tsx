@@ -110,56 +110,64 @@ function KpiCard({ kpi, index, loading }: { kpi: Kpi; index: number; loading: bo
   const data = kpi.sparkline.filter(Number.isFinite).map((value, point) => ({ point, value }))
   const icons = [BarChart3, ShoppingBag, Target, Activity, Users, Zap]; const Icon = icons[index] ?? Activity
   if (loading) return <article className="analytics-kpi skeleton-card"><div className="skeleton-line short" /><div className="skeleton-line value" /><div className="skeleton-line" /></article>
-  const toneColor = COLORS[index % COLORS.length] ?? '#38bdf8'
+  const toneColor = 'var(--accent)'
   const isFlat = data.length >= 2 && data.every((d) => d.value === data[0]?.value)
   const chartData = data.map((d, i) => ({
     ...d,
     plotValue: isFlat ? d.value * (1 + (i % 2 === 0 ? -0.04 : 0.04)) : d.value,
   }))
-  return <article className={`analytics-kpi tone-${index}`}>
+  // Per-KPI chart type: an area for revenue, bars for orders and customers, a
+  // trend line for AOV, and a professional data-pending panel for metrics whose
+  // source (visitor sessions, repeat history) is not connected yet.
+  const variant: 'area' | 'bars' | 'line' | 'pending' = index === 1 || index === 4 ? 'bars' : index === 2 ? 'line' : index === 3 || index === 5 ? 'pending' : 'area'
+  const gradientId = `kpi-grad-${index}`
+  return <article className={`analytics-kpi premium tone-${index} variant-${variant}`}>
     <header>
       <span className="kpi-icon"><Icon size={14} /></span>
       <small>{kpi.label}</small>
       {kpi.change !== null ? <b className={`kpi-trend-badge ${kpi.change >= 0 ? 'positive' : 'negative'}`} title="Change versus the previous period">{kpi.change >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}<span>{Math.abs(kpi.change).toFixed(1)}%</span><small>vs prev</small></b> : <b className="kpi-trend-badge neutral" title="A previous-period baseline is still building"><Activity size={12} /><span>New</span></b>}
     </header>
     <strong>{formatKpi(kpi)}</strong>
-    <p>{kpi.detail}</p>
-    <div className="sparkline" aria-label={`${kpi.label} recent trend`}>
-      {data.length >= 2 ? (
-        <ResponsiveContainer width="100%" height={52} minWidth={0} minHeight={0}>
-          <ComposedChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+    <p className="kpi-detail-line">{kpi.detail}</p>
+    <span className="kpi-compare">{kpi.change !== null ? <><i className={kpi.change >= 0 ? 'up' : 'down'} />vs. prior 28 days</> : 'Awaiting prior-period baseline'}</span>
+    {variant === 'pending' || data.length < 2 ? (
+      <div className="kpi-pending" aria-label={`${kpi.label} visualization pending`}>
+        <span className="kpi-pending-icon"><Icon size={15} /></span>
+        <div><strong>Visualization pending</strong><small>{data.length === 0 ? 'This metric needs a data source not connected yet' : 'More daily points unlock the trend chart'}</small></div>
+      </div>
+    ) : (
+      <div className="kpi-chart" aria-label={`${kpi.label} recent trend`}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
             <defs>
-              <linearGradient id={`kpi-grad-${index}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={toneColor} stopOpacity={0.52} />
-                <stop offset="55%" stopColor={toneColor} stopOpacity={0.20} />
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={toneColor} stopOpacity={0.55} />
+                <stop offset="55%" stopColor={toneColor} stopOpacity={0.16} />
                 <stop offset="100%" stopColor={toneColor} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <YAxis domain={['dataMin - 1', 'dataMax + 1']} hide />
-            <Area
-              type="monotone"
-              dataKey="plotValue"
-              stroke={toneColor}
-              strokeWidth={2.75}
-              fill={`url(#kpi-grad-${index})`}
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 2, fill: toneColor }}
-              isAnimationActive={true}
-              animationDuration={650}
-            />
+            <Tooltip content={<KpiTooltip format={kpi.format} label={kpi.label} total={data.length} />} cursor={false} />
+            {variant === 'area' && <Area type="monotone" dataKey="plotValue" stroke={toneColor} strokeWidth={2.6} fill={`url(#${gradientId})`} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, fill: toneColor }} isAnimationActive={true} animationDuration={650} />}
+            {variant === 'bars' && <Bar dataKey="plotValue" fill={toneColor} fillOpacity={0.5} radius={[3, 3, 0, 0]} maxBarSize={9} isAnimationActive={true} animationDuration={650} />}
+            {variant === 'line' && <Line type="monotone" dataKey="plotValue" stroke={toneColor} strokeWidth={2.6} dot={{ r: 2, fill: toneColor }} activeDot={{ r: 4, strokeWidth: 2, fill: toneColor }} isAnimationActive={true} animationDuration={650} />}
           </ComposedChart>
         </ResponsiveContainer>
-      ) : (
-        <div className="sparkline-guide"><i /><i /><i /></div>
-      )}
-    </div>
+      </div>
+    )}
   </article>
+}
+function KpiTooltip({ active, payload, format, label, total }: { active?: boolean; payload?: Array<{ payload?: { point: number; value: number } }>; format: Kpi['format']; label: string; total: number }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point || typeof point.value !== 'number' || !Number.isFinite(point.value)) return null
+  return <div className="kpi-tooltip"><span>{label}</span><strong>{formatKpiValue(point.value, format)}</strong><small>day {point.point + 1} of {total}</small></div>
 }
 
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
   const real = trend.some((row) => row.revenue > 0); const now = trend.filter((row) => row.forecast === null).reduce((sum, row) => sum + row.revenue, 0); const before = trend.reduce((sum, row) => sum + (row.previous ?? 0), 0); const growth = before > 0 ? (now - before) / before * 100 : null
   return <Widget className="revenue-trend" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div>}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 12, right: 12, left: -12 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".38"/><stop offset="1" stopColor="#38bdf8" stopOpacity="0"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.09)" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>}/><Bar dataKey="revenue" fill="#38bdf8" opacity={.09} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#38bdf8" strokeWidth={2.8} dot={{r:2,fill:'#dbeafe'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 12, right: 12, left: -12 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".38"/><stop offset="1" stopColor="#38bdf8" stopOpacity="0"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.09)" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>}/><Bar dataKey="revenue" fill="#38bdf8" opacity={.09} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#38bdf8" strokeWidth={2.8} dot={{r:2.4,fill:'#2563eb'}} activeDot={{r:4.5,strokeWidth:2.5,fill:'#ffffff',stroke:'#2563eb'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
   </Widget>
 }
 
@@ -167,8 +175,11 @@ export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }
   const real = trend.some((row) => row.orders > 0)
   const orders = trend.reduce((sum, row) => sum + row.orders, 0)
   const avg = orders ? trend.reduce((sum, row) => sum + row.revenue, 0) / orders : 0
-  return <Widget eyebrow="Volume & Value" title="Orders & AOV correlation" badge={real ? `${orders} orders` : undefined}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={trend.filter((row) => row.forecast === null)} margin={{ top: 12, right: 0, left: -20 }}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip />} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#818cf8" radius={[4, 4, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={false}/></ComposedChart></ResponsiveContainer></div><div className="insight-strip"><Brain size={14}/><span>Your average order value is <b>{money(avg)}</b>. Higher AOV means customers buy more per order.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
+  const rows = trend.filter((row) => row.forecast === null)
+  const peakOrderDay = rows.length ? [...rows].sort((a, b) => b.orders - a.orders)[0] : null
+  const peakAovDay = rows.length ? [...rows].sort((a, b) => b.aov - a.aov)[0] : null
+  return <Widget className="orders-aov" eyebrow="Volume & Value" title="Orders & AOV correlation" action={<span className="scope-pill"><ShoppingBag size={12} />{real ? `${orders} orders · ${money(avg)} AOV` : 'Awaiting orders'}</span>}>
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={rows} margin={{ top: 12, right: 4, left: -20 }}><defs><linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#818cf8" stopOpacity=".5"/><stop offset="1" stopColor="#818cf8" stopOpacity=".06"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip average={avg} />} cursor={{ fill: 'rgba(148,163,184,.06)' }} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="url(#ordersFill)" radius={[5, 5, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={{ r: 2, fill: '#2dd4bf' }} activeDot={{ r: 4, strokeWidth: 2, fill: '#ffffff', stroke: '#2dd4bf' }}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend orders" />Orders</span><span><i className="legend aov" />AOV</span><b>{peakOrderDay ? `Busiest day ${shortDay(peakOrderDay.day)} · ${peakOrderDay.orders} orders` : 'Busiest day building…'}</b></div><div className="insight-strip"><Brain size={14}/><span>Average order value <b>{money(avg)}</b>{peakAovDay && peakAovDay.aov > avg ? <> with a peak of <b>{money(peakAovDay.aov)}</b> on {shortDay(peakAovDay.day)}</> : null}. When AOV climbs faster than order count, growth comes from bigger baskets — not just more buyers.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
   </Widget>
 }
 
@@ -578,13 +589,14 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
   )
 }
 
-function OrdersAovTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
+function OrdersAovTooltip({ active, payload, label, average }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string; average?: number }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
   const formattedDate = formatDateLabel(label ?? point?.day)
   const orders = point?.orders ?? Number(payload.find((p) => p.dataKey === 'orders')?.value ?? 0)
   const aov = point?.aov ?? Number(payload.find((p) => p.dataKey === 'aov')?.value ?? 0)
   const revenue = point?.revenue ?? orders * aov
+  const aovDelta = average && average > 0 && aov > 0 ? ((aov - average) / average) * 100 : null
 
   return (
     <div className="analytics-tooltip">
@@ -607,6 +619,13 @@ function OrdersAovTooltip({ active, payload, label }: { active?: boolean; payloa
             <strong>{money(revenue)}</strong>
           </div>
         )}
+        {aovDelta !== null && (
+          <div className="tooltip-row">
+            <i style={{ background: '#2dd4bf' }} />
+            <span>vs period avg:</span>
+            <strong className={aovDelta >= 0 ? 'positive' : 'negative'}>{aovDelta >= 0 ? '+' : ''}{aovDelta.toFixed(0)}%</strong>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -615,7 +634,8 @@ class Boundary extends Component<{label:string;children:ReactNode},{error:string
 export const AnalyticsSectionBoundary = Boundary
 function hasPlan(insights:AnalyticsInsights|null,required:'growth'|'commander'){return Boolean(insights&&PLAN_RANK[insights.plan]>=PLAN_RANK[required])}
 function normalizeInsights(value:AnalyticsInsights|null|undefined):AnalyticsInsights|null { if(!value||typeof value!=='object')return null; return {...value,categories:Array.isArray(value.categories)?value.categories:[],topProducts:Array.isArray(value.topProducts)?value.topProducts:[],weekdays:Array.isArray(value.weekdays)?value.weekdays:[],peakHours:Array.isArray(value.peakHours)?value.peakHours:null,anomalies:Array.isArray(value.anomalies)?value.anomalies:value.anomalies===null?null:[],channels:Array.isArray(value.channels)?value.channels:[],geography:Array.isArray(value.geography)?value.geography:value.geography===null?null:[],cohorts:Array.isArray(value.cohorts)?value.cohorts:value.cohorts===null?null:[],comparisons:Array.isArray(value.comparisons)?value.comparisons:value.comparisons===null?null:[],opportunities:Array.isArray(value.opportunities)?value.opportunities:value.opportunities===null?null:[],locked:Array.isArray(value.locked)?value.locked:[],available:Array.isArray(value.available)?value.available:[],forecast:value.forecast??{status:'insufficient_data',message:'Connect your first sales days to begin forecasting.',points:[],standardDeviation:0}} }
-function formatKpi(kpi:Kpi){if(kpi.value===null||!Number.isFinite(kpi.value))return '—';if(kpi.format==='money')return money(kpi.value);if(kpi.format==='percent')return `${kpi.value.toFixed(1)}%`;return Math.round(kpi.value).toLocaleString()}
+function formatKpiValue(value: number, format: Kpi['format']): string { if (!Number.isFinite(value)) return '—'; if (format === 'money') return money(value); if (format === 'percent') return `${value.toFixed(1)}%`; return Math.round(value).toLocaleString() }
+function formatKpi(kpi: Kpi) { if (kpi.value === null || !Number.isFinite(kpi.value)) return '—'; return formatKpiValue(kpi.value, kpi.format) }
 const safe=(value:unknown)=>{const number=typeof value==='number'?value:Number(value);return Number.isFinite(number)?number:0}
 const money=(value:number)=>new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:Math.abs(value)>=1000?0:2}).format(safe(value))
 const compactMoney=(value:number)=>`$${Intl.NumberFormat(undefined,{notation:'compact',maximumFractionDigits:1}).format(safe(value))}`

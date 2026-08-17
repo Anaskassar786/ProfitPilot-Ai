@@ -111,3 +111,209 @@
   border-color: rgba(56,189,248,.12) !important;
 }
 
+
+
+/* ─── PR #42 Commit 1: Analytics light-theme visibility (logo, toolbar controls) ─── */
+.app-shell.light-mode .analytics-page-icon,
+.light-mode .analytics-page-icon {
+  color: #2563EB !important;
+  border-color: rgba(37, 99, 235, .28) !important;
+  background: radial-gradient(circle at 30% 20%, rgba(37, 99, 235, .14), rgba(37, 99, 235, .04)) !important;
+  box-shadow: 0 0 26px rgba(37, 99, 235, .12) !important;
+}
+
+.app-shell.light-mode .period-toggle,
+.light-mode .period-toggle {
+  background: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+}
+.app-shell.light-mode .period-toggle button,
+.light-mode .period-toggle button {
+  color: #374151 !important;
+}
+.app-shell.light-mode .period-toggle button:hover,
+.light-mode .period-toggle button:hover {
+  color: #111827 !important;
+  background: rgba(37, 99, 235, .08) !important;
+}
+.app-shell.light-mode .period-toggle button.active,
+.light-mode .period-toggle button.active {
+  color: #FFFFFF !important;
+  background: #2563EB !important;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .32) !important;
+}
+
+.app-shell.light-mode .analytics-tool-button,
+.light-mode .analytics-tool-button {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+}
+.app-shell.light-mode .analytics-tool-button svg,
+.light-mode .analytics-tool-button svg { color: #374151 !important; }
+.app-shell.light-mode .analytics-tool-button:hover:not(:disabled),
+.light-mode .analytics-tool-button:hover:not(:disabled) {
+  color: #111827 !important;
+  border-color: #93C5FD !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, .12) !important;
+}
+.app-shell.light-mode .analytics-tool-button.primary,
+.light-mode .analytics-tool-button.primary {
+  color: #FFFFFF !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #2563EB, #4F46E5) !important;
+}
+.app-shell.light-mode .analytics-tool-button.primary svg,
+.light-mode .analytics-tool-button.primary svg { color: #FFFFFF !important; }
+.app-shell.light-mode .analytics-tool-button.primary:hover:not(:disabled),
+.light-mode .analytics-tool-button.primary:hover:not(:disabled) {
+  border-color: transparent !important;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, .28) !important;
+}
+
+.app-shell.light-mode .custom-range-popover,
+.light-mode .custom-range-popover {
+  background: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+  box-shadow: 0 15px 40px rgba(15, 23, 42, .16) !important;
+}
+.app-shell.light-mode .custom-range-popover label,
+.light-mode .custom-range-popover label { color: #4B5563 !important; }
+.app-shell.light-mode .custom-range-popover input,
+.light-mode .custom-range-popover input {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  background: #F8FAFC !important;
+}
+
+
+/* ─── PR #42 Commit 2: Premium KPI cards — growth badge + comparison + rich chart ─── */
+.analytics-kpi.premium {
+  display: flex;
+  flex-direction: column;
+  min-height: 196px !important;
+  padding: 15px 16px 12px !important;
+}
+.analytics-kpi.premium > strong { margin: 12px 0 4px !important; }
+.analytics-kpi.premium .kpi-detail-line { max-width: 96% !important; }
+.kpi-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 9px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.kpi-compare i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,.5); }
+.kpi-compare i.down { background: #fb7185; box-shadow: 0 0 6px rgba(251,113,133,.5); }
+.kpi-chart { width: 100%; height: 66px; margin-top: auto; }
+.kpi-pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 11px;
+  background: rgba(148,163,184,.05);
+}
+.kpi-pending-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  color: var(--accent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.kpi-pending > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.kpi-pending strong { font-size: 11px; letter-spacing: -.01em; }
+.kpi-pending small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.kpi-tooltip {
+  display: flex;
+  min-width: 118px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+.kpi-tooltip span { color: var(--text-tertiary); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.kpi-tooltip strong { color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; }
+.kpi-tooltip small { color: var(--text-tertiary); font-size: 10px; }
+
+.app-shell.light-mode .analytics-kpi.tone-0 { --accent: #2563EB !important; }
+.app-shell.light-mode .analytics-kpi.tone-1 { --accent: #6366F1 !important; }
+.app-shell.light-mode .analytics-kpi.tone-2 { --accent: #0D9488 !important; }
+.app-shell.light-mode .analytics-kpi.tone-3 { --accent: #D97706 !important; }
+.app-shell.light-mode .analytics-kpi.tone-4 { --accent: #7C3AED !important; }
+.app-shell.light-mode .analytics-kpi.tone-5 { --accent: #DB2777 !important; }
+.app-shell.light-mode .analytics-kpi.premium .kpi-pending,
+.light-mode .analytics-kpi.premium .kpi-pending {
+  background: rgba(148,163,184,.07) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .kpi-tooltip,
+.light-mode .kpi-tooltip {
+  background: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+}
+
+
+/* ─── PR #42 Commit 3: Revenue Momentum chart — light theme saturation ─── */
+.app-shell.light-mode .revenue-trend .recharts-cartesian-grid line,
+.light-mode .revenue-trend .recharts-cartesian-grid line { stroke: #E5E7EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-cartesian-axis-tick-value,
+.light-mode .revenue-trend .recharts-cartesian-axis-tick-value { fill: #4B5563 !important; }
+.app-shell.light-mode .revenue-trend #revFill stop:first-child,
+.light-mode .revenue-trend #revFill stop:first-child { stop-color: rgba(37, 99, 235, .15) !important; }
+.app-shell.light-mode .revenue-trend #confidence stop:first-child,
+.light-mode .revenue-trend #confidence stop:first-child { stop-color: rgba(124, 58, 237, .14) !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#38bdf8"],
+.light-mode .revenue-trend .recharts-line-curve[stroke="#38bdf8"] { stroke: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#64748b"],
+.light-mode .revenue-trend .recharts-line-curve[stroke="#64748b"] { stroke: #94A3B8 !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-curve[stroke="#a78bfa"],
+.light-mode .revenue-trend .recharts-line-curve[stroke="#a78bfa"] { stroke: #7C3AED !important; }
+.app-shell.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#38bdf8"],
+.light-mode .revenue-trend .recharts-bar-rectangle path[fill="#38bdf8"] { fill: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#2563eb"],
+.light-mode .revenue-trend .recharts-line-dots .recharts-dot[fill="#2563eb"] { fill: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .chart-caption span,
+.light-mode .revenue-trend .chart-caption span { color: #374151 !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .legend,
+.light-mode .revenue-trend .chart-caption .legend { opacity: 1 !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .legend.current,
+.light-mode .revenue-trend .chart-caption .legend.current { background: #2563EB !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .legend.previous,
+.light-mode .revenue-trend .chart-caption .legend.previous { background: repeating-linear-gradient(90deg, #94A3B8 0 3px, transparent 3px 5px) !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .legend.forecast,
+.light-mode .revenue-trend .chart-caption .legend.forecast { background: repeating-linear-gradient(90deg, #7C3AED 0 3px, transparent 3px 5px) !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .positive,
+.light-mode .revenue-trend .chart-caption .positive { color: #059669 !important; }
+.app-shell.light-mode .revenue-trend .chart-caption .negative,
+.light-mode .revenue-trend .chart-caption .negative { color: #DC2626 !important; }
+
+
+/* ─── PR #42 Commit 4: Orders & AOV correlation — professional polish ─── */
+.chart-caption .legend.orders { width: 15px; height: 6px; border-radius: 2px; background: linear-gradient(180deg, #818cf8, rgba(129,140,248,.35)) !important; }
+.chart-caption .legend.aov { background: #2dd4bf !important; }
+.orders-aov .chart-caption b { margin-left: auto; color: var(--text-secondary); font-weight: 700; }
+.orders-aov .insight-strip { margin-top: 4px; }
+.app-shell.light-mode .orders-aov .recharts-cartesian-grid line,
+.light-mode .orders-aov .recharts-cartesian-grid line { stroke: #E5E7EB !important; }
+.app-shell.light-mode .orders-aov .recharts-cartesian-axis-tick-value,
+.light-mode .orders-aov .recharts-cartesian-axis-tick-value { fill: #4B5563 !important; }
+.app-shell.light-mode .orders-aov .recharts-line-curve[stroke="#2dd4bf"],
+.light-mode .orders-aov .recharts-line-curve[stroke="#2dd4bf"] { stroke: #0D9488 !important; }
+.app-shell.light-mode .orders-aov .recharts-line-dots .recharts-dot[fill="#2dd4bf"],
+.light-mode .orders-aov .recharts-line-dots .recharts-dot[fill="#2dd4bf"] { fill: #0D9488 !important; }
+.app-shell.light-mode .orders-aov .chart-caption span,
+.light-mode .orders-aov .chart-caption span { color: #374151 !important; }
+.app-shell.light-mode .orders-aov .chart-caption .legend.aov,
+.light-mode .orders-aov .chart-caption .legend.aov { background: #0D9488 !important; }
