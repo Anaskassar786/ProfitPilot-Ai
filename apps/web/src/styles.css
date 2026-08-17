@@ -708,3 +708,27 @@ td { font-size: var(--text-sm) !important; height: 64px !important; }
   animation: fadeOut 400ms ease forwards;
 }
 
+/* ─── PR #39 Typography Scale Enforcement ─── */
+body, input, textarea, select, button {
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+p {
+  line-height: var(--leading-relaxed);
+}
+.orders-table td, .customers-table td, .inventory-table td {
+  font-size: 14px !important;
+}
+.orders-table th, .customers-table th, .inventory-table th {
+  font-size: 12px !important;
+}
+.orders-table td > small, .customers-table td small, .inventory-table td > small {
+  font-size: 12px !important;
+}
+.orders-basic-card > p, .orders-premium-card > p, .inventory-basic-card > p {
+  font-size: 13px !important;
+}
+.orders-insight-label, .inventory-card-label {
+  font-size: 12px !important;
+}
+

@@ -23,14 +23,15 @@ export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: 
   const [customRange, setCustomRange] = useState<Readonly<{ from: string; to: string }> | null>(null)
   const setPeriod = (value: AnalyticsPeriod) => { setCustomRange(null); setPeriodValue(value) }
   const refresh = () => {
-    if (!context.storeId) { setInsights(null); setCustomerCountFallback(null); setLoading(false); return }
+    const storeId = context.storeId
+    if (!storeId) { setInsights(null); setCustomerCountFallback(null); setLoading(false); return }
     setLoading(true)
-    void fetchAnalyticsInsights(context.storeId)
+    void fetchAnalyticsInsights(storeId)
       .then((value) => {
         const norm = normalizeInsights(value)
         setInsights(norm)
         if (!norm || norm.totalCustomers === null || norm.totalCustomers === undefined) {
-          void fetchCustomers(context.storeId, { limit: 1 })
+          void fetchCustomers(storeId, { limit: 1 })
             .then((res) => {
               const count = res.stats?.total ?? res.pagination?.total ?? (res.customers?.length || null)
               if (count !== null && count !== undefined) setCustomerCountFallback(count)
@@ -40,7 +41,7 @@ export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: 
       })
       .catch(() => {
         setInsights(null)
-        void fetchCustomers(context.storeId, { limit: 1 })
+        void fetchCustomers(storeId, { limit: 1 })
           .then((res) => {
             const count = res.stats?.total ?? res.pagination?.total ?? (res.customers?.length || null)
             if (count !== null && count !== undefined) setCustomerCountFallback(count)
