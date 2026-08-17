@@ -2379,3 +2379,34 @@
   .value-metrics { grid-template-columns: 1fr; }
   .value-actions button { flex: 1; }
 }
+
+
+/* ─── PR #42 Commit 7: Top Selling Product — insight fill ─── */
+.orders-basic-card.top-product { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.top-product-layout { display: flex; flex-direction: column; gap: 12px; }
+.top-product-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.top-product-thumb { display: grid; width: 52px; height: 52px; flex: none; place-items: center; color: #7dd3fc; border: 1px solid rgba(56, 189, 248, .2); border-radius: 13px; background: radial-gradient(circle at 30% 20%, rgba(56, 189, 248, .16), rgba(30, 64, 175, .06)); font-size: 22px; font-weight: 800; }
+.top-product-head > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.top-product-head strong { overflow: hidden; color: var(--text); font-size: 15px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.top-product-head p { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
+.top-product-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.top-product-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
+.top-product-stats strong { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.top-product-stats span { color: var(--text-tertiary); font-size: 9.5px; line-height: 1.4; }
+.top-product-insights { display: flex; flex-direction: column; gap: 7px; }
+.top-product-insights p { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
+.top-product-insights svg { flex: none; color: var(--green); margin-top: 1px; }
+.top-product-insights p:nth-child(2) svg { color: var(--blue-bright); }
+.top-product-insights p:nth-child(3) svg { color: var(--purple); }
+.top-product-insights span { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
+.top-product-insights b { color: var(--text); font-size: 12px; }
+.top-product-insights small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.top-product-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+.top-product-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.top-product-actions button:hover { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
+.app-shell.light-mode .top-product-stats > div,
+.app-shell.light-mode .top-product-insights p { background: #F8FAFC !important; border-color: #E5E7EB !important; }
+.app-shell.light-mode .top-product-thumb { color: #2563EB !important; border-color: rgba(37, 99, 235, .25) !important; background: radial-gradient(circle at 30% 20%, rgba(37, 99, 235, .12), rgba(37, 99, 235, .03)) !important; }
+@media (max-width: 1180px) {
+  .top-product-stats { grid-template-columns: 1fr; }
+}
