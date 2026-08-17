@@ -500,3 +500,279 @@
 .app-shell.light-mode .command-empty strong {
   color: #111827 !important;
 }
+
+/* ── Orders table and readable detail drawer ────────────────────── */
+.orders-table th {
+  height: 44px !important;
+  padding: 12px 14px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  line-height: 1.4;
+}
+
+.orders-table td {
+  height: 72px !important;
+  padding: 14px !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+.order-id {
+  color: var(--blue-bright);
+  font-size: 15px !important;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.orders-table td > small,
+.order-customer small,
+.order-product-summary small {
+  margin-top: 4px;
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+
+.orders-table td:nth-child(2) > span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.order-customer {
+  gap: 10px;
+}
+
+.order-customer > span {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.order-customer strong,
+.order-product-summary strong {
+  color: var(--text);
+  font-size: 15px !important;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.orders-table td:nth-child(5) > strong {
+  color: var(--text);
+  font-size: 15px !important;
+  font-weight: 800;
+}
+
+.order-badge {
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.orders-table tbody tr:hover,
+.orders-table tbody tr:focus {
+  background: rgba(59, 130, 246, .055);
+}
+
+.order-details-drawer {
+  width: min(560px, 96vw);
+  background: var(--background);
+}
+
+.order-details-drawer > header {
+  gap: 20px;
+  padding: 24px;
+}
+
+.order-details-drawer > header h2 {
+  margin-block: 7px 10px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.order-details-drawer > header .section-kicker {
+  font-size: 12px !important;
+}
+
+.order-details-drawer > header > button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.order-drawer-scroll {
+  padding: 4px 24px 28px;
+}
+
+.order-detail-section {
+  padding: 20px 0;
+}
+
+.order-detail-section h3 {
+  gap: 9px;
+  margin-bottom: 16px;
+  color: var(--text);
+  font-size: 17px !important;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.order-detail-section h3 svg {
+  width: 18px;
+  height: 18px;
+}
+
+.order-detail-grid {
+  gap: 16px 20px;
+}
+
+.order-detail-grid dt {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.order-detail-grid dd {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.order-detail-lines {
+  gap: 10px;
+}
+
+.order-detail-lines > div {
+  gap: 16px;
+  min-height: 68px;
+  padding: 13px 14px;
+  border-radius: 10px;
+}
+
+.order-detail-lines strong {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.order-detail-lines small {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.order-detail-lines > div > span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.order-totals {
+  gap: 11px;
+}
+
+.order-totals > div {
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.order-totals > div > strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.order-totals .total {
+  margin-top: 5px;
+  padding-top: 14px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.order-totals .total strong {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.order-detail-section address,
+.order-detail-empty,
+.order-note {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.order-detail-tags {
+  gap: 7px;
+}
+
+.order-detail-tags span {
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.order-details-drawer > footer {
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.order-details-drawer > footer > span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-shell.light-mode .orders-table thead th {
+  color: #6B7280 !important;
+  background: #F9FAFB !important;
+}
+
+.app-shell.light-mode .orders-table td {
+  color: #111827 !important;
+}
+
+.app-shell.light-mode .orders-table tbody tr:hover,
+.app-shell.light-mode .orders-table tbody tr:focus {
+  background: #F9FAFB !important;
+}
+
+.app-shell.light-mode .order-id {
+  color: #2563EB !important;
+}
+
+.app-shell.light-mode .orders-table td > small,
+.app-shell.light-mode .order-customer small,
+.app-shell.light-mode .order-product-summary small {
+  color: #6B7280 !important;
+}
+
+.app-shell.light-mode .order-details-drawer {
+  color: #111827;
+  background: #FFFFFF !important;
+}
+
+.app-shell.light-mode .order-detail-lines > div {
+  border-color: #E5E7EB;
+  background: #F9FAFB;
+}
+
+@media (max-width: 640px) {
+  .orders-table td {
+    height: auto !important;
+    min-height: 42px !important;
+  }
+
+  .order-drawer-scroll,
+  .order-details-drawer > header,
+  .order-details-drawer > footer {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
