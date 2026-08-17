@@ -168,11 +168,205 @@ export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }
   </Widget>
 }
 
-export function SalesByChannel({ channels }: { channels: NonNullable<AnalyticsInsights['channels']> }) { const max = Math.max(1,...channels.map((row)=>row.revenue)); return <Widget eyebrow="Traffic Sources" title="Sales by channel" badge={channels.length ? `${channels.length} active` : undefined}>{channels.length ? <div className="channel-list">{channels.map((row,index)=><div className="channel-row" key={row.channel}><div className="channel-label"><span className="channel-icon"><ShoppingBag size={13}/></span><div><b>{row.channel}</b><small>{row.orders} orders · {row.share.toFixed(1)}%</small></div><strong>{money(row.revenue)}</strong></div><div className="channel-track"><i style={{width:`${Math.max(4,row.revenue/max*100)}%`,background:COLORS[index%COLORS.length]}}/></div><em className={row.growth !== null && row.growth < 0 ? 'negative':'positive'}>{row.growth === null ? 'New baseline' : `${row.growth>=0?'↑':'↓'} ${Math.abs(row.growth).toFixed(1)}%`}</em></div>)}</div> : <RichEmpty icon={Target} title="Channel attribution is ready" message="Shopify order source data will separate Online Store, POS, mobile, and integrations after sync." progress={0} goal="Sync order source data" />}</Widget> }
+export function SalesByChannel({ channels }: { channels: NonNullable<AnalyticsInsights['channels']> }) {
+  const max = Math.max(1, ...channels.map((row) => row.revenue))
+  return <Widget eyebrow="Traffic Sources" title="Sales by channel" badge={channels.length ? `${channels.length} active` : undefined}>
+    {channels.length ? (
+      <div className="channel-list">
+        {channels.map((row, index) => (
+          <div className="channel-row" key={row.channel}>
+            <div className="channel-label">
+              <span className="channel-icon"><ShoppingBag size={13} /></span>
+              <div>
+                <b>{row.channel}</b>
+                <small>{row.orders} orders · {row.share.toFixed(1)}%</small>
+              </div>
+              <strong>{money(row.revenue)}</strong>
+            </div>
+            <div className="channel-track">
+              <i style={{ width: `${Math.max(4, (row.revenue / max) * 100)}%`, background: COLORS[index % COLORS.length] }} />
+            </div>
+            <em className={row.growth !== null && row.growth < 0 ? 'negative' : 'positive'}>
+              {row.growth === null ? 'New baseline' : `${row.growth >= 0 ? '↑' : '↓'} ${Math.abs(row.growth).toFixed(1)}%`}
+            </em>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <RichEmpty
+        icon={Target}
+        title="Channel attribution is ready"
+        message="Shopify order source attribution will separate Online Store, Point of Sale, Mobile app, and custom integrations once orders with channel source data are synced."
+        progress={0}
+        goal="Sync order source data"
+      />
+    )}
+  </Widget>
+}
 
-export function CategoryDistribution({ categories }: { categories: AnalyticsInsights['categories'] }) { const total=categories.reduce((sum,row)=>sum+safe(row.revenue),0); return <Widget eyebrow="Category Breakdown" title="Sales by category">{categories.length>1?<div className="category-layout"><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={[...categories]} dataKey="revenue" nameKey="name" innerRadius="62%" outerRadius="84%" paddingAngle={3}>{categories.map((row,index)=><Cell key={row.name} fill={COLORS[index%COLORS.length] ?? '#38bdf8'}/>)}</Pie><Tooltip formatter={(value)=>money(safe(value))}/></PieChart></ResponsiveContainer><div className="donut-center"><strong>{money(total)}</strong><span>Total mix</span></div></div><div className="category-legend">{categories.slice(0,6).map((row,index)=><div key={row.name}><i style={{background:COLORS[index%COLORS.length]}}/><span>{row.name}</span><strong>{total?((row.revenue/total)*100).toFixed(1):0}%</strong><small>{money(row.revenue)}</small></div>)}</div></div>:categories.length===1?<div className="single-category"><span style={{background:COLORS[0]}}/><small>100% OF CATEGORY REVENUE</small><strong>{categories[0]!.name}</strong><b>{money(categories[0]!.revenue)}</b><p>Add product types in Shopify to unlock a richer revenue mix.</p></div>:<RichEmpty icon={PackageSearch} title="Build your category mix" message="Product type plus sales data will reveal which categories drive your revenue." progress={0} goal="Sync products and orders" />}</Widget> }
+export function CategoryDistribution({ categories }: { categories: AnalyticsInsights['categories'] }) {
+  const total = categories.reduce((sum, row) => sum + safe(row.revenue), 0)
+  return <Widget eyebrow="Category Breakdown" title="Sales by category">
+    {categories.length > 1 ? (
+      <div className="category-layout">
+        <div className="donut-wrap">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <PieChart>
+              <Pie data={[...categories]} dataKey="revenue" nameKey="name" innerRadius="62%" outerRadius="84%" paddingAngle={3}>
+                {categories.map((row, index) => <Cell key={row.name} fill={COLORS[index % COLORS.length] ?? '#38bdf8'} />)}
+              </Pie>
+              <Tooltip formatter={(value) => money(safe(value))} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="donut-center">
+            <strong>{money(total)}</strong>
+            <span>Total mix</span>
+          </div>
+        </div>
+        <div className="category-legend">
+          {categories.slice(0, 6).map((row, index) => (
+            <div key={row.name}>
+              <i style={{ background: COLORS[index % COLORS.length] }} />
+              <span>{row.name}</span>
+              <strong>{total ? ((row.revenue / total) * 100).toFixed(1) : 0}%</strong>
+              <small>{money(row.revenue)}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : categories.length === 1 ? (
+      <div className="single-category">
+        <span style={{ background: COLORS[0] }} />
+        <small>100% OF CATEGORY REVENUE</small>
+        <strong>{categories[0]!.name}</strong>
+        <b>{money(categories[0]!.revenue)}</b>
+        <p>Add product types and categories in Shopify to unlock a richer revenue mix across your catalog.</p>
+      </div>
+    ) : (
+      <RichEmpty
+        icon={PackageSearch}
+        title="Build your category mix"
+        message="Product collections and catalog categories combined with order line items will display category share of total revenue."
+        progress={0}
+        goal="Sync products and orders"
+      />
+    )}
+  </Widget>
+}
 
-export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insights: AnalyticsInsights|null; trend: readonly TrendPoint[]; loading:boolean; onUpgrade:()=>void }) { const [open,setOpen]=useState(true); const plan=insights?.plan??'trial'; const locked=(feature:string)=>insights?.locked.some((item)=>item.feature===feature)??false; const forecast=insights?.forecast; const projection=forecast?.points.reduce((sum,row)=>sum+row.value,0)??0; return <section className={`analytics-widget ai-intelligence ${open?'':'collapsed'}`}><header className="widget-header"><div className="widget-title ai-heading"><span className="brain-badge"><Brain size={20}/></span><div><h2>Business Intelligence</h2><p>Forecasts and insights based on your sales data.</p></div></div><div className="widget-actions">{insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}<button className="icon-button" onClick={()=>setOpen(!open)} aria-label={open?'Collapse AI intelligence':'Expand AI intelligence'}>{open?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button></div></header>{open&&<div className="ai-grid">{loading?<>{[0,1,2,3].map((key)=><div className="ai-card skeleton-card" key={key}><div className="skeleton-line short"/><div className="skeleton-line value"/><div className="skeleton-line"/></div>)}</>:<><article className="ai-card forecast-card"><CardLabel icon={LineChart} text="AI REVENUE FORECAST"/><h3>{forecast?.status==='available'?money(projection):`${Math.min(7,insights?.salesHistoryDays??0)} days — AI is learning`}</h3><p>{forecast?.message??'AI is analyzing your sales patterns. Sync more sales to unlock forecast.'}</p><div className="forecast-mini">{forecast?.status==='available'?<ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend.slice(-14)]}><Area type="monotone" dataKey="upper" fill="#8b5cf6" fillOpacity={.12} stroke="none"/><Line type="monotone" dataKey="revenue" stroke="#38bdf8" dot={false}/><Line type="monotone" dataKey="forecast" stroke="#a78bfa" strokeDasharray="4 4" dot={false}/></ComposedChart></ResponsiveContainer>:<Progress current={insights?.salesHistoryDays??0} total={7}/>}</div><footer><span className="confidence-dot"/> {forecast?.status==='available'?(forecast.standardDeviation<projection*.15?'High':'Medium'):''}</footer></article><article className="ai-card"><CardLabel icon={AlertTriangle} text="ANOMALY DETECTION"/>{locked('anomaly_detection')?<LockedInline plan="Start" message="Get alerted when revenue spikes or drops unexpectedly." onUpgrade={onUpgrade}/>:insights?.anomalies?.length?<div className="signal-list">{insights.anomalies.slice(0,3).map((item)=><div key={item.day}><span className={item.direction}/><p><b>{shortDay(item.day)} · {item.direction==='spike'?'Revenue spike':'Revenue dip'}</b><small>{Math.abs(item.percentFromAverage).toFixed(0)}% from your baseline</small></p></div>)}</div>:<EducationalState title="No unusual signals" message={(insights?.salesHistoryDays??0)<14?'AI needs 14 days of sales to spot unusual patterns.':'Revenue is tracking within its normal range.'} current={insights?.salesHistoryDays??0} total={14}/>}</article><article className="ai-card"><CardLabel icon={Lightbulb} text="GROWTH OPPORTUNITIES"/>{locked('growth_opportunities')?<LockedInline plan="Growth" message="Get personalized suggestions to grow your store." onUpgrade={onUpgrade}/>:insights?.opportunities?.length?<div className="opportunity-list">{insights.opportunities.map((item,index)=><div key={item.title}><b>{index+1}</b><p><strong>{item.title}</strong><small>{item.action}</small></p></div>)}</div>:<EducationalState title="Building growth opportunities" message="Sync more sales to unlock personalized growth suggestions." current={insights?.salesHistoryDays??0} total={14}/>}</article><article className="ai-card executive-card"><CardLabel icon={Wand2} text="EXECUTIVE BRIEF"/>{locked('executive_summary')?<LockedInline plan="Growth" message="AI-powered summary of your business performance." onUpgrade={onUpgrade}/>:<><blockquote>“{insights?.executiveSummary??'Your intelligence brief will activate with synced sales.'}”</blockquote><footer><Brain size={13}/> Based on your actual store data</footer></>}</article></>}</div>}</section> }
+export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insights: AnalyticsInsights | null; trend: readonly TrendPoint[]; loading: boolean; onUpgrade: () => void }) {
+  const [open, setOpen] = useState(true)
+  const locked = (feature: string) => insights?.locked.some((item) => item.feature === feature) ?? false
+  const forecast = insights?.forecast
+  const projection = forecast?.points.reduce((sum, row) => sum + row.value, 0) ?? 0
+  const historyDays = Math.max(0, insights?.salesHistoryDays ?? (trend.filter((t) => t.revenue > 0).length || 0))
+
+  return <section className={`analytics-widget ai-intelligence ${open ? '' : 'collapsed'}`}>
+    <header className="widget-header">
+      <div className="widget-title ai-heading">
+        <span className="brain-badge"><Brain size={20} /></span>
+        <div>
+          <h2>Business Intelligence</h2>
+          <p>Predictive forecasts, anomaly detection, and growth opportunities based on your sales data.</p>
+        </div>
+      </div>
+      <div className="widget-actions">
+        {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}
+        <button className="icon-button" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse AI intelligence' : 'Expand AI intelligence'}>{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
+      </div>
+    </header>
+    {open && <div className="ai-grid">
+      {loading ? (
+        <>{[0, 1, 2, 3].map((key) => <div className="ai-card skeleton-card" key={key}><div className="skeleton-line short" /><div className="skeleton-line value" /><div className="skeleton-line" /></div>)}</>
+      ) : (
+        <>
+          <article className="ai-card forecast-card">
+            <CardLabel icon={LineChart} text="AI REVENUE FORECAST" />
+            <h3>{forecast?.status === 'available' ? money(projection) : `Building forecast · ${Math.min(7, historyDays)} of 7 days`}</h3>
+            <p>{forecast?.status === 'available' ? (forecast.message ?? 'Projected daily revenue with confidence intervals.') : `Analyzing your sales patterns. Full predictive forecasting activates once 7 consecutive days of sales data are captured (${Math.min(7, historyDays)}/7 days captured).`}</p>
+            <div className="forecast-mini">
+              {forecast?.status === 'available' ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <ComposedChart data={[...trend.slice(-14)]}>
+                    <Area type="monotone" dataKey="upper" fill="#8b5cf6" fillOpacity={0.12} stroke="none" />
+                    <Line type="monotone" dataKey="revenue" stroke="#38bdf8" dot={false} />
+                    <Line type="monotone" dataKey="forecast" stroke="#a78bfa" strokeDasharray="4 4" dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <Progress current={historyDays} total={7} />
+              )}
+            </div>
+            <footer>
+              <span className="confidence-dot" /> {forecast?.status === 'available' ? (forecast.standardDeviation < projection * 0.15 ? 'High confidence' : 'Medium confidence') : `${Math.min(7, historyDays)} of 7 days learned`}
+            </footer>
+          </article>
+          <article className="ai-card">
+            <CardLabel icon={AlertTriangle} text="ANOMALY DETECTION" />
+            {locked('anomaly_detection') ? (
+              <LockedInline plan="Start" message="Receive real-time alerts when revenue spikes or dips unexpectedly against baseline." onUpgrade={onUpgrade} />
+            ) : insights?.anomalies?.length ? (
+              <div className="signal-list">
+                {insights.anomalies.slice(0, 3).map((item) => (
+                  <div key={item.day}>
+                    <span className={item.direction} />
+                    <p>
+                      <b>{shortDay(item.day)} · {item.direction === 'spike' ? 'Revenue spike' : 'Revenue dip'}</b>
+                      <small>{Math.abs(item.percentFromAverage).toFixed(0)}% from your baseline</small>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EducationalState
+                title="No unusual signals"
+                message={historyDays < 14 ? 'AI requires 14 consecutive sales days to compute baseline standard deviations and identify anomaly signals.' : 'Revenue is tracking stably within expected statistical ranges.'}
+                current={historyDays}
+                total={14}
+              />
+            )}
+          </article>
+          <article className="ai-card">
+            <CardLabel icon={Lightbulb} text="GROWTH OPPORTUNITIES" />
+            {locked('growth_opportunities') ? (
+              <LockedInline plan="Growth" message="Unlock algorithmic revenue opportunities tailored to your catalog performance." onUpgrade={onUpgrade} />
+            ) : insights?.opportunities?.length ? (
+              <div className="opportunity-list">
+                {insights.opportunities.map((item, index) => (
+                  <div key={item.title}>
+                    <b>{index + 1}</b>
+                    <p>
+                      <strong>{item.title}</strong>
+                      <small>{item.action}</small>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EducationalState
+                title="Building growth opportunities"
+                message="Capturing sales velocity and order trends to generate high-impact revenue recommendations."
+                current={historyDays}
+                total={14}
+              />
+            )}
+          </article>
+          <article className="ai-card executive-card">
+            <CardLabel icon={Wand2} text="EXECUTIVE BRIEF" />
+            {locked('executive_summary') ? (
+              <LockedInline plan="Growth" message="Executive summary synthesizing sales trends, customer acquisition, and inventory demand." onUpgrade={onUpgrade} />
+            ) : (
+              <>
+                <blockquote>“{insights?.executiveSummary ?? 'Your executive intelligence brief activates as orders sync across your store catalog.'}”</blockquote>
+                <footer><Brain size={13} /> Generated from your verified store data</footer>
+              </>
+            )}
+          </article>
+        </>
+      )}
+    </div>}
+  </section>
+}
 
 export function CohortAnalysis({ insights,onUpgrade }:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if (!hasPlan(insights,'growth')) return <LockedWidget icon={Users} title="Customer cohort analysis" eyebrow="Customer Retention" plan="Growth" message="Track which customer groups keep coming back." onUpgrade={onUpgrade}/>; const cohorts=(insights?.cohorts??[]).filter((row)=>row&&typeof row.cohort==='string'&&row.cohort.trim()!==''); return <Widget eyebrow="Customer Retention" title="Customer cohort analysis" badge={cohorts.length?'Monthly retention':undefined}>{cohorts.length?<div className="cohort-table"><div className="cohort-row cohort-head"><span>Acquired</span>{[0,1,2,3,4,5].map((month)=><b key={month}>M{month}</b>)}</div>{cohorts.map((row)=><div className="cohort-row" key={row.cohort}><span>{cohortLabel(row.cohort)}</span>{[0,1,2,3,4,5].map((month)=>{const raw=(row.periods??[]).find((period)=>period?.month===month)?.retention; const value=typeof raw==='number'&&Number.isFinite(raw)?raw:undefined; return <b key={month} style={{background:value===undefined?'rgba(30,41,59,.35)':`rgba(45,212,191,${.08+Math.min(1,value/100)*.7})`}}>{value===undefined?'—':`${value.toFixed(0)}%`}</b>})}</div>)}</div>:<RichEmpty icon={Users} title="Building retention data" message="Sync customer orders over time to see how many return each month." progress={Math.min(3,new Set((insights?.cohorts??[]).map((row)=>row.cohort)).size)} goal="3 months of customer history" />}</Widget> }
 
@@ -181,7 +375,66 @@ export function GeographicDistribution({insights,onUpgrade}:{insights:AnalyticsI
 export function ProductPerformance({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const products=insights?.topProducts??[]; return <section className="product-performance"><Widget className="products-table-card" eyebrow="Top Products" title="Top products by revenue" badge={products.length?`Top ${Math.min(15,products.length)}`:undefined}>{products.length?<div className="products-scroll"><table><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th>Units</th><th>Revenue</th><th>Share</th><th>Momentum</th></tr></thead><tbody>{products.map((product,index)=><tr key={product.productId}><td><b className={index<3?'rank':''}>{index+1}</b></td><td><div className="product-cell">{product.image?<img src={product.image} alt=""/>:<span>{product.name.slice(0,1)}</span>}<strong>{product.name}</strong></div></td><td>{product.category??'Uncategorized'}</td><td>{product.units.toLocaleString()}</td><td><strong>{money(product.revenue)}</strong></td><td>{product.share.toFixed(1)}%</td><td className={product.trend}>{product.trend==='up'?<ArrowUpRight size={15}/>:product.trend==='down'?<ArrowDownRight size={15}/>:<Activity size={14}/>} {product.growth!=null?`${Math.abs(product.growth).toFixed(0)}%`:'Building'}</td></tr>)}</tbody></table></div>:<RichEmpty icon={PackageSearch} title="Top products will appear here" message="Sync product sales to see your bestsellers ranked by revenue and units." progress={0} goal="Sync orders to build product rankings" />}</Widget><Widget className="product-insights" eyebrow="Product Insights" title="Product insights">{!hasPlan(insights,'growth')?<LockedInline plan="Growth" message="Discover trending products and categories." onUpgrade={onUpgrade}/>:products.length?<div className="merch-list"><MerchSignal icon={ArrowUpRight} tone="green" label="Rising star" value={products.find((p)=>p.trend==='up')?.name??'No rising product yet'} /><MerchSignal icon={ArrowDownRight} tone="red" label="Needs attention" value={products.find((p)=>p.trend==='down')?.name??'No decline detected'} /><MerchSignal icon={Trophy} tone="amber" label="Revenue leader" value={products[0]?.name??'Building'} /></div>:<EducationalState title="Building product insights" message="Sync more sales to see trending products." current={insights?.salesHistoryDays??0} total={14}/>}</Widget></section> }
 function MerchSignal({icon:Icon,tone,label,value}:{icon:typeof Activity;tone:string;label:string;value:string}) { return <div className={`merch-signal ${tone}`}><span><Icon size={15}/></span><p><small>{label}</small><strong>{value}</strong></p><ChevronUp size={14}/></div> }
 
-export function TemporalPatterns({insights}:{insights:AnalyticsInsights|null}) { const weekdays=(insights?.weekdays??[]).filter((row)=>row&&typeof row.day==='string').map((row)=>({...row,revenue:safe(row.revenue)})); const peak=(insights?.peakHours??[]).filter((row)=>row&&Number.isFinite(row.hour)).map((row)=>({...row,orders:safe(row.orders)})); const best=[...weekdays].sort((a,b)=>b.revenue-a.revenue)[0]; const hasDays=weekdays.some((row)=>row.revenue>0); const hasHours=peak.some((row)=>row.orders>0); return <section className="analytics-split"><Widget eyebrow="Weekly Performance" title="Best performing day" badge={hasDays&&best?<><Trophy size={12}/>{best.day} leads</>:undefined}>{hasDays?<div className="temporal-chart"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...weekdays]}><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tick={{fill:'#8090a5',fontSize:9}} axisLine={false} tickLine={false}/><YAxis tickFormatter={compactMoney} tick={{fill:'#8090a5',fontSize:8}} axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>money(safe(value))}/><Bar dataKey="revenue" radius={[6,6,0,0]}>{weekdays.map((row)=><Cell key={row.day} fill={row.day===best?.day?'#38bdf8':'rgba(56,189,248,.22)'}/>)}</Bar></ComposedChart></ResponsiveContainer></div>:<RichEmpty icon={CalendarDays} title="Building your weekly pattern" message={`${Math.min(7,insights?.salesHistoryDays??0)} of 7 sales days captured. Each synced day makes timing guidance more useful.`} progress={Math.min(7,insights?.salesHistoryDays??0)} goal="7 sales days" />}</Widget><Widget eyebrow="Peak Hours" title="Peak sales hours" badge={hasHours?'Busiest hours from your orders':undefined}>{hasHours?<div className="hour-heatmap"><div className="heat-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div><div className="heat-cells">{peak.map((row)=>{const max=Math.max(...peak.map((item)=>item.orders),1);return <div key={row.hour} title={`${row.hour}:00 · ${row.orders} orders`} style={{background:`rgba(139,92,246,${.08+row.orders/max*.8})`}}><span>{row.orders||''}</span></div>})}</div><div className="insight-strip"><Clock3 size={14}/><span>Use your busiest hours to schedule campaigns and support coverage.</span></div></div>:<RichEmpty icon={Clock3} title="Sync order times to see busiest hours" message="Sync orders with timestamps to unlock the hourly heatmap." progress={0} goal="Sync orders with timestamps" />}</Widget></section> }
+export function TemporalPatterns({ insights }: { insights: AnalyticsInsights | null }) {
+  const weekdays = (insights?.weekdays ?? []).filter((row) => row && typeof row.day === 'string').map((row) => ({ ...row, revenue: safe(row.revenue) }))
+  const peak = (insights?.peakHours ?? []).filter((row) => row && Number.isFinite(row.hour)).map((row) => ({ ...row, orders: safe(row.orders) }))
+  const best = [...weekdays].sort((a, b) => b.revenue - a.revenue)[0]
+  const hasDays = weekdays.some((row) => row.revenue > 0)
+  const hasHours = peak.some((row) => row.orders > 0)
+  return <section className="analytics-split">
+    <Widget eyebrow="Weekly Performance" title="Best performing day" badge={hasDays && best ? <><Trophy size={12} />{best.day} leads</> : undefined}>
+      {hasDays ? (
+        <div className="temporal-chart">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ComposedChart data={[...weekdays]}>
+              <CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false} />
+              <XAxis dataKey="day" tick={{ fill: '#8090a5', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={compactMoney} tick={{ fill: '#8090a5', fontSize: 8 }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(value) => money(safe(value))} />
+              <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
+                {weekdays.map((row) => <Cell key={row.day} fill={row.day === best?.day ? '#38bdf8' : 'rgba(56,189,248,.22)'} />)}
+              </Bar>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <RichEmpty
+          icon={CalendarDays}
+          title="Building your weekly pattern"
+          message={`Weekly performance patterns will reveal your best-selling days and optimal timing for campaigns. Currently building — ${Math.min(7, insights?.salesHistoryDays ?? 0)} of 7 days captured.`}
+          progress={Math.min(7, insights?.salesHistoryDays ?? 0)}
+          goal="7 sales days"
+        />
+      )}
+    </Widget>
+    <Widget eyebrow="Peak Hours" title="Peak sales hours" badge={hasHours ? 'Busiest hours from your orders' : undefined}>
+      {hasHours ? (
+        <div className="hour-heatmap">
+          <div className="heat-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+          <div className="heat-cells">
+            {peak.map((row) => {
+              const max = Math.max(...peak.map((item) => item.orders), 1)
+              return (
+                <div key={row.hour} title={`${row.hour}:00 · ${row.orders} orders`} style={{ background: `rgba(139,92,246,${0.08 + (row.orders / max) * 0.8})` }}>
+                  <span>{row.orders || ''}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="insight-strip"><Clock3 size={14} /><span>Use your busiest hours to schedule campaigns and support coverage.</span></div>
+        </div>
+      ) : (
+        <RichEmpty
+          icon={Clock3}
+          title="Sync order times to see busiest hours"
+          message="Hourly demand needs timestamps. Peak sales hours help you time promotions perfectly. Sync orders with timestamps to unlock the hourly heatmap and identify your busiest shopping hours."
+          progress={0}
+          goal="Sync orders with timestamps"
+        />
+      )}
+    </Widget>
+  </section>
+}
 
 export function ConversionFunnel({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget wide icon={Target} title="Conversion funnel" eyebrow="Conversion Journey" plan="Growth" message="See how visitors move from browsing to buying." onUpgrade={onUpgrade}/>; const funnel=insights?.funnel; return <Widget eyebrow="Conversion Journey" title="Conversion funnel" action={<span className="scope-pill"><Activity size={12}/> Order-based view</span>}><div className="funnel-layout"><div className="funnel-bars">{(funnel?.stages??[]).map((stage,index)=><div className={stage.value===null?'unavailable':''} style={{width:`${100-index*10}%`}} key={stage.name}><span>{stage.name}</span><strong>{stage.value===null?'Connect Shopify Analytics':stage.value.toLocaleString()}</strong></div>)}</div><div className="funnel-note"><Target size={22}/><div><strong>Order data is ready. Connect Shopify Analytics to track visitors.</strong><p>{funnel?.message??'Connect Shopify Analytics to track visitors and product views.'}</p><button className="text-button">View connection roadmap →</button></div></div></div></Widget> }
 
