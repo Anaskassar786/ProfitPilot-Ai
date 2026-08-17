@@ -1,15 +1,18 @@
-import { CampaignEmailService, MerchantEmailVerifier, PostgresMerchantEmailConfigRepository, PostgresTemplateRepository, PostgresWorkflowRepository, ThreadLedger, createBrevoMailer } from '@profitpilot/automation'
+import { AutomationExecutionService, CampaignEmailService, MerchantEmailVerifier, PostgresMerchantEmailConfigRepository, PostgresRunRepository, PostgresTemplateRepository, PostgresWorkflowRepository, ThreadLedger, createBrevoMailer } from '@profitpilot/automation'
+import { ProductionWorkflowActions } from './automation-actions.js'
+import { AutomationTriggerService } from './automation-triggers.js'
 import type { EmailTransport } from '@profitpilot/automation'
 import type { ExportRow } from '@profitpilot/reporting'
 import { createF5Bootstrap } from './f5-bootstrap.js'
 import type { F5Bootstrap } from './f5-bootstrap.js'
 import type { AutomationRouteDependencies } from './automation-routes.js'
 import { AppError, storeId } from '@profitpilot/types'
+import { OpenRouterClient } from '@profitpilot/ai'
 import { PostgresCustomerRepository } from './customers.js'
 import { PostgresCampaignSendStore, TargetedCampaignService } from './targeted-campaigns.js'
 import { withTenantContext } from '@profitpilot/db'
 
-export type F6Bootstrap = Readonly<F5Bootstrap & { automation: AutomationRouteDependencies }>
+export type F6Bootstrap = Readonly<F5Bootstrap & { automation: AutomationRouteDependencies & Readonly<{ triggers: AutomationTriggerService }> }>
 export function createF6Bootstrap(env: Readonly<Record<string, string | undefined>>): F6Bootstrap | null {
   const f5 = createF5Bootstrap(env)
   if (!f5) return null
@@ -31,7 +34,29 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
     env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || null,
     { locked: (tenant, plan) => withTenantContext(f5.database, tenant, async (client) => { await client.query(`INSERT INTO billing_audit (shop_id, actor, event, payload) VALUES ($1, 'merchant', 'campaigns.targeted_send.locked', $2::jsonb)`, [tenant, JSON.stringify({ plan, requiredPlan: 'growth' })]) }) },
   )
-  return { ...f5, automation: { workflows: new PostgresWorkflowRepository(f5.database), templates, emailVerifier, merchantEmails, targetedCampaigns, tickets: new ThreadLedger(), exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset) } }
+  const workflows = new PostgresWorkflowRepository(f5.database)
+  const runs = new PostgresRunRepository(f5.database)
+  const workflowAi = new OpenRouterClient({ keys: [env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string' && key.trim().length > 0), models: [env.AI_MODEL_PRIMARY, env.AI_MODEL_FALLBACK1, env.AI_MODEL_FALLBACK2].filter((model): model is string => typeof model === 'string' && model.trim().length > 0), maxTokens: 300 })
+  const actions = new ProductionWorkflowActions(f5.database, f5.storeDirectory, f5.tokenVault, targetedCampaigns, workflowAi.configured ? workflowAi : null, env.SHOPIFY_API_VERSION?.trim() || '2025-10')
+  const execution = new AutomationExecutionService(runs, actions)
+  const triggers = new AutomationTriggerService(f5.database, workflows, execution)
+  return { ...f5, automation: {
+    workflows,
+    runs,
+    execution,
+    triggers,
+    billing: f5.billing.repository,
+    templates,
+    emailVerifier,
+    merchantEmails,
+    targetedCampaigns,
+    tickets: new ThreadLedger(),
+    requirePermission: (tenant, user, permission) => withTenantContext(f5.database, tenant, async (client) => {
+      const result = await client.query<{ allowed: boolean }>(`SELECT EXISTS (SELECT 1 FROM member_roles mr JOIN role_permissions rp ON rp.role_id = mr.role_id WHERE mr.store_id = $1 AND mr.user_id = $2 AND rp.permission_id = $3) AS allowed`, [tenant, user, permission])
+      if (result.rows[0]?.allowed !== true) throw new AppError('FORBIDDEN', 'You do not have permission to manage automations', 403, { permission })
+    }),
+    exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset),
+  } }
 }
 
 function campaignMailer(env: Readonly<Record<string, string | undefined>>): EmailTransport {

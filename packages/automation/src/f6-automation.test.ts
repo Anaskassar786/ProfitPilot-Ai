@@ -3,7 +3,7 @@ import { storeId } from '@profitpilot/types'
 import { DEFAULT_POLICY, WorkflowRunner, InMemoryStepLedger, activateWorkflow, assertPolicy, canAutoExecute, compileTemplate, chooseWinner, renderTemplate, SuppressionLedger, InMemorySendLedger, BatchSender, TrackingService, MerchantEmailVerifier, priorityForPlan, ThreadLedger } from './index.js'
 import type { WorkflowDefinition, CampaignTemplate } from './index.js'
 
-const base: WorkflowDefinition = { id: 'wf', storeId: storeId('s'), version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['wait'] }, { id: 'wait', type: 'wait', config: { delayMs: 50 }, next: ['condition'] }, { id: 'condition', type: 'condition', config: {}, next: ['tag', 'email'] }, { id: 'tag', type: 'action', config: { action: 'tag' }, next: [] }, { id: 'email', type: 'action', config: { action: 'email' }, next: [] }] }
+const base: WorkflowDefinition = { id: 'wf', storeId: storeId('s'), name: 'Test workflow', description: null, category: 'Operations', tags: [], timezone: 'UTC', overlapPolicy: 'SKIP', version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['wait'] }, { id: 'wait', type: 'wait', config: { delayMs: 50 }, next: ['condition'] }, { id: 'condition', type: 'condition', config: {}, next: ['tag', 'email'] }, { id: 'tag', type: 'action', config: { action: 'tag_customer', tag: 'VIP' }, next: [] }, { id: 'email', type: 'action', config: { action: 'email' }, next: [] }] }
 
 describe('F6 workflow runner and policy', () => {
   it('runs a wait node and resumes through a condition branch', async () => {
@@ -20,7 +20,7 @@ describe('F6 workflow runner and policy', () => {
   it('deduplicates completed steps', async () => { const ledger = new InMemoryStepLedger(); const runner = new WorkflowRunner(ledger, () => 100); const workflow = activateWorkflow({ ...base, nodes: [{ ...base.nodes[0]!, next: ['tag'] }, base.nodes[3]!] }, 'now'); let calls = 0; await runner.run(workflow, 'run', {}, { ...DEFAULT_POLICY, mode: 'SEMI_AUTOMATIC' }, async () => { calls += 1; return {} }, true); await runner.run(workflow, 'run', {}, { ...DEFAULT_POLICY, mode: 'SEMI_AUTOMATIC' }, async () => { calls += 1; return {} }, true); expect(calls).toBe(2) })
   it('keeps manual mode safe for high-risk actions', () => expect(canAutoExecute(DEFAULT_POLICY, 'EMAIL', false)).toBe(false))
   it('allows approved semi-automatic email', () => expect(canAutoExecute({ ...DEFAULT_POLICY, mode: 'SEMI_AUTOMATIC' }, 'EMAIL', true)).toBe(true))
-  it('enforces automation caps', () => expect(() => assertPolicy(DEFAULT_POLICY, 'TAG', false, 10, 0)).toThrow('approval'))
+  it('enforces automation caps', () => expect(() => assertPolicy(DEFAULT_POLICY, 'TAG_CUSTOMER', false, 10, 0)).toThrow('approval'))
 })
 
 describe('F6 closed campaign templates', () => {

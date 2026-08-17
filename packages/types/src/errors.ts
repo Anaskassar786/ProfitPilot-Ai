@@ -2,6 +2,7 @@ export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
+  | 'PAYMENT_REQUIRED'
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'RATE_LIMITED'

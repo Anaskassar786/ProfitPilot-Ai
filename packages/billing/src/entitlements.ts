@@ -5,10 +5,10 @@ import type { EntitlementKey } from './plans.js'
 import { PLAN_DEFINITIONS } from './plans.js'
 
 export class UpgradeRequiredError extends AppError {
-  public constructor(feature: EntitlementKey, plan: PlanTier) { super('FORBIDDEN', `Upgrade required for ${feature}`, 403, { feature, plan, reason: 'UPGRADE_REQUIRED' }); this.name = 'UpgradeRequiredError' }
+  public constructor(feature: EntitlementKey, plan: PlanTier) { super('PAYMENT_REQUIRED', `Upgrade required for ${feature}`, 402, { feature, plan, reason: 'UPGRADE_REQUIRED' }); this.name = 'UpgradeRequiredError' }
 }
 
-const TRIAL_LIMITS: Readonly<Record<EntitlementKey, number | null>> = { orders_sync_month: 100, products_sync: 100, customers_sync: 100, ai_recommendations_month: 10, active_agents: 2, jarvis_messages_month: 60, automation_workflows: 1, active_campaigns: 1, email_sends_month: 100, sms_sends_month: 0, team_members: 1, reports: 1, exports: 0, forecasting: 0, attribution: 0 }
+const TRIAL_LIMITS: Readonly<Record<EntitlementKey, number | null>> = { orders_sync_month: 100, products_sync: 100, customers_sync: 100, ai_recommendations_month: 10, active_agents: 2, jarvis_messages_month: 60, automation_workflows: 2, active_campaigns: 1, email_sends_month: 100, sms_sends_month: 0, team_members: 1, reports: 1, exports: 0, forecasting: 0, attribution: 0 }
 
 export type GateContext = Readonly<{ feature: EntitlementKey; used: number; billingPage?: boolean; support?: boolean; legal?: boolean }>
 export type GateDecision = Readonly<{ allowed: boolean; readOnly: boolean; limit: number | null; remaining: number | null; reason: string | null }>

@@ -42,12 +42,20 @@ const main = async (): Promise<void> => {
 
   const bootstrap = createF9Bootstrap(process.env, logger)
   if (bootstrap && process.env.RUN_MIGRATIONS === 'true') await runMigrations(bootstrap.database)
+  const shopify = bootstrap?.shopify.webhook ? { ...bootstrap.shopify, webhook: { ...bootstrap.shopify.webhook, finalize: async (event: Parameters<NonNullable<typeof bootstrap.shopify.webhook>['handle']>[0]) => {
+    await bootstrap.shopify.webhook?.finalize?.(event)
+    await bootstrap.automation.triggers.handleWebhook(event)
+  } } } : bootstrap?.shopify
   const app = bootstrap === null
     ? createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), webDistPath })
-    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: bootstrap.shopify, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
+    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
   if (webIndexExists) logger.info('Web app serving enabled', { webDistPath, exists: webDistExists, indexExists: webIndexExists })
   const server = app.listen(port, '0.0.0.0', () => logger.info('ProfitPilot API listening', { port, shopifyRoutes: bootstrap !== null, webApp: webIndexExists, startedInMs: Date.now() - startedAt }))
+  const automationTick = bootstrap ? setInterval(() => {
+    void Promise.all([bootstrap.automation.triggers.tickSchedules(), bootstrap.automation.triggers.resumeWaits(), bootstrap.automation.triggers.purgeExpiredData()]).catch((error: unknown) => logger.error('Automation scheduler tick failed', { error: error instanceof Error ? error.message : String(error) }))
+  }, 60_000) : null
   const shutdown = (): void => {
+    if (automationTick) clearInterval(automationTick)
     server.close(() => { void bootstrap?.database.close() })
   }
   process.once('SIGTERM', shutdown)

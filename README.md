@@ -28,7 +28,13 @@ F0 through F9 are complete. F9 adds persisted maintenance mode with critical end
 - `@profitpilot/ui` — F0 design token boundary
 - `@profitpilot/ai` — context, health, rules, agents, OpenRouter, calibration, evidence, execution, attribution, costs, Jarvis, Copilot, repositories
 - `@profitpilot/billing` — plans, entitlements, Shopify charges, trials, gift codes, grandfathering, ROI, funnel, admin sessions, reconciliation
-- `@profitpilot/automation` — workflows, policies, campaigns, templates, SMTP, suppression, tracking, batching, tickets
+- `@profitpilot/automation` — named/versioned workflows, durable runs and approvals, safety policies, installable templates, SMTP, suppression, tracking, batching, campaigns, and tickets
+
+## Automation
+
+The Automation hub is a tenant-scoped Shopify workflow system with a React Flow editor, immutable published versions, manual/scheduled/webhook triggers, dry runs, persistent run and step history, approval pauses, and real action adapters. Supported production actions are consent-aware email, customer tags, bounded discounts, internal notifications, wait/delay, and bounded inventory updates. SMS is intentionally unavailable.
+
+Workflow limits are enforced by the API: Trial 2, Start 5, Growth 20, and Commander unlimited. AI workflow nodes and AI templates are Commander-only. Sensitive actions are payload-bound to expiring approval records, run logs redact PII, and all PostgreSQL workflow operations use tenant context.
 - `@profitpilot/forecasting` — deterministic seasonality, demand, stockout, and RFM formula foundation
 - `@profitpilot/reporting` — closed-period reports, custom PDF writers, DB/R2 vault, and delivery status
 - `@profitpilot/monitoring` — error/Sentry monitoring, access review, launch controls, queue ops, and p95 load-budget measurements

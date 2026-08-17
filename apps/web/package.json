@@ -21,6 +21,7 @@
   "dependencies": {
     "@profitpilot/types": "workspace:*",
     "@profitpilot/ui": "workspace:*",
+    "@xyflow/react": "^12.11.3",
     "axe-core": "^4.10.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",

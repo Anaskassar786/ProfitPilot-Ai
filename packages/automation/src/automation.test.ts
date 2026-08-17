@@ -3,7 +3,7 @@ import { storeId } from '@profitpilot/types'
 import { activateWorkflow, validateWorkflow } from './index.js'
 import type { WorkflowDefinition } from './index.js'
 
-const definition: WorkflowDefinition = { id: 'wf-1', storeId: storeId('s1'), version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['action'] }, { id: 'action', type: 'action', config: { action: 'tag' }, next: [] }] }
+const definition: WorkflowDefinition = { id: 'wf-1', storeId: storeId('s1'), name: 'Customer tagging', description: null, category: 'Customer', tags: [], timezone: 'UTC', overlapPolicy: 'SKIP', version: 1, nodes: [{ id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['action'] }, { id: 'action', type: 'action', config: { action: 'tag_customer', tag: 'VIP' }, next: [] }] }
 
 describe('workflow graph validation', () => {
   it('accepts a valid trigger and action graph', () => expect(() => validateWorkflow(definition)).not.toThrow())
