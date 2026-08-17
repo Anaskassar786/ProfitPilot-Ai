@@ -929,3 +929,437 @@
     background: #FFFFFF !important;
   }
 }
+
+/* ── Inventory premium overview and saturated light treatment ───── */
+.inventory-overview-grid {
+  gap: 18px !important;
+}
+
+.inventory-health-card.modern,
+.inventory-distribution-card.modern,
+.inventory-value-card.modern {
+  min-height: 420px !important;
+  gap: 17px !important;
+  padding: 24px !important;
+  border-radius: 16px;
+}
+
+.inventory-card-label {
+  color: var(--text-secondary);
+  font-weight: 800;
+  letter-spacing: .055em;
+}
+
+.inventory-card-label > svg {
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+  color: var(--blue-bright);
+  border-radius: 5px;
+  background: rgba(59, 130, 246, .12);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, .14);
+}
+
+.inventory-health-card.modern .grade-badge {
+  min-width: 44px;
+  height: 36px;
+  padding-inline: 11px;
+  border-radius: 11px;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 18px currentColor;
+}
+
+.inventory-health-card.modern .grade-badge.green { color: #34D399; border-color: rgba(16, 185, 129, .48); background: rgba(5, 150, 105, .20); }
+.inventory-health-card.modern .grade-badge.blue { color: #60A5FA; border-color: rgba(37, 99, 235, .46); background: rgba(37, 99, 235, .20); }
+.inventory-health-card.modern .grade-badge.amber { color: #FBBF24; border-color: rgba(217, 119, 6, .46); background: rgba(217, 119, 6, .19); }
+.inventory-health-card.modern .grade-badge.red { color: #F87171; border-color: rgba(220, 38, 38, .44); background: rgba(220, 38, 38, .18); }
+
+.inventory-health-gauge-wrap.large {
+  position: relative;
+  padding: 2px 0 10px;
+}
+
+.inventory-health-gauge-wrap.large::before {
+  position: absolute;
+  width: 188px;
+  height: 126px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 58, 237, .18), transparent 68%);
+  filter: blur(12px);
+  content: "";
+  pointer-events: none;
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge.large,
+.inventory-health-gauge-wrap.large .inventory-health-gauge {
+  --inventory-health-sweep: 0deg;
+  width: 160px;
+  height: 160px;
+  background:
+    conic-gradient(from 220deg, transparent 0 var(--inventory-health-sweep), rgba(107, 114, 128, .18) var(--inventory-health-sweep) 360deg),
+    conic-gradient(from 220deg, #2563EB 0deg, #7C3AED 105deg, #059669 235deg, #0891B2 360deg) !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, .24), 0 18px 42px rgba(37, 99, 235, .16), 0 0 34px rgba(124, 58, 237, .14);
+  animation: inventory-gauge-enter 700ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge.no-data {
+  background: conic-gradient(from 220deg, rgba(107, 114, 128, .25), rgba(107, 114, 128, .08)) !important;
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge::before {
+  inset: 12px;
+  border: 1px solid var(--border-soft);
+  background: radial-gradient(circle at 50% 35%, rgba(99, 102, 241, .10), var(--card) 67%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge .gauge-inner {
+  gap: 5px;
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge .gauge-inner strong {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.inventory-health-gauge-wrap.large .inventory-health-gauge .gauge-inner span {
+  max-width: 110px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: .045em;
+  text-align: center;
+}
+
+.inventory-health-components.modern {
+  gap: 14px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.inventory-health-components.modern li {
+  gap: 7px;
+}
+
+.inventory-health-components.modern li > div:first-child span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.inventory-health-components.modern li > div:first-child strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.inventory-health-components.modern small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.inventory-health-components.modern .metric-row-icon {
+  width: 28px;
+  height: 28px;
+  color: #60A5FA;
+  border: 1px solid rgba(59, 130, 246, .18);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, .11);
+}
+
+.inventory-health-components.modern li:nth-child(2) .metric-row-icon { color: #A78BFA; border-color: rgba(124, 58, 237, .20); background: rgba(124, 58, 237, .11); }
+.inventory-health-components.modern li:nth-child(3) .metric-row-icon { color: #34D399; border-color: rgba(5, 150, 105, .20); background: rgba(5, 150, 105, .11); }
+.inventory-health-components.modern li:nth-child(4) .metric-row-icon { color: #FBBF24; border-color: rgba(217, 119, 6, .20); background: rgba(217, 119, 6, .11); }
+
+.inventory-health-bar {
+  height: 8px;
+  border: 1px solid var(--border-soft);
+  background: rgba(107, 114, 128, .12);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+}
+
+.inventory-health-bar .animated {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #2563EB, #7C3AED, #0891B2);
+  box-shadow: 0 0 12px rgba(59, 130, 246, .30);
+  transform-origin: left;
+  animation: inventory-bar-grow 750ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.inventory-health-bar .animated::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: translateX(-100%);
+  animation: inventory-bar-shine 2.4s 700ms ease-in-out infinite;
+  content: "";
+}
+
+.inventory-value-card.modern .inventory-value-total {
+  margin-top: -2px;
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -.045em;
+}
+
+.inventory-value-card.modern > small {
+  margin: -10px 0 2px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inventory-value-card.modern .inventory-top-value.modern {
+  gap: 10px;
+}
+
+.inventory-value-card.modern .inventory-top-value.modern li {
+  position: relative;
+  gap: 14px;
+  min-height: 70px;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-radius: 11px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+
+.inventory-value-card.modern .inventory-top-value.modern li::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, #2563EB, #7C3AED);
+  opacity: .72;
+  content: "";
+}
+
+.inventory-value-card.modern .inventory-top-value.modern li:hover {
+  border-color: rgba(59, 130, 246, .32);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
+  transform: translateY(-2px);
+}
+
+.value-item-main {
+  gap: 12px;
+}
+
+.value-item-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .14);
+}
+
+.value-item-main > div {
+  gap: 3px;
+}
+
+.value-item-main strong,
+.inventory-top-value-amount strong {
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.value-item-main small,
+.inventory-top-value-amount small {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.value-distribution-bar {
+  height: 6px;
+  margin-top: 5px;
+  background: rgba(107, 114, 128, .12);
+}
+
+.value-distribution-bar i {
+  min-width: 4px;
+  background: linear-gradient(90deg, #2563EB, #0891B2);
+  box-shadow: 0 0 8px rgba(37, 99, 235, .24);
+}
+
+.inventory-top-value.modern li:nth-child(2) .value-distribution-bar i { background: linear-gradient(90deg, #7C3AED, #DB2777); }
+.inventory-top-value.modern li:nth-child(3) .value-distribution-bar i { background: linear-gradient(90deg, #059669, #0891B2); }
+.inventory-top-value.modern li:nth-child(4) .value-distribution-bar i { background: linear-gradient(90deg, #D97706, #DC2626); }
+
+.inventory-donut .recharts-pie-sector path {
+  filter: drop-shadow(0 3px 5px rgba(15, 23, 42, .16));
+}
+
+.inventory-distribution-legend.modern .legend-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inventory-distribution-legend.modern .legend-count {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.inventory-table th {
+  height: 44px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+}
+
+.inventory-table td {
+  height: 72px !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+.inventory-item-cell {
+  gap: 11px;
+}
+
+.inventory-item-cell strong {
+  font-size: 15px !important;
+  font-weight: 700;
+}
+
+.inventory-item-cell small,
+.inventory-table td > small,
+.inventory-stock-cell small,
+.inventory-location-cell small,
+.inventory-muted {
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+
+.inventory-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.stock-quantity,
+.inventory-location-cell > span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.inventory-badge {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+@keyframes inventory-gauge-enter {
+  from { opacity: .35; transform: scale(.88) rotate(-10deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes inventory-bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes inventory-bar-shine {
+  0%, 45% { transform: translateX(-100%); }
+  75%, 100% { transform: translateX(100%); }
+}
+
+.app-shell.light-mode .inventory-health-card.modern,
+.app-shell.light-mode .inventory-distribution-card.modern,
+.app-shell.light-mode .inventory-value-card.modern,
+.app-shell.light-mode .inventory-stat-card,
+.app-shell.light-mode .inventory-insights,
+.app-shell.light-mode .inventory-ai-card,
+.app-shell.light-mode .inventory-table-card {
+  color: #111827;
+  border-color: #E5E7EB !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 10px 28px rgba(15, 23, 42, .045) !important;
+}
+
+.app-shell.light-mode .inventory-card-label,
+.app-shell.light-mode .inventory-health-components.modern li > div:first-child span,
+.app-shell.light-mode .inventory-distribution-legend.modern .legend-status {
+  color: #374151 !important;
+}
+
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.green { color: #FFFFFF; border-color: #047857; background: #059669; box-shadow: 0 0 18px rgba(5, 150, 105, .28); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.blue { color: #FFFFFF; border-color: #1D4ED8; background: #2563EB; box-shadow: 0 0 18px rgba(37, 99, 235, .25); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.amber { color: #FFFFFF; border-color: #B45309; background: #D97706; box-shadow: 0 0 18px rgba(217, 119, 6, .23); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.red { color: #FFFFFF; border-color: #B91C1C; background: #DC2626; box-shadow: 0 0 18px rgba(220, 38, 38, .22); }
+
+.app-shell.light-mode .inventory-health-gauge-wrap.large .inventory-health-gauge::before {
+  background: radial-gradient(circle at 50% 35%, #F8FAFC, #FFFFFF 68%);
+}
+
+.app-shell.light-mode .inventory-health-bar,
+.app-shell.light-mode .value-distribution-bar {
+  border-color: #E5E7EB;
+  background: #E5E7EB;
+}
+
+.app-shell.light-mode .inventory-value-card.modern .inventory-top-value.modern li,
+.app-shell.light-mode .inventory-distribution-legend.modern li {
+  border-color: #E5E7EB;
+  background: #F9FAFB;
+}
+
+.app-shell.light-mode .inventory-value-card.modern .inventory-top-value.modern li:hover,
+.app-shell.light-mode .inventory-distribution-legend.modern li:hover {
+  border-color: #93C5FD;
+  background: #FFFFFF;
+}
+
+.app-shell.light-mode .inventory-table th {
+  color: #6B7280 !important;
+  background: #F9FAFB !important;
+}
+
+.app-shell.light-mode .inventory-table td,
+.app-shell.light-mode .inventory-item-cell strong,
+.app-shell.light-mode .stock-quantity {
+  color: #111827 !important;
+}
+
+.app-shell.light-mode .inventory-table tbody tr:hover,
+.app-shell.light-mode .inventory-table tbody tr:focus {
+  background: #F9FAFB !important;
+}
+
+.app-shell.light-mode .inventory-badge.status-in_stock {
+  color: #FFFFFF !important;
+  border-color: #047857 !important;
+  background: #059669 !important;
+}
+
+.app-shell.light-mode .inventory-badge.status-low {
+  color: #FFFFFF !important;
+  border-color: #B45309 !important;
+  background: #D97706 !important;
+}
+
+.app-shell.light-mode .inventory-badge.status-out {
+  color: #FFFFFF !important;
+  border-color: #B91C1C !important;
+  background: #DC2626 !important;
+}
+
+.app-shell.light-mode .inventory-badge.status-untracked {
+  color: #374151 !important;
+  border-color: #D1D5DB !important;
+  background: #E5E7EB !important;
+}
+
+@media (max-width: 1180px) {
+  .inventory-health-card.modern,
+  .inventory-distribution-card.modern,
+  .inventory-value-card.modern {
+    min-height: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .inventory-table td {
+    height: auto !important;
+    min-height: 42px !important;
+  }
+}
