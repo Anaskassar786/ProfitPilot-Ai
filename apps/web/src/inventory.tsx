@@ -12,6 +12,7 @@ import {
   HeartPulse,
   Layers,
   LineChart,
+  LockKeyhole,
   MapPin,
   MoreHorizontal,
   PackageX,
