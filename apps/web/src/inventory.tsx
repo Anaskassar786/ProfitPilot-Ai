@@ -199,8 +199,8 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
 export function InventoryStatsGrid({ data, loading }: { data: InventoryPageResult; loading: boolean }) {
   const { stats } = data
   const cards: readonly Readonly<{ key: string; label: string; value: string; hint: string; icon: ReactNode; tone: string }>[] = [
-    { key: 'skus', label: 'Total SKUs', value: formatUnits(stats.totalSkus), hint: `${formatUnits(stats.trackedSkus)} tracked by Shopify`, icon: <Layers size={17} />, tone: 'blue' },
-    { key: 'units', label: 'Units in Stock', value: formatUnits(stats.totalUnits), hint: stats.averageStock === null ? 'No tracked quantities yet' : `Average ${formatUnits(stats.averageStock)} per tracked SKU`, icon: <Boxes size={17} />, tone: 'green' },
+    { key: 'skus', label: 'Total Products', value: formatUnits(stats.totalSkus), hint: `${formatUnits(stats.trackedSkus)} tracked products`, icon: <Layers size={17} />, tone: 'blue' },
+    { key: 'units', label: 'Units in Stock', value: formatUnits(stats.totalUnits), hint: stats.averageStock === null ? 'No tracked quantities yet' : `Average ${formatUnits(stats.averageStock)} per tracked product`, icon: <Boxes size={17} />, tone: 'green' },
     { key: 'low', label: 'Low Stock Alerts', value: formatUnits(stats.lowStockCount), hint: `Below ${stats.lowStockThreshold} units on hand`, icon: <TrendingDown size={17} />, tone: 'amber' },
     { key: 'out', label: 'Out of Stock', value: formatUnits(stats.outOfStockCount), hint: stats.untrackedSkus > 0 ? `${formatUnits(stats.untrackedSkus)} more are not tracked` : 'Tracked items at zero units', icon: <PackageX size={17} />, tone: 'red' },
   ]
@@ -217,26 +217,31 @@ export function InventoryHealthCard({ data, loading }: { data: InventoryPageResu
   const { health } = data
   const unavailable = health.score === null
   const sweep = unavailable ? 0 : Math.max(8, Math.round(health.score * 2.4))
-  return <article className="card inventory-health-card">
-    <div className="inventory-card-label"><HeartPulse size={16} /><span>Inventory Health</span></div>
+  const gradeColor = health.grade === 'A' || health.grade === 'A+' ? 'green' : health.grade === 'B' ? 'blue' : health.grade === 'C' ? 'amber' : health.grade === 'D' ? 'red' : 'muted'
+  return <article className="card inventory-health-card modern">
+    <div className="inventory-card-label"><HeartPulse size={16} /><span>Inventory Health</span><span className={`grade-badge ${gradeColor}`}>{health.grade}</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : <>
-      <div className="inventory-health-gauge-wrap">
+      <div className="inventory-health-gauge-wrap large">
         <div
-          className={`health-gauge compact ${unavailable ? 'no-data' : health.tone}`}
+          className={`health-gauge large ${unavailable ? 'no-data' : health.tone}`}
           style={unavailable ? undefined : { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } as CSSProperties}
         >
           <div className="gauge-inner">
             <strong>{unavailable ? '—' : health.score}</strong>
-            <span>{unavailable ? 'No inventory data' : `${health.grade} · ${health.label}`}</span>
+            <span>{unavailable ? 'No inventory data' : health.label}</span>
           </div>
         </div>
       </div>
-      <ul className="inventory-health-components">
-        {health.components.map((component) => <li key={component.key}>
-          <div><span>{component.label}</span><strong>{component.score}%</strong></div>
-          <div className="inventory-health-bar" role="presentation"><i style={{ width: `${component.score}%` }} /></div>
-          <small>{component.detail}</small>
-        </li>)}
+      <ul className="inventory-health-components modern">
+        {health.components.map((component) => {
+          const icon = component.key.includes('stockout') || component.key.includes('out') ? PackageX : component.key.includes('low') ? TrendingDown : component.key.includes('value') ? Coins : component.key.includes('turnover') ? TrendingUp : Boxes
+          const Icon = icon as any
+          return <li key={component.key}>
+            <div><span className="metric-row-icon"><Icon size={14} /></span><span>{component.label}</span><strong>{component.score}%</strong></div>
+            <div className="inventory-health-bar" role="presentation"><i style={{ width: `${component.score}%` }} className="animated" /></div>
+            <small>{component.detail}</small>
+          </li>
+        })}
         {health.components.length === 0 && <li className="inventory-health-empty">Health is calculated from your real stock levels once inventory is synced.</li>}
       </ul>
     </>}
@@ -276,16 +281,28 @@ export function StockDistributionChart({ data, loading }: { data: InventoryPageR
 
 export function InventoryValueSummary({ data, loading }: { data: InventoryPageResult; loading: boolean }) {
   const { stats, topValueItems } = data
-  return <article className="card inventory-value-card">
+  const imageMap = new Map<string, string | null>()
+  for (const row of data.items) {
+    if (row.variantId && row.imageUrl) imageMap.set(row.variantId, row.imageUrl)
+  }
+  const totalValue = stats.totalValue ?? 0
+  return <article className="card inventory-value-card modern">
     <div className="inventory-card-label"><Coins size={16} /><span>Inventory Value</span></div>
     {loading ? <div className="inventory-skeleton-block" /> : <>
       <strong className="inventory-value-total">{formatMoney(stats.totalValue, stats.currency)}</strong>
-      <small>{stats.totalValue === null ? 'No variant prices were returned by Shopify.' : `Retail value across ${formatUnits(stats.valuedSkus)} priced SKUs`}</small>
-      {topValueItems.length > 0 && <ul className="inventory-top-value">
-        {topValueItems.map((item) => <li key={item.variantId}>
-          <div><strong>{item.title}</strong>{item.variantTitle && <small>{item.variantTitle}</small>}</div>
-          <div className="inventory-top-value-amount"><strong>{formatMoney(item.value, stats.currency)}</strong><small>{formatUnits(item.quantity)} units</small></div>
-        </li>)}
+      <small>{stats.totalValue === null ? 'No variant prices were returned by Shopify.' : `Retail value across ${formatUnits(stats.valuedSkus)} priced products`}</small>
+      {topValueItems.length > 0 && <ul className="inventory-top-value modern">
+        {topValueItems.map((item) => {
+          const img = imageMap.get(item.variantId) ?? null
+          const pct = totalValue > 0 && item.value ? Math.round((item.value / totalValue) * 100) : 0
+          return <li key={item.variantId}>
+            <div className="value-item-main">
+              {img ? <img src={img} alt="" className="value-item-thumb" /> : <span className="value-item-thumb placeholder"><PackageX size={14} /></span>}
+              <div><strong title={item.title}>{item.title}</strong>{item.variantTitle && <small>{item.variantTitle}</small>}<div className="value-distribution-bar"><i style={{ width: `${pct}%` }} /></div></div>
+            </div>
+            <div className="inventory-top-value-amount"><strong>{formatMoney(item.value, stats.currency)}</strong><small>{formatUnits(item.quantity)} units · {pct}%</small></div>
+          </li>
+        })}
       </ul>}
     </>}
   </article>
@@ -296,9 +313,9 @@ export function BasicInsightsCard({ data, onUpgrade }: { data: InventoryPageResu
   return <section className="card inventory-insights">
     <header className="inventory-insights-header">
       <div className="inventory-insights-title">
-        <span className="ai-insights-icon"><Sparkles size={18} /></span>
+        <span className="ai-insights-icon"><Boxes size={18} /></span>
         <div>
-          <div className="section-kicker">INVENTORY INTELLIGENCE</div>
+          <div className="section-kicker">INVENTORY INSIGHTS</div>
           <h2>Stock Insights</h2>
           <p>Calculated from your synced Shopify inventory. Nothing here is estimated.</p>
         </div>
@@ -438,11 +455,10 @@ function InventoryTableRow({ item, multiLocation, showDaysOfCover, onSelect }: {
  * Growth+ column. An item without 30 days of sales history, or a variant of a
  * multi-variant product (Shopify reports sales per product), says so instead of
  * showing a number that would be invented.
- */
-export function DaysOfCoverCell({ cover }: { cover: DaysOfCover }) {
+ */export function DaysOfCoverCell({ cover }: { cover: DaysOfCover }) {
   const label = daysOfCoverLabel(cover)
   if (cover.status === 'available') return <div className="inventory-cover-cell"><strong className={`tone-${daysOfCoverTone(cover)}`}>{label}</strong><small>{cover.velocity.toLocaleString(undefined, { maximumFractionDigits: 2 })} units/day</small></div>
-  if (cover.status === 'locked') return <div className="inventory-cover-cell"><strong className="tone-muted">Growth</strong><small>Upgrade to calculate</small></div>
+  if (cover.status === 'locked') return <div className="inventory-cover-cell"><strong className="tone-muted" title="Upgrade to unlock"><LockKeyhole size={12} /> Upgrade</strong><small>Unlock to calculate</small></div>
   return <div className="inventory-cover-cell"><strong className="tone-muted">{label}</strong><small title={cover.message}>{cover.reason === 'variant_sales_unavailable' ? 'Sales are per product' : cover.reason === 'no_sales' ? 'No sales in 30 days' : cover.reason === 'no_stock_signal' ? 'No tracked quantity' : 'Awaiting sales history'}</small></div>
 }
 

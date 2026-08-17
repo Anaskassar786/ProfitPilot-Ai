@@ -265,3 +265,111 @@
   .inventory-detail-grid { grid-template-columns:1fr; }
   .inventory-details-drawer > footer > span { display:none; }
 }
+
+/* ─── PR #38 Commit 3: Inventory Typography & Spacing Bump ─── */
+.inventory-workspace { gap: 20px !important; }
+.inventory-stats-grid { gap: 16px !important; }
+.inventory-stat-card { min-height: 124px !important; padding: 18px 20px !important; gap: 10px !important; }
+.inventory-stat-head { font-size: 11px !important; }
+.inventory-stat-card > strong { font-size: 26px !important; }
+.inventory-stat-card > small { font-size: 12px !important; }
+.inventory-overview-grid { gap: 16px !important; }
+.inventory-health-card, .inventory-distribution-card, .inventory-value-card { min-height: 300px !important; padding: 20px 22px !important; gap: 12px !important; }
+.inventory-card-label { font-size: 11px !important; }
+.inventory-insights-header { padding: 20px 22px !important; }
+.inventory-insights-title h2 { font-size: 16px !important; }
+.inventory-insights-title p { font-size: 12px !important; }
+.inventory-basic-card > strong { font-size: 16px !important; }
+.inventory-basic-card > p { font-size: 12px !important; }
+.inventory-table th { font-size: 11px !important; padding: 12px 14px !important; }
+.inventory-table td { font-size: 13px !important; padding: 14px 14px !important; }
+.inventory-toolbar { padding: 16px 20px !important; gap: 14px !important; }
+.inventory-search input { font-size: 14px !important; height: 38px !important; }
+.inventory-pagination { font-size: 12px !important; padding: 14px 20px !important; }
+.inventory-ai-tile > strong { font-size: 14px !important; }
+.inventory-ai-tile > p { font-size: 12px !important; }
+
+
+/* ─── PR #38 Commit 4: Light Theme Rebuild — Inventory ─── */
+.app-shell.light-mode .inventory-stat-card,
+.app-shell.light-mode .inventory-health-card,
+.app-shell.light-mode .inventory-distribution-card,
+.app-shell.light-mode .inventory-value-card,
+.app-shell.light-mode .inventory-insights,
+.app-shell.light-mode .inventory-ai-card,
+.app-shell.light-mode .inventory-table-card,
+.app-shell.light-mode .inventory-basic-card,
+.app-shell.light-mode .inventory-ai-tile,
+.light-mode .inventory-stat-card,
+.light-mode .inventory-health-card,
+.light-mode .inventory-distribution-card,
+.light-mode .inventory-value-card,
+.light-mode .inventory-insights,
+.light-mode .inventory-ai-card,
+.light-mode .inventory-table-card,
+.light-mode .inventory-basic-card,
+.light-mode .inventory-ai-tile {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.app-shell.light-mode .inventory-insights::before,
+.app-shell.light-mode .inventory-ai-card::before,
+.light-mode .inventory-insights::before,
+.light-mode .inventory-ai-card::before { display: none !important; }
+
+.app-shell.light-mode .inventory-toolbar,
+.app-shell.light-mode .inventory-search,
+.app-shell.light-mode .inventory-tabs,
+.app-shell.light-mode .inventory-sort-control,
+.light-mode .inventory-toolbar,
+.light-mode .inventory-search,
+.light-mode .inventory-tabs,
+.light-mode .inventory-sort-control {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .inventory-table th,
+.light-mode .inventory-table th {
+  background: var(--bg-secondary) !important;
+}
+.app-shell.light-mode .inventory-empty,
+.app-shell.light-mode .inventory-error,
+.light-mode .inventory-empty,
+.light-mode .inventory-error {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-default) !important;
+}
+.app-shell.light-mode .inventory-donut-center,
+.light-mode .inventory-donut-center {
+  color: var(--text-primary) !important;
+}
+
+
+/* ─── PR #38 Commit 8: Inventory modern redesign ─── */
+.inventory-health-card.modern .grade-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 800; margin-left: auto; }
+.grade-badge.green { color: #059669; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.2); }
+.grade-badge.blue { color: #2563EB; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.2); }
+.grade-badge.amber { color: #D97706; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.2); }
+.grade-badge.red { color: #DC2626; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.2); }
+.grade-badge.muted { color: var(--text-tertiary); background: var(--bg-secondary); border: 1px solid var(--border-default); }
+
+.inventory-health-gauge-wrap.large .health-gauge.large { width: 140px; height: 140px; }
+.inventory-health-gauge-wrap.large .health-gauge.large::before { inset: 10px; }
+.inventory-health-gauge-wrap.large .gauge-inner strong { font-size: 32px; }
+
+.inventory-health-components.modern { gap: 12px; }
+.metric-row-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; background: var(--bg-secondary); color: var(--text-tertiary); flex: 0 0 auto; }
+.inventory-health-bar .animated { transition: width 600ms cubic-bezier(.4,0,.2,1); background: linear-gradient(90deg,var(--blue),var(--purple)); }
+
+.inventory-value-card.modern .inventory-top-value.modern { gap: 8px; }
+.value-item-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.value-item-thumb { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-soft); flex: 0 0 auto; }
+.value-item-thumb.placeholder { display: grid; place-items: center; background: var(--bg-secondary); color: var(--text-tertiary); }
+.value-distribution-bar { height: 4px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; margin-top: 4px; width: 100%; }
+.value-distribution-bar i { display: block; height: 100%; background: linear-gradient(90deg,var(--blue),var(--profit)); border-radius: inherit; }
+
+.inventory-sort-control { display: flex; align-items: center; gap: 6px; }
+.sort-dropdown-clean { display: flex; align-items: center; gap: 6px; }
+.sort-direction-toggle { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); }
+

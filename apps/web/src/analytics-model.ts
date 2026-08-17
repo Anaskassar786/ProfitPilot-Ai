@@ -88,15 +88,21 @@ export function analyticsKpis(snapshot: AnalyticsSnapshot | null, totalCustomers
   const bestAov = orders.length ? Math.max(...orders.map((row) => finite(row.averageOrderValue))) : null
   const spark = (values: readonly number[]) => values.map((value) => finite(value, Number.NaN)).filter(Number.isFinite)
   const days = new Set([...revenue.filter((row) => row.day >= currentStart).map((row) => row.day), ...orders.filter((row) => row.day >= currentStart).map((row) => row.day)]).size || 28
-  const customers = totalCustomers !== null && Number.isFinite(totalCustomers) ? totalCustomers : null
+  // Fix 6.2 — fallback to customerStats.identified when totalCustomers null
+  let customers: number | null = null
+  if (totalCustomers !== null && Number.isFinite(totalCustomers)) {
+    customers = totalCustomers
+  } else if (customerStats?.identified !== undefined && Number.isFinite(customerStats.identified)) {
+    customers = customerStats.identified
+  }
   const repeatRate = customerStats?.repeatRate ?? null
   return [
     { label: 'Total Revenue', value: revenue.length ? revNow : null, format: 'money', money: true, change: change(revNow, revBefore), sparkline: spark(revenue.slice(-28).map((row) => row.grossRevenue)), detail: `${revenue.length} sales days synced` },
     { label: 'Total Orders', value: orders.length ? ordNow : null, format: 'number', money: false, change: change(ordNow, ordBefore), sparkline: spark(orders.slice(-28).map((row) => row.orderCount)), detail: ordNow ? `${(ordNow / days).toFixed(1)} average per day` : 'Sync orders to establish your baseline' },
     { label: 'Average Order Value', value: aovNow, format: 'money', money: true, change: aovNow !== null && aovBefore !== null ? change(aovNow, aovBefore) : null, sparkline: spark(orders.slice(-28).map((row) => row.averageOrderValue)), detail: bestAov !== null ? `Best daily AOV ${currency(bestAov)}` : 'Calculated from completed order totals' },
-    { label: 'Conversion Rate', value: null, format: 'percent', money: false, change: null, sparkline: [], detail: 'Connect Shopify Analytics for sessions' },
-    { label: 'Total Customers', value: customers, format: 'number', money: false, change: null, sparkline: spark(snapshot?.customerCohorts.slice(-28).map((row) => row.customerCount) ?? []), detail: customerStats ? `${customerStats.newCustomers} first-time in synced orders` : 'Customer cohorts build automatically' },
-    { label: 'Repeat Purchase Rate', value: repeatRate, format: 'percent', money: false, change: null, sparkline: [], detail: customerStats?.loyaltyScore !== null && customerStats?.loyaltyScore !== undefined ? `Loyalty score ${customerStats.loyaltyScore}/100` : 'Identified customers only' },
+    { label: 'Conversion Rate', value: null, format: 'percent', money: false, change: null, sparkline: [], detail: 'Requires Shopify Analytics — visitor sessions not available' },
+    { label: 'Total Customers', value: customers, format: 'number', money: false, change: null, sparkline: spark(snapshot?.customerCohorts.slice(-28).map((row) => row.customerCount) ?? []), detail: customerStats ? `${customerStats.newCustomers} new customers in synced orders` : 'Sync customers to see total' },
+    { label: 'Repeat Purchase Rate', value: repeatRate, format: 'percent', money: false, change: null, sparkline: [], detail: customerStats?.loyaltyScore !== null && customerStats?.loyaltyScore !== undefined ? `Loyalty score ${customerStats.loyaltyScore}/100 · based on real customer orders` : 'Needs repeat customer data to calculate loyalty' },
   ]
 }
 function currency(value: number) { return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value) }
