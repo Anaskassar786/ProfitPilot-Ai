@@ -144,11 +144,15 @@ export function formatStoreDisplayName(domain: string | null): string | null {
   // Strip .myshopify.com suffix
   const withoutSuffix = trimmed.replace(/\.myshopify\.com$/, '')
   if (!withoutSuffix) return null
+  if (withoutSuffix === 'commander-pilot' || withoutSuffix === 'commander_pilot') return 'Commander'
   // Replace hyphens/underscores with spaces, split, Title Case each word
   const words = withoutSuffix
     .split(/[-_]+/)
     .filter(Boolean)
+    .filter((word) => word.toLowerCase() !== 'pilot')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
   if (words.length === 0) return null
-  return words.join(' ')
+  const formatted = words.join(' ')
+  if (formatted === 'Commander Pilot') return 'Commander'
+  return formatted
 }
