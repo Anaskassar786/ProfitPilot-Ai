@@ -336,9 +336,9 @@ export function agentGuide(id: string): AgentGuide {
 
 /* ── AI Growth Command modules (all shipped — links open the real pages) ── */
 
-export type GrowthModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'INSIGHTS_HUB' | 'AI_COMMAND'
+export type GrowthModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'PATTERN_AI' | 'AI_COMMAND'
 /** Sidebar section id each module's "Open" action navigates to. */
-export type GrowthModulePath = 'store-coach' | 'ai-executive' | 'insights-hub' | 'ai-command'
+export type GrowthModulePath = 'store-coach' | 'ai-executive' | 'patternai' | 'ai-command'
 export type GrowthModule = Readonly<{
   id: GrowthModuleId
   label: string
@@ -372,11 +372,11 @@ export const GROWTH_MODULES: readonly GrowthModule[] = [
     features: ['Boardroom-level strategic summaries', 'Investor-ready PDFs on Commander', 'Big-decision context from closed-period data'],
   },
   {
-    id: 'INSIGHTS_HUB',
-    label: 'Insights Hub',
+    id: 'PATTERN_AI',
+    label: 'PatternAI',
     description: 'Discovers hidden patterns and delivers deep insights.',
     sampleInsight: 'We found a hidden pattern: weekend bundles outperform weekday discounts.',
-    path: 'insights-hub',
+    path: 'patternai',
     planTiers: { trial: 'Limited', start: 'Basic', growth: 'Full', commander: '+ API + Real-time' },
     features: ['Deep pattern discovery across your data', 'API and real-time streams on Commander', 'Hidden correlations surfaced automatically'],
   },

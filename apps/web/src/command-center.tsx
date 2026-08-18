@@ -23,9 +23,9 @@ import {
   ListFilter,
   Loader2,
   LockKeyhole,
-  Microscope,
   Minus,
   MoreHorizontal,
+  Network,
   Package,
   Pause,
   Play,
@@ -97,7 +97,7 @@ export const AGENT_ICONS: Readonly<Record<string, LucideIcon>> = {
 export const GROWTH_MODULE_ICONS: Readonly<Record<string, LucideIcon>> = {
   STORE_COACH: GraduationCap,
   AI_EXECUTIVE: Briefcase,
-  INSIGHTS_HUB: Microscope,
+  PATTERN_AI: Network,
   AI_COMMAND: Command,
 }
 

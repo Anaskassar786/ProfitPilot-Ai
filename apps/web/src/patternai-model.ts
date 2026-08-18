@@ -1,15 +1,22 @@
 /**
- * Client-side contract and humanization layer for the Insights Hub (PR #50).
+ * PatternAI — client-side contract and humanization layer.
  *
  * Mirrors `apps/api/src/insights-hub-routes.ts` and `@profitpilot/ai`
- * `insights-hub.ts`. The workspace NEVER derives a metric, a confidence, or a
- * count of its own — it renders what the API returned. Every figure on screen
- * is computed server-side from real synchronized store data; the AI narrator
- * only restyles deterministic engine output through the language firewall.
+ * `insights-hub.ts` (storage names keep the original module id for backend
+ * compatibility; the product surface is PatternAI). The workspace NEVER
+ * derives a metric, a confidence, or a count of its own — it renders what the
+ * API returned. Every figure on screen is computed server-side from real
+ * synchronized store data; the AI narrator only restyles deterministic engine
+ * output through the language firewall.
  *
- * "Curious scientist" tone: discoveries are phrased as questions and
- * observations ("Did you know…"), never as commands or invented numbers.
+ * Voice: discovery-oriented, curious, educational. PatternAI explains what it
+ * found and how it knows — it never commands, and it never invents a number.
  */
+
+/** Product identity, used by the shell, the hero, and the empty states. */
+export const PATTERN_AI_NAME = 'PatternAI'
+export const PATTERN_AI_TAGLINE = 'Discover the patterns that drive your business'
+export const PATTERN_AI_SUBTITLE = 'AI-powered pattern intelligence, computed from your real store data — never invented.' 
 
 export type PlanTier = 'trial' | 'start' | 'growth' | 'commander'
 
@@ -244,6 +251,8 @@ export type InsightsOverview = Readonly<{
   preferences: InsightsPreferences
   autoDiscoveryRan: boolean
   trial: boolean
+  /** Sections the API could not load this render (it still returned a page). */
+  degraded?: readonly string[]
   generatedAt: string
 }>
 
@@ -313,7 +322,7 @@ export const INSIGHTS_UPGRADE_CTA = 'Upgrade Plan'
 export const INSIGHTS_UPGRADE_PATH = '/billing'
 
 export function insightsUpgradeMessage(feature: InsightsFeature): string {
-  const label = FEATURE_LABELS[feature] ?? 'This Insights Hub feature'
+  const label = FEATURE_LABELS[feature] ?? 'This PatternAI capability'
   return `${label} is not included in your current plan. ${INSIGHTS_UPGRADE_CTA} to keep exploring.`
 }
 
@@ -326,10 +335,10 @@ export const FEATURE_LABELS: Readonly<Record<InsightsFeature, string>> = {
   trends: 'Trend watching',
   comparisons: 'Head-to-head comparisons',
   knowledge: 'The knowledge base',
-  timeline: 'The insights timeline',
+  timeline: 'The discovery timeline',
   predictions: 'Predictions',
   autoDiscovery: 'Auto-discovery',
-  export: 'Insight exports',
+  export: 'Pattern exports',
   share: 'Sharing',
   apiAccess: 'API access',
   externalTrends: 'External market trends',
@@ -447,7 +456,7 @@ export const SUGGESTED_WHY_QUESTIONS: readonly string[] = [
   'Why do some customers come back and others never return?',
 ]
 
-/* ── Routing (/ai-growth-command/insights/*) ───────────────────────────── */
+/* ── Routing (/ai-growth-command/patternai/*) ──────────────────────────── */
 
 export type InsightsTab =
   | 'overview'
@@ -466,7 +475,17 @@ export type InsightsTab =
 
 export type InsightsRoute = Readonly<{ tab: InsightsTab; id: string | null }>
 
-export const INSIGHTS_BASE_PATH = '/ai-growth-command/insights'
+export const PATTERN_AI_BASE_PATH = '/ai-growth-command/patternai'
+/** Pre-rebrand path: still parsed so old bookmarks and emails keep working. */
+export const PATTERN_AI_LEGACY_BASE_PATH = '/ai-growth-command/insights'
+/** @deprecated Use PATTERN_AI_BASE_PATH. Kept for import compatibility. */
+export const INSIGHTS_BASE_PATH = PATTERN_AI_BASE_PATH
+
+/** True for both the PatternAI path and the legacy Insights Hub path. */
+export function isPatternAiPath(pathname: string): boolean {
+  const path = pathname.replace(/\?.*$/, '')
+  return path.startsWith(PATTERN_AI_BASE_PATH) || path.startsWith(PATTERN_AI_LEGACY_BASE_PATH)
+}
 
 const TAB_SEGMENTS: Readonly<Record<string, InsightsTab>> = {
   discoveries: 'discoveries',
@@ -485,7 +504,7 @@ const TAB_SEGMENTS: Readonly<Record<string, InsightsTab>> = {
 
 export function parseInsightsRoute(pathname: string): InsightsRoute {
   const path = pathname.replace(/\?.*$/, '').replace(/\/+$/, '')
-  const base = INSIGHTS_BASE_PATH
+  const base = path.startsWith(PATTERN_AI_LEGACY_BASE_PATH) ? PATTERN_AI_LEGACY_BASE_PATH : PATTERN_AI_BASE_PATH
   if (!path.startsWith(base)) return { tab: 'overview', id: null }
   const rest = path.slice(base.length).replace(/^\/+/, '')
   if (!rest) return { tab: 'overview', id: null }
@@ -497,7 +516,7 @@ export function parseInsightsRoute(pathname: string): InsightsRoute {
 }
 
 export function insightsRoutePath(tab: InsightsTab, id: string | null, search = ''): string {
-  const base = tab === 'overview' ? INSIGHTS_BASE_PATH : `${INSIGHTS_BASE_PATH}/${tab}`
+  const base = tab === 'overview' ? PATTERN_AI_BASE_PATH : `${PATTERN_AI_BASE_PATH}/${tab}`
   return `${id ? `${base}/${id}` : base}${search}`
 }
 
@@ -520,17 +539,36 @@ export function insightsTabLabel(tab: InsightsTab): string {
   switch (tab) {
     case 'overview': return 'Discovery feed'
     case 'discoveries': return 'Discoveries'
-    case 'lessons': return 'Lessons'
+    case 'lessons': return 'Learning library'
     case 'patterns': return 'Pattern lab'
-    case 'personas': return 'Personas'
-    case 'why': return 'Why?'
+    case 'personas': return 'Customer personas'
+    case 'why': return 'Why? explorer'
     case 'trends': return 'Trend watcher'
-    case 'comparisons': return 'Compare'
+    case 'comparisons': return 'Comparisons'
     case 'knowledge': return 'Knowledge base'
     case 'timeline': return 'Timeline'
     case 'predictions': return 'Predictions'
     case 'settings': return 'Settings'
     case 'api-access': return 'API access'
+  }
+}
+
+/** One-line "what this surface is for", shown under each section heading. */
+export function insightsTabPurpose(tab: InsightsTab): string {
+  switch (tab) {
+    case 'overview': return 'Everything PatternAI noticed in your store, newest first.'
+    case 'discoveries': return 'Every discovery on record, filterable by type and category.'
+    case 'lessons': return 'Short, personalised briefings written from your own numbers.'
+    case 'patterns': return 'The recurring structures behind your sales, mapped visually.'
+    case 'personas': return 'Who your buyers actually are, grouped by measured behaviour.'
+    case 'why': return 'Ask why something happened and trace it to root causes.'
+    case 'trends': return 'What is rising, what is fading, and how confident we are.'
+    case 'comparisons': return 'Settle a question with a measured head-to-head study.'
+    case 'knowledge': return 'Your own wiki of saved patterns, notes, and conclusions.'
+    case 'timeline': return 'A chronological record of everything PatternAI has learned.'
+    case 'predictions': return 'Forecasts with honest ranges and stated confidence.'
+    case 'settings': return 'Discovery cadence, categories, and notification preferences.'
+    case 'api-access': return 'Programmatic access to your patterns for your own tools.'
   }
 }
 
@@ -671,4 +709,104 @@ export function personaShare(persona: InsightPersona): string {
 export function meterPercent(used: number, limit: number | null): number | null {
   if (limit === null || !Number.isFinite(limit) || limit <= 0) return null
   return Math.min(100, Math.round((used / limit) * 100))
+}
+
+/* ── PatternAI presentation model (pure, unit-tested) ──────────────────── */
+
+export type DiscoveryTone = 'pattern' | 'anomaly' | 'opportunity' | 'correlation' | 'trend' | 'segment' | 'behavior'
+
+/** Stable colour tone per discovery type — used for card accents and badges. */
+export function discoveryTone(type: DiscoveryType): DiscoveryTone {
+  return type.toLowerCase() as DiscoveryTone
+}
+
+/** Short, human "what kind of finding is this" label used on card headers. */
+export const DISCOVERY_TYPE_HEADLINES: Readonly<Record<DiscoveryType, string>> = {
+  PATTERN: 'New pattern detected',
+  ANOMALY: 'Anomaly detected',
+  OPPORTUNITY: 'Opportunity spotted',
+  CORRELATION: 'Correlation found',
+  TREND: 'Trend forming',
+  SEGMENT: 'Segment identified',
+  BEHAVIOR: 'Behaviour observed',
+}
+
+export type PatternAiStat = Readonly<{ id: string; label: string; value: string; caption: string }>
+
+/**
+ * The six hero tiles. Values come straight from the API's counts — this
+ * function only formats, it never derives a number of its own.
+ */
+export function patternAiStats(overview: InsightsOverview | null): readonly PatternAiStat[] {
+  const value = (count: number | undefined): string => (overview ? formatInsightNumber(count ?? 0) : '—')
+  const counts = overview?.counts
+  return [
+    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread' },
+    { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now' },
+    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified' },
+    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered' },
+    { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch' },
+    { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live' },
+  ]
+}
+
+export type PatternAiPlanFeature = Readonly<{ feature: InsightsFeature; label: string; unlocked: boolean; requiredPlan: PlanTier }>
+export type PatternAiPlanSummary = Readonly<{ plan: PlanTier; planLabel: string; unlocked: readonly PatternAiPlanFeature[]; locked: readonly PatternAiPlanFeature[] }>
+
+export const PLAN_LABELS: Readonly<Record<PlanTier, string>> = {
+  trial: 'Trial',
+  start: 'Start',
+  growth: 'Growth',
+  commander: 'Commander',
+}
+
+/**
+ * Plan-based feature display. The overview is authoritative when present;
+ * otherwise the static minimum-plan matrix is used. Copy never names a target
+ * plan in a CTA — the CTA is always the generic "Upgrade Plan".
+ */
+export function patternAiPlanSummary(plan: PlanTier, overview: InsightsOverview | null): PatternAiPlanSummary {
+  const features = (Object.keys(INSIGHTS_FEATURE_MIN_PLAN) as InsightsFeature[]).map((feature) => {
+    const lock = insightsFeatureLock(plan, feature, overview)
+    return { feature, label: FEATURE_LABELS[feature], unlocked: !lock.locked, requiredPlan: lock.requiredPlan }
+  })
+  return {
+    plan,
+    planLabel: PLAN_LABELS[plan],
+    unlocked: features.filter((entry) => entry.unlocked),
+    locked: features.filter((entry) => !entry.unlocked),
+  }
+}
+
+export type ReadinessCheck = Readonly<{ id: string; label: string; met: boolean; have: number; need: number }>
+
+/**
+ * The "growing your pattern intelligence" checklist. Requirements come from
+ * the API's readiness block so the thresholds can never drift from the engine.
+ */
+export function readinessChecklist(readiness: InsightsDataReadiness | null): readonly ReadinessCheck[] {
+  if (!readiness) return []
+  return [
+    { id: 'discoveries', label: 'Orders synced for discovery', met: readiness.canDiscover, have: readiness.totalOrders, need: readiness.totalOrders > 0 && readiness.canDiscover ? readiness.totalOrders : Math.max(readiness.totalOrders, 1) },
+    { id: 'personas', label: 'Customers for persona modelling', met: readiness.personasRequirement.met, have: readiness.personasRequirement.have, need: readiness.personasRequirement.need },
+    { id: 'trends', label: 'Days of history for trend watching', met: readiness.trendsRequirement.met, have: readiness.trendsRequirement.have, need: readiness.trendsRequirement.need },
+    { id: 'predictions', label: 'Days of history for forecasting', met: readiness.predictRequirement.met, have: readiness.predictRequirement.have, need: readiness.predictRequirement.need },
+  ]
+}
+
+/** Percentage complete for a readiness row, capped at 100. */
+export function readinessPercent(check: ReadinessCheck): number {
+  if (check.need <= 0) return check.met ? 100 : 0
+  return Math.max(0, Math.min(100, Math.round((check.have / check.need) * 100)))
+}
+
+/**
+ * Human sentence for degraded sections, e.g. after a partial storage outage.
+ * Empty string when everything answered — the banner then never renders.
+ */
+export function degradedNotice(overview: InsightsOverview | null): string {
+  const sections = overview?.degraded ?? []
+  if (sections.length === 0) return ''
+  const list = [...sections].sort().join(', ')
+  return `PatternAI rendered this page without ${list}. Those sections are retrying in the background — nothing shown here is estimated.`
 }

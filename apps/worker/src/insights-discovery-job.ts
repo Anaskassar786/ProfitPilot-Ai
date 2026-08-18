@@ -1,5 +1,5 @@
 /**
- * Insights Hub auto-discovery worker jobs (PR #50, Part 4).
+ * PatternAI (formerly Insights Hub) auto-discovery worker jobs.
  *
  * The scheduler enqueues sweep jobs; each store's pipeline runs inside the
  * API process (it owns the dataset, the plan matrix, and RLS tenant context).

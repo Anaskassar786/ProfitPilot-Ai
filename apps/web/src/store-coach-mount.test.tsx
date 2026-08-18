@@ -82,16 +82,16 @@ describe('Store Coach app mount (PR #48)', () => {
   it('renders the AI Growth Command deep link without crashing', async () => {
     await expect(mountApp()).resolves.toBeUndefined()
   })
-  it('shows Store Coach, AI Executive, and Insights Hub as separate sidebar entries', async () => {
+  it('shows Store Coach, AI Executive, and PatternAI as separate sidebar entries', async () => {
     await mountApp()
     const nav = document.querySelector('.side-nav')
     expect(nav?.textContent ?? '').toContain('Store Coach')
     expect(nav?.textContent ?? '').toContain('AI Executive')
-    expect(nav?.textContent ?? '').toContain('Insights Hub')
+    expect(nav?.textContent ?? '').toContain('PatternAI')
     const labels = [...(nav?.querySelectorAll('.nav-item') ?? [])].map((item) => item.textContent ?? '')
     expect(labels.some((text) => text.includes('Store Coach'))).toBe(true)
     expect(labels.some((text) => text.includes('AI Executive'))).toBe(true)
-    expect(labels.some((text) => text.includes('Insights Hub'))).toBe(true)
+    expect(labels.some((text) => text.includes('PatternAI'))).toBe(true)
   })
   it('does not nest Store Coach and AI Executive as tabs inside one page', async () => {
     await mountApp()

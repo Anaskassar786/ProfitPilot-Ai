@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
+// Section icons are Lucide glyphs plus PatternAI's own constellation mark,
+// which renders the same `size`/`className` contract without being a Lucide
+// forwardRef component — hence the widened icon type below.
+type SectionIcon = LucideIcon | ((props: Readonly<{ size?: number | string; className?: string }>) => ReactElement)
 import {
   Activity,
   AlertCircle,
@@ -30,7 +34,6 @@ import {
   FileBarChart,
   FileText,
   Filter,
-  FlaskConical,
   Gauge,
   GitBranch,
   Globe2,
@@ -117,7 +120,8 @@ import { StoreCoachWorkspace } from './store-coach.js'
 import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
-import { InsightsHubWorkspace } from './insights-hub.js'
+import { PatternAiWorkspace } from './patternai.js'
+import { PatternAiIcon } from './patternai-logo.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -145,7 +149,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
     items: [
       { id: 'store-coach', label: 'Store Coach', icon: GraduationCap, tag: 'NEW' },
       { id: 'ai-executive', label: 'AI Executive', icon: Landmark, tag: 'NEW' },
-      { id: 'insights-hub', label: 'Insights Hub', icon: FlaskConical, tag: 'NEW' },
+      { id: 'patternai', label: 'PatternAI', icon: PatternAiIcon, tag: 'NEW' },
     ],
   },
   {
@@ -161,7 +165,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   },
 ]
 
-const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: LucideIcon }>>> = {
+const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: SectionIcon }>>> = {
   dashboard: { title: 'Dashboard', description: 'A clear view of the store data ProfitPilot is receiving.', icon: LayoutDashboard },
   products: { title: 'Products', description: 'Catalog records synced from Shopify, with no invented inventory.', icon: Package },
   orders: { title: 'Orders', description: 'Search, filter, inspect, and export real Shopify orders with plan-aware intelligence.', icon: ShoppingBag },
@@ -174,7 +178,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'ai-executive': { title: 'AI Executive', description: 'Boardroom-grade strategy — reports, benchmarks, scenarios, and risks from your real store data.', icon: Landmark },
   automation: { title: 'Automation', description: 'Automate the busywork — recover carts, welcome customers, and stay on top of stock.', icon: Workflow },
-  'insights-hub': { title: 'Insights Hub', description: 'Where data becomes wisdom — discoveries, lessons, personas, and Why? answers from your real synced data.', icon: FlaskConical },
+  patternai: { title: 'PatternAI', description: 'Discover the patterns that drive your business — discoveries, lessons, personas, and Why? answers computed from your real synced data.', icon: PatternAiIcon },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: Sparkles },
@@ -186,7 +190,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'admin-ops': { title: 'Admin Ops', description: 'Launch controls, merchant flags, queue inspection, and retries.', icon: ShieldCheck },
 }
 
-type NavItem = Readonly<{ id: SectionId; label: string; icon: LucideIcon; tag?: string; badge?: string }>
+type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; tag?: string; badge?: string }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 type ToastState = Readonly<{ message: string; kind: ToastKind }>
@@ -199,15 +203,16 @@ export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
   // the user expects instead of resetting to the dashboard.
-  // PR #55: /ai-growth-command/insights* deep links open Insights Hub; its
-  // sub-tabs manage their own detail segments from there.
+  // /ai-growth-command/patternai* deep links open PatternAI (the pre-rebrand
+  // /ai-growth-command/insights* paths still resolve); its sub-tabs manage
+  // their own detail segments from there.
   const [activePage, setActivePage] = useState<SectionId>(() => {
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
     if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
     if (window.location.hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
-    if (window.location.pathname.startsWith('/ai-growth-command/insights')) return 'insights-hub'
+    if (window.location.pathname.startsWith('/ai-growth-command/patternai') || window.location.pathname.startsWith('/ai-growth-command/insights')) return 'patternai'
     if (window.location.pathname.startsWith('/ai-growth-command/executive')) return 'ai-executive'
     if (window.location.pathname.startsWith('/ai-growth-command')) return 'store-coach'
     if (window.location.pathname.startsWith('/automation')) return 'automation'
@@ -383,7 +388,7 @@ export default function App() {
     if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
     // Each AI Growth Command module is its own sidebar page with its own
-    // pathname (same pattern Insights Hub already used).
+    // pathname (same pattern PatternAI already used).
     const growthTarget = growthCommandPath(next)
     if (growthTarget && !window.location.pathname.startsWith(growthTarget)) window.history.pushState({}, '', `${growthTarget}${window.location.search}`)
     else if (!growthTarget && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
@@ -401,17 +406,17 @@ export default function App() {
   }
 
   // Browser back/forward between the recommendations hash route, the
-  // Insights Hub path route, and other pages keeps the visible page in sync.
+  // PatternAI path route, and other pages keeps the visible page in sync.
   useEffect(() => {
     const onHashNavigation = () => {
       const section = hashSection(window.location.hash)
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
       if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
-      const onInsights = window.location.pathname.startsWith('/ai-growth-command/insights')
+      const onPatternAi = window.location.pathname.startsWith('/ai-growth-command/patternai') || window.location.pathname.startsWith('/ai-growth-command/insights')
       const onExecutive = window.location.pathname.startsWith('/ai-growth-command/executive') || window.location.hash.startsWith('#/ai-growth-command/executive')
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onInsights ? 'insights-hub' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'insights-hub' || current === 'automation' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -545,7 +550,7 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCol
   </>
 }
 
-function TopBar({ active, unreadCount, onMenu, onCommand, onNotifications, onProfile, profileOpen, lightMode, onTheme, onShortcuts }: { active: Readonly<{ title: string; icon: LucideIcon }>; unreadCount: number; onMenu: () => void; onCommand: () => void; onNotifications: () => void; onProfile: () => void; profileOpen: boolean; lightMode: boolean; onTheme: () => void; onShortcuts: () => void }) {
+function TopBar({ active, unreadCount, onMenu, onCommand, onNotifications, onProfile, profileOpen, lightMode, onTheme, onShortcuts }: { active: Readonly<{ title: string; icon: SectionIcon }>; unreadCount: number; onMenu: () => void; onCommand: () => void; onNotifications: () => void; onProfile: () => void; profileOpen: boolean; lightMode: boolean; onTheme: () => void; onShortcuts: () => void }) {
   const ActiveIcon = active.icon
   return <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></button><button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></button><div className="topbar-divider" /><button className="icon-button notification-button" onClick={onNotifications} aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} new)` : 'Open notifications'}><Bell size={18} />{unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button><button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</button><button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></button></div></header>
 }
@@ -603,7 +608,7 @@ function PageRouter({
   if (active === 'ai-growth-command' || active === 'store-coach') return <StoreCoachWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'ai-executive') return <AiExecutivePage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI team" title="Recommendations" description="Your AI team has been watching your store 🎯 Here are opportunities to grow your business — review and take action."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
-  if (active === 'insights-hub') return <PageLayout eyebrow="AI Growth Command" title="Insights Hub" description="Where data becomes wisdom — discoveries, lessons, patterns, personas, and Why? answers computed from your real synced store data."><InsightsHubWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
+  if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'reports') return <PageLayout eyebrow="Closed-period PDFs" title="Reports" description="Closed-period PDF reports, deterministic forecast methods, and honest delivery status."><ReportsWorkspace context={context} /></PageLayout>
@@ -878,7 +883,7 @@ function AreaChart({ points }: { points: readonly import('./model.js').RevenuePo
   return <div className="revenue-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Revenue trend"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity=".3" /><stop offset="100%" stopColor="#3B82F6" stopOpacity="0" /></linearGradient></defs>{[16, 40, 64, 88].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} className="chart-grid-line" />)}<polygon points={`0,100 ${line} 100,100`} fill="url(#areaFill)" /><polyline points={line} fill="none" stroke="#5994FF" strokeWidth="1.7" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{coords.map((coord, index) => <circle key={coord.point.day} cx={coord.x} cy={coord.y} r={hover === index ? 1.8 : 1.1} fill="#93C5FD" onMouseEnter={() => setHover(index)} onMouseLeave={() => setHover(null)} />)}</svg><div className="chart-y-labels"><span>{formatMoney(max)}</span><span>{formatMoney((max + min) / 2)}</span><span>{formatMoney(min)}</span></div><div className="chart-x-labels"><span>{points[0]?.day ?? ''}</span><span>{points[points.length - 1]?.day ?? ''}</span></div>{active && <div className="chart-tooltip" style={{ left: `${Math.min(86, Math.max(8, active.x))}%` }}><strong>{formatMoney(active.point.value)}</strong><span>{active.point.day}</span></div>}</div>
 }
 function EmptyChart({ onSync }: { onSync: () => void }) { return <div className="empty-chart"><LineChart size={24} /><strong>No closed-period analytics yet</strong><span>Run a real sync to draw this chart.</span><button className="text-button" onClick={onSync}><RefreshCw size={14} /> Sync data</button></div> }
-function EmptyState({ icon: Icon, title, description, action, onAction }: { icon: LucideIcon; title: string; description: string; action: string; onAction: () => void }) { return <div className="empty-state"><span className="empty-icon"><Icon size={22} /></span><h3>{title}</h3><p>{description}</p><button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button></div> }
+function EmptyState({ icon: Icon, title, description, action, onAction }: { icon: SectionIcon; title: string; description: string; action: string; onAction: () => void }) { return <div className="empty-state"><span className="empty-icon"><Icon size={22} /></span><h3>{title}</h3><p>{description}</p><button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button></div> }
 function EmptySmall({ icon: Icon, text }: { icon: LucideIcon; text: string }) { return <div className="empty-small"><Icon size={18} /><span>{text}</span></div> }
 function InsightItem({ icon: Icon, title, detail, tone }: { icon: LucideIcon; title: string; detail: string; tone: string }) { return <div className="insight-item"><span className={`insight-icon ${tone}`}><Icon size={16} /></span><span><strong>{title}</strong><small>{detail}</small></span><ArrowUpRight size={15} /></div> }
 function MetricLine({ label, value }: { label: string; value: string }) { return <div className="metric-line"><span>{label}</span><strong>{value}</strong></div> }
@@ -930,7 +935,7 @@ function hashSection(hash: string): 'recommendations' | 'ai-executive' | 'store-
 }
 
 function growthCommandPath(page: SectionId): string | null {
-  if (page === 'insights-hub') return '/ai-growth-command/insights'
+  if (page === 'patternai') return '/ai-growth-command/patternai'
   if (page === 'ai-executive') return '/ai-growth-command/executive'
   if (page === 'store-coach' || page === 'ai-growth-command') return '/ai-growth-command/coach'
   return null

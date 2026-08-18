@@ -248,8 +248,8 @@ describe('PR49 section organization', () => {
 
 describe('PR49 shipped AI Growth Command modules', () => {
   it('defines all four modules with a real destination path', () => {
-    expect(GROWTH_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'INSIGHTS_HUB', 'AI_COMMAND'])
-    expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'insights-hub', 'ai-command'])
+    expect(GROWTH_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'PATTERN_AI', 'AI_COMMAND'])
+    expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'patternai', 'ai-command'])
     expect(GROWTH_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
   })
   it('marks AI Executive as Requires Growth on lower plans only', () => {
@@ -260,8 +260,8 @@ describe('PR49 shipped AI Growth Command modules', () => {
     expect(growthModuleAccess(module, 'growth')).toMatchObject({ badge: 'available', badgeLabel: 'Available', requiresUpgrade: false })
     expect(growthModuleAccess(module, 'commander').tierLabel).toBe('+ Investor PDFs')
   })
-  it('keeps Store Coach and Insights Hub available on every plan', () => {
-    for (const id of ['STORE_COACH', 'INSIGHTS_HUB'] as const) {
+  it('keeps Store Coach and PatternAI available on every plan', () => {
+    for (const id of ['STORE_COACH', 'PATTERN_AI'] as const) {
       const module = GROWTH_MODULES.find((entry) => entry.id === id)
       if (!module) throw new Error('missing module')
       expect(growthModuleAccess(module, 'trial').badge).toBe('available')

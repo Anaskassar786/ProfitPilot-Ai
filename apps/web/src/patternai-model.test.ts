@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DISCOVERY_TYPE_HEADLINES,
   INSIGHTS_BASE_PATH,
   INSIGHTS_FEATURE_MIN_PLAN,
   INSIGHTS_UPGRADE_CTA,
+  PATTERN_AI_BASE_PATH,
+  PATTERN_AI_NAME,
+  PATTERN_AI_TAGLINE,
+  degradedNotice,
+  discoveryTone,
+  insightsTabPurpose,
+  isPatternAiPath,
+  patternAiPlanSummary,
+  patternAiStats,
+  readinessChecklist,
+  readinessPercent,
   comparisonDelta,
   confidenceLabel,
   confidencePercent,
@@ -23,9 +35,9 @@ import {
   tagCloud,
   trendScatter,
   insightsUpgradeMessage,
-} from './insights-hub-model.js'
-import { discoveryTreemapBlocks, funnelStages, hourHeatCells, knowledgeNetwork, weekdayHeatCells } from './insights-hub.js'
-import type { InsightDiscovery, InsightKnowledgeEntry, InsightPattern, InsightsOverview, InsightTrend } from './insights-hub-model.js'
+} from './patternai-model.js'
+import { discoveryTreemapBlocks, funnelStages, hourHeatCells, knowledgeNetwork, weekdayHeatCells } from './patternai.js'
+import type { InsightDiscovery, InsightKnowledgeEntry, InsightPattern, InsightsOverview, InsightTrend } from './patternai-model.js'
 
 function discovery(overrides: Partial<InsightDiscovery> = {}): InsightDiscovery {
   return { id: 'd1', storeId: 's', discoveryType: 'PATTERN', category: 'TIME', title: 'Saturdays spike', description: 'Saturday revenue share is above the weekly mean.', explanation: 'Interesting — Saturday outperforms.', confidenceScore: 0.82, impactEstimate: 430, impactCurrency: 'USD', dataEvidence: {}, visualizationData: {}, discoveredAt: '2026-08-17T00:00:00.000Z', status: 'NEW', sample: false, viewedAt: null, actionTakenAt: null, expiresAt: null, ...overrides }
@@ -77,9 +89,70 @@ describe('insights routing', () => {
     expect(tabForTimelineEntity('INVESTIGATION')).toBe('why')
     expect(tabForTimelineEntity('PREDICTION')).toBe('predictions')
   })
-  it('labels every tab for the nav', () => {
-    expect(insightsTabLabel('why')).toBe('Why?')
+  it('labels every tab for the nav with discovery-oriented names', () => {
+    expect(insightsTabLabel('why')).toBe('Why? explorer')
+    expect(insightsTabLabel('lessons')).toBe('Learning library')
+    expect(insightsTabLabel('patterns')).toBe('Pattern lab')
     expect(insightsTabLabel('api-access')).toBe('API access')
+  })
+  it('explains the purpose of every section', () => {
+    for (const tab of ['overview', 'discoveries', 'lessons', 'patterns', 'personas', 'why', 'trends', 'comparisons', 'knowledge', 'timeline', 'predictions', 'settings', 'api-access'] as const) {
+      expect(insightsTabPurpose(tab).length).toBeGreaterThan(10)
+    }
+  })
+})
+
+describe('PatternAI rebrand', () => {
+  it('routes under /ai-growth-command/patternai', () => {
+    expect(PATTERN_AI_BASE_PATH).toBe('/ai-growth-command/patternai')
+    expect(insightsRoutePath('patterns', null)).toBe('/ai-growth-command/patternai/patterns')
+  })
+  it('still parses pre-rebrand Insights Hub deep links', () => {
+    expect(parseInsightsRoute('/ai-growth-command/insights/personas/per_1')).toEqual({ tab: 'personas', id: 'per_1' })
+    expect(isPatternAiPath('/ai-growth-command/insights/lessons')).toBe(true)
+    expect(isPatternAiPath('/ai-growth-command/patternai')).toBe(true)
+    expect(isPatternAiPath('/ai-growth-command/coach')).toBe(false)
+  })
+  it('carries the product identity strings', () => {
+    expect(PATTERN_AI_NAME).toBe('PatternAI')
+    expect(PATTERN_AI_TAGLINE).toBe('Discover the patterns that drive your business')
+  })
+  it('gives each discovery type its own tone and headline', () => {
+    expect(discoveryTone('ANOMALY')).toBe('anomaly')
+    expect(DISCOVERY_TYPE_HEADLINES.PATTERN).toBe('New pattern detected')
+    expect(new Set(Object.values(DISCOVERY_TYPE_HEADLINES)).size).toBe(7)
+  })
+})
+
+describe('PatternAI presentation model', () => {
+  it('formats six hero stats from API counts only', () => {
+    const stats = patternAiStats(overview())
+    expect(stats).toHaveLength(6)
+    expect(stats.map((stat) => stat.id)).toEqual(['discoveries', 'patterns', 'personas', 'investigations', 'trends', 'predictions'])
+    expect(stats[0]?.value).toBe('1')
+  })
+  it('shows placeholders rather than zeroes before the overview lands', () => {
+    expect(patternAiStats(null).every((stat) => stat.value === '—')).toBe(true)
+  })
+  it('splits plan features into available and locked without naming a tier in the CTA', () => {
+    const summary = patternAiPlanSummary('trial', overview())
+    expect(summary.planLabel).toBe('Trial')
+    expect(summary.unlocked.map((entry) => entry.feature)).toContain('trends')
+    expect(summary.locked.map((entry) => entry.feature)).toContain('apiAccess')
+    expect(INSIGHTS_UPGRADE_CTA).toBe('Upgrade Plan')
+  })
+  it('builds a readiness checklist straight from the API requirements', () => {
+    const checks = readinessChecklist(overview().readiness)
+    const personas = checks.find((check) => check.id === 'personas')
+    expect(personas).toEqual({ id: 'personas', label: 'Customers for persona modelling', met: false, have: 12, need: 50 })
+    expect(readinessPercent(personas!)).toBe(24)
+    expect(readinessChecklist(null)).toEqual([])
+  })
+  it('reports degraded sections honestly and stays silent when all is well', () => {
+    expect(degradedNotice(overview())).toBe('')
+    const notice = degradedNotice({ ...overview(), degraded: ['personas', 'trends'] })
+    expect(notice).toContain('personas, trends')
+    expect(notice).toContain('nothing shown here is estimated')
   })
 })
 
