@@ -1,5 +1,5 @@
 /**
- * Insights Hub engine — PR #50.
+ * PatternAI engine (module storage keeps the original `insights_*` names).
  *
  * Pure, deterministic discovery / learning / understanding logic. Every
  * discovery, pattern, persona, trend, comparison, and prediction produced
@@ -40,7 +40,7 @@ export type InsightsHubEnvConfig = Readonly<{
   apiRateLimit: number
 }>
 
-/** Reads the dedicated Insights Hub environment block (see .env.example). */
+/** Reads the dedicated PatternAI environment block (see .env.example). */
 export function insightsHubEnvConfig(env: Readonly<Record<string, string | undefined>>): InsightsHubEnvConfig {
   const primary = env.INSIGHTS_HUB_MODEL_PRIMARY?.trim() || INSIGHTS_HUB_DEFAULT_MODEL_PRIMARY
   const fallback = env.INSIGHTS_HUB_MODEL_FALLBACK?.trim() || INSIGHTS_HUB_DEFAULT_MODEL_FALLBACK
@@ -285,7 +285,7 @@ export function insightsFeatureAccess(plan: PlanTier, feature: InsightsFeature):
 /** 402 UPGRADE_REQUIRED error raised when a plan wall is hit. */
 export function insightsUpgradeError(feature: InsightsFeature, plan: PlanTier): AppError {
   const requiredPlan = requiredPlanForInsightsFeature(feature)
-  return new AppError('PAYMENT_REQUIRED', 'This Insights Hub capability is not included in your current plan. Upgrade Plan to unlock it.', 402, {
+  return new AppError('PAYMENT_REQUIRED', 'This PatternAI capability is not included in your current plan. Upgrade Plan to unlock it.', 402, {
     reason: 'UPGRADE_REQUIRED',
     feature,
     plan,
@@ -560,7 +560,7 @@ export const DISCOVERY_MIN_DAYS = 7
 export const DISCOVERY_MIN_ORDERS = 10
 export const PREDICTION_MIN_DAYS = 14
 
-/** Computes which Insights Hub surfaces have enough real data to run. */
+/** Computes which PatternAI surfaces have enough real data to run. */
 export function insightsDataReadiness(dataset: InsightsDataset): InsightsDataReadiness {
   const revenueDays = new Set(dataset.revenueDaily.filter((row) => row.grossRevenue > 0 || row.orderCount > 0).map((row) => row.day)).size
   const totalOrders = dataset.ordersDaily.reduce((sum, row) => sum + row.orderCount, 0)
@@ -1001,7 +1001,7 @@ export function trialSampleDiscoveries(dataset: InsightsDataset, now = new Date(
     discoveryType: 'OPPORTUNITY',
     category: 'PRODUCTS',
     title: 'Sample discovery — product pairs you might be missing',
-    description: 'This is a labeled sample. Once your store has 7 days of synced orders, Insights Hub shows real discoveries here, like products customers buy together.',
+    description: 'This is a labeled sample. Once your store has 7 days of synced orders, PatternAI shows real discoveries here, like products customers buy together.',
     explanation: 'Real discoveries are computed from your synced orders, revenue, and customer data — never invented. Sync your store to replace this sample.',
     confidenceScore: 0,
     impactEstimate: null,
@@ -1844,7 +1844,7 @@ export function generateLesson(dataset: InsightsDataset, category: DiscoveryCate
   } else {
     if (sample) {
       lessonType = 'BEST_PRACTICE'
-      title = 'Sample lesson — how Insights Hub teaches with your numbers'
+      title = 'Sample lesson — how PatternAI teaches with your numbers'
       sections = [
         { heading: 'This is a sample', body: 'Once your store syncs 7+ days of orders, lessons are written from your real metrics — weekday rhythms, repeat-buyer structure, hero products, and baskets.' },
         { heading: 'What personalized means', body: 'Every number in a real lesson is computed from your synced data and verified by the language firewall before it is shown.' },
@@ -1979,7 +1979,7 @@ export function summarizeUsage(used: number, limit: number): Readonly<{ used: nu
 
 /* ── Prompt builders (language-only AI layer) ──────────────────────────── */
 
-export const INSIGHTS_HUB_SYSTEM_PROMPT = `You are the Insights Hub narrator for ProfitPilot, a Shopify analytics product. Your tone is that of a curious, precise scientist: "Interesting...", "Did you know...". Ground rules you must obey:
+export const INSIGHTS_HUB_SYSTEM_PROMPT = `You are the PatternAI narrator for ProfitPilot, a Shopify analytics product. Your tone is that of a curious, precise scientist: "Interesting...", "Did you know...". Ground rules you must obey:
 1. You receive deterministic findings computed from the store's REAL data. Never add, remove, or alter any number.
 2. Explain WHY, not just WHAT — offer one plausible, clearly-hedged reason and one way to explore further.
 3. Keep it under 120 words. Plain language, no jargon, no emojis.
@@ -1988,7 +1988,7 @@ export const INSIGHTS_HUB_SYSTEM_PROMPT = `You are the Insights Hub narrator for
 
 export function discoveryExplanationPrompt(input: Readonly<{ title: string; description: string; evidenceNumbers: readonly number[]; category: DiscoveryCategory }>): string {
   return [
-    `Rewrite this ${input.category.toLowerCase()} discovery for a busy merchant in the Insights Hub voice.`,
+    `Rewrite this ${input.category.toLowerCase()} discovery for a busy merchant in the PatternAI voice.`,
     `Do not introduce any new numbers — only these verified values may appear: ${input.evidenceNumbers.join(', ')}.`,
     `Title: ${input.title}`,
     `Finding: ${input.description}`,

@@ -6,16 +6,33 @@ import {
   BigNumberCard,
   CoachEmptyState,
   CoachErrorState,
+  CoachGenerationSteps,
   CoachHealthBadge,
   CoachSkeletonMain,
   PriorityCard,
   RadialGauge,
   Sparkline,
+  Toggle,
   coachPathForView,
   coachViewFromPath,
 } from './store-coach.js'
-import { Toggle } from './store-coach.js'
-import { COACH_LIMITS, PERSONALITY_META, coachPersonalitiesForPlan, huddleTimeLabel, paceLabel } from './store-coach-model.js'
+import {
+  COACH_LIMITS,
+  PERSONALITY_META,
+  STREAK_BADGE_TARGETS,
+  badgeTitleFromId,
+  coachPersonalitiesForPlan,
+  daypartForHour,
+  formatCoachDate,
+  formatCoachDateRange,
+  greetingForDaypart,
+  heatmapPatterns,
+  huddleTimeLabel,
+  merchantDisplayName,
+  nextStreakMilestone,
+  paceLabel,
+  planFeatureSummary,
+} from './store-coach-model.js'
 import type { CoachPriority } from './store-coach-model.js'
 
 const PRIORITY: CoachPriority = {
@@ -95,6 +112,116 @@ describe('Store Coach formatting', () => {
       expect(meta.sample.length).toBeGreaterThan(20)
     }
   })
+  it('formats briefing and review dates from ISO days', () => {
+    expect(formatCoachDate('2026-08-18')).toMatch(/Aug 18,? 2026/)
+    expect(formatCoachDateRange('2026-08-17', '2026-08-23')).toContain('2026')
+    expect(formatCoachDate('not-a-date')).toBe('not-a-date')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Redesign helpers (FIX 2, 6, 7, 12)
+// ---------------------------------------------------------------------------
+
+describe('Personalized hero greeting (FIX 2)', () => {
+  it('buckets hours into dayparts', () => {
+    expect(daypartForHour(6)).toBe('morning')
+    expect(daypartForHour(11)).toBe('morning')
+    expect(daypartForHour(13)).toBe('afternoon')
+    expect(daypartForHour(18)).toBe('evening')
+    expect(daypartForHour(23)).toBe('night')
+    expect(daypartForHour(2)).toBe('night')
+  })
+  it('greets for every daypart without naming a wrong tier or inventing data', () => {
+    expect(greetingForDaypart('morning')).toBe('Good morning')
+    expect(greetingForDaypart('afternoon')).toBe('Good afternoon')
+    expect(greetingForDaypart('evening')).toBe('Good evening')
+    expect(greetingForDaypart('night')).toBe('Burning the midnight oil')
+  })
+  it('derives the merchant name from the real shop domain only', () => {
+    expect(merchantDisplayName('anas-apparel.myshopify.com')).toBe('Anas Apparel')
+    expect(merchantDisplayName('best-store')).toBe('Best Store')
+    expect(merchantDisplayName('shop.example.org')).toBe('Shop')
+    expect(merchantDisplayName(null)).toBeNull()
+    expect(merchantDisplayName('123456.myshopify.com')).toBeNull()
+  })
+})
+
+describe('Heatmap pattern derivation (FIX 6) — real cells only', () => {
+  it('returns an honest empty result when there are no cells', () => {
+    const empty = heatmapPatterns([])
+    expect(empty.totalOrders).toBe(0)
+    expect(empty.bestWeekday).toBeNull()
+    expect(empty.weekendDeltaPct).toBeNull()
+  })
+  it('computes weekday averages, best day, and weekend delta from real cells', () => {
+    const cells = [
+      // Sundays: 8 orders per week for 3 weeks
+      ...[0, 1, 2].map((week) => ({ weekday: 0, orders: 8, day: `sun-${week}`, revenue: 800, intensity: 0.9, week })),
+      // Mondays: 2 orders per week for 3 weeks
+      ...[0, 1, 2].map((week) => ({ weekday: 1, orders: 2, day: `mon-${week}`, revenue: 200, intensity: 0.3, week })),
+    ]
+    const patterns = heatmapPatterns(cells)
+    expect(patterns.totalOrders).toBe(30)
+    expect(patterns.activeDays).toBe(6)
+    expect(patterns.bestWeekday).toBe(0)
+    expect(patterns.quietWeekday).toBe(1)
+    // With fewer than 10 active days the weekend delta stays hidden
+    expect(patterns.weekendDeltaPct).toBeNull()
+  })
+  it('reports the weekend delta once there is enough spread', () => {
+    const cells: { weekday: number; orders: number }[] = []
+    for (let week = 0; week < 8; week += 1) {
+      cells.push({ weekday: 0, orders: 10 })
+      cells.push({ weekday: 6, orders: 10 })
+      for (let weekday = 1; weekday <= 5; weekday += 1) cells.push({ weekday, orders: 5 })
+    }
+    const patterns = heatmapPatterns(cells)
+    expect(patterns.weekendDeltaPct).toBe(100)
+    expect(patterns.bestWeekday).toBe(0)
+  })
+})
+
+describe('Streak milestones (FIX 7)', () => {
+  it('targets the next unread milestone with clamped progress', () => {
+    expect(nextStreakMilestone(0)).toEqual({ target: 3, progressPct: 0 })
+    expect(nextStreakMilestone(3)).toEqual({ target: 7, progressPct: Math.round((3 / 7) * 100) })
+    expect(nextStreakMilestone(6)).toEqual({ target: 7, progressPct: Math.round((6 / 7) * 100) })
+  })
+  it('returns null once every milestone is earned', () => {
+    expect(nextStreakMilestone(100)).toBeNull()
+    expect(nextStreakMilestone(250)).toBeNull()
+  })
+  it('maps the backend streak badge ladder', () => {
+    expect(STREAK_BADGE_TARGETS['3_DAY_STREAK']).toBe(3)
+    expect(STREAK_BADGE_TARGETS['100_DAY_STREAK']).toBe(100)
+    expect(badgeTitleFromId('7_DAY_STREAK')).toBe('7 Day Streak')
+    expect(badgeTitleFromId('FIRST_HUDDLE')).toBe('First Huddle')
+  })
+})
+
+describe('Plan feature summary (FIX 12)', () => {
+  it('lists exactly what each tier includes', () => {
+    const trial = planFeatureSummary('trial')
+    expect(trial.included.join(' ')).toContain('2 priorities per day')
+    expect(trial.included.join(' ')).toContain('5 coach chat messages a day')
+    expect(trial.upgradeTeaser).not.toBeNull()
+    const commander = planFeatureSummary('commander')
+    expect(commander.included.join(' ')).toContain('Unlimited priorities per day')
+    expect(commander.included.join(' ')).toContain('Weekly PDF reports')
+    expect(commander.upgradeTeaser).toBeNull()
+  })
+  it('teases upgrades without promising fake store outcomes', () => {
+    const start = planFeatureSummary('start')
+    expect(start.upgradeTeaser).toContain('Voice coaching')
+    const growth = planFeatureSummary('growth')
+    expect(growth.upgradeTeaser).toContain('Weekly PDF reports')
+    for (const summary of [planFeatureSummary('trial'), planFeatureSummary('start'), planFeatureSummary('growth')]) {
+      for (const line of [...summary.included, ...(summary.upgradeTeaser ?? [])]) {
+        expect(line).not.toMatch(/your revenue|guaranteed|\$/i)
+      }
+    }
+  })
 })
 
 describe('Store Coach components', () => {
@@ -108,18 +235,31 @@ describe('Store Coach components', () => {
     const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 140, tone: 'amber' }))
     expect(html).toContain('100%')
   })
-  it('renders the three priority category accents', () => {
+  it('renders the three priority category accents with Take Action / Skip', () => {
     const high = renderToStaticMarkup(createElement(PriorityCard, { priority: PRIORITY, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(high).toContain('coach-priority-card red')
     expect(high).toContain('High Impact')
     expect(high).toContain('$1,281')
     expect(high).toContain('15 min')
+    expect(high).toContain('Take Action')
+    expect(high).toContain('Skip')
     const quick = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'QUICK_WIN', id: 'p2' }, busy: true, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(quick).toContain('coach-priority-card green')
     expect(quick).toContain('Quick Win')
     const opportunity = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'OPPORTUNITY', id: 'p3' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(opportunity).toContain('coach-priority-card amber')
     expect(opportunity).toContain('Opportunity')
+  })
+  it('falls back to a growth label when a priority has no dollar estimate', () => {
+    const html = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, impactValue: 0, impactLabel: '' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    expect(html).toContain('Growth')
+    expect(html).not.toContain('$1,281')
+  })
+  it('renders the animated generation steps for the briefing', () => {
+    const html = renderToStaticMarkup(createElement(CoachGenerationSteps))
+    expect(html).toContain('coach-generating-steps')
+    expect(html).toContain('Reading yesterday’s synced orders')
+    expect(html).toContain('Writing your personalized briefing')
   })
   it('renders big number cards with trend arrows and sparkline', () => {
     const html = renderToStaticMarkup(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: 12.4, series: [100, 120, 110, 140, 160], icon: TrendingUp }))
@@ -134,8 +274,8 @@ describe('Store Coach components', () => {
     expect(html).toContain('aria-hidden="true"')
   })
   it('renders educational empty states with actions', () => {
-    const html = renderToStaticMarkup(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))
-    expect(html).toContain('Set your first goal')
+    const html = renderToStaticMarkup(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first weekly goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))
+    expect(html).toContain('Set your first weekly goal')
     expect(html).toContain('Get AI suggestions')
   })
   it('renders error states with retry and upgrade actions', () => {

@@ -1,11 +1,16 @@
 /**
- * Insights Hub workspace (PR #50) — "Where data becomes wisdom."
+ * PatternAI workspace — "Discover the patterns that drive your business."
  *
- * The third module of AI Growth Command: DISCOVER hidden patterns, LEARN
- * lessons grounded in the store's own data, UNDERSTAND behavior. The UI is a
- * thin renderer over `/insights/*`: every number on screen was computed
- * server-side from real synced data; locked plans see generic "Upgrade Plan"
- * CTAs; trial explores through clearly labeled samples.
+ * The discovery module of AI Growth Command: FIND hidden patterns, LEARN from
+ * the store's own history, UNDERSTAND why the business moves. PatternAI
+ * deliberately does not coach (Store Coach), does not write strategy decks
+ * (GrowthIQ), does not queue actions (Recommendations) and does not run agents
+ * (AI Command Center) — it explains.
+ *
+ * The UI is a thin renderer over `/patternai/*` (served alongside the original
+ * `/insights/*` prefix): every number on screen was computed server-side from
+ * real synced data; locked plans see the generic "Upgrade Plan" CTA; trial
+ * explores through clearly labelled samples.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -16,33 +21,33 @@ import {
   Bell,
   BellOff,
   BookOpen,
-  Brain,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Compass,
   Copy,
   Download,
-  Eye,
-  FlaskConical,
   HelpCircle,
   History,
   KeyRound,
   Library,
   Lightbulb,
   Lock,
-  Microscope,
   Network,
+  Radar,
   RefreshCw,
   Scale,
   Search,
   Settings2,
+  ShieldCheck,
   Sparkles,
   Star,
-  Telescope,
   Trash2,
   TrendingDown,
   TrendingUp,
+  TriangleAlert,
   Users,
+  Waypoints,
   X,
   Zap,
 } from 'lucide-react'
@@ -50,6 +55,7 @@ import type { LucideIcon } from 'lucide-react'
 import { ApiClientError } from './api.js'
 import * as api from './api.js'
 import type { CatalogProduct, WorkspaceContext } from './model.js'
+import { PatternAiMark } from './patternai-logo.js'
 import {
   COMPARISON_TYPES,
   DISCOVERY_CATEGORIES,
@@ -58,6 +64,10 @@ import {
   DISCOVERY_TYPE_LABELS,
   HORIZON_LABELS,
   INSIGHTS_UPGRADE_CTA,
+  PATTERN_AI_LEGACY_BASE_PATH,
+  PATTERN_AI_TAGLINE,
+  PLAN_LABELS,
+  DISCOVERY_TYPE_HEADLINES,
   KNOWLEDGE_TYPE_LABELS,
   LESSON_TYPE_LABELS,
   PATTERN_TYPE_LABELS,
@@ -78,15 +88,23 @@ import {
   insightsFeatureLock,
   insightsRoutePath,
   insightsTabLabel,
+  discoveryTone,
+  insightsTabPurpose,
+  isPatternAiPath,
+  degradedNotice,
   meterPercent,
   parseInsightsRoute,
+  patternAiPlanSummary,
+  patternAiStats,
+  readinessChecklist,
+  readinessPercent,
   patternBubbles,
   personaShare,
   subjectLabel,
   tabForTimelineEntity,
   tagCloud,
   trendScatter,
-} from './insights-hub-model.js'
+} from './patternai-model.js'
 import type {
   ComparisonType,
   DiscoveryCategory,
@@ -100,6 +118,7 @@ import type {
   InsightPattern,
   InsightPersona,
   InsightPrediction,
+  InsightsDataReadiness,
   InsightsFeature,
   InsightsOverview,
   InsightsPreferences,
@@ -110,7 +129,7 @@ import type {
   PlanTier,
   PredictionHorizon,
   TimelineResult,
-} from './insights-hub-model.js'
+} from './patternai-model.js'
 import {
   InsightsAreaBand,
   InsightsBubbleChart,
@@ -124,7 +143,7 @@ import {
   InsightsTreeMap,
   InsightsWordCloud,
   downloadChartSvg,
-} from './insights-hub-charts.js'
+} from './patternai-charts.js'
 
 export type InsightsToastKind = 'success' | 'info' | 'warning' | 'error'
 export type InsightsWorkspaceProps = Readonly<{
@@ -173,9 +192,9 @@ export function InsightsLockedPanel({ feature, plan, overview, onNavigateBilling
   const lock = insightsFeatureLock(plan, feature, overview)
   if (!lock.locked) return null
   return (
-    <div className="ih-locked" data-feature={feature}>
-      <span className="ih-locked-icon"><Lock size={18} /></span>
-      <strong>This lab is locked on your current plan</strong>
+    <div className="pa-locked" data-feature={feature}>
+      <span className="pa-locked-icon"><Lock size={18} /></span>
+      <strong>This capability is locked on your current plan</strong>
       <p>{note ?? insightsUpgradeMessageText(feature)}</p>
       <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} />
     </div>
@@ -184,10 +203,10 @@ export function InsightsLockedPanel({ feature, plan, overview, onNavigateBilling
 
 function insightsUpgradeMessageText(feature: InsightsFeature): string {
   switch (feature) {
-    case 'personas': return 'Customer personas decode who your buyers are. Unlock persona science with a plan upgrade.'
+    case 'personas': return 'Customer personas group your buyers by measured behaviour, not guesswork. Unlock persona modelling with a plan upgrade.'
     case 'investigations': return 'The Why? explorer traces any metric drop to its root causes. Unlock investigations with a plan upgrade.'
     case 'comparisons': return 'Head-to-head comparisons settle product, period, and segment debates with your real numbers.'
-    case 'knowledge': return 'The knowledge base compounds every insight into reusable wisdom. Unlock it with a plan upgrade.'
+    case 'knowledge': return 'The knowledge base compounds every discovery into a private library you can search later. Unlock it with a plan upgrade.'
     case 'predictions': return 'Forecasts project revenue, orders, and stockouts with honest confidence intervals.'
     case 'apiAccess': return 'Programmatic insight access for your own tools, with a dedicated API key and hourly quota.'
     case 'externalTrends': return 'External market trends appear here once a verified benchmark feed is connected — we never invent market data.'
@@ -197,8 +216,8 @@ function insightsUpgradeMessageText(feature: InsightsFeature): string {
 
 export function InsightsEmptyState({ icon: Icon, title, body, action }: { icon: LucideIcon; title: string; body: string; action?: ReactNode }) {
   return (
-    <div className="ih-empty">
-      <span className="ih-empty-icon"><Icon size={20} /></span>
+    <div className="pa-empty">
+      <span className="pa-empty-icon"><Icon size={20} /></span>
       <strong>{title}</strong>
       <p>{body}</p>
       {action}
@@ -206,33 +225,105 @@ export function InsightsEmptyState({ icon: Icon, title, body, action }: { icon: 
   )
 }
 
+/**
+ * Honest, non-blaming failure state. A single failing section never removes
+ * the rest of the page: this panel replaces only the section that failed and
+ * always offers a retry, which is exactly what the old crash screen did not.
+ */
 export function InsightsErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="ih-error" role="alert">
-      <strong>The laboratory hit a snag</strong>
-      <p>{message}</p>
-      <button className="button secondary compact" onClick={onRetry}><RefreshCw size={12} /> Try again</button>
+    <div className="pa-error" role="alert">
+      <span className="pa-error-icon"><TriangleAlert size={16} /></span>
+      <div className="pa-error-copy">
+        <strong>This section could not load</strong>
+        <p>{message}</p>
+      </div>
+      <button className="pa-button ghost compact" onClick={onRetry}><RefreshCw size={12} /> Try again</button>
     </div>
   )
 }
 
+/**
+ * Educational first-run state. Instead of an empty box, a merchant with no
+ * discoveries yet sees exactly what PatternAI will show them and what data it
+ * still needs — with real, API-computed progress on every requirement.
+ */
+export function PatternAiWelcome({ readiness, plan, onRunDiscovery, onNavigateBilling, canRun }: {
+  readiness: InsightsDataReadiness | null
+  plan: PlanTier
+  onRunDiscovery: () => void
+  onNavigateBilling: () => void
+  canRun: boolean
+}) {
+  const checks = readinessChecklist(readiness)
+  const capabilities: readonly Readonly<{ icon: LucideIcon; title: string; body: string }>[] = [
+    { icon: Network, title: 'Hidden patterns', body: 'Weekly rhythms, product affinities and repeat-purchase structures found in your order history.' },
+    { icon: BookOpen, title: 'Personalised lessons', body: 'Short briefings written from your numbers — not generic ecommerce advice.' },
+    { icon: Users, title: 'Customer personas', body: 'Behaviour-based groups with real share, value and reach guidance.' },
+    { icon: HelpCircle, title: 'Answers to "why?"', body: 'Trace a drop or a spike to ranked root causes with the evidence attached.' },
+    { icon: TrendingUp, title: 'Trends, early', body: 'Movements flagged while they are still small enough to act on.' },
+    { icon: Radar, title: 'Forecasts with ranges', body: 'Revenue, orders and stockout projections that state their own confidence.' },
+  ]
+  return (
+    <section className="pa-welcome">
+      <header className="pa-welcome-head">
+        <PatternAiMark size={40} variant="badge" />
+        <div>
+          <h3>Welcome to PatternAI</h3>
+          <p>{PATTERN_AI_TAGLINE}. Here is what appears on this page as your store data lands.</p>
+        </div>
+      </header>
+      <div className="pa-welcome-grid">
+        {capabilities.map(({ icon: Icon, title, body }) => (
+          <article key={title} className="pa-welcome-card">
+            <span className="pa-welcome-icon"><Icon size={16} /></span>
+            <strong>{title}</strong>
+            <p>{body}</p>
+          </article>
+        ))}
+      </div>
+      {checks.length > 0 && (
+        <div className="pa-readiness">
+          <span className="pa-eyebrow">Growing your pattern intelligence</span>
+          <p className="pa-muted">PatternAI gets sharper as your store grows. These thresholds come from the engine — no discovery is published before its evidence exists.</p>
+          <ul>
+            {checks.map((check) => (
+              <li key={check.id} className={check.met ? 'met' : ''}>
+                <span className="pa-readiness-label">{check.met ? <CheckCircle2 size={13} /> : <Clock3 size={13} />} {check.label}</span>
+                <span className="pa-readiness-track"><span style={{ width: `${readinessPercent(check)}%` }} /></span>
+                <span className="pa-readiness-count">{formatInsightNumber(check.have)} / {formatInsightNumber(check.need)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <footer className="pa-welcome-actions">
+        {canRun
+          ? <button className="pa-button primary" onClick={onRunDiscovery}><Sparkles size={13} /> Run your first discovery</button>
+          : <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} />}
+        {plan === 'trial' && <span className="pa-muted">Trial stores explore labelled samples; paid plans compute discoveries from your own data.</span>}
+      </footer>
+    </section>
+  )
+}
+
 export function InsightsSkeleton({ rows = 3 }: { rows?: number }) {
-  return <div className="ih-skeletons" aria-busy="true">{Array.from({ length: rows }, (_, index) => <span key={index} className="ih-skeleton" />)}</div>
+  return <div className="pa-skeletons" aria-busy="true">{Array.from({ length: rows }, (_, index) => <span key={index} className="pa-skeleton" />)}</div>
 }
 
 export function ConfidencePill({ score }: { score: number }) {
-  return <span className={`ih-confidence tone-${confidenceTone(score)}`} title={confidenceLabel(score)}><span style={{ width: `${confidencePercent(score)}%` }} />{confidencePercent(score)}%</span>
+  return <span className={`pa-confidence tone-${confidenceTone(score)}`} title={confidenceLabel(score)}><span style={{ width: `${confidencePercent(score)}%` }} />{confidencePercent(score)}%</span>
 }
 
 export function SampleBadge() {
-  return <span className="ih-sample-badge" title="Generated from a labeled example so you can explore. Paid plans compute these from your synced data.">SAMPLE</span>
+  return <span className="pa-sample-badge" title="Generated from a labeled example so you can explore. Paid plans compute these from your synced data.">SAMPLE</span>
 }
 
 export function RatingStars({ value, onRate, disabled = false }: { value: number | null; onRate?: (rating: number) => void; disabled?: boolean }) {
   return (
-    <span className="ih-stars" role={onRate ? 'radiogroup' : undefined} aria-label="Rate this insight">
+    <span className="pa-stars" role={onRate ? 'radiogroup' : undefined} aria-label="Rate this insight">
       {[1, 2, 3, 4, 5].map((star) => (
-        <button key={star} className={`ih-star ${value !== null && star <= value ? 'lit' : ''}`} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
+        <button key={star} className={`pa-star ${value !== null && star <= value ? 'lit' : ''}`} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
           <Star size={13} fill={value !== null && star <= value ? 'currentColor' : 'none'} />
         </button>
       ))}
@@ -243,9 +334,9 @@ export function RatingStars({ value, onRate, disabled = false }: { value: number
 export function UsageMeterBar({ label, used, limit }: { label: string; used: number; limit: number | null }) {
   const percent = meterPercent(used, limit)
   return (
-    <div className="ih-meter">
-      <div className="ih-meter-head"><span>{label}</span><strong>{limit === null ? `${used} used` : `${used} / ${limit}`}</strong></div>
-      {percent !== null && <div className="ih-meter-track"><span className={percent >= 100 ? 'blocked' : percent >= 80 ? 'warn' : ''} style={{ width: `${percent}%` }} /></div>}
+    <div className="pa-meter">
+      <div className="pa-meter-head"><span>{label}</span><strong>{limit === null ? `${used} used` : `${used} / ${limit}`}</strong></div>
+      {percent !== null && <div className="pa-meter-track"><span className={percent >= 100 ? 'blocked' : percent >= 80 ? 'warn' : ''} style={{ width: `${percent}%` }} /></div>}
     </div>
   )
 }
@@ -254,7 +345,7 @@ export function UsageMeterBar({ label, used, limit }: { label: string; used: num
 export function MarkdownLite({ markdown }: { markdown: string }) {
   const blocks = markdown.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean)
   return (
-    <div className="ih-markdown">
+    <div className="pa-markdown">
       {blocks.map((block, index) => {
         if (block.startsWith('### ')) return <h4 key={index}>{inline(block.slice(4))}</h4>
         if (block.startsWith('## ')) return <h3 key={index}>{inline(block.slice(3))}</h3>
@@ -275,32 +366,63 @@ function inline(text: string): ReactNode {
 }
 
 function ChartExportButton({ targetRef, filename, enabled, onLocked }: { targetRef: React.RefObject<HTMLDivElement | null>; filename: string; enabled: boolean; onLocked: () => void }) {
-  if (!enabled) return <button className="button ghost compact ih-export-locked" onClick={onLocked} title="Export unlocks with a plan upgrade"><Lock size={11} /> Export</button>
+  if (!enabled) return <button className="button ghost compact pa-export-locked" onClick={onLocked} title="Export unlocks with a plan upgrade"><Lock size={11} /> Export</button>
   return <button className="button ghost compact" onClick={() => void downloadChartSvg(targetRef.current, filename)} title="Download this chart as an SVG"><Download size={11} /> Export</button>
 }
 
-/* ── Tabs ──────────────────────────────────────────────────────────────── */
+/* ── Section navigation ────────────────────────────────────────────────── */
 
-const TABS: readonly Readonly<{ tab: InsightsTab; icon: LucideIcon; feature: InsightsFeature | null }>[] = [
-  { tab: 'overview', icon: Telescope, feature: null },
-  { tab: 'lessons', icon: BookOpen, feature: null },
-  { tab: 'patterns', icon: Brain, feature: null },
-  { tab: 'personas', icon: Users, feature: 'personas' },
-  { tab: 'why', icon: HelpCircle, feature: 'investigations' },
-  { tab: 'trends', icon: TrendingUp, feature: 'trends' },
-  { tab: 'comparisons', icon: Scale, feature: 'comparisons' },
-  { tab: 'knowledge', icon: Library, feature: 'knowledge' },
-  { tab: 'timeline', icon: History, feature: 'timeline' },
-  { tab: 'predictions', icon: Sparkles, feature: 'predictions' },
-  { tab: 'settings', icon: Settings2, feature: null },
-  { tab: 'api-access', icon: KeyRound, feature: 'apiAccess' },
+type NavEntry = Readonly<{ tab: InsightsTab; icon: LucideIcon; feature: InsightsFeature | null }>
+type NavGroup = Readonly<{ label: string; entries: readonly NavEntry[] }>
+
+/**
+ * Grouped navigation. PatternAI is a discovery product, so the order follows
+ * the merchant's journey: see what was found → learn from it → go deeper →
+ * look ahead → configure.
+ */
+const NAV_GROUPS: readonly NavGroup[] = [
+  {
+    label: 'Discover',
+    entries: [
+      { tab: 'overview', icon: Compass, feature: null },
+      { tab: 'lessons', icon: BookOpen, feature: null },
+      { tab: 'patterns', icon: Network, feature: null },
+      { tab: 'personas', icon: Users, feature: 'personas' },
+    ],
+  },
+  {
+    label: 'Understand',
+    entries: [
+      { tab: 'why', icon: HelpCircle, feature: 'investigations' },
+      { tab: 'trends', icon: TrendingUp, feature: 'trends' },
+      { tab: 'comparisons', icon: Scale, feature: 'comparisons' },
+    ],
+  },
+  {
+    label: 'Remember & look ahead',
+    entries: [
+      { tab: 'knowledge', icon: Library, feature: 'knowledge' },
+      { tab: 'timeline', icon: History, feature: 'timeline' },
+      { tab: 'predictions', icon: Radar, feature: 'predictions' },
+    ],
+  },
+  {
+    label: 'Workspace',
+    entries: [
+      { tab: 'settings', icon: Settings2, feature: null },
+      { tab: 'api-access', icon: KeyRound, feature: 'apiAccess' },
+    ],
+  },
 ]
+
+const ALL_NAV_ENTRIES: readonly NavEntry[] = NAV_GROUPS.flatMap((group) => group.entries)
 
 /* ── Root workspace ────────────────────────────────────────────────────── */
 
-export function InsightsHubWorkspace({ context, catalog = [], onToast, onNavigateBilling }: InsightsWorkspaceProps) {
+export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateBilling }: InsightsWorkspaceProps) {
   const [route, setRoute] = useState(() => parseInsightsRoute(typeof window === 'undefined' ? '' : window.location.pathname))
   const overviewState = useResource<InsightsOverview>(context.storeId ? () => api.fetchInsightsOverview(context.storeId ?? '') : null, [context.storeId])
+  const [planPanelOpen, setPlanPanelOpen] = useState(false)
 
   const go = useCallback((tab: InsightsTab, id: string | null = null) => {
     const path = insightsRoutePath(tab, id, typeof window === 'undefined' ? '' : window.location.search)
@@ -308,10 +430,18 @@ export function InsightsHubWorkspace({ context, catalog = [], onToast, onNavigat
     setRoute({ tab, id })
   }, [])
 
+  // Legacy /ai-growth-command/insights links are normalised to the PatternAI
+  // path on first paint so shared URLs keep working after the rebrand.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.location.pathname.startsWith(PATTERN_AI_LEGACY_BASE_PATH)) return
+    const parsed = parseInsightsRoute(window.location.pathname)
+    try { window.history.replaceState({}, '', insightsRoutePath(parsed.tab, parsed.id, window.location.search)) } catch { /* embedded browsers may restrict history */ }
+  }, [])
+
   useEffect(() => {
     const onPop = () => {
-      const parsed = parseInsightsRoute(window.location.pathname)
-      if (window.location.pathname.startsWith('/ai-growth-command/insights')) setRoute(parsed)
+      if (isPatternAiPath(window.location.pathname)) setRoute(parseInsightsRoute(window.location.pathname))
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -320,62 +450,156 @@ export function InsightsHubWorkspace({ context, catalog = [], onToast, onNavigat
   const overview = overviewState.data
   const plan: PlanTier = overview?.plan ?? 'trial'
   const lockedFor = (feature: InsightsFeature): boolean => insightsFeatureLock(plan, feature, overview).locked
+  const stats = patternAiStats(overview)
+  const degraded = degradedNotice(overview)
+  const activeEntry = ALL_NAV_ENTRIES.find((entry) => entry.tab === route.tab) ?? ALL_NAV_ENTRIES[0]!
 
   const shared = { storeId: context.storeId, overview, plan, catalog, go, onToast, onNavigateBilling, exportEnabled: !lockedFor('export'), onExportLocked: () => { onToast('Chart export unlocks with a plan upgrade.', 'info') } }
 
+  const runDiscovery = async () => {
+    if (!context.storeId) { onToast('Connect your store to run a discovery sweep.', 'info'); return }
+    if (lockedFor('discoveries')) { onToast('The discovery engine unlocks with a plan upgrade.', 'warning'); onNavigateBilling(); return }
+    try {
+      const result = await api.generateInsightsDiscoveries(context.storeId)
+      onToast(result.generated > 0 ? `PatternAI found ${result.generated} new discover${result.generated === 1 ? 'y' : 'ies'} in your data.` : 'Nothing new crossed the confidence bar — PatternAI stays quiet rather than guessing.', 'success')
+      overviewState.reload()
+      go('overview')
+    } catch (error: unknown) {
+      if (error instanceof ApiClientError && error.status === 402) { onToast('Your discovery allowance for this month is used up.', 'warning'); onNavigateBilling() }
+      else onToast(error instanceof Error ? error.message : 'The discovery sweep could not start.', 'error')
+    }
+  }
+
   return (
-    <div className="ih-root" data-plan={plan}>
-      <header className="ih-hero">
-        <div className="ih-hero-copy">
-          <span className="ih-hero-kicker"><FlaskConical size={12} /> AI GROWTH COMMAND · INSIGHTS HUB</span>
-          <h2>Where data becomes wisdom.</h2>
-          <p>Discover hidden patterns, learn from your own data, and understand why your business moves — every figure computed from your synced store, nothing invented.</p>
+    <div className="pa-root" data-plan={plan}>
+      <header className="pa-hero">
+        <div className="pa-hero-main">
+          <div className="pa-hero-identity">
+            <PatternAiMark size={44} variant="badge" />
+            <div>
+              <h2 className="pa-hero-title">Pattern<em>AI</em></h2>
+              <p className="pa-hero-tagline">{PATTERN_AI_TAGLINE}</p>
+            </div>
+          </div>
+          <p className="pa-hero-body">PatternAI reads your synced Shopify history and surfaces the structures underneath it — the rhythms, the segments, the correlations you would never spot by eye. Every number below is computed from your store; nothing here is invented or borrowed from another shop.</p>
+          <div className="pa-hero-actions">
+            <button className="pa-button primary" onClick={() => void runDiscovery()}>
+              <Sparkles size={14} /> Run discovery
+            </button>
+            <button className="pa-button ghost" onClick={() => go('settings')}><Settings2 size={14} /> Settings</button>
+            <button className="pa-plan-chip" onClick={() => setPlanPanelOpen((open) => !open)} aria-expanded={planPanelOpen}>
+              <ShieldCheck size={13} /> {PLAN_LABELS[plan]} plan
+              <ChevronRight size={13} className={planPanelOpen ? 'pa-chip-caret open' : 'pa-chip-caret'} />
+            </button>
+          </div>
         </div>
-        <div className="ih-hero-stats">
-          <div className="ih-stat"><span>New discoveries</span><strong>{overview ? formatInsightNumber(overview.counts.newDiscoveries) : '—'}</strong></div>
-          <div className="ih-stat"><span>Active patterns</span><strong>{overview ? formatInsightNumber(overview.counts.patterns) : '—'}</strong></div>
-          <div className="ih-stat"><span>Lessons read</span><strong>{overview ? `${overview.counts.lessonsRead}/${overview.counts.lessons}` : '—'}</strong></div>
-          <div className="ih-stat"><span>Personas</span><strong>{overview ? formatInsightNumber(overview.counts.personas) : '—'}</strong></div>
+        <div className="pa-hero-stats" role="list" aria-label="PatternAI at a glance">
+          {stats.map((stat) => (
+            <div key={stat.id} className="pa-stat" role="listitem">
+              <span className="pa-stat-label">{stat.label}</span>
+              <strong className="pa-stat-value">{stat.value}</strong>
+              <span className="pa-stat-caption">{stat.caption}</span>
+            </div>
+          ))}
           {overview && overview.usage.discoveries.limit !== null && (
-            <div className="ih-stat ih-stat-meter"><UsageMeterBar label="Discoveries this month" used={overview.usage.discoveries.used} limit={overview.usage.discoveries.limit} /></div>
+            <div className="pa-stat pa-stat-meter" role="listitem">
+              <UsageMeterBar label="Discoveries this month" used={overview.usage.discoveries.used} limit={overview.usage.discoveries.limit} />
+            </div>
           )}
         </div>
       </header>
 
-      {overview?.autoDiscoveryRan && <div className="ih-banner info"><Sparkles size={13} /> Auto-discovery just ran — the feed below reflects your freshest synced data.</div>}
-      {overview?.trial && <div className="ih-banner sample"><Eye size={13} /> You are exploring trial mode: clearly labeled samples show what the Hub finds once a paid plan starts generating from your store.</div>}
-      {overviewState.status === 'error' && !overviewState.upgradeRequired && <InsightsErrorPanel message={overviewState.message ?? 'Overview failed to load.'} onRetry={overviewState.reload} />}
+      {planPanelOpen && <PlanPanel plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} onClose={() => setPlanPanelOpen(false)} />}
 
-      <nav className="ih-tabs" aria-label="Insights Hub sections">
-        {TABS.map(({ tab, icon: Icon, feature }) => {
-          const locked = feature !== null && lockedFor(feature)
-          const active = route.tab === tab
-          return (
-            <button key={tab} className={`ih-tab ${active ? 'active' : ''} ${locked ? 'locked' : ''}`} onClick={() => go(tab)} aria-current={active ? 'page' : undefined}>
-              <Icon size={13} />
-              <span>{insightsTabLabel(tab)}</span>
-              {locked && <Lock size={10} />}
-            </button>
-          )
-        })}
-      </nav>
+      {degraded && <div className="pa-banner warn"><TriangleAlert size={13} /> {degraded}</div>}
+      {overview?.autoDiscoveryRan && <div className="pa-banner info"><Sparkles size={13} /> Auto-discovery just ran — this page reflects your freshest synced data.</div>}
+      {overview?.trial && <div className="pa-banner sample"><Compass size={13} /> Trial mode: clearly labelled samples show the shape of what PatternAI finds once a paid plan starts computing from your own store.</div>}
+      {overviewState.status === 'error' && !overviewState.upgradeRequired && <InsightsErrorPanel message={overviewState.message ?? 'The overview could not be loaded.'} onRetry={overviewState.reload} />}
 
-      <main className="ih-tab-panel">
-        {route.tab === 'overview' && <DiscoveriesTab {...shared} detailId={null} />}
-        {route.tab === 'discoveries' && <DiscoveriesTab {...shared} detailId={route.id} />}
-        {route.tab === 'lessons' && <LessonsTab {...shared} detailId={route.id} />}
-        {route.tab === 'patterns' && <PatternsTab {...shared} />}
-        {route.tab === 'personas' && <PersonasTab {...shared} detailId={route.id} />}
-        {route.tab === 'why' && <WhyTab {...shared} detailId={route.id} />}
-        {route.tab === 'trends' && <TrendsTab {...shared} />}
-        {route.tab === 'comparisons' && <ComparisonsTab {...shared} createMode={route.id === 'new'} detailId={route.id === 'new' ? null : route.id} />}
-        {route.tab === 'knowledge' && <KnowledgeTab {...shared} detailId={route.id} />}
-        {route.tab === 'timeline' && <TimelineTab {...shared} />}
-        {route.tab === 'predictions' && <PredictionsTab {...shared} />}
-        {route.tab === 'settings' && <SettingsTab {...shared} />}
-        {route.tab === 'api-access' && <ApiAccessTab {...shared} />}
-      </main>
+      <div className="pa-layout">
+        <nav className="pa-nav" aria-label="PatternAI sections">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="pa-nav-group">
+              <span className="pa-nav-group-label">{group.label}</span>
+              {group.entries.map(({ tab, icon: Icon, feature }) => {
+                const locked = feature !== null && lockedFor(feature)
+                const active = route.tab === tab || (route.tab === 'discoveries' && tab === 'overview')
+                return (
+                  <button key={tab} className={`pa-nav-item ${active ? 'active' : ''} ${locked ? 'locked' : ''}`} onClick={() => go(tab)} aria-current={active ? 'page' : undefined}>
+                    <Icon size={15} />
+                    <span>{insightsTabLabel(tab)}</span>
+                    {locked && <Lock size={11} />}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <main className="pa-tab-panel">
+          <div className="pa-section-head">
+            <div>
+              <h3>{insightsTabLabel(route.tab)}</h3>
+              <p>{insightsTabPurpose(route.tab)}</p>
+            </div>
+            <activeEntry.icon size={18} className="pa-section-icon" />
+          </div>
+          {route.tab === 'overview' && <DiscoveriesTab {...shared} detailId={null} />}
+          {route.tab === 'discoveries' && <DiscoveriesTab {...shared} detailId={route.id} />}
+          {route.tab === 'lessons' && <LessonsTab {...shared} detailId={route.id} />}
+          {route.tab === 'patterns' && <PatternsTab {...shared} />}
+          {route.tab === 'personas' && <PersonasTab {...shared} detailId={route.id} />}
+          {route.tab === 'why' && <WhyTab {...shared} detailId={route.id} />}
+          {route.tab === 'trends' && <TrendsTab {...shared} />}
+          {route.tab === 'comparisons' && <ComparisonsTab {...shared} createMode={route.id === 'new'} detailId={route.id === 'new' ? null : route.id} />}
+          {route.tab === 'knowledge' && <KnowledgeTab {...shared} detailId={route.id} />}
+          {route.tab === 'timeline' && <TimelineTab {...shared} />}
+          {route.tab === 'predictions' && <PredictionsTab {...shared} />}
+          {route.tab === 'settings' && <SettingsTab {...shared} />}
+          {route.tab === 'api-access' && <ApiAccessTab {...shared} />}
+        </main>
+      </div>
     </div>
+  )
+}
+
+/** Backwards-compatible alias for the pre-rebrand component name. */
+export const InsightsHubWorkspace = PatternAiWorkspace
+
+/**
+ * Plan panel: exactly what this store can use today and what a paid plan adds.
+ * The CTA is always the generic "Upgrade Plan" — never a named target tier.
+ */
+export function PlanPanel({ plan, overview, onNavigateBilling, onClose }: { plan: PlanTier; overview: InsightsOverview | null; onNavigateBilling: () => void; onClose?: () => void }) {
+  const summary = patternAiPlanSummary(plan, overview)
+  return (
+    <section className="pa-plan-panel" aria-label="Plan features">
+      <header>
+        <div>
+          <span className="pa-eyebrow">Your plan</span>
+          <strong>{summary.planLabel}</strong>
+        </div>
+        {onClose && <button className="pa-icon-button" onClick={onClose} aria-label="Close plan details"><X size={14} /></button>}
+      </header>
+      <div className="pa-plan-columns">
+        <div className="pa-plan-column">
+          <span className="pa-plan-column-head unlocked"><CheckCircle2 size={13} /> Available now</span>
+          <ul>{summary.unlocked.map((entry) => <li key={entry.feature}><CheckCircle2 size={12} /> {entry.label}</li>)}</ul>
+        </div>
+        <div className="pa-plan-column">
+          <span className="pa-plan-column-head locked"><Lock size={13} /> Unlocks with a paid plan</span>
+          {summary.locked.length === 0
+            ? <p className="pa-muted">Everything PatternAI offers is unlocked on this store.</p>
+            : <ul>{summary.locked.map((entry) => <li key={entry.feature} className="locked"><Lock size={12} /> {entry.label}</li>)}</ul>}
+        </div>
+      </div>
+      {summary.locked.length > 0 && (
+        <footer>
+          <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} />
+          <span className="pa-muted">Pricing and limits live on the billing page — PatternAI never quotes a tier at you mid-task.</span>
+        </footer>
+      )}
+    </section>
   )
 }
 
@@ -419,17 +643,18 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
   const discoveries = list.data ?? feed.data?.discoveries ?? []
   const readiness = feed.data?.readiness ?? overview?.readiness ?? null
   const generationLocked = overview ? !overview.features.discoveries : plan === 'trial'
+  const filtered = statusFilter !== 'ALL' || categoryFilter !== 'ALL'
   const weekdayCells = useMemo(() => weekdayHeatCells(discoveries), [discoveries])
   const hourCells = useMemo(() => hourHeatCells(discoveries), [discoveries])
 
-  if (!storeId) return <InsightsEmptyState icon={Telescope} title="Connect your store first" body="Insights Hub reads metrics from your synced Shopify store. Connect a store and run a sync to start the science." />
+  if (!storeId) return <InsightsEmptyState icon={Compass} title="Connect your store first" body="PatternAI reads your synced Shopify history. Connect a store and run a sync, and the first discoveries appear here." />
 
   if (props.detailId) return <DiscoveryDetail storeId={storeId} id={props.detailId} plan={plan} onBack={() => go('discoveries', null)} onToast={onToast} onNavigateBilling={onNavigateBilling} />
 
   return (
-    <section className="ih-discoveries">
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters">
+    <section className="pa-discoveries">
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters">
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | DiscoveryStatus)} aria-label="Filter by status">
             <option value="ALL">All statuses</option>
             {(Object.keys(DISCOVERY_STATUS_LABELS) as DiscoveryStatus[]).map((status) => <option key={status} value={status}>{DISCOVERY_STATUS_LABELS[status]}</option>)}
@@ -439,11 +664,11 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
             {DISCOVERY_CATEGORIES.map((category) => <option key={category} value={category}>{DISCOVERY_CATEGORY_LABELS[category]}</option>)}
           </select>
         </div>
-        <div className="ih-toolbar-actions">
+        <div className="pa-toolbar-actions">
           <ChartExportButton targetRef={chartRef} filename="insights-discovery-heatmap" enabled={exportEnabled} onLocked={onExportLocked} />
           {generationLocked
             ? <button className="button primary" onClick={onNavigateBilling} title="On-demand discovery generation unlocks with a plan upgrade"><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void generate()} disabled={generating}><FlaskConical size={13} /> {generating ? 'Examining your data…' : 'Run discovery'}</button>}
+            : <button className="button primary" onClick={() => void generate()} disabled={generating}><Network size={13} /> {generating ? 'Examining your data…' : 'Run discovery'}</button>}
         </div>
       </div>
 
@@ -453,35 +678,66 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
         : <InsightsErrorPanel message={feed.message ?? 'The discovery feed failed to load.'} onRetry={feed.reload} />)}
 
       {discoveries.length > 0 && (
-        <div className="ih-card ih-funnel-card">
-          <div className="ih-card-head"><span className="section-kicker"><Zap size={11} /> FROM SIGNAL TO ACTION</span><small>Where your discoveries stand in review</small></div>
+        <div className="pa-card pa-funnel-card">
+          <div className="pa-card-head"><span className="section-kicker"><Zap size={11} /> FROM SIGNAL TO ACTION</span><small>Where your discoveries stand in review</small></div>
           <InsightsFlowChart stages={funnelStages(discoveries)} />
         </div>
       )}
 
       {feed.status === 'ready' && discoveries.length === 0 && (
-        <InsightsEmptyState
-          icon={Telescope}
-          title={readiness && !readiness.canDiscover ? 'Not enough history to discover yet' : 'No discoveries match this filter'}
-          body={readiness && !readiness.canDiscover ? `${readiness.discoverRequirement} You currently have ${readiness.revenueDays} day${readiness.revenueDays === 1 ? '' : 's'} of revenue history and ${formatInsightNumber(readiness.totalOrders)} orders — sync your store and check back as data accumulates.` : 'Try widening the filters, or run a fresh discovery sweep against your latest synced data.'}
-        />
+        filtered
+          ? <InsightsEmptyState icon={Compass} title="No discoveries match this filter" body="Widen the filters above, or run a fresh sweep against your latest synced data." />
+          : <PatternAiWelcome readiness={readiness} plan={plan} canRun={!generationLocked} onRunDiscovery={() => void generate()} onNavigateBilling={onNavigateBilling} />
       )}
 
       {weekdayCells.length > 0 && (
-        <div className="ih-card" ref={chartRef}>
-          <div className="ih-card-head"><span className="section-kicker"><Clock3 size={11} /> WHEN YOUR STORE HUMS</span><small>Revenue share by weekday — measured from your orders</small></div>
+        <div className="pa-card" ref={chartRef}>
+          <div className="pa-card-head"><span className="section-kicker"><Clock3 size={11} /> WHEN YOUR STORE HUMS</span><small>Revenue share by weekday — measured from your orders</small></div>
           <InsightsHeatmap cells={weekdayCells} xLabels={[...DAY_LABELS]} yLabels={['Revenue']} />
         </div>
       )}
       {hourCells.length > 0 && (
-        <div className="ih-card">
-          <div className="ih-card-head"><span className="section-kicker"><Clock3 size={11} /> YOUR STORE BY THE HOUR</span><small>Orders by hour of day (UTC) — measured, not modeled</small></div>
+        <div className="pa-card">
+          <div className="pa-card-head"><span className="section-kicker"><Clock3 size={11} /> YOUR STORE BY THE HOUR</span><small>Orders by hour of day (UTC) — measured, not modeled</small></div>
           <InsightsHeatmap cells={hourCells} xLabels={[...HOUR_LABELS]} yLabels={['Orders']} />
         </div>
       )}
 
-      <div className="ih-masonry">
+      <div className="pa-masonry">
         {discoveries.map((discovery) => <DiscoveryCard key={discovery.id} discovery={discovery} storeId={storeId} onOpen={() => go('discoveries', discovery.id)} onChanged={() => list.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
+      </div>
+
+      <ExploreFurther go={go} />
+    </section>
+  )
+}
+
+/**
+ * Where to go next. Each destination is a distinct way of *understanding* the
+ * store — deliberately none of them duplicate Store Coach's daily plan,
+ * GrowthIQ's strategy reports or the Recommendations queue.
+ */
+export function ExploreFurther({ go }: { go: (tab: InsightsTab, id?: string | null) => void }) {
+  const destinations: readonly Readonly<{ tab: InsightsTab; icon: LucideIcon; blurb: string }>[] = [
+    { tab: 'lessons', icon: BookOpen, blurb: 'Read a briefing written from your own numbers.' },
+    { tab: 'patterns', icon: Network, blurb: 'Map every recurring structure by confidence and recurrence.' },
+    { tab: 'personas', icon: Users, blurb: 'Meet the behaviour groups behind your revenue.' },
+    { tab: 'why', icon: HelpCircle, blurb: 'Ask why something moved and see the ranked causes.' },
+    { tab: 'trends', icon: TrendingUp, blurb: 'Watch what is rising and fading, with confidence.' },
+    { tab: 'predictions', icon: Radar, blurb: 'Look ahead with ranges instead of single numbers.' },
+  ]
+  return (
+    <section className="pa-explore">
+      <span className="pa-eyebrow">Keep exploring</span>
+      <div className="pa-explore-grid">
+        {destinations.map(({ tab, icon: Icon, blurb }) => (
+          <button key={tab} className="pa-explore-card" onClick={() => go(tab)}>
+            <span className="pa-explore-icon"><Icon size={15} /></span>
+            <strong>{insightsTabLabel(tab)}</strong>
+            <p>{blurb}</p>
+            <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
+          </button>
+        ))}
       </div>
     </section>
   )
@@ -576,33 +832,45 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
     setBusy(true)
     try {
       await api.setInsightDiscoveryStatus(storeId, discovery.id, status)
-      onToast(status === 'DISMISSED' ? 'Marked not useful — the engine learns from this.' : `Discovery ${DISCOVERY_STATUS_LABELS[status].toLowerCase()}.`, 'success')
+      onToast(status === 'DISMISSED' ? 'Dismissed — PatternAI will weight this kind of finding lower.' : `Discovery ${DISCOVERY_STATUS_LABELS[status].toLowerCase()}.`, 'success')
       onChanged()
     } catch (error: unknown) {
       if (error instanceof ApiClientError && error.status === 402) { onToast('Discovery actions unlock with a plan upgrade.', 'warning'); onNavigateBilling() }
       else onToast(error instanceof Error ? error.message : 'Could not update the discovery.', 'error')
     } finally { setBusy(false) }
   }
+  // Evidence rows are the engine's own numbers; the card shows the first three
+  // and the detail view shows the full bundle. Nothing is computed here.
+  const evidence = evidenceRows(discovery.dataEvidence, 3)
   return (
-    <article className={`ih-discovery-card category-${discovery.category.toLowerCase()} ${discovery.status === 'NEW' ? 'fresh' : ''}`}>
-      <header>
-        <span className={`ih-type-badge type-${discovery.discoveryType.toLowerCase()}`}>{DISCOVERY_TYPE_LABELS[discovery.discoveryType]}</span>
-        <span className="ih-category">{DISCOVERY_CATEGORY_LABELS[discovery.category]}</span>
+    <article className={`pa-discovery-card tone-${discoveryTone(discovery.discoveryType)} ${discovery.status === 'NEW' ? 'fresh' : ''}`}>
+      <header className="pa-discovery-head">
+        <span className={`pa-type-badge type-${discovery.discoveryType.toLowerCase()}`}>{DISCOVERY_TYPE_HEADLINES[discovery.discoveryType]}</span>
         {discovery.sample && <SampleBadge />}
-        <time>{formatRelativeTime(discovery.discoveredAt)}</time>
+        <time dateTime={discovery.discoveredAt}>{formatRelativeTime(discovery.discoveredAt)}</time>
       </header>
-      <h3>{discovery.title}</h3>
-      <p>{discovery.description}</p>
-      {discovery.explanation && <blockquote className="ih-narration"><Microscope size={12} /> {discovery.explanation}</blockquote>}
-      <div className="ih-discovery-meta">
+
+      <h3 className="pa-discovery-title">{discovery.title}</h3>
+      <p className="pa-discovery-body">{discovery.description}</p>
+      {discovery.explanation && <blockquote className="pa-narration"><Waypoints size={12} /> {discovery.explanation}</blockquote>}
+
+      {evidence.length > 0 && (
+        <dl className="pa-evidence-inline">
+          {evidence.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
+        </dl>
+      )}
+
+      <div className="pa-discovery-meta">
         <ConfidencePill score={discovery.confidenceScore} />
-        {discovery.impactEstimate !== null && <span className="ih-impact">≈ {formatInsightMoney(discovery.impactEstimate, discovery.impactCurrency)} potential</span>}
+        <span className="pa-category">{DISCOVERY_CATEGORY_LABELS[discovery.category]}</span>
+        {discovery.impactEstimate !== null && <span className="pa-impact"><Zap size={11} /> {formatInsightMoney(discovery.impactEstimate, discovery.impactCurrency)} in play</span>}
       </div>
-      <footer>
-        <button className="button secondary compact" onClick={onOpen}><Eye size={12} /> Evidence</button>
-        <button className="button ghost compact" disabled={busy || discovery.status === 'SAVED'} onClick={() => void setStatus('SAVED')}>Save</button>
-        <button className="button ghost compact" disabled={busy || discovery.status === 'ACTED_ON'} onClick={() => void setStatus('ACTED_ON')}>Acted on it</button>
-        <button className="button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')}>Not useful</button>
+
+      <footer className="pa-discovery-actions">
+        <button className="pa-button secondary compact" onClick={onOpen}><Search size={12} /> Explore</button>
+        <button className="pa-button ghost compact" disabled={busy || discovery.status === 'SAVED'} onClick={() => void setStatus('SAVED')}><Star size={12} /> Save</button>
+        <button className="pa-button ghost compact" disabled={busy || discovery.status === 'ACTED_ON'} onClick={() => void setStatus('ACTED_ON')}><CheckCircle2 size={12} /> Acted on it</button>
+        <button className="pa-button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')}>Dismiss</button>
       </footer>
     </article>
   )
@@ -615,33 +883,33 @@ function DiscoveryDetail({ storeId, id, plan, onBack, onToast, onNavigateBilling
   const discovery = state.data
   const rows = evidenceRows(discovery.dataEvidence, 8)
   return (
-    <section className="ih-detail">
+    <section className="pa-detail">
       <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to discoveries</button>
-      <article className="ih-card ih-detail-card">
-        <header className="ih-detail-head">
-          <span className={`ih-type-badge type-${discovery.discoveryType.toLowerCase()}`}>{DISCOVERY_TYPE_LABELS[discovery.discoveryType]}</span>
-          <span className="ih-category">{DISCOVERY_CATEGORY_LABELS[discovery.category]}</span>
+      <article className="pa-card pa-detail-card">
+        <header className="pa-detail-head">
+          <span className={`pa-type-badge type-${discovery.discoveryType.toLowerCase()}`}>{DISCOVERY_TYPE_LABELS[discovery.discoveryType]}</span>
+          <span className="pa-category">{DISCOVERY_CATEGORY_LABELS[discovery.category]}</span>
           {discovery.sample && <SampleBadge />}
           <ConfidencePill score={discovery.confidenceScore} />
         </header>
         <h2>{discovery.title}</h2>
-        <p className="ih-detail-description">{discovery.description}</p>
-        {discovery.explanation && <blockquote className="ih-narration"><Microscope size={13} /> {discovery.explanation}</blockquote>}
-        {plan === 'trial' && <div className="ih-banner sample"><Eye size={13} /> This is a labeled sample. Paid plans compute discoveries entirely from your synced store data. <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button></div>}
-        <div className="ih-evidence">
-          <h4><FlaskConical size={13} /> The evidence — pulled from your real data</h4>
-          {rows.length === 0 ? <p className="ih-muted">Evidence bundle is empty for this discovery.</p> : (
+        <p className="pa-detail-description">{discovery.description}</p>
+        {discovery.explanation && <blockquote className="pa-narration"><Waypoints size={13} /> {discovery.explanation}</blockquote>}
+        {plan === 'trial' && <div className="pa-banner sample"><Compass size={13} /> This is a labeled sample. Paid plans compute discoveries entirely from your synced store data. <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button></div>}
+        <div className="pa-evidence">
+          <h4><Network size={13} /> The evidence — pulled from your real data</h4>
+          {rows.length === 0 ? <p className="pa-muted">Evidence bundle is empty for this discovery.</p> : (
             <dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
           )}
         </div>
-        {discovery.impactEstimate !== null && <p className="ih-detail-impact"><Zap size={13} /> Estimated potential: <strong>{formatInsightMoney(discovery.impactEstimate, discovery.impactCurrency)}</strong> — computed from observed order values, never a guess.</p>}
+        {discovery.impactEstimate !== null && <p className="pa-detail-impact"><Zap size={13} /> Estimated potential: <strong>{formatInsightMoney(discovery.impactEstimate, discovery.impactCurrency)}</strong> — computed from observed order values, never a guess.</p>}
         {discoveryTreemapBlocks(discovery).length > 0 && (
-          <div className="ih-detail-chart">
+          <div className="pa-detail-chart">
             <h4>How it splits</h4>
             <InsightsTreeMap blocks={discoveryTreemapBlocks(discovery)} />
           </div>
         )}
-        <footer className="ih-detail-actions"><DiscoveryStatusActions storeId={storeId} discovery={discovery} onChanged={() => state.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} /></footer>
+        <footer className="pa-detail-actions"><DiscoveryStatusActions storeId={storeId} discovery={discovery} onChanged={() => state.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} /></footer>
       </article>
     </section>
   )
@@ -654,7 +922,7 @@ function DiscoveryStatusActions({ storeId, discovery, onChanged, onToast, onNavi
     try { await api.setInsightDiscoveryStatus(storeId, discovery.id, status); onChanged() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) onNavigateBilling(); else onToast(error instanceof Error ? error.message : 'Update failed.', 'error') } finally { setBusy(false) }
   }
   return (
-    <div className="ih-action-row">
+    <div className="pa-action-row">
       {(['REVIEWED', 'SAVED', 'ACTED_ON', 'DISMISSED'] as const).map((status) => <button key={status} className={`button compact ${discovery.status === status ? 'primary' : 'secondary'}`} disabled={busy} onClick={() => void act(status)}>{DISCOVERY_STATUS_LABELS[status]}</button>)}
     </div>
   )
@@ -689,9 +957,9 @@ function LessonsTab(props: TabProps & { detailId: string | null }) {
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters"><span className="ih-muted">{items.length} lesson{items.length === 1 ? '' : 's'} · {items.filter((lesson) => lesson.readAt).length} read</span></div>
-        <div className="ih-toolbar-actions">
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters"><span className="pa-muted">{items.length} lesson{items.length === 1 ? '' : 's'} · {items.filter((lesson) => lesson.readAt).length} read</span></div>
+        <div className="pa-toolbar-actions">
           {generationLocked
             ? <button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
             : <button className="button primary" onClick={() => void generate()} disabled={generating}><BookOpen size={13} /> {generating ? 'Writing lessons…' : 'Generate lessons'}</button>}
@@ -705,23 +973,23 @@ function LessonsTab(props: TabProps & { detailId: string | null }) {
       )}
 
       {recommended.data && recommended.data.length > 0 && (
-        <div className="ih-recommended">
+        <div className="pa-recommended">
           <span className="section-kicker"><Lightbulb size={11} /> RECOMMENDED FOR YOU — FROM YOUR PATTERNS</span>
-          <div className="ih-recommended-row">
+          <div className="pa-recommended-row">
             {recommended.data.slice(0, 3).map((lesson) => (
-              <button key={lesson.id} className="ih-recommended-chip" onClick={() => go('lessons', lesson.id)}>{lesson.sample && <SampleBadge />} {lesson.title} <ChevronRight size={12} /></button>
+              <button key={lesson.id} className="pa-recommended-chip" onClick={() => go('lessons', lesson.id)}>{lesson.sample && <SampleBadge />} {lesson.title} <ChevronRight size={12} /></button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="ih-lesson-grid">
+      <div className="pa-lesson-grid">
         {items.map((lesson) => (
-          <button key={lesson.id} className={`ih-lesson-card ${lesson.readAt ? 'read' : ''}`} onClick={() => go('lessons', lesson.id)}>
-            <header><span className="ih-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="ih-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}{lesson.bookmarked && <Star size={11} className="ih-bookmarked" />}</header>
+          <button key={lesson.id} className={`pa-lesson-card ${lesson.readAt ? 'read' : ''}`} onClick={() => go('lessons', lesson.id)}>
+            <header><span className="pa-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="pa-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}{lesson.bookmarked && <Star size={11} className="pa-bookmarked" />}</header>
             <h3>{lesson.title}</h3>
             <p>{lesson.summary}</p>
-            <footer><span><Clock3 size={11} /> {lesson.readingTimeMinutes} min read</span>{lesson.rating !== null && <span className="ih-muted">Rated {lesson.rating}/5</span>}{lesson.readAt ? <span className="ih-read-flag"><CheckCircle2 size={11} /> Read</span> : <span className="ih-unread-flag">Unread</span>}</footer>
+            <footer><span><Clock3 size={11} /> {lesson.readingTimeMinutes} min read</span>{lesson.rating !== null && <span className="pa-muted">Rated {lesson.rating}/5</span>}{lesson.readAt ? <span className="pa-read-flag"><CheckCircle2 size={11} /> Read</span> : <span className="pa-unread-flag">Unread</span>}</footer>
           </button>
         ))}
       </div>
@@ -738,20 +1006,20 @@ function LessonReader({ storeId, id, onBack, onToast }: { storeId: string; id: s
   if (state.status === 'loading') return <InsightsSkeleton rows={6} />
   if (!lesson) return <InsightsErrorPanel message={state.message ?? 'Lesson not found.'} onRetry={state.reload} />
   return (
-    <section className="ih-detail">
+    <section className="pa-detail">
       <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to the library</button>
-      <article className="ih-card ih-detail-card ih-reader">
-        <header className="ih-detail-head"><span className="ih-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="ih-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}<span className="ih-muted"><Clock3 size={11} /> {lesson.readingTimeMinutes} min</span></header>
+      <article className="pa-card pa-detail-card pa-reader">
+        <header className="pa-detail-head"><span className="pa-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="pa-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}<span className="pa-muted"><Clock3 size={11} /> {lesson.readingTimeMinutes} min</span></header>
         <h2>{lesson.title}</h2>
-        <p className="ih-detail-description">{lesson.summary}</p>
+        <p className="pa-detail-description">{lesson.summary}</p>
         <MarkdownLite markdown={lesson.contentMarkdown} />
         {lesson.actionItems.length > 0 && (
-          <div className="ih-actions-list">
+          <div className="pa-actions-list">
             <h4><Lightbulb size={13} /> Do this next</h4>
             <ul>{lesson.actionItems.map((item) => <li key={item}><CheckCircle2 size={12} /> {item}</li>)}</ul>
           </div>
         )}
-        <footer className="ih-detail-actions">
+        <footer className="pa-detail-actions">
           <RatingStars value={lesson.rating} onRate={async (rating) => { try { await api.rateInsightLesson(storeId, id, rating); onToast('Thanks — ratings tune future lessons.', 'success'); state.reload() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Rating failed.', 'error') } }} />
           <button className="button ghost compact" onClick={async () => { try { await api.bookmarkInsightLesson(storeId, id, !lesson.bookmarked); state.reload() } catch { onToast('Bookmark failed.', 'error') } }}><Star size={12} fill={lesson.bookmarked ? 'currentColor' : 'none'} /> {lesson.bookmarked ? 'Bookmarked' : 'Bookmark'}</button>
         </footer>
@@ -780,47 +1048,47 @@ function PatternsTab({ storeId, overview, plan, onToast, onNavigateBilling, expo
     } finally { setDetecting(false) }
   }
 
-  if (!storeId) return <InsightsEmptyState icon={Brain} title="Connect your store first" body="The pattern lab watches your real order rhythm." />
+  if (!storeId) return <InsightsEmptyState icon={Network} title="Connect your store first" body="The pattern lab studies your real order rhythm — it needs synced history first." />
   const items = patterns.data?.patterns ?? []
   const detectionLocked = overview ? !overview.features.patterns : plan === 'trial'
   const bubbles = patternBubbles(items.filter((pattern) => pattern.status === 'ACTIVE'))
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters"><span className="ih-muted">{items.filter((pattern) => pattern.status === 'ACTIVE').length} active pattern{items.filter((pattern) => pattern.status === 'ACTIVE').length === 1 ? '' : 's'}{patterns.data?.viewOnly ? ' · view-only gallery on your plan' : ''}</span></div>
-        <div className="ih-toolbar-actions">
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters"><span className="pa-muted">{items.filter((pattern) => pattern.status === 'ACTIVE').length} active pattern{items.filter((pattern) => pattern.status === 'ACTIVE').length === 1 ? '' : 's'}{patterns.data?.viewOnly ? ' · view-only gallery on your plan' : ''}</span></div>
+        <div className="pa-toolbar-actions">
           <ChartExportButton targetRef={chartRef} filename="insights-pattern-bubbles" enabled={exportEnabled} onLocked={onExportLocked} />
           {detectionLocked
             ? <button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void detect()} disabled={detecting}><Brain size={13} /> {detecting ? 'Watching for patterns…' : 'Detect patterns'}</button>}
+            : <button className="button primary" onClick={() => void detect()} disabled={detecting}><Network size={13} /> {detecting ? 'Watching for patterns…' : 'Detect patterns'}</button>}
         </div>
       </div>
 
       {patterns.status === 'loading' && <InsightsSkeleton rows={4} />}
       {patterns.status === 'error' && <InsightsErrorPanel message={patterns.message ?? 'Patterns failed to load.'} onRetry={patterns.reload} />}
       {patterns.status === 'ready' && items.length === 0 && (
-        <InsightsEmptyState icon={Brain} title="No patterns on record yet" body="Patterns are structures the engine has seen repeat across your data — weekly rhythms, product affinities, seasonal swells. Run detection once you have a few weeks of synced history." />
+        <InsightsEmptyState icon={Network} title="No patterns on record yet" body="Patterns are structures the engine has seen repeat across your data — weekly rhythms, product affinities, seasonal swells. Run detection once you have a few weeks of synced history." />
       )}
 
       {bubbles.length > 0 && (
-        <div className="ih-card" ref={chartRef}>
-          <div className="ih-card-head"><span className="section-kicker"><Brain size={11} /> PATTERN STRENGTH MAP</span><small>Bubble size = confirmed occurrences · axis = engine confidence</small></div>
+        <div className="pa-card" ref={chartRef}>
+          <div className="pa-card-head"><span className="section-kicker"><Network size={11} /> PATTERN STRENGTH MAP</span><small>Bubble size = confirmed occurrences · axis = engine confidence</small></div>
           <InsightsBubbleChart points={bubbles.map((bubble) => ({ ...bubble, tone: bubble.type.toLowerCase() }))} xLabel="Confidence →" yLabel="Recurrence →" />
         </div>
       )}
 
-      <div className="ih-pattern-list">
+      <div className="pa-pattern-list">
         {items.map((pattern) => (
-          <article key={pattern.id} className={`ih-pattern-row status-${pattern.status.toLowerCase()}`}>
-            <span className={`ih-type-badge pattern-${pattern.patternType.toLowerCase()}`}>{PATTERN_TYPE_LABELS[pattern.patternType]}</span>
-            <div className="ih-pattern-copy">
+          <article key={pattern.id} className={`pa-pattern-row status-${pattern.status.toLowerCase()}`}>
+            <span className={`pa-type-badge pattern-${pattern.patternType.toLowerCase()}`}>{PATTERN_TYPE_LABELS[pattern.patternType]}</span>
+            <div className="pa-pattern-copy">
               <strong>{pattern.title}</strong>
               <p>{pattern.description}</p>
               <small>Seen {pattern.occurrenceCount}× · first detected {formatRelativeTime(pattern.firstDetected)} · last confirmed {formatRelativeTime(pattern.lastConfirmed)}</small>
             </div>
             <ConfidencePill score={pattern.confidenceScore} />
-            <div className="ih-pattern-actions">
+            <div className="pa-pattern-actions">
               <button className={`icon-button ${pattern.alertsEnabled ? 'armed' : ''}`} title={pattern.alertsEnabled ? 'Alerting when this pattern breaks' : 'Enable break alerts'} onClick={async () => { try { await api.setInsightPatternAlerts(storeId, pattern.id, !pattern.alertsEnabled); patterns.reload() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Pattern alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{pattern.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</button>
               {pattern.status === 'ACTIVE' && <button className="icon-button" title="Invalidate pattern" onClick={async () => { try { await api.invalidateInsightPattern(storeId, pattern.id); onToast('Pattern invalidated — it will need fresh evidence to return.', 'info'); patterns.reload() } catch { onToast('Could not invalidate the pattern.', 'error') } }}><Trash2 size={14} /></button>}
             </div>
@@ -862,9 +1130,9 @@ function PersonasTab(props: TabProps & { detailId: string | null }) {
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters"><span className="ih-muted">{items.length} persona{items.length === 1 ? '' : 's'} identified</span></div>
-        <div className="ih-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Users size={13} /> {generating ? 'Studying your customers…' : items.length > 0 ? 'Rebuild personas' : 'Identify personas'}</button></div>
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters"><span className="pa-muted">{items.length} persona{items.length === 1 ? '' : 's'} identified</span></div>
+        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Users size={13} /> {generating ? 'Studying your customers…' : items.length > 0 ? 'Rebuild personas' : 'Identify personas'}</button></div>
       </div>
       {personas.status === 'loading' && <InsightsSkeleton rows={3} />}
       {personas.status === 'ready' && items.length === 0 && readiness && (
@@ -872,16 +1140,16 @@ function PersonasTab(props: TabProps & { detailId: string | null }) {
           icon={Users}
           title={readiness.canPersonas ? 'Ready when you are' : `Personas require at least ${readiness.personasRequirement.need} customers`}
           body={readiness.canPersonas ? 'Run persona identification to cluster your customer base into named, actionable segments.' : `Persona science clusters real customers — it needs ${readiness.personasRequirement.need} of them and you currently have ${readiness.personasRequirement.have}. Every synced customer gets you closer.`}
-          action={<div className="ih-readiness"><span style={{ width: `${Math.min(100, (readiness.personasRequirement.have / readiness.personasRequirement.need) * 100)}%` }} /></div>}
+          action={<div className="pa-readiness"><span style={{ width: `${Math.min(100, (readiness.personasRequirement.have / readiness.personasRequirement.need) * 100)}%` }} /></div>}
         />
       )}
-      <div className="ih-persona-grid">
+      <div className="pa-persona-grid">
         {items.map((persona) => (
-          <button key={persona.id} className="ih-persona-card" onClick={() => go('personas', persona.id)}>
-            <span className="ih-persona-emoji" aria-hidden="true">{persona.personaEmoji}</span>
+          <button key={persona.id} className="pa-persona-card" onClick={() => go('personas', persona.id)}>
+            <span className="pa-persona-emoji" aria-hidden="true">{persona.personaEmoji}</span>
             <h3>{persona.personaName}</h3>
-            <span className="ih-persona-share">{personaShare(persona)} · {formatInsightNumber(persona.customerCount)} people</span>
-            <span className="ih-persona-impact">{formatInsightMoney(persona.estimatedRevenueImpact, persona.revenueCurrency)} lifetime value</span>
+            <span className="pa-persona-share">{personaShare(persona)} · {formatInsightNumber(persona.customerCount)} people</span>
+            <span className="pa-persona-impact">{formatInsightMoney(persona.estimatedRevenueImpact, persona.revenueCurrency)} lifetime value</span>
             <ConfidencePill score={persona.confidenceScore} />
           </button>
         ))}
@@ -897,13 +1165,13 @@ function PersonaDetail({ storeId, id, onBack, onToast }: { storeId: string; id: 
   if (!persona.data) return <InsightsErrorPanel message={persona.message ?? 'Persona not found.'} onRetry={persona.reload} />
   const data = persona.data
   return (
-    <section className="ih-detail">
+    <section className="pa-detail">
       <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to personas</button>
-      <article className="ih-card ih-detail-card">
-        <header className="ih-detail-head"><span className="ih-persona-emoji large">{data.personaEmoji}</span><div><h2>{data.personaName}</h2><p className="ih-detail-description">{personaShare(data)} — {formatInsightMoney(data.estimatedRevenueImpact, data.revenueCurrency)} lifetime value across {formatInsightNumber(data.customerCount)} customers.</p></div><ConfidencePill score={data.confidenceScore} /></header>
-        <div className="ih-persona-detail-grid">
-          <div className="ih-persona-radar"><InsightsRadarChart traits={data.radar} /></div>
-          <div className="ih-persona-lists">
+      <article className="pa-card pa-detail-card">
+        <header className="pa-detail-head"><span className="pa-persona-emoji large">{data.personaEmoji}</span><div><h2>{data.personaName}</h2><p className="pa-detail-description">{personaShare(data)} — {formatInsightMoney(data.estimatedRevenueImpact, data.revenueCurrency)} lifetime value across {formatInsightNumber(data.customerCount)} customers.</p></div><ConfidencePill score={data.confidenceScore} /></header>
+        <div className="pa-persona-detail-grid">
+          <div className="pa-persona-radar"><InsightsRadarChart traits={data.radar} /></div>
+          <div className="pa-persona-lists">
             <h4>How they behave</h4>
             <ul>{data.behaviorPatterns.map((item) => <li key={item}>{item}</li>)}</ul>
             <h4>What motivates them</h4>
@@ -913,13 +1181,13 @@ function PersonaDetail({ storeId, id, onBack, onToast }: { storeId: string; id: 
           </div>
         </div>
         {customers.data && (
-          <div className="ih-persona-customers">
+          <div className="pa-persona-customers">
             <h4><Users size={13} /> The segment, anonymized</h4>
-            <p className="ih-muted">Average {customers.data.aggregate.avgOrders} orders · average {formatInsightMoney(customers.data.aggregate.avgLifetimeValue, customers.data.aggregate.currency)} lifetime value. Customer identities stay private — aggregates only.</p>
-            <div className="ih-anon-chips">{customers.data.anonymizedSample.map((label) => <span key={label}>{label}</span>)}</div>
+            <p className="pa-muted">Average {customers.data.aggregate.avgOrders} orders · average {formatInsightMoney(customers.data.aggregate.avgLifetimeValue, customers.data.aggregate.currency)} lifetime value. Customer identities stay private — aggregates only.</p>
+            <div className="pa-anon-chips">{customers.data.anonymizedSample.map((label) => <span key={label}>{label}</span>)}</div>
           </div>
         )}
-        <footer className="ih-detail-actions"><button className="button secondary compact" onClick={() => { navigator.clipboard?.writeText(`${data.personaName} — ${personaShare(data)}`).then(() => onToast('Persona summary copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy summary</button></footer>
+        <footer className="pa-detail-actions"><button className="button secondary compact" onClick={() => { navigator.clipboard?.writeText(`${data.personaName} — ${personaShare(data)}`).then(() => onToast('Persona summary copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy summary</button></footer>
       </article>
     </section>
   )
@@ -956,15 +1224,15 @@ function WhyTab(props: TabProps & { detailId: string | null }) {
   const quota = overview?.usage.investigations ?? null
   return (
     <section>
-      <div className="ih-why-box">
-        <h3><Microscope size={15} /> Ask why anything happened</h3>
+      <div className="pa-why-box">
+        <h3><Waypoints size={15} /> Ask why anything happened</h3>
         <p>The explorer decomposes your real metrics — revenue into orders and basket size, products into mix shifts — and ranks root causes by measured impact.</p>
-        <form className="ih-why-form" onSubmit={(event) => { event.preventDefault(); void ask(question) }}>
+        <form className="pa-why-form" onSubmit={(event) => { event.preventDefault(); void ask(question) }}>
           <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Why did revenue drop last week?" maxLength={400} aria-label="Ask a why question" />
           <button className="button primary" type="submit" disabled={asking || !question.trim()}>{asking ? 'Investigating…' : 'Investigate'}</button>
         </form>
-        <div className="ih-why-suggestions">
-          {SUGGESTED_WHY_QUESTIONS.map((suggestion) => <button key={suggestion} className="ih-suggestion" onClick={() => void ask(suggestion)} disabled={asking}>{suggestion}</button>)}
+        <div className="pa-why-suggestions">
+          {SUGGESTED_WHY_QUESTIONS.map((suggestion) => <button key={suggestion} className="pa-suggestion" onClick={() => void ask(suggestion)} disabled={asking}>{suggestion}</button>)}
         </div>
         {quota && quota.limit !== null && <UsageMeterBar label="Investigations this month" used={quota.used} limit={quota.limit} />}
       </div>
@@ -973,9 +1241,9 @@ function WhyTab(props: TabProps & { detailId: string | null }) {
       {investigations.status === 'ready' && (investigations.data?.length ?? 0) === 0 && (
         <InsightsEmptyState icon={HelpCircle} title="No investigations yet" body="Ask your first Why? question above. Every answer cites the exact rows of your data that support it." />
       )}
-      <div className="ih-investigation-list">
+      <div className="pa-investigation-list">
         {(investigations.data ?? []).map((investigation) => (
-          <button key={investigation.id} className="ih-investigation-row" onClick={() => go('why', investigation.id)}>
+          <button key={investigation.id} className="pa-investigation-row" onClick={() => go('why', investigation.id)}>
             <HelpCircle size={15} />
             <div><strong>{investigation.question}</strong><small>{investigation.rootCauses.length} root cause{investigation.rootCauses.length === 1 ? '' : 's'} · {formatRelativeTime(investigation.createdAt)}</small></div>
             <ConfidencePill score={investigation.confidenceScore} />
@@ -993,30 +1261,30 @@ function InvestigationDetail({ storeId, id, onBack, onToast }: { storeId: string
   if (!state.data) return <InsightsErrorPanel message={state.message ?? 'Investigation not found.'} onRetry={state.reload} />
   const item = state.data
   return (
-    <section className="ih-detail">
+    <section className="pa-detail">
       <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to Why?</button>
-      <article className="ih-card ih-detail-card">
-        <header className="ih-detail-head"><span className={`ih-type-badge status-${item.status.toLowerCase()}`}>{item.status === 'COMPLETED' ? 'Solved' : 'In progress'}</span><ConfidencePill score={item.confidenceScore} /></header>
+      <article className="pa-card pa-detail-card">
+        <header className="pa-detail-head"><span className={`pa-type-badge status-${item.status.toLowerCase()}`}>{item.status === 'COMPLETED' ? 'Solved' : 'In progress'}</span><ConfidencePill score={item.confidenceScore} /></header>
         <h2>{item.question}</h2>
-        <div className="ih-steps">
+        <div className="pa-steps">
           <h4>How the answer was built</h4>
-          <ol>{item.steps.map((step, index) => <li key={index}><span className="ih-step-index">{index + 1}</span>{step}</li>)}</ol>
-          <p className="ih-muted">Data examined: {item.dataSourcesAnalyzed.join(' · ')}</p>
+          <ol>{item.steps.map((step, index) => <li key={index}><span className="pa-step-index">{index + 1}</span>{step}</li>)}</ol>
+          <p className="pa-muted">Data examined: {item.dataSourcesAnalyzed.join(' · ')}</p>
         </div>
-        <div className="ih-causes">
+        <div className="pa-causes">
           <h4>Root causes, ranked by measured impact</h4>
-          {item.rootCauses.length === 0 && <p className="ih-muted">No dominant cause surfaced — the movement is within normal variance.</p>}
+          {item.rootCauses.length === 0 && <p className="pa-muted">No dominant cause surfaced — the movement is within normal variance.</p>}
           {item.rootCauses.map((cause) => (
-            <div key={cause.cause} className="ih-cause">
-              <div className="ih-cause-head"><strong>{cause.cause}</strong><span>{Math.round(cause.impactShare * 100)}% of the movement</span></div>
-              <div className="ih-cause-bar"><span style={{ width: `${Math.round(cause.impactShare * 100)}%` }} /></div>
+            <div key={cause.cause} className="pa-cause">
+              <div className="pa-cause-head"><strong>{cause.cause}</strong><span>{Math.round(cause.impactShare * 100)}% of the movement</span></div>
+              <div className="pa-cause-bar"><span style={{ width: `${Math.round(cause.impactShare * 100)}%` }} /></div>
               <p>{cause.evidence}</p>
             </div>
           ))}
         </div>
-        {item.whatToDo.length > 0 && <div className="ih-actions-list"><h4><Lightbulb size={13} /> What to do</h4><ul>{item.whatToDo.map((tip) => <li key={tip}><CheckCircle2 size={12} /> {tip}</li>)}</ul></div>}
-        {item.preventionTips.length > 0 && <div className="ih-actions-list"><h4>Prevent the repeat</h4><ul>{item.preventionTips.map((tip) => <li key={tip}>{tip}</li>)}</ul></div>}
-        <footer className="ih-detail-actions"><span className="ih-muted">Was this answer useful?</span><RatingStars value={null} onRate={async (rating) => { try { await api.rateInsightInvestigation(storeId, id, rating); onToast('Thanks — this tunes future investigations.', 'success') } catch { onToast('Rating failed.', 'error') } }} /></footer>
+        {item.whatToDo.length > 0 && <div className="pa-actions-list"><h4><Lightbulb size={13} /> What to do</h4><ul>{item.whatToDo.map((tip) => <li key={tip}><CheckCircle2 size={12} /> {tip}</li>)}</ul></div>}
+        {item.preventionTips.length > 0 && <div className="pa-actions-list"><h4>Prevent the repeat</h4><ul>{item.preventionTips.map((tip) => <li key={tip}>{tip}</li>)}</ul></div>}
+        <footer className="pa-detail-actions"><span className="pa-muted">Was this answer useful?</span><RatingStars value={null} onRate={async (rating) => { try { await api.rateInsightInvestigation(storeId, id, rating); onToast('Thanks — this tunes future investigations.', 'success') } catch { onToast('Rating failed.', 'error') } }} /></footer>
       </article>
     </section>
   )
@@ -1037,21 +1305,21 @@ function TrendsTab({ storeId, overview, plan, onToast, onNavigateBilling, export
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters"><span className="ih-muted">{trends.length} signal{trends.length === 1 ? '' : 's'} under watch{freshness ? ` · ${freshness.toLowerCase()}` : ''}</span></div>
-        <div className="ih-toolbar-actions"><ChartExportButton targetRef={chartRef} filename="insights-trend-scatter" enabled={exportEnabled} onLocked={onExportLocked} /></div>
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters"><span className="pa-muted">{trends.length} signal{trends.length === 1 ? '' : 's'} under watch{freshness ? ` · ${freshness.toLowerCase()}` : ''}</span></div>
+        <div className="pa-toolbar-actions"><ChartExportButton targetRef={chartRef} filename="insights-trend-scatter" enabled={exportEnabled} onLocked={onExportLocked} /></div>
       </div>
 
       {readiness && !readiness.canTrends && (
-        <div className="ih-banner info"><Clock3 size={13} /> Trend watching sharpens with history — {readiness.trendsRequirement.have} of {readiness.trendsRequirement.need} days synced. Signals strengthen automatically as data lands.</div>
+        <div className="pa-banner info"><Clock3 size={13} /> Trend watching sharpens with history — {readiness.trendsRequirement.have} of {readiness.trendsRequirement.need} days synced. Signals strengthen automatically as data lands.</div>
       )}
 
       {business.status === 'loading' && <InsightsSkeleton rows={4} />}
       {business.status === 'error' && <InsightsErrorPanel message={business.message ?? 'Trends failed to load.'} onRetry={business.reload} />}
 
       {trends.length > 0 && (
-        <div className="ih-card" ref={chartRef}>
-          <div className="ih-card-head"><span className="section-kicker"><Telescope size={11} /> SIGNAL MAP</span><small>Magnitude vs confidence — click a signal to filter it below</small></div>
+        <div className="pa-card" ref={chartRef}>
+          <div className="pa-card-head"><span className="section-kicker"><Compass size={11} /> SIGNAL MAP</span><small>Magnitude vs confidence — click a signal to filter it below</small></div>
           <InsightsScatter points={trendScatter(trends).map((point) => ({ ...point, tone: point.up ? 'cyan' : 'rose' }))} xLabel="Magnitude →" yLabel="Confidence →" />
         </div>
       )}
@@ -1060,12 +1328,12 @@ function TrendsTab({ storeId, overview, plan, onToast, onNavigateBilling, export
       <TrendSection title="Emerging" tone="up" trends={trends.filter((trend) => trend.trendType === 'EMERGING')} storeId={storeId ?? ''} onChanged={() => business.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />
       <TrendSection title="Declining" tone="down" trends={trends.filter((trend) => trend.trendType === 'DECLINING')} storeId={storeId ?? ''} onChanged={() => business.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />
 
-      <div className="ih-trend-section">
-        <h3><Telescope size={14} /> Market</h3>
+      <div className="pa-trend-section">
+        <h3><Compass size={14} /> Market</h3>
         {locked
           ? <InsightsLockedPanel feature="externalTrends" plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} />
           : market.status === 'ready' && market.data && !market.data.available
-            ? <div className="ih-honest-note"><Telescope size={14} /><div><strong>Outside signals stay honest here</strong><p>{market.data.message}</p></div></div>
+            ? <div className="pa-honest-note"><Compass size={14} /><div><strong>Outside signals stay honest here</strong><p>{market.data.message}</p></div></div>
             : (market.data?.trends ?? []).map((trend) => <TrendRow key={trend.id} trend={trend} storeId={storeId ?? ''} onChanged={() => market.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
       </div>
     </section>
@@ -1074,9 +1342,9 @@ function TrendsTab({ storeId, overview, plan, onToast, onNavigateBilling, export
 
 function TrendSection({ title, tone, trends, storeId, onChanged, onToast, onNavigateBilling }: { title: string; tone: 'up' | 'down'; trends: readonly InsightTrend[]; storeId: string; onChanged: () => void; onToast: (m: string, k?: InsightsToastKind) => void; onNavigateBilling: () => void }) {
   return (
-    <div className="ih-trend-section">
+    <div className="pa-trend-section">
       <h3>{tone === 'up' ? <TrendingUp size={14} /> : <TrendingDown size={14} />} {title}</h3>
-      {trends.length === 0 && <p className="ih-muted">Nothing here yet — the watcher only speaks when your data says something.</p>}
+      {trends.length === 0 && <p className="pa-muted">Nothing here yet — the watcher only speaks when your data says something.</p>}
       {trends.map((trend) => <TrendRow key={trend.id} trend={trend} storeId={storeId} onChanged={onChanged} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
     </div>
   )
@@ -1084,9 +1352,9 @@ function TrendSection({ title, tone, trends, storeId, onChanged, onToast, onNavi
 
 function TrendRow({ trend, storeId, onChanged, onToast, onNavigateBilling }: { trend: InsightTrend; storeId: string; onChanged: () => void; onToast: (m: string, k?: InsightsToastKind) => void; onNavigateBilling: () => void }) {
   return (
-    <article className={`ih-trend-row dir-${trend.direction.toLowerCase()}`}>
-      <span className="ih-trend-arrow">{trend.direction === 'UP' ? <TrendingUp size={15} /> : trend.direction === 'DOWN' ? <TrendingDown size={15} /> : <ChevronRight size={15} />}</span>
-      <div className="ih-trend-copy"><strong>{trend.title}</strong><p>{trend.description}</p><small>{TREND_TYPE_LABELS[trend.trendType]} · {trend.timePeriod} · {trend.dataSource === 'INTERNAL' ? 'your data' : trend.dataSource.toLowerCase()} · {formatPercent(trend.magnitude, 1)} movement</small></div>
+    <article className={`pa-trend-row dir-${trend.direction.toLowerCase()}`}>
+      <span className="pa-trend-arrow">{trend.direction === 'UP' ? <TrendingUp size={15} /> : trend.direction === 'DOWN' ? <TrendingDown size={15} /> : <ChevronRight size={15} />}</span>
+      <div className="pa-trend-copy"><strong>{trend.title}</strong><p>{trend.description}</p><small>{TREND_TYPE_LABELS[trend.trendType]} · {trend.timePeriod} · {trend.dataSource === 'INTERNAL' ? 'your data' : trend.dataSource.toLowerCase()} · {formatPercent(trend.magnitude, 1)} movement</small></div>
       <ConfidencePill score={trend.confidenceScore} />
       <button className={`icon-button ${trend.alertsEnabled ? 'armed' : ''}`} title={trend.alertsEnabled ? 'Alerting on this trend' : 'Enable alerts'} onClick={async () => { try { await api.setInsightTrendAlerts(storeId, trend.id, !trend.alertsEnabled); onChanged() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Trend alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{trend.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</button>
     </article>
@@ -1131,15 +1399,15 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters"><span className="ih-muted">{list.data?.length ?? 0} comparison{(list.data?.length ?? 0) === 1 ? '' : 's'} run</span></div>
-        <div className="ih-toolbar-actions">{!props.createMode && <button className="button primary" onClick={() => go('comparisons', 'new')}><Scale size={13} /> New comparison</button>}</div>
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters"><span className="pa-muted">{list.data?.length ?? 0} comparison{(list.data?.length ?? 0) === 1 ? '' : 's'} run</span></div>
+        <div className="pa-toolbar-actions">{!props.createMode && <button className="button primary" onClick={() => go('comparisons', 'new')}><Scale size={13} /> New comparison</button>}</div>
       </div>
 
       {(props.createMode || (list.data?.length ?? 0) === 0) && (
-        <div className="ih-card ih-builder">
+        <div className="pa-card pa-builder">
           <h3><Scale size={15} /> Build a comparison</h3>
-          <div className="ih-builder-grid">
+          <div className="pa-builder-grid">
             <label>Type
               <select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as ComparisonType }))}>
                 {COMPARISON_TYPES.map((type) => <option key={type} value={type} disabled={!allowedTypes.includes(type)}>{COMPARISON_TYPE_LABELS_TEXT[type]}{allowedTypes.includes(type) ? '' : ' — plan upgrade'}</option>)}
@@ -1148,9 +1416,9 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
             <label>Subject A{form.type === 'PRODUCT' ? <select value={form.a} onChange={(event) => setForm((current) => ({ ...current, a: event.target.value }))}><option value="">Pick a product…</option>{catalog.map((product) => <option key={product.productId} value={product.productId}>{productTitle(product)}</option>)}</select> : form.type === 'SEGMENT' ? <select value={form.a} onChange={(event) => setForm((current) => ({ ...current, a: event.target.value }))}><option value="">Pick a segment…</option>{SEGMENT_OPTIONS.map((segment) => <option key={segment.value} value={segment.value}>{segment.label}</option>)}</select> : <input value={form.a} onChange={(event) => setForm((current) => ({ ...current, a: event.target.value }))} placeholder={subjectPlaceholder(form.type, thirtyBack)} />}</label>
             <label>Subject B{form.type === 'PRODUCT' ? <select value={form.b} onChange={(event) => setForm((current) => ({ ...current, b: event.target.value }))}><option value="">Pick another product…</option>{catalog.map((product) => <option key={product.productId} value={product.productId}>{productTitle(product)}</option>)}</select> : form.type === 'SEGMENT' ? <select value={form.b} onChange={(event) => setForm((current) => ({ ...current, b: event.target.value }))}><option value="">Pick a segment…</option>{SEGMENT_OPTIONS.map((segment) => <option key={segment.value} value={segment.value}>{segment.label}</option>)}</select> : <input value={form.b} onChange={(event) => setForm((current) => ({ ...current, b: event.target.value }))} placeholder={subjectPlaceholder(form.type, sixtyBack)} />}</label>
           </div>
-          {form.type === 'PERIOD' && <p className="ih-muted">Each period subject is a start day (YYYY-MM-DD); the engine compares the following 30-day windows. Today is {today}. Try {thirtyBack} vs {sixtyBack}.</p>}
-          {form.type === 'CHANNEL' && <p className="ih-muted">Channel attribution depends on Shopify channel fields; if sync has not captured them, the comparison will tell you honestly instead of inventing a split.</p>}
-          <div className="ih-builder-actions">
+          {form.type === 'PERIOD' && <p className="pa-muted">Each period subject is a start day (YYYY-MM-DD); the engine compares the following 30-day windows. Today is {today}. Try {thirtyBack} vs {sixtyBack}.</p>}
+          {form.type === 'CHANNEL' && <p className="pa-muted">Channel attribution depends on Shopify channel fields; if sync has not captured them, the comparison will tell you honestly instead of inventing a split.</p>}
+          <div className="pa-builder-actions">
             {props.createMode && <button className="button ghost" onClick={() => go('comparisons', null)}><X size={12} /> Cancel</button>}
             <button className="button primary" disabled={busy || !form.a.trim() || !form.b.trim() || form.a.trim() === form.b.trim()} onClick={() => void run()}>{busy ? 'Measuring…' : 'Run comparison'}</button>
           </div>
@@ -1159,9 +1427,9 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
 
       {list.status === 'loading' && <InsightsSkeleton rows={3} />}
       {list.status === 'ready' && (list.data?.length ?? 0) === 0 && !props.createMode && null}
-      <div className="ih-comparison-list">
+      <div className="pa-comparison-list">
         {(list.data ?? []).map((comparison) => (
-          <button key={comparison.id} className="ih-comparison-row" onClick={() => go('comparisons', comparison.id)}>
+          <button key={comparison.id} className="pa-comparison-row" onClick={() => go('comparisons', comparison.id)}>
             <Scale size={15} />
             <div><strong>{comparison.title}</strong><small>{COMPARISON_TYPE_LABELS_TEXT[comparison.comparisonType]} · {comparison.winner === 'INSUFFICIENT_DATA' ? 'not enough data yet' : comparison.winner === 'TIE' ? 'statistical tie' : `${subjectLabel(comparison.winner === 'A' ? comparison.subjectA : comparison.subjectB, comparison.winner)} leads`} · {formatRelativeTime(comparison.createdAt)}</small></div>
             <ChevronRight size={14} />
@@ -1205,22 +1473,22 @@ function ComparisonDetail({ storeId, id, onBack, onToast }: { storeId: string; i
   if (!state.data) return <InsightsErrorPanel message={state.message ?? 'Comparison not found.'} onRetry={state.reload} />
   const item = state.data
   return (
-    <section className="ih-detail">
+    <section className="pa-detail">
       <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to comparisons</button>
-      <article className="ih-card ih-detail-card">
-        <header className="ih-detail-head"><span className="ih-type-badge compare">{COMPARISON_TYPE_LABELS_TEXT[item.comparisonType]}</span><span className="ih-muted">{formatRelativeTime(item.createdAt)}</span></header>
+      <article className="pa-card pa-detail-card">
+        <header className="pa-detail-head"><span className="pa-type-badge compare">{COMPARISON_TYPE_LABELS_TEXT[item.comparisonType]}</span><span className="pa-muted">{formatRelativeTime(item.createdAt)}</span></header>
         <h2>{item.title}</h2>
         {item.winner === 'INSUFFICIENT_DATA'
-          ? <div className="ih-honest-note"><Scale size={14} /><div><strong>Not enough data to call this one</strong><p>{item.insights[0] ?? 'Both subjects need more synced history before a fair verdict.'}</p></div></div>
+          ? <div className="pa-honest-note"><Scale size={14} /><div><strong>Not enough data to call this one</strong><p>{item.insights[0] ?? 'Both subjects need more synced history before a fair verdict.'}</p></div></div>
           : <>
-            <div className="ih-winner-banner">{item.winner === 'TIE' ? 'Statistical tie — neither side dominates.' : `${subjectLabel(item.winner === 'A' ? item.subjectA : item.subjectB, item.winner)} wins on the measured metrics.`}</div>
+            <div className="pa-winner-banner">{item.winner === 'TIE' ? 'Statistical tie — neither side dominates.' : `${subjectLabel(item.winner === 'A' ? item.subjectA : item.subjectB, item.winner)} wins on the measured metrics.`}</div>
             <InsightsComparisonBars rows={item.metrics} />
-            <div className="ih-delta-table">
-              {item.metrics.map((metric) => <div key={metric.metric} className="ih-delta-row"><span>{metric.metric.replaceAll('_', ' ')}</span><strong className={metric.winner === 'TIE' ? '' : 'ih-delta'}>{comparisonDelta(metric)}</strong></div>)}
+            <div className="pa-delta-table">
+              {item.metrics.map((metric) => <div key={metric.metric} className="pa-delta-row"><span>{metric.metric.replaceAll('_', ' ')}</span><strong className={metric.winner === 'TIE' ? '' : 'pa-delta'}>{comparisonDelta(metric)}</strong></div>)}
             </div>
-            <ul className="ih-insight-bullets">{item.insights.map((insight) => <li key={insight}>{insight}</li>)}</ul>
+            <ul className="pa-insight-bullets">{item.insights.map((insight) => <li key={insight}>{insight}</li>)}</ul>
           </>}
-        <footer className="ih-detail-actions"><button className="button ghost compact subtle" onClick={async () => { try { await api.deleteInsightComparison(storeId, id); onToast('Comparison removed.', 'info'); onBack() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={12} /> Delete</button></footer>
+        <footer className="pa-detail-actions"><button className="button ghost compact subtle" onClick={async () => { try { await api.deleteInsightComparison(storeId, id); onToast('Comparison removed.', 'info'); onBack() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={12} /> Delete</button></footer>
       </article>
     </section>
   )
@@ -1268,40 +1536,40 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <form className="ih-search" onSubmit={(event) => { event.preventDefault(); void search() }}>
+      <div className="pa-toolbar">
+        <form className="pa-search" onSubmit={(event) => { event.preventDefault(); void search() }}>
           <Search size={13} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search everything the Hub has learned…" aria-label="Search knowledge base" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search everything PatternAI has learned…" aria-label="Search knowledge base" />
           {searchResults && <button type="button" className="icon-button" onClick={() => { setSearchResults(null); setQuery('') }} aria-label="Clear search"><X size={13} /></button>}
         </form>
-        <div className="ih-toolbar-actions"><button className="button primary" onClick={() => setEditor({ id: null, title: '', content: '', tags: '' })}><Library size={13} /> Add note</button></div>
+        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => setEditor({ id: null, title: '', content: '', tags: '' })}><Library size={13} /> Add note</button></div>
       </div>
 
       {network.nodes.length > 1 && (
-        <div className="ih-card ih-network-card">
-          <div className="ih-card-head"><span className="section-kicker"><Network size={11} /> HOW YOUR KNOWLEDGE CONNECTS</span><small>Linked insights and notes</small></div>
+        <div className="pa-card pa-network-card">
+          <div className="pa-card-head"><span className="section-kicker"><Network size={11} /> HOW YOUR KNOWLEDGE CONNECTS</span><small>Linked insights and notes</small></div>
           <InsightsNetworkGraph nodes={network.nodes} edges={network.edges} onSelect={(id) => go('knowledge', id)} />
         </div>
       )}
 
       {cloud.length > 0 && <InsightsWordCloud words={cloud} onSelect={(tag) => { setActiveTag((current) => (current === tag ? null : tag)); setSearchResults(null) }} />}
-      {activeTag && <div className="ih-banner info"><Network size={13} /> Filtering by tag “{activeTag}”. <button className="text-button" onClick={() => setActiveTag(null)}>Clear</button></div>}
+      {activeTag && <div className="pa-banner info"><Network size={13} /> Filtering by tag “{activeTag}”. <button className="text-button" onClick={() => setActiveTag(null)}>Clear</button></div>}
 
       {list.status === 'loading' && <InsightsSkeleton rows={4} />}
       {list.status === 'ready' && items.length === 0 && (
         <InsightsEmptyState icon={Library} title={searchResults ? 'Nothing matches that search' : 'The knowledge base is empty'} body={searchResults ? 'Try different words — the index searches titles, bodies, and tags.' : 'Insights, lessons, and your own notes accumulate here into a searchable company brain. Add your first note to start.'} />
       )}
 
-      <div className="ih-knowledge-list">
+      <div className="pa-knowledge-list">
         {items.map((entry) => (
-          <article key={entry.id} className="ih-knowledge-row">
-            <span className="ih-type-badge knowledge">{KNOWLEDGE_TYPE_LABELS[entry.entryType]}</span>
-            <div className="ih-knowledge-copy">
+          <article key={entry.id} className="pa-knowledge-row">
+            <span className="pa-type-badge knowledge">{KNOWLEDGE_TYPE_LABELS[entry.entryType]}</span>
+            <div className="pa-knowledge-copy">
               <strong>{entry.title}</strong>
               <p>{entry.contentMarkdown.slice(0, 160)}{entry.contentMarkdown.length > 160 ? '…' : ''}</p>
-              <small>{entry.author === 'AI' ? 'Written by the Hub' : 'Your note'} · updated {formatRelativeTime(entry.updatedAt)}{entry.tags.length > 0 ? ` · ${entry.tags.join(', ')}` : ''}</small>
+              <small>{entry.author === 'AI' ? 'Written by PatternAI' : 'Your note'} · updated {formatRelativeTime(entry.updatedAt)}{entry.tags.length > 0 ? ` · ${entry.tags.join(', ')}` : ''}</small>
             </div>
-            <div className="ih-pattern-actions">
+            <div className="pa-pattern-actions">
               <button className="icon-button" title="Edit" onClick={() => setEditor({ id: entry.id, title: entry.title, content: entry.contentMarkdown, tags: entry.tags.join(', ') })}><BookOpen size={14} /></button>
               <button className="icon-button" title="Delete" onClick={async () => { try { await api.deleteInsightsKnowledge(storeId, entry.id); list.reload() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={14} /></button>
             </div>
@@ -1310,7 +1578,7 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
       </div>
 
       {editor && (
-        <div className="modal-overlay"><div className="modal-card ih-editor">
+        <div className="modal-overlay"><div className="modal-card pa-editor">
           <div className="modal-card-top"><div><div className="section-kicker"><Library size={12} /> KNOWLEDGE NOTE</div><h2>{editor.id ? 'Edit note' : 'New note'}</h2></div><button className="icon-button" onClick={() => setEditor(null)}><X size={17} /></button></div>
           <label>Title<input value={editor.title} onChange={(event) => setEditor({ ...editor, title: event.target.value })} placeholder="What did we learn?" maxLength={180} /></label>
           <label>Note<textarea value={editor.content} onChange={(event) => setEditor({ ...editor, content: event.target.value })} placeholder="Markdown supported — headings, lists, **bold**." rows={7} /></label>
@@ -1340,38 +1608,38 @@ function TimelineTab({ storeId, overview, plan, go, onNavigateBilling }: TabProp
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
   const timeline = useResource<TimelineResult>(storeId ? () => api.fetchInsightsTimeline(storeId, typeFilter === 'ALL' ? {} : { type: typeFilter as TimelineEntityTypeForApi }) : null, [storeId, typeFilter])
 
-  if (!storeId) return <InsightsEmptyState icon={History} title="Connect your store first" body="Your insight timeline builds as the Hub works." />
+  if (!storeId) return <InsightsEmptyState icon={History} title="Connect your store first" body="Your discovery timeline fills in as PatternAI studies your store." />
   const events = timeline.data?.events ?? []
   const windowDays = timeline.data?.windowDays ?? null
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters">
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters">
           <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filter timeline by type">
             <option value="ALL">Everything</option>
             {TIMELINE_TYPES.map((type) => <option key={type} value={type}>{TIMELINE_TYPE_LABELS[type]}</option>)}
           </select>
-          <span className="ih-muted">{windowDays === null ? 'Full history' : `Last ${windowDays} days on your plan`}</span>
+          <span className="pa-muted">{windowDays === null ? 'Full history' : `Last ${windowDays} days on your plan`}</span>
         </div>
-        <div className="ih-toolbar-actions">{windowDays !== null && windowDays <= 30 && <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} compact />}</div>
+        <div className="pa-toolbar-actions">{windowDays !== null && windowDays <= 30 && <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} compact />}</div>
       </div>
 
       {timeline.status === 'loading' && <InsightsSkeleton rows={5} />}
       {timeline.status === 'ready' && events.length === 0 && <InsightsEmptyState icon={History} title="The timeline is waiting for its first entry" body="Every discovery, lesson, pattern, persona, investigation, trend, comparison, and prediction lands here as it happens. Run a discovery sweep to begin." />}
       {events.length > 0 && <InsightsTimelineStrip events={events.map((event) => ({ id: event.id, at: event.eventAt, label: `${TIMELINE_TYPE_LABELS[event.entityType]}: ${event.description}`, tone: event.entityType.toLowerCase() }))} onSelect={(id) => { const event = events.find((entry) => entry.id === id); if (event) go(tabForTimelineEntity(event.entityType), event.entityId) }} />}
-      <ol className="ih-timeline">
+      <ol className="pa-timeline">
         {events.map((event) => (
-          <li key={event.id} className={`ih-timeline-event type-${event.entityType.toLowerCase()}`}>
+          <li key={event.id} className={`pa-timeline-event type-${event.entityType.toLowerCase()}`}>
             <button onClick={() => go(tabForTimelineEntity(event.entityType), event.entityId)}>
-              <span className="ih-timeline-badge">{TIMELINE_TYPE_LABELS[event.entityType]}</span>
-              <span className="ih-timeline-text">{event.description}</span>
+              <span className="pa-timeline-badge">{TIMELINE_TYPE_LABELS[event.entityType]}</span>
+              <span className="pa-timeline-text">{event.description}</span>
               <time>{formatRelativeTime(event.eventAt)}</time>
             </button>
           </li>
         ))}
       </ol>
-      {overview?.trial && <div className="ih-banner sample"><History size={13} /> Trial sees the last week of the timeline. {INSIGHTS_UPGRADE_CTA} for the full memory.</div>}
+      {overview?.trial && <div className="pa-banner sample"><History size={13} /> Trial sees the last week of the timeline. {INSIGHTS_UPGRADE_CTA} for the full memory.</div>}
     </section>
   )
 }
@@ -1409,20 +1677,20 @@ function PredictionsTab({ storeId, overview, plan, onToast, onNavigateBilling }:
 
   return (
     <section>
-      <div className="ih-toolbar">
-        <div className="ih-toolbar-filters">
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-filters">
           <select value={horizon} onChange={(event) => setHorizon(event.target.value as 'ALL' | PredictionHorizon)} aria-label="Filter by horizon">
             <option value="ALL">All horizons</option>
             {(Object.keys(HORIZON_LABELS) as PredictionHorizon[]).map((value) => <option key={value} value={value} disabled={allowedHorizons.length > 0 && !allowedHorizons.includes(value)}>{HORIZON_LABELS[value]}{allowedHorizons.length > 0 && !allowedHorizons.includes(value) ? ' — plan upgrade' : ''}</option>)}
           </select>
         </div>
-        <div className="ih-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Sparkles size={13} /> {generating ? 'Projecting…' : 'Refresh forecasts'}</button></div>
+        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Sparkles size={13} /> {generating ? 'Projecting…' : 'Refresh forecasts'}</button></div>
       </div>
 
-      {readiness && !readiness.canPredict && <div className="ih-banner info"><Clock3 size={13} /> Forecasting needs {readiness.predictRequirement.need} days of revenue history — you have {readiness.predictRequirement.have}. The model gets more honest every day you sync.</div>}
+      {readiness && !readiness.canPredict && <div className="pa-banner info"><Clock3 size={13} /> Forecasting needs {readiness.predictRequirement.need} days of revenue history — you have {readiness.predictRequirement.have}. The model gets more honest every day you sync.</div>}
       {predictions.status === 'loading' && <InsightsSkeleton rows={3} />}
       {predictions.status === 'ready' && items.length === 0 && <InsightsEmptyState icon={Sparkles} title="No forecasts yet" body="Refresh forecasts and the engine projects revenue, orders, and stockouts from your real trend lines — every prediction ships with a confidence interval and an accuracy score once reality votes." />}
-      <div className="ih-prediction-grid">
+      <div className="pa-prediction-grid">
         {items.map((prediction) => <PredictionCard key={prediction.id} prediction={prediction} storeId={storeId} onChanged={() => predictions.reload()} onToast={onToast} />)}
       </div>
     </section>
@@ -1440,19 +1708,19 @@ export function PredictionCard({ prediction, storeId, onChanged, onToast }: { pr
     try { await api.validateInsightPrediction(storeId, prediction.id, value); onToast('Accuracy recorded — the model just got graded.', 'success'); onChanged() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Validation failed.', 'error') } finally { setValidating(false); setActual('') }
   }
   return (
-    <article className={`ih-card ih-prediction type-${prediction.predictionType.toLowerCase()}`}>
-      <header className="ih-detail-head"><span className="ih-type-badge predict">{PREDICTION_TYPE_LABELS[prediction.predictionType]}</span><span className="ih-category">{HORIZON_LABELS[prediction.horizon]}</span><ConfidencePill score={prediction.confidenceScore} /></header>
+    <article className={`pa-card pa-prediction type-${prediction.predictionType.toLowerCase()}`}>
+      <header className="pa-detail-head"><span className="pa-type-badge predict">{PREDICTION_TYPE_LABELS[prediction.predictionType]}</span><span className="pa-category">{HORIZON_LABELS[prediction.horizon]}</span><ConfidencePill score={prediction.confidenceScore} /></header>
       <h3>{prediction.title}</h3>
       <p>{prediction.description}</p>
-      <div className="ih-prediction-figure">
+      <div className="pa-prediction-figure">
         <strong>{isMoney ? formatInsightMoney(prediction.predictedValue, prediction.currency) : formatInsightNumber(prediction.predictedValue)}</strong>
         <span>range {isMoney ? formatInsightMoney(prediction.predictedLow, prediction.currency) : formatInsightNumber(prediction.predictedLow)} – {isMoney ? formatInsightMoney(prediction.predictedHigh, prediction.currency) : formatInsightNumber(prediction.predictedHigh)}</span>
       </div>
       <InsightsAreaBand series={prediction.series} formatValue={(value) => (isMoney ? formatInsightMoney(value, prediction.currency) : formatInsightNumber(value))} />
-      <small className="ih-muted">Method: {prediction.method} · based on {prediction.basedOn.join(', ')}</small>
+      <small className="pa-muted">Method: {prediction.method} · based on {prediction.basedOn.join(', ')}</small>
       {prediction.accuracyScore !== null
-        ? <p className="ih-accuracy"><CheckCircle2 size={12} /> Actual: {isMoney ? formatInsightMoney(prediction.actualValue, prediction.currency) : formatInsightNumber(prediction.actualValue)} — accuracy {Math.round(prediction.accuracyScore * 100)}%</p>
-        : <div className="ih-validate"><input value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Actual value when the window closes" aria-label="Actual value" /><button className="button ghost compact" disabled={validating || !actual.trim()} onClick={() => void validate()}>Grade it</button></div>}
+        ? <p className="pa-accuracy"><CheckCircle2 size={12} /> Actual: {isMoney ? formatInsightMoney(prediction.actualValue, prediction.currency) : formatInsightNumber(prediction.actualValue)} — accuracy {Math.round(prediction.accuracyScore * 100)}%</p>
+        : <div className="pa-validate"><input value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Actual value when the window closes" aria-label="Actual value" /><button className="button ghost compact" disabled={validating || !actual.trim()} onClick={() => void validate()}>Grade it</button></div>}
     </article>
   )
 }
@@ -1469,22 +1737,22 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
     try { await api.updateInsightsPreferences(storeId, body); preferences.reload() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('That setting unlocks with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast(error instanceof Error ? error.message : 'Could not save preferences.', 'error') } finally { setSaving(false) }
   }
 
-  if (!storeId) return <InsightsEmptyState icon={Settings2} title="Connect your store first" body="Preferences shape how the Hub studies your data." />
+  if (!storeId) return <InsightsEmptyState icon={Settings2} title="Connect your store first" body="Preferences shape how PatternAI studies your data." />
   if (preferences.status === 'loading' || !preferences.data) return <InsightsSkeleton rows={4} />
   const prefs = preferences.data
   const autoDiscoveryPlanLocked = overview ? !overview.features.autoDiscovery : plan === 'trial'
 
   return (
-    <section className="ih-settings">
-      <div className="ih-card ih-settings-card">
-        <h3><FlaskConical size={15} /> Auto-discovery</h3>
-        <p className="ih-muted">The nightly sweep (2:00 AM UTC; Sundays for weekly) studies your newest synced data and files discoveries, patterns, and trends while you sleep.</p>
+    <section className="pa-settings">
+      <div className="pa-card pa-settings-card">
+        <h3><Network size={15} /> Auto-discovery</h3>
+        <p className="pa-muted">The nightly sweep (2:00 AM UTC; Sundays for weekly) studies your newest synced data and files discoveries, patterns, and trends while you sleep.</p>
         <ToggleRow label="Auto-discovery" hint={autoDiscoveryPlanLocked ? 'Unlocks with a plan upgrade' : 'Run discovery automatically'} checked={prefs.autoDiscoveryEnabled && !autoDiscoveryPlanLocked} disabled={autoDiscoveryPlanLocked || saving} onChange={(value) => void patch({ autoDiscoveryEnabled: value })} />
-        <div className="ih-field"><span>Frequency</span><div className="ih-choice-row">{(['DAILY', 'WEEKLY', 'REALTIME'] as const).map((frequency) => { const realtimeLocked = frequency === 'REALTIME' && plan !== 'commander'; return <button key={frequency} className={`ih-choice ${prefs.discoveryFrequency === frequency ? 'active' : ''}`} disabled={realtimeLocked || saving} onClick={() => void patch({ discoveryFrequency: frequency })} title={realtimeLocked ? 'Real-time unlocks on the highest plan' : undefined}>{frequency === 'REALTIME' ? 'Real-time' : frequency === 'DAILY' ? 'Daily 2:00 AM' : 'Weekly (Sunday)'}{realtimeLocked && <Lock size={10} />}</button> })}</div></div>
-        <div className="ih-field"><span>Categories studied</span><div className="ih-choice-row wrap">{DISCOVERY_CATEGORIES.map((category) => { const active = prefs.discoveryCategories.includes(category); return <button key={category} className={`ih-choice ${active ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ discoveryCategories: active ? prefs.discoveryCategories.filter((item) => item !== category) : [...prefs.discoveryCategories, category] })}>{DISCOVERY_CATEGORY_LABELS[category]}</button> })}</div></div>
+        <div className="pa-field"><span>Frequency</span><div className="pa-choice-row">{(['DAILY', 'WEEKLY', 'REALTIME'] as const).map((frequency) => { const realtimeLocked = frequency === 'REALTIME' && plan !== 'commander'; return <button key={frequency} className={`pa-choice ${prefs.discoveryFrequency === frequency ? 'active' : ''}`} disabled={realtimeLocked || saving} onClick={() => void patch({ discoveryFrequency: frequency })} title={realtimeLocked ? 'Real-time unlocks on the highest plan' : undefined}>{frequency === 'REALTIME' ? 'Real-time' : frequency === 'DAILY' ? 'Daily 2:00 AM' : 'Weekly (Sunday)'}{realtimeLocked && <Lock size={10} />}</button> })}</div></div>
+        <div className="pa-field"><span>Categories studied</span><div className="pa-choice-row wrap">{DISCOVERY_CATEGORIES.map((category) => { const active = prefs.discoveryCategories.includes(category); return <button key={category} className={`pa-choice ${active ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ discoveryCategories: active ? prefs.discoveryCategories.filter((item) => item !== category) : [...prefs.discoveryCategories, category] })}>{DISCOVERY_CATEGORY_LABELS[category]}</button> })}</div></div>
       </div>
 
-      <div className="ih-card ih-settings-card">
+      <div className="pa-card pa-settings-card">
         <h3><Bell size={15} /> Notifications</h3>
         <ToggleRow label="High-confidence discoveries" hint="Ping me when confidence clears 85%" checked={prefs.notificationPreferences.highConfidenceDiscoveries} disabled={saving} onChange={(value) => void patch({ notificationPreferences: { ...prefs.notificationPreferences, highConfidenceDiscoveries: value } })} />
         <ToggleRow label="Trend alerts" hint="A watched trend accelerates or breaks" checked={prefs.notificationPreferences.trendAlerts} disabled={saving} onChange={(value) => void patch({ notificationPreferences: { ...prefs.notificationPreferences, trendAlerts: value } })} />
@@ -1492,12 +1760,12 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
         <ToggleRow label="Weekly digest" hint="A Sunday summary of the week’s learnings" checked={prefs.notificationPreferences.weeklyDigest} disabled={saving} onChange={(value) => void patch({ notificationPreferences: { ...prefs.notificationPreferences, weeklyDigest: value } })} />
       </div>
 
-      <div className="ih-card ih-settings-card">
-        <h3><Microscope size={15} /> Study behavior</h3>
+      <div className="pa-card pa-settings-card">
+        <h3><Waypoints size={15} /> Study behavior</h3>
         <ToggleRow label="Trend monitoring" hint="Keep business trend signals under watch" checked={prefs.trendMonitoringEnabled} disabled={saving} onChange={(value) => void patch({ trendMonitoringEnabled: value })} />
         <ToggleRow label="Persona refresh" hint="Re-cluster personas as customers evolve" checked={prefs.personaUpdatesEnabled} disabled={saving} onChange={(value) => void patch({ personaUpdatesEnabled: value })} />
-        <div className="ih-field"><span>Insight language</span><div className="ih-choice-row"><button className={`ih-choice ${prefs.language === 'en' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'en' })}>English</button><button className={`ih-choice ${prefs.language === 'hi' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'hi' })}>हिन्दी</button></div></div>
-        <p className="ih-muted">API access lives on its own page — {plan === 'commander' ? 'available on your plan.' : 'it unlocks on the highest plan.'} {plan !== 'commander' && <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button>}</p>
+        <div className="pa-field"><span>Insight language</span><div className="pa-choice-row"><button className={`pa-choice ${prefs.language === 'en' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'en' })}>English</button><button className={`pa-choice ${prefs.language === 'hi' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'hi' })}>हिन्दी</button></div></div>
+        <p className="pa-muted">API access lives on its own page — {plan === 'commander' ? 'available on your plan.' : 'it unlocks on the highest plan.'} {plan !== 'commander' && <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button>}</p>
       </div>
     </section>
   )
@@ -1505,9 +1773,9 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
 
 function ToggleRow({ label, hint, checked, disabled, onChange }: { label: string; hint: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
   return (
-    <div className="ih-toggle-row">
+    <div className="pa-toggle-row">
       <div><strong>{label}</strong><small>{hint}</small></div>
-      <button className={`ih-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>
+      <button className={`pa-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>
     </div>
   )
 }
@@ -1542,47 +1810,47 @@ function ApiAccessTab({ storeId, plan, overview, onToast, onNavigateBilling }: T
   const data = status.data
 
   return (
-    <section className="ih-api">
-      <div className="ih-card ih-settings-card">
+    <section className="pa-api">
+      <div className="pa-card pa-settings-card">
         <h3><KeyRound size={15} /> Programmatic access</h3>
-        <p className="ih-muted">Your insights as JSON — discoveries, patterns, personas, predictions, trends — for your own dashboards and automations. {data?.rateLimitPerHour !== null && data?.rateLimitPerHour !== undefined ? `${data.rateLimitPerHour} requests/hour · ${data.rateLimitPerHour * 10}/day.` : ''}</p>
+        <p className="pa-muted">Your insights as JSON — discoveries, patterns, personas, predictions, trends — for your own dashboards and automations. {data?.rateLimitPerHour !== null && data?.rateLimitPerHour !== undefined ? `${data.rateLimitPerHour} requests/hour · ${data.rateLimitPerHour * 10}/day.` : ''}</p>
         {data?.maskedKey
-          ? <div className="ih-key-row"><code>{data.maskedKey}</code><button className="button secondary compact" disabled={busy} onClick={() => void generate(true)}>Regenerate</button><small className="ih-muted">Regenerating invalidates the old key instantly.</small></div>
+          ? <div className="pa-key-row"><code>{data.maskedKey}</code><button className="button secondary compact" disabled={busy} onClick={() => void generate(true)}>Regenerate</button><small className="pa-muted">Regenerating invalidates the old key instantly.</small></div>
           : <button className="button primary" disabled={busy} onClick={() => void generate(false)}>{busy ? 'Issuing…' : 'Generate API key'}</button>}
         {revealed && (
-          <div className="ih-key-reveal">
+          <div className="pa-key-reveal">
             <strong>Your new key — shown once</strong>
-            <div className="ih-key-row"><code>{revealed}</code><button className="button ghost compact" onClick={() => { navigator.clipboard?.writeText(revealed).then(() => onToast('Key copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy</button></div>
+            <div className="pa-key-row"><code>{revealed}</code><button className="button ghost compact" onClick={() => { navigator.clipboard?.writeText(revealed).then(() => onToast('Key copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy</button></div>
             <button className="text-button" onClick={() => setRevealed(null)}>I have stored it safely — hide it</button>
           </div>
         )}
       </div>
 
       {data && (
-        <div className="ih-card ih-settings-card">
+        <div className="pa-card pa-settings-card">
           <h3><Zap size={15} /> Usage</h3>
-          <div className="ih-usage-grid">
-            <div className="ih-stat"><span>Requests this hour</span><strong>{formatInsightNumber(data.usage.requestsThisHour)}</strong>{data.rateLimitPerHour !== null && <small>of {data.rateLimitPerHour}</small>}</div>
-            <div className="ih-stat"><span>Requests today</span><strong>{formatInsightNumber(data.usage.requestsToday)}</strong>{data.rateLimitPerHour !== null && <small>of {data.rateLimitPerHour * 10}</small>}</div>
+          <div className="pa-usage-grid">
+            <div className="pa-stat"><span>Requests this hour</span><strong>{formatInsightNumber(data.usage.requestsThisHour)}</strong>{data.rateLimitPerHour !== null && <small>of {data.rateLimitPerHour}</small>}</div>
+            <div className="pa-stat"><span>Requests today</span><strong>{formatInsightNumber(data.usage.requestsToday)}</strong>{data.rateLimitPerHour !== null && <small>of {data.rateLimitPerHour * 10}</small>}</div>
           </div>
-          {data.recent.length > 0 && <ol className="ih-api-recent">{data.recent.map((call, index) => <li key={`${call.calledAt}-${index}`}><code>{call.endpoint}</code><time>{formatRelativeTime(call.calledAt)}</time></li>)}</ol>}
+          {data.recent.length > 0 && <ol className="pa-api-recent">{data.recent.map((call, index) => <li key={`${call.calledAt}-${index}`}><code>{call.endpoint}</code><time>{formatRelativeTime(call.calledAt)}</time></li>)}</ol>}
         </div>
       )}
 
-      <div className="ih-card ih-settings-card">
+      <div className="pa-card pa-settings-card">
         <h3><BookOpen size={15} /> Quick start</h3>
-        <pre className="ih-code">{`curl -H "Authorization: Bearer ihk_your_key" \\
+        <pre className="pa-code">{`curl -H "Authorization: Bearer ihk_your_key" \\
   ${typeof window === 'undefined' ? 'https://your-profitpilot-host' : window.location.origin}/public-api/insights/discoveries?status=NEW`}</pre>
-        <pre className="ih-code">{`// JavaScript
+        <pre className="pa-code">{`// JavaScript
 const res = await fetch('/public-api/insights/predictions', {
   headers: { Authorization: 'Bearer ihk_your_key' },
 })
 const { data } = await res.json()`}</pre>
-        <pre className="ih-code">{`# Python
+        <pre className="pa-code">{`# Python
 import requests
 requests.get('https://your-profitpilot-host/public-api/insights/trends',
              headers={'Authorization': 'Bearer ihk_your_key'}).json()`}</pre>
-        <p className="ih-muted">OpenAPI 3.1 spec: <a href={docs.data?.specUrl ?? '/public-api/insights/openapi.json'} target="_blank" rel="noreferrer">{docs.data?.specUrl ?? '/public-api/insights/openapi.json'}</a></p>
+        <p className="pa-muted">OpenAPI 3.1 spec: <a href={docs.data?.specUrl ?? '/public-api/insights/openapi.json'} target="_blank" rel="noreferrer">{docs.data?.specUrl ?? '/public-api/insights/openapi.json'}</a></p>
       </div>
     </section>
   )

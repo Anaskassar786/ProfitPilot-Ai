@@ -16,6 +16,8 @@ export type RecommendationReader = Readonly<{ list(storeId: StoreId): Promise<re
 export type RecommendationDecider = Readonly<{ decidePending(storeId: StoreId, id: string, status: 'APPROVED' | 'REJECTED', extras?: Readonly<Record<string, unknown>>): Promise<unknown> }>
 export type EmailSender = Readonly<{ send(input: Readonly<{ to: string; subject: string; html: string; storeId: string }>): Promise<Readonly<{ messageId: string }>> }>
 export type WorkflowTrigger = Readonly<{ trigger(storeId: string, workflowId: string): Promise<Readonly<{ runId: string; status: string }>> }>
+export type WorkflowReader = Readonly<{ list(storeId: string, query?: Readonly<Record<string, unknown>>): Promise<Readonly<{ items: readonly Readonly<Record<string, unknown>>[]; total?: number }>> }>
+export type WorkflowController = WorkflowTrigger & Readonly<{ setStatus(storeId: string, workflowId: string, status: 'PAUSED' | 'ACTIVE'): Promise<Readonly<Record<string, unknown>> | null> }>
 export type ReportGenerator = Readonly<{ generate(storeId: string, reportType: string, dateRange: string): Promise<unknown> }>
 export type NotificationWriter = Readonly<{ create(storeId: string, title: string, message: string, priority: string): Promise<Readonly<{ id: string }>> }>
 
@@ -26,6 +28,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     inventory?: Pick<InventoryRepository, 'list'>
     analytics?: AnalyticsReader
     recommendations?: RecommendationReader
+    workflows?: WorkflowReader
   }>) {}
 
   public async run(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -37,10 +40,29 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       if (call.name === 'get_recommendations') return this.recommendations(storeId, call)
       if (call.name === 'get_inventory_status') return this.inventory(storeId, call)
       if (call.name === 'get_store_health') return this.health(storeId)
+      if (call.name === 'list_workflows') return this.workflows(storeId, call)
       return { ok: false, name: call.name, error: 'This tool is not a read query.', source: call.name }
     } catch (error: unknown) {
       return { ok: false, name: call.name, error: error instanceof Error ? error.message : 'The data source failed.', source: call.name }
     }
+  }
+
+  private async workflows(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
+    if (!this.deps.workflows) return missing(call.name, 'Automations have not been set up yet.')
+    const status = typeof call.params.status === 'string' && call.params.status.trim() ? call.params.status.toUpperCase() : ''
+    const query = typeof call.params.query === 'string' && call.params.query.trim() ? call.params.query.trim() : ''
+    const page = await this.deps.workflows.list(storeId, { ...(status ? { status } : {}), ...(query ? { search: query } : {}), limit: 20 })
+    const items = (page.items ?? []).map((workflow) => ({
+      id: workflow.id,
+      name: workflow.name,
+      status: workflow.status,
+      category: workflow.category,
+      nodeCount: workflow.nodeCount,
+      lastRunAt: workflow.lastRunAt ?? null,
+      successCount: workflow.successCount ?? 0,
+      failureCount: workflow.failureCount ?? 0,
+    }))
+    return ok(call.name, { count: items.length, total: typeof page.total === 'number' ? page.total : items.length, items }, 'automation_workflows')
   }
 
   private async customers(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -62,7 +84,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       tags: customer.tags,
       primarySegment: customer.primarySegment,
     }))
-    const data = { count: items.length, items, coverage: dataset.coverage.explanation }
+    const data = { count: items.length, total: dataset.customers.length, items, coverage: dataset.coverage.explanation }
     return ok(call.name, data, 'sync_records.customers')
   }
 
@@ -167,7 +189,7 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     email?: EmailSender
     shopify?: Readonly<{ directory: StoreDirectory; tokens: TokenVault; apiVersion?: string }>
     recommendations?: RecommendationDecider
-    workflows?: WorkflowTrigger
+    workflows?: WorkflowController
     reports?: ReportGenerator
     notifications?: NotificationWriter
   }>) {}
@@ -178,6 +200,8 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     if (action.actionType === 'CREATE_DISCOUNT') return this.createDiscount(storeId, action)
     if (action.actionType === 'APPROVE_RECOMMENDATION') return this.approveRecommendation(storeId, action)
     if (action.actionType === 'TRIGGER_WORKFLOW') return this.triggerWorkflow(storeId, action)
+    if (action.actionType === 'PAUSE_WORKFLOW') return this.pauseWorkflow(storeId, action)
+    if (action.actionType === 'RESUME_WORKFLOW') return this.resumeWorkflow(storeId, action)
     if (action.actionType === 'SEND_NOTIFICATION') return this.notify(storeId, action)
     if (action.actionType === 'GENERATE_REPORT') return this.report(storeId, action)
     return { status: 'FAILED', result: { message: 'Unknown action type.' }, errorDetails: { reason: 'UNKNOWN_ACTION' }, rollbackAvailable: false }
@@ -299,6 +323,27 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
       return { status: 'SUCCESS', result: { runId: result.runId, status: result.status }, rollbackAvailable: false }
     } catch (error: unknown) {
       return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Workflow trigger failed.' }, rollbackAvailable: false }
+    }
+  }
+
+  private async pauseWorkflow(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult> {
+    return this.setWorkflowStatus(storeId, action, 'PAUSED')
+  }
+
+  private async resumeWorkflow(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult> {
+    return this.setWorkflowStatus(storeId, action, 'ACTIVE')
+  }
+
+  private async setWorkflowStatus(storeId: StoreId, action: AiCommandActionRecord, status: 'PAUSED' | 'ACTIVE'): Promise<ActionExecutionResult> {
+    if (!this.deps.workflows) return { status: 'FAILED', result: { message: 'Workflow control is not connected.' }, rollbackAvailable: false }
+    const workflowId = String(action.actionParams.workflow_id ?? '')
+    if (!workflowId) return { status: 'FAILED', result: { message: 'I could not tell which automation you mean. Try naming it, e.g. "Pause the welcome email automation".' }, rollbackAvailable: false }
+    try {
+      const updated = await this.deps.workflows.setStatus(storeId, workflowId, status)
+      if (!updated) return { status: 'FAILED', result: { message: 'That automation was not found. Check the Automation page for its current name and status.' }, rollbackAvailable: false }
+      return { status: 'SUCCESS', result: { workflowId, status, name: isRecord(updated) && typeof updated.name === 'string' ? updated.name : null }, rollbackAvailable: false }
+    } catch (error: unknown) {
+      return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Workflow status could not be changed.' }, rollbackAvailable: false }
     }
   }
 

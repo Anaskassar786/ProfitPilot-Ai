@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   conversationIdFromHash,
   groupConversations,
+  hoursUntilDailyReset,
   isAiCommandHash,
   isCampaignsHash,
   parseSseBlocks,
@@ -55,5 +56,10 @@ describe('AI Command frontend model', () => {
     expect(searchConversations(list, 'inventory')).toHaveLength(0)
     expect(tableRows([{ id: '1', name: 'Ada' }, 'skip'])).toHaveLength(1)
     expect(remainingUndoSeconds(new Date(Date.now() + 12_000).toISOString())).toBeGreaterThan(0)
+  })
+
+  it('counts down whole hours until the daily reset (UTC midnight)', () => {
+    expect(hoursUntilDailyReset(new Date('2026-08-18T12:00:00.000Z'))).toBe(12)
+    expect(hoursUntilDailyReset(new Date('2026-08-18T23:59:00.000Z'))).toBe(1)
   })
 })

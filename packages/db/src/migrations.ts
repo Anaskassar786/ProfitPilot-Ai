@@ -90,7 +90,13 @@ export const INSIGHTS_HUB_MIGRATIONS: readonly Migration[] = [
   { id: '0024', filename: '0024_insights_hub.sql', sql: 'Insights Hub discoveries, lessons, patterns, personas, investigations, trends, comparisons, knowledge, timeline, predictions, preferences, and API usage' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS]
+// PatternAI (formerly Insights Hub): repairs the uuid/text id mismatch from
+// 0024 that made every discovery write — and therefore the whole page — fail.
+export const PATTERN_AI_MIGRATIONS: readonly Migration[] = [
+  { id: '0025', filename: '0025_patternai_id_types.sql', sql: 'PatternAI id columns widened to text, pattern/trend upsert uniqueness, and discovery feed index' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

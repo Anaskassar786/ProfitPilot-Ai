@@ -135,36 +135,67 @@ export const AGENT_LABELS: Readonly<Record<AgentId, string>> = {
 }
 
 export const RULE_LABELS: Readonly<Record<RuleId, string>> = {
-  STOCKOUT_RISK: 'Stockout Risk',
-  DEAD_STOCK: 'Dead Stock',
-  CHURN_RISK: 'Churn Risk',
-  PRICING_UPLIFT: 'Pricing Uplift',
-  REPEAT_PURCHASE: 'Repeat Purchase',
-  CART_ABANDONMENT: 'Cart Abandonment',
-  CROSS_SELL: 'Cross-sell',
-  NEW_CUSTOMER_WELCOME: 'New Customer Welcome',
+  STOCKOUT_RISK: 'Stockout Alerts',
+  DEAD_STOCK: 'Dead Stock Cash-Out',
+  CHURN_RISK: 'Save At-Risk Customers',
+  PRICING_UPLIFT: 'Price Optimization',
+  REPEAT_PURCHASE: 'Bring Back Old Customers',
+  CART_ABANDONMENT: 'Cart Recovery',
+  CROSS_SELL: 'Cross-Sell Ideas',
+  NEW_CUSTOMER_WELCOME: 'Welcome New Customers',
+}
+
+export const RULE_TAGLINES: Readonly<Record<RuleId, string>> = {
+  STOCKOUT_RISK: 'Never run out of your best-sellers again',
+  DEAD_STOCK: 'Turn slow-moving inventory into cash',
+  CHURN_RISK: 'Bring back customers before they leave',
+  PRICING_UPLIFT: 'Find hidden pricing opportunities',
+  REPEAT_PURCHASE: 'Wake up your dormant customers',
+  CART_ABANDONMENT: 'Recover lost sales automatically',
+  CROSS_SELL: 'Increase order value effortlessly',
+  NEW_CUSTOMER_WELCOME: 'Make a great first impression',
+}
+
+export const RULE_EMOJIS: Readonly<Record<RuleId, string>> = {
+  STOCKOUT_RISK: '🚨',
+  DEAD_STOCK: '💰',
+  CHURN_RISK: '❤️',
+  PRICING_UPLIFT: '📈',
+  REPEAT_PURCHASE: '🔄',
+  CART_ABANDONMENT: '🛒',
+  CROSS_SELL: '🎁',
+  NEW_CUSTOMER_WELCOME: '👋',
 }
 
 export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = {
-  STOCKOUT_RISK: 'Flags products whose inventory covers fewer days than your reorder window at current sales velocity.',
-  DEAD_STOCK: 'Finds stocked products with zero sales across the trailing 120 days so you can free the cash.',
-  CHURN_RISK: 'Spots high-lifetime-value customers who have gone quiet past the churn window.',
-  PRICING_UPLIFT: 'Identifies high-margin products with active demand that can absorb a measured price test.',
-  REPEAT_PURCHASE: 'Finds returning customers who are overdue for their next order.',
-  CART_ABANDONMENT: 'Catches recent abandoned checkouts still inside the recovery window.',
-  CROSS_SELL: 'Surfaces product pairs your customers already buy together.',
-  NEW_CUSTOMER_WELCOME: 'Highlights brand-new customers inside the welcome window.',
+  STOCKOUT_RISK: 'We warn you when popular products are about to run out.',
+  DEAD_STOCK: 'Spot products just sitting there so you can clear them.',
+  CHURN_RISK: 'We find high-value customers who might leave — in time to bring them back.',
+  PRICING_UPLIFT: 'Discover safe price increases that boost profit without scaring buyers away.',
+  REPEAT_PURCHASE: 'Reach customers who have not ordered in a while, right when they are due.',
+  CART_ABANDONMENT: 'Turn abandoned carts back into orders while the shopper still remembers you.',
+  CROSS_SELL: 'See which products customers already buy together and suggest the pair.',
+  NEW_CUSTOMER_WELCOME: 'Set up a warm welcome for brand-new buyers so the first impression sticks.',
 }
+
+/** Friendly bullets for the empty-state “what we look for” list. */
+export const TEAM_FIND_BULLETS: readonly string[] = [
+  'Customers at risk of leaving',
+  'Products running low',
+  'Revenue opportunities',
+  'Pricing improvements',
+  'Cart recovery chances',
+]
 
 /** One-line agent roles for educational surfaces (sidebar, empty states). */
 export const AGENT_DESCRIPTIONS: Readonly<Record<AgentId, string>> = {
-  REVENUE_AGENT: 'Watches revenue momentum and calls out swings worth acting on.',
-  INVENTORY_AGENT: 'Protects stock cover and frees cash locked in dead inventory.',
-  CUSTOMER_AGENT: 'Guards high-value customers and times their next purchase.',
-  PRICING_AGENT: 'Finds margin-safe products that can absorb a price test.',
+  REVENUE_AGENT: 'Watches your sales and flags swings worth acting on.',
+  INVENTORY_AGENT: 'Keeps bestsellers in stock and frees cash locked in idle inventory.',
+  CUSTOMER_AGENT: 'Looks after your best customers and times the next hello.',
+  PRICING_AGENT: 'Finds products that can handle a careful price lift.',
   CAMPAIGN_AGENT: 'Recovers abandoned carts and welcomes brand-new buyers.',
-  PRODUCT_AGENT: 'Spots product pairs your customers already buy together.',
-  EXECUTIVE_AGENT: 'Summarizes the deterministic store health score for you.',
+  PRODUCT_AGENT: 'Spots products your customers already love buying together.',
+  EXECUTIVE_AGENT: 'Gives you a plain-language read on overall store health.',
 }
 
 // ---------------------------------------------------------------------------
@@ -173,13 +204,13 @@ export const AGENT_DESCRIPTIONS: Readonly<Record<AgentId, string>> = {
 // they never compute it.
 // ---------------------------------------------------------------------------
 
-/** The data source a rule reads, shown as the "Uses:" badge on rule cards. */
+/** The data source a rule reads, shown as the "Analyzes:" badge on rule cards. */
 export const RULE_DATA_SOURCES: Readonly<Record<RuleId, string>> = {
   STOCKOUT_RISK: 'Products',
-  DEAD_STOCK: 'Products + orders',
+  DEAD_STOCK: 'Products & Orders',
   CHURN_RISK: 'Customers',
   PRICING_UPLIFT: 'Products',
-  REPEAT_PURCHASE: 'Customers + orders',
+  REPEAT_PURCHASE: 'Customers & Orders',
   CART_ABANDONMENT: 'Checkouts',
   CROSS_SELL: 'Orders',
   NEW_CUSTOMER_WELCOME: 'Customers',
@@ -207,30 +238,30 @@ export type RuleDetail = Readonly<{
 }>
 
 export const RULE_DETAILS: Readonly<Record<RuleId, RuleDetail>> = {
-  STOCKOUT_RISK: { trigger: 'Fires when a product has 7 or fewer days of cover left at its current sales velocity.', impact: 'Revenue at risk before a restock can land.', healthy: 'No stockout risks — every selling product has more than a week of cover.' },
-  DEAD_STOCK: { trigger: 'Fires when a stocked product has had zero sales across the trailing 120 days.', impact: 'Inventory value sitting idle.', healthy: 'No dead stock — nothing on shelves has gone 120 days without a sale.' },
-  CHURN_RISK: { trigger: 'Fires when a customer worth $250+ lifetime value goes quiet for 75+ days.', impact: 'Customer lifetime value at risk.', healthy: 'No churn risks — high-value customers are ordering inside their window.' },
-  PRICING_UPLIFT: { trigger: 'Fires when a product with 55%+ margin still has active daily demand.', impact: 'Modeled 30-day uplift from a measured price test.', healthy: 'No pricing openings — no high-margin product is under-priced with demand today.' },
-  REPEAT_PURCHASE: { trigger: 'Fires when a returning customer is 45+ days past their expected reorder.', impact: 'Modeled value of their next order.', healthy: 'No overdue reorders — repeat customers are inside their cadence.' },
-  CART_ABANDONMENT: { trigger: 'Fires on abandoned checkouts 1–48 hours old that have not recovered.', impact: 'Expected recovery at an 11% win-back rate.', healthy: 'Cart abandonment is within the normal range — nothing winnable is pending.' },
-  CROSS_SELL: { trigger: 'Fires when two products are bought together in 8%+ of their orders.', impact: 'Modeled basket value of recommending the pair.', healthy: 'No cross-sell gaps — no new product pairs cleared the co-purchase threshold.' },
-  NEW_CUSTOMER_WELCOME: { trigger: 'Fires when a first order landed within the last 7 days.', impact: 'First-order value worth protecting.', healthy: 'No unwelcomed customers — every first order is past the welcome window.' },
+  STOCKOUT_RISK: { trigger: 'Fires when a product has 7 or fewer days of cover left at its current sales velocity.', impact: 'Revenue you could lose if it sells out before a restock lands.', healthy: 'No stockout alerts — every selling product has more than a week of cover.' },
+  DEAD_STOCK: { trigger: 'Fires when a stocked product has had zero sales across the trailing 120 days.', impact: 'Cash sitting on the shelf that you could free up.', healthy: 'No idle inventory — nothing on shelves has gone 120 days without a sale.' },
+  CHURN_RISK: { trigger: 'Fires when a customer worth $250+ lifetime value goes quiet for 75+ days.', impact: 'Customer lifetime value you can still protect.', healthy: 'No at-risk customers — your high-value buyers are ordering inside their window.' },
+  PRICING_UPLIFT: { trigger: 'Fires when a product with 55%+ margin still has active daily demand.', impact: 'Extra profit from a careful 30-day price test.', healthy: 'No pricing openings — nothing high-margin looks underpriced with demand today.' },
+  REPEAT_PURCHASE: { trigger: 'Fires when a returning customer is 45+ days past their expected reorder.', impact: 'The value of their next order if you reach out now.', healthy: 'No overdue reorders — repeat customers are inside their usual rhythm.' },
+  CART_ABANDONMENT: { trigger: 'Fires on abandoned checkouts 1–48 hours old that have not recovered.', impact: 'Expected recovery if you follow up while they still remember you.', healthy: 'Cart recovery is within the normal range — nothing winnable is waiting.' },
+  CROSS_SELL: { trigger: 'Fires when two products are bought together in 8%+ of their orders.', impact: 'Extra basket value if you recommend the pair.', healthy: 'No new pairing ideas — no fresh product pairs cleared the threshold.' },
+  NEW_CUSTOMER_WELCOME: { trigger: 'Fires when a first order landed within the last 7 days.', impact: 'First-order value worth protecting with a warm welcome.', healthy: 'No unwelcomed customers — every first order is past the welcome window.' },
 }
 
 export const ACTION_TYPE_LABELS: Readonly<Record<ActionType, string>> = {
-  CREATE_RECOMMENDATION: 'Create recommendation',
-  TAG_CUSTOMER: 'Tag customer',
-  SEND_EMAIL: 'Send email',
-  CREATE_DISCOUNT: 'Create discount',
-  INTERNAL_ALERT: 'Internal alert',
+  CREATE_RECOMMENDATION: 'Save this insight',
+  TAG_CUSTOMER: 'Tag this customer',
+  SEND_EMAIL: 'Draft an email',
+  CREATE_DISCOUNT: 'Draft a discount',
+  INTERNAL_ALERT: 'Alert your team',
 }
 
 export const ACTION_TYPE_PREVIEWS: Readonly<Record<ActionType, string>> = {
-  CREATE_RECOMMENDATION: 'Records this as an approved insight. No store data is changed.',
-  TAG_CUSTOMER: 'Applies a segmentation tag to the referenced customer in Shopify.',
-  SEND_EMAIL: 'Prepares a draft email to the referenced customer. Nothing sends without your reviewed campaign and verified sender.',
-  CREATE_DISCOUNT: 'Prepares a discount draft for your review. No code goes live without confirmation.',
-  INTERNAL_ALERT: 'Raises an internal alert for your team. Customers are never contacted.',
+  CREATE_RECOMMENDATION: 'We save this as an approved insight. Nothing in your store changes.',
+  TAG_CUSTOMER: 'Adds a helpful tag to this customer in Shopify so you can find them later.',
+  SEND_EMAIL: 'Prepares a draft email. Nothing sends until you review the campaign and confirm the sender.',
+  CREATE_DISCOUNT: 'Prepares a discount draft for your review. No code goes live without your OK.',
+  INTERNAL_ALERT: 'Pings your team internally. Customers are never contacted.',
 }
 
 export const RISK_LABELS: Readonly<Record<ActionRisk, string>> = {
@@ -384,12 +415,29 @@ export const PLAN_LABELS: Readonly<Record<PlanTier, string>> = { trial: 'Trial',
 // ---------------------------------------------------------------------------
 
 export const KPI_TOOLTIPS = {
-  pendingImpact: 'Total modeled revenue value waiting in pending recommendations. Approving is how you capture it.',
-  approvedThisMonth: "Recommendations you've approved this month and the modeled impact they represent.",
-  approvalRate: 'Share of your decisions that were approvals. A higher rate means agents are suggesting things worth doing.',
-  averageDecision: 'Average time between a recommendation being created and your decision. Faster review means fresher impact.',
-  monthlyUsage: 'Newly generated recommendations against your plan limit this month. Reviewing and deciding always stay free.',
+  pendingImpact: 'The money sitting in recommendations you have not reviewed yet. Approving is how you capture it.',
+  approvedThisMonth: "How many opportunities you have green-lit this month, plus the value they represent.",
+  approvalRate: 'How often you say yes. A higher rate means your AI team is suggesting things worth doing.',
+  averageDecision: 'How quickly you review new findings. Faster reviews mean you catch opportunities while they are still fresh.',
+  monthlyUsage: 'New recommendations created this month against your plan. Reviewing and deciding always stay free.',
 } as const
+
+/** Time-of-day greeting for the page header. Hour is 0–23 in the merchant's local clock. */
+export function greetingForHour(hour: number): string {
+  if (!Number.isFinite(hour) || hour < 0) return 'Hello'
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+/** Turns a Shopify shop domain into a short, human store name. */
+export function shopDisplayName(shop: string | null | undefined): string | null {
+  if (!shop) return null
+  const raw = shop.replace(/\.myshopify\.com$/i, '').split('.')[0] ?? ''
+  const cleaned = raw.replace(/[-_]+/g, ' ').trim()
+  if (!cleaned) return null
+  return cleaned.split(/\s+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
 
 // ---------------------------------------------------------------------------
 // Store health tone — words for the deterministic 0–100 score returned by
@@ -433,11 +481,11 @@ export const STATUS_TABS: readonly StatusTab[] = ['ALL', 'PENDING', 'APPROVED', 
 
 /** Hover tips explaining what each status tab means (Issue: filter tabs were cryptic). */
 export const STATUS_TAB_TOOLTIPS: Readonly<Record<StatusTab, string>> = {
-  ALL: 'Every recommendation your AI team has generated, in any state.',
-  PENDING: 'Waiting on your decision. Reviewing and deciding never count against your plan.',
-  APPROVED: 'Opportunities you approved. Customer-facing actions stop at drafts you review.',
-  REJECTED: 'Passes and expired items. Rejections teach agents to raise the bar.',
-  EXECUTED: 'Approved actions that ran — including any that failed and need a retry.',
+  ALL: 'Everything your AI team has found, in any state.',
+  PENDING: 'Waiting on you. Reviewing and deciding never count against your plan.',
+  APPROVED: 'Opportunities you said yes to. Anything that reaches a customer stays a draft until you review it.',
+  REJECTED: 'Ones you skipped, plus anything that expired. Skipping teaches your AI team to raise the bar.',
+  EXECUTED: 'Approved actions that already ran — including any that failed and need a retry.',
 }
 
 export function statusTabLabel(tab: StatusTab): string { return tab === 'ALL' ? 'All' : STATUS_LABELS[tab] }

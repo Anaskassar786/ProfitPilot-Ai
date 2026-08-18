@@ -1,5 +1,5 @@
 export type AiCommandPlan = 'trial' | 'start' | 'growth' | 'commander'
-export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked'
+export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked' | 'offtopic'
 export type AiCommandRole = 'user' | 'assistant' | 'system'
 
 export type AiCommandStructuredData = Readonly<{
@@ -84,6 +84,17 @@ export type AiCommandQuickCommand = Readonly<{
   kind: 'info' | 'action'
 }>
 
+export type AiCommandQuickCategory = 'analytics' | 'customers' | 'products' | 'growth' | 'actions'
+
+export function quickCommandCategory(command: AiCommandQuickCommand): AiCommandQuickCategory {
+  if (command.kind === 'action') return 'actions'
+  const text = `${command.label} ${command.command}`.toLowerCase()
+  if (/(customer|vip|inactive|segment|churn|subscriber)/.test(text)) return 'customers'
+  if (/(product|stock|inventory|catalog|sku)/.test(text)) return 'products'
+  if (/(grow|increase|recommend|discount|idea)/.test(text)) return 'growth'
+  return 'analytics'
+}
+
 export type AiCommandActionRecord = Readonly<{
   id: string
   actionType: string
@@ -135,6 +146,13 @@ export function usageLabel(usage: AiCommandUsage | null, plan: AiCommandPlan): s
 export function usagePercent(usage: AiCommandUsage | null): number {
   if (!usage || usage.limit === null || usage.limit === 0) return 0
   return Math.min(100, Math.round((usage.commandsUsed / usage.limit) * 100))
+}
+
+/** Whole hours until the daily command limit resets (UTC midnight). */
+export function hoursUntilDailyReset(now = new Date()): number {
+  const next = new Date(now)
+  next.setUTCHours(24, 0, 0, 0)
+  return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 3_600_000))
 }
 
 export function planLabel(plan: AiCommandPlan): string {

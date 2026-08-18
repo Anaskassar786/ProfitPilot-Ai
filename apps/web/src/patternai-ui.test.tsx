@@ -3,8 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
   DiscoveryCard,
+  ExploreFurther,
   InsightsEmptyState,
-  InsightsHubWorkspace,
+  InsightsErrorPanel,
+  PatternAiWelcome,
+  PatternAiWorkspace,
+  PlanPanel,
   InsightsLockedPanel,
   InsightsUpgradeCta,
   MarkdownLite,
@@ -12,7 +16,8 @@ import {
   RatingStars,
   SampleBadge,
   UsageMeterBar,
-} from './insights-hub.js'
+} from './patternai.js'
+import { PatternAiMark, PatternAiWordmark } from './patternai-logo.js'
 import {
   InsightsAreaBand,
   InsightsBubbleChart,
@@ -25,9 +30,9 @@ import {
   InsightsTimelineStrip,
   InsightsTreeMap,
   InsightsWordCloud,
-} from './insights-hub-charts.js'
-import type { InsightDiscovery, InsightPrediction } from './insights-hub-model.js'
-import { FlaskConical } from 'lucide-react'
+} from './patternai-charts.js'
+import type { InsightDiscovery, InsightPrediction } from './patternai-model.js'
+import { Compass } from 'lucide-react'
 
 const noop = vi.fn()
 
@@ -61,7 +66,7 @@ describe('DiscoveryCard humanization (no enum leakage)', () => {
     const html = htmlFor(discovery())
     expect(html).toContain('Save')
     expect(html).toContain('Acted on it')
-    expect(html).toContain('Not useful')
+    expect(html).toContain('Dismiss')
   })
 })
 
@@ -86,7 +91,7 @@ describe('plan messaging', () => {
 
 describe('educational empty states and samples', () => {
   it('renders the curious-scientist empty state', () => {
-    const html = renderToStaticMarkup(createElement(InsightsEmptyState, { icon: FlaskConical, title: 'Personas require at least 50 customers', body: 'You have 12 synced so far.' }))
+    const html = renderToStaticMarkup(createElement(InsightsEmptyState, { icon: Compass, title: 'Personas require at least 50 customers', body: 'You have 12 synced so far.' }))
     expect(html).toContain('Personas require at least 50 customers')
   })
   it('SampleBadge carries the trial labeling', () => {
@@ -134,7 +139,7 @@ describe('chart kit — SVG only, no line charts, no donuts', () => {
     const html = renderToStaticMarkup(createElement(InsightsBubbleChart, { points: [{ id: 'p1', label: 'Weekly rhythm', x: 0.8, y: 0.6, r: 14 }], xLabel: 'Confidence →', yLabel: 'Recurrence →' }))
     expect(html).toContain('<circle')
     expect(html).toContain('Confidence →')
-    expect(html).toContain('ih-chart-grid')
+    expect(html).toContain('pa-chart-grid')
     expect(html).not.toContain('<polyline')
   })
   it('RadarChart draws trait polygon + labels', () => {
@@ -157,25 +162,93 @@ describe('chart kit — SVG only, no line charts, no donuts', () => {
     expect(renderToStaticMarkup(createElement(InsightsScatter, { points: [{ id: 'a', label: 'trend', x: 0.4, y: 0.7 }], xLabel: 'M', yLabel: 'C' }))).toContain('<circle')
     expect(renderToStaticMarkup(createElement(InsightsWordCloud, { words: [{ tag: 'weekend', weight: 3 }] }))).toContain('weekend')
     expect(renderToStaticMarkup(createElement(InsightsTimelineStrip, { events: [{ id: 'e1', at: '2026-08-17T00:00:00.000Z', label: 'Discovery', tone: 'discovery' }] }))).toContain('<circle')
-    expect(renderToStaticMarkup(createElement(InsightsNetworkGraph, { nodes: [{ id: 'a', label: 'Alpha', kind: 'NOTE' }, { id: 'b', label: 'Beta', kind: 'DISCOVERY' }], edges: [{ from: 'a', to: 'b' }] }))).toContain('ih-network-edge')
+    expect(renderToStaticMarkup(createElement(InsightsNetworkGraph, { nodes: [{ id: 'a', label: 'Alpha', kind: 'NOTE' }, { id: 'b', label: 'Beta', kind: 'DISCOVERY' }], edges: [{ from: 'a', to: 'b' }] }))).toContain('pa-network-edge')
     expect(renderToStaticMarkup(createElement(InsightsTreeMap, { blocks: [{ id: 'x', label: 'Repeat', value: 60 }, { id: 'y', label: 'One-time', value: 40 }] }))).toContain('<rect')
     expect(renderToStaticMarkup(createElement(InsightsFlowChart, { stages: [{ id: 'n', label: 'New', value: 4 }, { id: 'r', label: 'Reviewed', value: 2 }] }))).toContain('<rect')
-    expect(renderToStaticMarkup(createElement(InsightsComparisonBars, { rows: [{ metric: 'revenue', a: 100, b: 50, winner: 'A' }] }))).toContain('ih-compare-bar')
+    expect(renderToStaticMarkup(createElement(InsightsComparisonBars, { rows: [{ metric: 'revenue', a: 100, b: 50, winner: 'A' }] }))).toContain('pa-compare-bar')
+  })
+})
+
+describe('PatternAI brand mark', () => {
+  it('draws a five-node neural constellation, not a flask or an eye', () => {
+    const html = renderToStaticMarkup(createElement(PatternAiMark, { size: 32 }))
+    expect((html.match(/<circle/g) ?? []).length).toBe(10) // five nodes + five halos
+    expect((html.match(/<line /g) ?? []).length).toBe(7)
+    expect(html).toContain('linearGradient')
+    expect(html).toContain('PatternAI')
+  })
+  it('renders a badge plate variant for headers and favicons', () => {
+    expect(renderToStaticMarkup(createElement(PatternAiMark, { size: 24, variant: 'badge' }))).toContain('<rect')
+  })
+  it('wordmark spells PatternAI', () => {
+    const html = renderToStaticMarkup(createElement(PatternAiWordmark, {}))
+    expect(html).toContain('Pattern')
+    expect(html).toContain('AI')
+  })
+})
+
+describe('failure and welcome states', () => {
+  it('the error panel is scoped and retryable — no laboratory metaphors', () => {
+    const html = renderToStaticMarkup(createElement(InsightsErrorPanel, { message: 'Internal server error', onRetry: noop }))
+    expect(html).toContain('This section could not load')
+    expect(html).toContain('Try again')
+    expect(html.toLowerCase()).not.toContain('laboratory')
+  })
+  it('the welcome state teaches what PatternAI will show and how close the data is', () => {
+    const readiness = {
+      revenueDays: 12, totalOrders: 15, customerCount: 15, productsWithSales: 4,
+      canDiscover: false, canPersonas: false, canTrends: false, canPatterns: false, canPredict: false,
+      discoverRequirement: 'Needs 20 orders.',
+      personasRequirement: { met: false, have: 15, need: 50 },
+      trendsRequirement: { met: false, have: 12, need: 30 },
+      predictRequirement: { met: false, have: 12, need: 30 },
+    }
+    const html = renderToStaticMarkup(createElement(PatternAiWelcome, { readiness, plan: 'trial', canRun: false, onRunDiscovery: noop, onNavigateBilling: noop }))
+    expect(html).toContain('Welcome to PatternAI')
+    expect(html).toContain('Customers for persona modelling')
+    expect(html).toContain('15 / 50')
+    expect(html).toContain('Upgrade Plan')
+    expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
+  })
+})
+
+describe('plan panel', () => {
+  it('separates available capabilities from locked ones with a generic CTA', () => {
+    const html = renderToStaticMarkup(createElement(PlanPanel, { plan: 'trial', overview: null, onNavigateBilling: noop }))
+    expect(html).toContain('Available now')
+    expect(html).toContain('Unlocks with a paid plan')
+    expect(html).toContain('Upgrade Plan')
+    expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
   })
 })
 
 describe('workspace smoke test', () => {
-  it('renders the shell with hero, tabs, and the no-store empty state', () => {
-    const html = renderToStaticMarkup(createElement(InsightsHubWorkspace, { context: { storeId: null, shop: null }, onToast: noop, onNavigateBilling: noop }))
-    expect(html).toContain('Where data becomes wisdom.')
-    expect(html).toContain('AI GROWTH COMMAND')
+  const shell = () => renderToStaticMarkup(createElement(PatternAiWorkspace, { context: { storeId: null, shop: null }, onToast: noop, onNavigateBilling: noop }))
+  it('renders the PatternAI hero, grouped navigation, and the no-store state', () => {
+    const html = shell()
+    expect(html).toContain('Discover the patterns that drive your business')
+    expect(html).toContain('Discovery feed')
+    expect(html).toContain('Learning library')
+    expect(html).toContain('Pattern lab')
+    expect(html).toContain('Why? explorer')
+    expect(html).toContain('API access')
     expect(html).toContain('Connect your store first')
-    expect(html).toContain('Why?')
-    expect(html).toContain('NEW' === 'NEW' ? 'API access' : '')
   })
-  it('trial plan marks locked tabs without naming plans', () => {
-    const html = renderToStaticMarkup(createElement(InsightsHubWorkspace, { context: { storeId: null, shop: null }, onToast: noop, onNavigateBilling: noop }))
+  it('carries no Insights Hub branding and no lab or eye iconography', () => {
+    const html = shell()
+    expect(html).not.toContain('Insights Hub')
+    expect(html.toLowerCase()).not.toContain('laboratory')
+    expect(html.toLowerCase()).not.toContain('lucide-flask')
+    expect(html.toLowerCase()).not.toContain('lucide-eye')
+  })
+  it('marks locked sections without naming a plan', () => {
+    const html = shell()
     expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
-    expect(html).toMatch(/ih-tab\s+locked/)
+    expect(html).toMatch(/pa-nav-item[^"]*locked/)
+  })
+  it('renders the cross-section explorer', () => {
+    const html = renderToStaticMarkup(createElement(ExploreFurther, { go: noop }))
+    expect(html).toContain('Keep exploring')
+    expect(html).toContain('Trend watcher')
   })
 })

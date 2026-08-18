@@ -4,6 +4,7 @@ import {
   Bot,
   Check,
   Clock3,
+  Lightbulb,
   LockKeyhole,
   MessageSquare,
   Mic,
@@ -13,9 +14,9 @@ import {
   Volume2,
   X,
 } from 'lucide-react'
-import { ApiClientError, clearCoachChat, completeCoachOnboardingStep, fetchCoachChatHistory, fetchCoachChatSuggestions, fetchCoachOnboarding, skipCoachOnboarding, streamCoachChat } from './api.js'
+import { ApiClientError, clearCoachChat, completeCoachOnboardingStep, fetchCoachChatHistory, fetchCoachChatSuggestions, fetchCoachOnboarding, fetchCoachPreferences, skipCoachOnboarding, streamCoachChat } from './api.js'
 import { COACH_LIMITS, PERSONALITY_META, PLAN_LABEL, coachPersonalitiesForPlan, huddleTimeLabel } from './store-coach-model.js'
-import type { CoachMessage, CoachPlan, CoachUsageView } from './store-coach-model.js'
+import type { CoachMessage, CoachPersonality, CoachPlan, CoachUsageView } from './store-coach-model.js'
 import type { CoachToast } from './store-coach.js'
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
   const [busy, setBusy] = useState(false)
   const [suggestions, setSuggestions] = useState<readonly string[]>([])
   const [usage, setUsage] = useState<CoachUsageView | null>(null)
+  const [personality, setPersonality] = useState<CoachPersonality>('PROFESSIONAL')
   const [listening, setListening] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -41,10 +43,12 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
       fetchCoachChatHistory(storeId),
       fetchCoachChatSuggestions(storeId),
       import('./api.js').then(({ fetchCoachUsage }) => fetchCoachUsage(storeId)),
-    ]).then(([history, suggested, usageResult]) => {
+      fetchCoachPreferences(storeId),
+    ]).then(([history, suggested, usageResult, preferencesResult]) => {
       if (history.status === 'fulfilled') setMessages(history.value.messages)
       if (suggested.status === 'fulfilled') setSuggestions(suggested.value)
       if (usageResult.status === 'fulfilled') setUsage(usageResult.value)
+      if (preferencesResult.status === 'fulfilled') setPersonality(preferencesResult.value.personality)
       setHistoryLoaded(true)
     })
   }, [storeId])
@@ -117,11 +121,18 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
           <div className="coach-chat-skeleton"><span /><span /><span /></div>
         ) : messages.length === 0 && !streaming ? (
           <div className="coach-chat-empty">
-            <span className="coach-orb"><Bot size={22} /></span>
-            <strong>Ask me anything about your store</strong>
-            <p>I can only answer with numbers that exist in your synced data. If the number isn\u2019t there yet, I\u2019ll say so and tell you what to sync.</p>
-            <div className="coach-chat-suggestions">
-              {suggestions.slice(0, 4).map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)}>{suggestion}</button>)}
+            <div className="coach-chat-persona">
+              <span className="coach-orb small"><Bot size={18} /></span>
+              <div>
+                <strong>Coach <span className="coach-chat-personality">{PERSONALITY_META[personality].label} mode</span></strong>
+                <p>Hi! I’m here to help with anything about your store. I have access to your real synced data and every answer is checked against it before it reaches you — if a number isn’t there yet, I’ll say so and tell you what to sync.</p>
+              </div>
+            </div>
+            <div className="coach-chat-try">
+              <span className="coach-chat-try-label"><Lightbulb size={13} /> Try asking me</span>
+              <div className="coach-chat-suggestions">
+                {(suggestions.length > 0 ? suggestions.slice(0, 4) : ['How did my store do yesterday?', 'What should I focus on today?', 'What is my best selling product?', 'Suggest a goal for this week']).map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)}>“{suggestion}”</button>)}
+              </div>
             </div>
           </div>
         ) : (
@@ -159,18 +170,18 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(input) } }}
-          placeholder={voiceAvailable ? 'Ask your coach, or press the mic to talk…' : 'Ask your coach…'}
+          placeholder={voiceAvailable ? 'Ask your coach, or press the mic to talk…' : 'Type your question about your store…'}
           rows={compact ? 2 : 3}
           disabled={busy}
         />
-        <button className="button primary coach-send" disabled={busy || !input.trim()} onClick={() => void send(input)}><Send size={15} /></button>
+        <button className="button primary coach-send" disabled={busy || !input.trim()} onClick={() => void send(input)}><Send size={15} /> Send</button>
       </div>
       <div className="coach-chat-footer">
-        <span>{usage ? `${usage.chatMessagesToday} / ${chatLimit} messages today` : 'message counter loading'}</span>
-        <span className="coach-chat-hint">Shift+Enter for a new line · {voiceAvailable ? 'voice enabled' : `voice is a Growth feature`}</span>
+        <span className="coach-chat-plan">Your plan: {PLAN_LABEL[plan]} · {remaining} message{remaining === 1 ? '' : 's'} left today</span>
+        <span className="coach-chat-hint">Shift+Enter for a new line · {voiceAvailable ? 'voice enabled' : 'voice on higher plans'}</span>
         {messages.length > 0 && <button className="text-button" onClick={clear}><Trash2 size={12} /> Clear history</button>}
       </div>
-      {(plan === 'trial' || plan === 'start') && <LockedInlineFeature feature="Voice chat" planName="Growth" onUpgrade={onNavigateBilling} />}
+      {plan !== 'commander' && <LockedInlineFeature feature="Unlimited coach chat" planName="higher plans" onUpgrade={onNavigateBilling} />}
     </div>
   )
 }
@@ -194,7 +205,7 @@ export type CoachOnboardingState = Readonly<{ currentStep: number; completed: bo
 const ONBOARDING_STEPS = [
   { step: 1, title: 'Meet Store Coach', description: 'Your personal AI business advisor. Every morning the Coach reads your real synced data and turns it into a short, honest briefing.' },
   { step: 2, title: 'Choose your personality', description: 'The Coach adapts its tone. Pick the voice that fits how you like to work.' },
-  { step: 3, title: 'Set your huddle time', description: 'Your daily briefing arrives at a time that suits you — in your store\u2019s own timezone.' },
+  { step: 3, title: 'Set your huddle time', description: 'Your daily briefing arrives at a time that suits you — in your store’s own timezone.' },
   { step: 4, title: 'Set your first goal', description: 'Goals give the Coach a north star. AI suggestions are derived from your real trend.' },
   { step: 5, title: 'Try chat', description: 'Ask anything about your store. Answers are checked against your actual numbers before they reach you.' },
 ] as const
@@ -264,7 +275,7 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
           {visibleStep === 1 && (
             <div className="coach-onboarding-preview">
               <span className="coach-message-avatar"><Bot size={14} /></span>
-              <div className="coach-message-bubble"><p>Good morning. I\u2019m Store Coach. I read your synced orders and revenue every day, and I only ever quote numbers that actually exist in your data.</p></div>
+              <div className="coach-message-bubble"><p>Good morning. I’m Store Coach. I read your synced orders and revenue every day, and I only ever quote numbers that actually exist in your data.</p></div>
             </div>
           )}
           {visibleStep === 2 && (
@@ -283,22 +294,40 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
           )}
           {visibleStep === 3 && (
             <div className="coach-onboarding-time">
-              <input type="time" value={minutesToTimeInput(huddleMinutes)} onChange={(event) => { const [hours, minutes] = event.target.value.split(':').map(Number); setHuddleMinutes((hours ?? 0) * 60 + (minutes ?? 0)) }} />
-              <p>Your briefing will be ready by {huddleTimeLabel(huddleMinutes)} every day, in your store\u2019s timezone. (Custom times unlock on the Start plan; trial stores keep 7:00 AM.)</p>
+              <div className="coach-time-presets">
+                {([[420, 'Morning', '7:00 AM — recommended'], [600, 'Late morning', '10:00 AM'], [840, 'Afternoon', '2:00 PM'], [1080, 'Evening', '6:00 PM']] as const).map(([minutes, label, detail]) => (
+                  <button key={minutes} type="button" className={`coach-time-preset ${huddleMinutes === minutes ? 'active' : ''}`} onClick={() => setHuddleMinutes(minutes)}>
+                    <strong>{label}</strong>
+                    <small>{detail}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="coach-onboarding-time-row">
+                <input type="time" value={minutesToTimeInput(huddleMinutes)} onChange={(event) => { const [hours, minutes] = event.target.value.split(':').map(Number); setHuddleMinutes((hours ?? 0) * 60 + (minutes ?? 0)) }} aria-label="Custom huddle time" />
+                <p>Your briefing will be ready by {huddleTimeLabel(huddleMinutes)} every day, in your store’s timezone. (Custom times unlock on the Start plan; trial stores keep 7:00 AM.)</p>
+              </div>
             </div>
           )}
           {visibleStep === 4 && (
             <div className="coach-onboarding-goal-preview">
               <span className="coach-feasibility high">high feasibility</span>
-              <strong>Beat last week\u2019s revenue</strong>
+              <strong>Beat last week’s revenue</strong>
               <p>The Coach proposes this from your real trailing trend once your tour finishes. You can accept, adjust, or skip it.</p>
             </div>
           )}
           {visibleStep === 5 && (
-            <div className="coach-chat-suggestions">
-              <button onClick={finish}>How did my store do yesterday?</button>
-              <button onClick={finish}>What should I focus on today?</button>
-              <button onClick={finish}>Suggest a goal for this week</button>
+            <div className="coach-onboarding-finish">
+              <div className="coach-onboarding-checklist">
+                <span><Check size={13} /> Daily briefings from your real data</span>
+                <span><Check size={13} /> Top priorities, tracked automatically</span>
+                <span><Check size={13} /> Goal tracking with honest pace projections</span>
+              </div>
+              <div className="coach-chat-try-label"><Lightbulb size={13} /> Try your first question</div>
+              <div className="coach-chat-suggestions">
+                <button onClick={finish}>How did my store do yesterday?</button>
+                <button onClick={finish}>What should I focus on today?</button>
+                <button onClick={finish}>Suggest a goal for this week</button>
+              </div>
             </div>
           )}
         </div>

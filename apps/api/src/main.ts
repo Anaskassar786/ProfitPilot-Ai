@@ -59,7 +59,7 @@ const main = async (): Promise<void> => {
     await bootstrap.automation.triggers.handleWebhook(event)
   } } } : bootstrap?.shopify
   const executive = bootstrap ? createExecutiveBootstrap(bootstrap, process.env, logger) : null
-  // PR #55: Insights Hub runs on its own dedicated OpenRouter key + Nemotron
+  // PatternAI (formerly Insights Hub) runs on its own dedicated OpenRouter key + Nemotron
   // models. When the key is absent the service still works — it degrades to
   // pure deterministic output with no AI narration (never fake content).
   const insights = createInsightsHubBootstrap(process.env)
@@ -72,11 +72,12 @@ const main = async (): Promise<void> => {
             analytics: bootstrap.dataPlane.analytics,
             orders: bootstrap.orders.repository,
           },
-          repository: new PostgresInsightsHubRepository(bootstrap.database),
+          repository: new PostgresInsightsHubRepository(bootstrap.database, logger),
           plan: async (storeId) => (await bootstrap.billing.repository.get(storeId))?.plan ?? 'trial',
           billingState: async (storeId) => (await bootstrap.billing.repository.get(storeId))?.state ?? null,
           narrator: insights.narrator,
           env: insights.env,
+          logger,
         }),
         env: insights.env,
       }

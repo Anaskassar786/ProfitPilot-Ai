@@ -8,6 +8,10 @@
 
 .cc-workspace { display: flex; flex-direction: column; gap: 22px; }
 
+/* Subtle fade-in for freshly loaded data (no blank screens, no jarring pop). */
+.cc-kpi, .cc-agent-card { animation: cc-rise .35s ease both; }
+@keyframes cc-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
 /* ── Error banner ── */
 .cc-error-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; color: #FCA5A5; border: 1px solid rgba(239,68,68,.35); border-radius: var(--radius-lg); background: rgba(239,68,68,.08); font-size: 13px; }
 .cc-error-banner .cc-button { margin-left: auto; }
@@ -19,7 +23,7 @@
 .cc-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cc-kpi-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; }
 .cc-kpi-icon.health { color: var(--green); background: rgba(16,185,129,.12); }
-.cc-kpi-icon.budget { color: var(--amber); background: rgba(245,158,11,.12); }
+.cc-kpi-icon.actions { color: var(--amber); background: rgba(245,158,11,.12); }
 .cc-kpi-icon.insights { color: var(--purple); background: rgba(155,124,246,.14); }
 .cc-kpi-icon.agents { color: var(--blue); background: rgba(59,130,246,.12); }
 .cc-kpi strong { font-size: 28px; letter-spacing: -.04em; line-height: 1.2; color: var(--text); }
@@ -36,6 +40,14 @@
 .cc-agent-dots i { width: 9px; height: 9px; border-radius: 999px; }
 .cc-agent-dots i.active { background: var(--green); box-shadow: 0 0 6px rgba(16,185,129,.6); }
 .cc-agent-dots i.locked { background: rgba(120,133,157,.35); }
+
+/* ── Sparklines (theme-adaptive, hoverable, subtle) ── */
+.cc-sparkline { width: 100%; height: 30px; margin: 2px 0 4px; overflow: visible; }
+.cc-sparkline polyline { stroke: var(--purple); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+.cc-sparkline circle { fill: var(--purple); opacity: .9; cursor: help; }
+.cc-kpi-week { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; letter-spacing: -.01em; }
+.cc-kpi-total { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.cc-kpi .cc-kpi-trend { align-self: flex-start; }
 
 /* ── Sections ── */
 .cc-section { display: flex; flex-direction: column; gap: 14px; }
@@ -261,18 +273,20 @@
 .cc-category-label small { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(155,124,246,.1); }
 .cc-category-label::before { content: ''; width: 8px; height: 8px; border-radius: 3px; background: linear-gradient(135deg, #5B6EE5, #9B7CF6); }
 
-/* ── Upcoming module cards ── */
-.cc-agent-card.upcoming { border-color: rgba(155,124,246,.28); background: linear-gradient(160deg, rgba(40,36,74,.5), rgba(21,24,35,.85)); }
-.cc-agent-card.upcoming:hover { border-color: rgba(155,124,246,.55); box-shadow: 0 10px 30px rgba(112,85,231,.16); }
-.cc-agent-icon.upcoming-icon { color: var(--purple); background: rgba(155,124,246,.14); cursor: default; }
-.cc-status-pill.upcoming { color: var(--purple); background: rgba(155,124,246,.12); }
-.cc-status-pill.upcoming i { box-shadow: 0 0 6px currentColor; animation: cc-pulse 2.4s ease infinite; }
+/* ── Growth module cards (shipped — cards link to real pages) ── */
+.cc-agent-card.growth { border-color: rgba(155,124,246,.28); background: linear-gradient(160deg, rgba(40,36,74,.5), rgba(21,24,35,.85)); }
+.cc-agent-card.growth:hover { border-color: rgba(155,124,246,.55); box-shadow: 0 10px 30px rgba(112,85,231,.16); }
+.cc-agent-card.growth.requires { border-color: rgba(245,158,11,.28); }
+.cc-agent-card.growth.requires:hover { border-color: rgba(245,158,11,.5); box-shadow: 0 10px 28px rgba(245,158,11,.12); }
+.cc-agent-card.growth .cc-agent-title { cursor: pointer; }
+.cc-agent-card.growth .cc-agent-title:hover h3 { color: #CDBEFF; }
+.cc-agent-icon.growth-icon { color: var(--purple); background: rgba(155,124,246,.14); }
 .cc-category-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; color: var(--text-secondary); background: rgba(120,133,157,.12); font-size: 12px; font-weight: 600; }
 .cc-plan-badge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cc-plan-badge.available { color: var(--green); background: rgba(16,185,129,.1); }
 .cc-plan-badge.requires { color: var(--amber); background: rgba(245,158,11,.1); }
 .cc-tier-label { color: var(--text-tertiary); font-size: 12px; }
-.cc-upcoming-note { margin: -4px 0 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
+.cc-module-note { margin: -4px 0 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 
 /* ── Activity feed empty state samples ── */
 .cc-feed-samples { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 360px; margin-top: 10px; }
@@ -300,15 +314,15 @@
 .cc-activity-summary span { color: var(--text-tertiary); font-size: 12px; }
 .cc-setting-muted { color: var(--text-tertiary); flex-shrink: 0; }
 
-/* ── Upcoming module drawer ── */
-.cc-coming-soon-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: #DAD9FF; border: 1px solid rgba(155,124,246,.3); border-radius: 10px; background: rgba(155,124,246,.1); font-size: 13px; line-height: 1.5; }
-.cc-coming-soon-banner svg { flex-shrink: 0; color: var(--purple); }
+/* ── Growth module drawer ── */
+.cc-available-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: var(--text-secondary); border: 1px solid rgba(16,185,129,.3); border-radius: 10px; background: rgba(16,185,129,.08); font-size: 13px; line-height: 1.5; }
+.cc-available-banner svg { flex-shrink: 0; color: var(--green); }
 .cc-plan-matrix { display: flex; flex-direction: column; border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
 .cc-plan-matrix-row { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 10px; padding: 9px 13px; border-bottom: 1px solid var(--border-soft); font-size: 13px; }
 .cc-plan-matrix-row:last-child { border-bottom: none; }
 .cc-plan-matrix-row strong { color: var(--text); font-weight: 650; }
 .cc-plan-matrix-row span { color: var(--text-secondary); }
-.cc-plan-matrix-row em { font-style: normal; color: var(--purple); font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(155,124,246,.12); }
+.cc-plan-matrix-row em { font-style: normal; color: var(--purple); font-family: var(--font-mono); font-size: 12px; padding: 2px 7px; border-radius: 999px; background: rgba(155,124,246,.12); }
 .cc-plan-matrix-row.current { background: rgba(155,124,246,.07); }
 
 /* ── Skeleton section header ── */
@@ -325,8 +339,10 @@
 
 /* ── Light mode additions ── */
 .app-shell.light-mode .cc-tip[data-tip]::after { background: #FFFFFF; box-shadow: 0 10px 28px rgba(15,23,42,.16); }
-.app-shell.light-mode .cc-agent-card.upcoming { background: linear-gradient(160deg, #F3EFFE, #FFFFFF); }
+.app-shell.light-mode .cc-agent-card.growth { background: linear-gradient(160deg, #F3EFFE, #FFFFFF); }
 .app-shell.light-mode .cc-plan-matrix-row.current { background: rgba(155,124,246,.06); }
+.app-shell.light-mode .cc-available-banner { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.28); }
+.app-shell.light-mode .cc-sparkline polyline, .app-shell.light-mode .cc-sparkline circle { stroke: #7C5CD6; fill: #7C5CD6; }
 
 /* ── How agents work explainer (activity feed empty state) ── */
 .cc-how-it-works { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; padding: 0; list-style: none; width: 100%; max-width: 400px; text-align: left; }
@@ -334,3 +350,71 @@
 .cc-how-it-works li strong { flex-shrink: 0; color: var(--purple); font-family: var(--font-mono); font-size: 12px; }
 .cc-how-it-works li span { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 .app-shell.light-mode .cc-how-it-works li { background: #FFFFFF; }
+
+/* ── Light theme contrast hardening (WCAG AA) ── */
+.app-shell.light-mode .cc-kpi,
+.app-shell.light-mode .cc-agent-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.app-shell.light-mode .cc-kpi:hover,
+.app-shell.light-mode .cc-agent-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+.app-shell.light-mode .cc-agent-card {
+  background-image: none;
+}
+.app-shell.light-mode .cc-agent-card.locked {
+  background: #F8FAFC;
+  border-style: dashed;
+  border-color: #CBD5E1;
+}
+.app-shell.light-mode .cc-section-header h2,
+.app-shell.light-mode .cc-empty h2,
+.app-shell.light-mode .cc-drawer-header h2 {
+  color: #111827;
+}
+.app-shell.light-mode .cc-section-header p,
+.app-shell.light-mode .cc-empty p {
+  color: #4B5563;
+}
+.app-shell.light-mode .cc-agent-tagline,
+.app-shell.light-mode .cc-agent-stats span,
+.app-shell.light-mode .cc-confidence {
+  color: #4B5563;
+}
+.app-shell.light-mode .cc-status-pill.active {
+  color: #166534;
+  background: #DCFCE7;
+  border: 1px solid #BBF7D0;
+}
+.app-shell.light-mode .cc-status-pill.paused,
+.app-shell.light-mode .cc-plan-badge {
+  color: #92400E;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+}
+.app-shell.light-mode .cc-agent-icon.active { background: #DCFCE7; color: #059669; }
+.app-shell.light-mode .cc-agent-icon.paused { background: #FEF3C7; color: #D97706; }
+.app-shell.light-mode .cc-feed { border: 1px solid #E2E8F0; }
+.app-shell.light-mode .cc-feed-row:hover { background: #F1F5F9; }
+.app-shell.light-mode .cc-menu-list {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+.app-shell.light-mode .cc-kpi-icon.health { background: #DCFCE7; color: #059669; }
+.app-shell.light-mode .cc-kpi-icon.actions { background: #FEF3C7; color: #D97706; }
+.app-shell.light-mode .cc-kpi-icon.insights { background: #EDE9FE; color: #7C3AED; }
+.app-shell.light-mode .cc-kpi-icon.agents { background: #DBEAFE; color: #2563EB; }
+.app-shell.light-mode .cc-agent-dots i.locked { background: #CBD5E1; }
+.app-shell.light-mode .cc-button.secondary {
+  color: #111827;
+  border-color: #E2E8F0;
+  background: #FFFFFF;
+}
+.app-shell.light-mode .cc-button.secondary:hover {
+  border-color: #7C3AED;
+}

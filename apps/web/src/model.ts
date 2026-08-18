@@ -11,7 +11,7 @@ export type SectionId =
   | 'ai-executive'
   | 'recommendations'
   | 'automation'
-  | 'insights-hub'
+  | 'patternai'
   | 'campaigns'
   | 'copilot'
   | 'ai-command'

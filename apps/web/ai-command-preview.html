@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Command — Redesign Preview</title>
+<style>
+/* ── Scaffold tokens (mirrors styles.css) ── */
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --background:#0F0F0F; --card:#1A1A1A; --card-hover:#242424;
+  --border:#2E2E2E; --border-soft:rgba(120,133,157,.18);
+  --text:#F5F5F5; --text-secondary:#A3A3A3; --text-tertiary:#737373;
+  --blue:#3B82F6; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --purple:#9B7CF6;
+  --radius-lg:12px; --shadow-lg:0 10px 15px rgba(0,0,0,.7);
+}
+* { box-sizing:border-box; }
+body { margin:0; background:#0B0B0B; color:#F5F5F5; }
+button { font:inherit; cursor:pointer; }
+.demo-toolbar { position:sticky; top:0; z-index:50; display:flex; gap:10px; align-items:center; padding:14px 28px; background:rgba(15,15,15,.9); backdrop-filter:blur(10px); border-bottom:1px solid #2E2E2E; }
+.demo-toolbar h1 { font-size:15px; margin:0; font-weight:700; letter-spacing:-.02em; }
+.demo-toolbar .spacer { flex:1; }
+.demo-toolbar button { padding:8px 14px; border-radius:8px; border:1px solid #2E2E2E; background:#1A1A1A; color:#F5F5F5; font-size:13px; font-weight:600; }
+.demo-toolbar button.active { border-color:rgba(139,92,246,.5); background:rgba(139,92,246,.16); color:#C4B5FD; }
+.demo-section { padding:32px 40px 64px; max-width:1180px; margin:0 auto; }
+.demo-section.dark { background:#0F0F0F; }
+.demo-section.light { background:#F8FAFC; }
+.demo-section > h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:#737373; margin:0 0 18px; }
+.demo-section.light > h2 { color:#6B7280; }
+.demo-note { margin:0 0 20px; font-size:13px; color:#A3A3A3; }
+.demo-section.light .demo-note { color:#4B5563; }
+
+/* ── upgrade-plan-cta (mirrors upgrade-overrides.css) ── */
+.upgrade-plan-cta { display:inline-flex !important; align-items:center !important; justify-content:center !important; flex:0 0 auto !important; gap:8px !important; min-width:140px !important; width:auto !important; min-height:40px !important; height:40px !important; padding:0 16px !important; color:#fff !important; border:1px solid rgba(99,102,241,.46) !important; border-radius:10px !important; background:linear-gradient(135deg,#2563EB 0%,#4F46E5 52%,#7C3AED 100%) !important; box-shadow:0 6px 18px rgba(37,99,235,.24), inset 0 1px 0 rgba(255,255,255,.18) !important; font-size:14px !important; font-weight:700 !important; line-height:1 !important; letter-spacing:-.01em !important; white-space:nowrap !important; border:0; }
+.upgrade-plan-cta:hover:not(:disabled) { background:linear-gradient(135deg,#1D4ED8 0%,#4338CA 50%,#6D28D9 100%) !important; transform:translateY(-1px); }
+.upgrade-plan-cta svg { flex:0 0 auto; }
+
+/* ═══════════════ AI COMMAND CSS (from ai-command.css) ═══════════════ */
+.aic-shell {
+  --aic-bg:#0F0F0F; --aic-panel:#1A1A1A; --aic-panel-2:#242424;
+  --aic-border:#2E2E2E; --aic-border-soft:rgba(120,133,157,.18);
+  --aic-text:#F5F5F5; --aic-text-secondary:#A3A3A3; --aic-text-muted:#737373;
+  --aic-accent:#8B5CF6; --aic-accent-strong:#7C3AED; --aic-accent-soft:rgba(139,92,246,.14); --aic-accent-border:rgba(139,92,246,.3);
+  --aic-user-bg:#2A2A2A; --aic-user-border:#3A3A3A; --aic-ai-bg:#1F1F1F; --aic-ai-border:#2C2C2C;
+  --aic-success:#10B981; --aic-warning:#F59E0B; --aic-danger:#EF4444;
+  --aic-shadow:0 8px 30px rgba(0,0,0,.35);
+  display:flex; flex-direction:column; gap:14px; color:var(--aic-text);
+}
+.app-shell.light-mode .aic-shell {
+  --aic-bg:#FFFFFF; --aic-panel:#FAFAFA; --aic-panel-2:#FFFFFF;
+  --aic-border:#E5E7EB; --aic-border-soft:#E5E7EB;
+  --aic-text:#111827; --aic-text-secondary:#4B5563; --aic-text-muted:#6B7280;
+  --aic-accent:#7C3AED; --aic-accent-strong:#6D28D9; --aic-accent-soft:rgba(124,58,237,.08); --aic-accent-border:rgba(124,58,237,.25);
+  --aic-user-bg:#F3F4F6; --aic-user-border:#E5E7EB; --aic-ai-bg:#FFFFFF; --aic-ai-border:#E5E7EB;
+  --aic-success:#059669; --aic-warning:#D97706; --aic-danger:#DC2626;
+  --aic-shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+}
+.aic-header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.aic-title { display:flex; align-items:center; gap:12px; min-width:0; }
+.aic-title h2 { margin:0; font-size:22px; font-weight:700; letter-spacing:-.03em; color:var(--aic-text); }
+.aic-title p { margin:2px 0 0; color:var(--aic-text-secondary); font-size:13px; }
+.aic-header-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.aic-status { display:inline-flex; align-items:center; gap:7px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; color:var(--aic-text-secondary); border:1px solid var(--aic-border); background:var(--aic-panel); }
+.aic-status i { width:7px; height:7px; border-radius:999px; background:var(--aic-success); box-shadow:0 0 8px var(--aic-success); }
+.aic-orb { width:56px; height:56px; display:grid; place-items:center; color:#F4F1FF; border-radius:16px; border:1px solid rgba(155,124,246,.45); background:linear-gradient(145deg,#5B61D8,#9A50D4); box-shadow:0 0 28px rgba(112,85,231,.28); }
+.aic-orb.compact { width:40px; height:40px; border-radius:12px; }
+.aic-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px 14px; border-radius:9px; border:1px solid transparent; font-size:13px; font-weight:600; cursor:pointer; color:var(--aic-text); background:transparent; transition:background 150ms ease,border-color 150ms ease,transform 150ms ease; }
+.aic-button:hover { transform:translateY(-1px); }
+.aic-button.secondary { color:var(--aic-text); border-color:var(--aic-border); background:var(--aic-panel-2); }
+.aic-button.ghost { color:var(--aic-text-secondary); background:transparent; border-color:var(--aic-border); }
+.aic-button.ghost.icon-only { width:38px; padding:0; }
+.aic-planbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border:1px solid var(--aic-border); border-radius:12px; background:var(--aic-panel); }
+.aic-planbar-left { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.aic-planbar-plan { font-size:13px; font-weight:700; padding:3px 10px; border-radius:999px; background:var(--aic-accent-soft); color:var(--aic-accent); border:1px solid var(--aic-accent-border); }
+.aic-planbar-usage, .aic-planbar-actions { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--aic-text-secondary); }
+.aic-planbar-actions.locked { color:var(--aic-warning); }
+.aic-planbar-actions.unlocked { color:var(--aic-success); }
+.aic-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; min-height:560px; }
+.aic-main { display:flex; flex-direction:column; min-height:560px; border:1px solid var(--aic-border); border-radius:16px; background:var(--aic-panel); box-shadow:var(--aic-shadow); overflow:hidden; }
+.aic-scroll { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:20px; }
+.aic-welcome { display:flex; flex-direction:column; align-items:center; gap:12px; padding:44px 20px 20px; text-align:center; max-width:760px; margin:0 auto; width:100%; }
+.aic-welcome-icon { width:64px; height:64px; display:grid; place-items:center; color:#F4F1FF; border-radius:18px; border:1px solid rgba(139,92,246,.5); background:linear-gradient(145deg,#6D28D9,#9A50D4); box-shadow:0 0 40px rgba(139,92,246,.35); }
+.aic-welcome h2 { margin:8px 0 0; font-size:28px; font-weight:700; letter-spacing:-.03em; color:var(--aic-text); }
+.aic-welcome-sub { margin:-6px 0 0; font-size:15px; color:var(--aic-accent); font-weight:600; }
+.aic-welcome-lede { max-width:460px; margin:0; color:var(--aic-text-secondary); font-size:14px; line-height:1.6; }
+.aic-capabilities { width:100%; margin-top:12px; border:1px solid var(--aic-border); border-radius:14px; background:var(--aic-panel-2); overflow:hidden; text-align:left; }
+.app-shell.light-mode .aic-capabilities { background:#FFFFFF; box-shadow:0 1px 2px rgba(16,24,40,.05); }
+.aic-capabilities-head { display:flex; align-items:center; gap:8px; padding:12px 16px; font-size:13px; font-weight:700; color:var(--aic-text); border-bottom:1px solid var(--aic-border-soft); }
+.aic-capabilities-head svg { color:var(--aic-accent); }
+.aic-capabilities-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:var(--aic-border-soft); }
+.aic-capability { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--aic-panel-2); border:none; text-align:left; cursor:pointer; transition:background 150ms ease; }
+.app-shell.light-mode .aic-capability { background:#FFFFFF; }
+.aic-capability:hover { background:var(--aic-accent-soft); }
+.aic-capability-icon { width:34px; height:34px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; color:var(--aic-accent); background:var(--aic-accent-soft); }
+.aic-capability-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.aic-capability-copy strong { font-size:13px; font-weight:600; color:var(--aic-text); }
+.aic-capability-copy small { font-size:12px; color:var(--aic-text-muted); }
+.aic-capability-arrow { margin-left:auto; flex:0 0 auto; color:var(--aic-text-muted); }
+.aic-capability.locked { opacity:.72; }
+.aic-capability.locked .aic-capability-icon { color:var(--aic-warning); background:rgba(245,158,11,.12); }
+.aic-capability-lock { margin-left:auto; display:inline-flex; align-items:center; gap:4px; flex:0 0 auto; font-size:12px; font-weight:600; color:var(--aic-warning); }
+.aic-popular { display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; margin-top:6px; }
+.aic-popular-label { font-size:12px; color:var(--aic-text-muted); letter-spacing:.03em; }
+.aic-popular-chips { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.aic-popular-chips button { display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border:1px solid var(--aic-border); border-radius:999px; background:var(--aic-panel-2); color:var(--aic-text-secondary); font-size:13px; cursor:pointer; transition:border-color 150ms ease,color 150ms ease,transform 150ms ease; }
+.aic-popular-chips button:hover { color:var(--aic-text); border-color:var(--aic-accent-border); transform:translateY(-1px); }
+.aic-popular-chips button svg { color:var(--aic-accent); }
+.aic-welcome-plan { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; width:100%; margin-top:14px; padding:14px 16px; border:1px solid var(--aic-border); border-radius:12px; background:var(--aic-panel-2); }
+.aic-welcome-plan-copy { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.aic-welcome-plan-usage, .aic-welcome-plan-actions { font-size:13px; color:var(--aic-text-secondary); }
+.aic-welcome-plan-actions { color:var(--aic-warning); }
+.aic-plan-badge { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:650; color:var(--aic-accent); background:var(--aic-accent-soft); border:1px solid var(--aic-accent-border); }
+.aic-bubble { display:flex; flex-direction:column; gap:6px; max-width:min(760px,96%); }
+.aic-bubble.mine { align-self:flex-end; }
+.aic-bubble.theirs { align-self:flex-start; }
+.aic-bubble-meta { display:flex; align-items:center; gap:8px; color:var(--aic-text-muted); font-size:12px; }
+.aic-bubble.mine .aic-bubble-meta { justify-content:flex-end; }
+.aic-avatar { display:inline-flex; align-items:center; justify-content:center; gap:5px; height:24px; padding:0 9px; border-radius:999px; font-size:12px; font-weight:700; }
+.aic-avatar.user { color:#3B82F6; background:rgba(59,130,246,.12); }
+.app-shell.light-mode .aic-avatar.user { color:#2563EB; background:rgba(37,99,235,.1); }
+.aic-avatar.ai { color:var(--aic-accent); background:var(--aic-accent-soft); }
+.aic-bubble-body { position:relative; padding:14px 16px; border-radius:16px; font-size:14px; line-height:1.6; color:var(--aic-text); border:1px solid transparent; }
+.aic-bubble.mine .aic-bubble-body { background:var(--aic-user-bg); border-color:var(--aic-user-border); border-bottom-right-radius:6px; }
+.aic-bubble.theirs .aic-bubble-body { background:var(--aic-ai-bg); border-color:var(--aic-ai-border); border-bottom-left-radius:6px; }
+.aic-bubble-body p { margin:0; white-space:pre-wrap; }
+.aic-bubble-actions { display:flex; align-items:center; gap:2px; margin-top:10px; padding-top:8px; border-top:1px solid var(--aic-border-soft); opacity:.55; transition:opacity 150ms ease; }
+.aic-bubble-body:hover .aic-bubble-actions { opacity:1; }
+.aic-chip-action { display:grid; place-items:center; width:28px; height:28px; border:none; border-radius:7px; background:transparent; color:var(--aic-text-muted); cursor:pointer; transition:background 150ms ease,color 150ms ease; }
+.aic-chip-action:hover { color:var(--aic-text); background:var(--aic-accent-soft); }
+.aic-metrics { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.aic-metric { flex:1 1 140px; min-width:140px; display:flex; flex-direction:column; gap:4px; padding:14px; border:1px solid var(--aic-border-soft); border-radius:12px; background:var(--aic-panel-2); }
+.app-shell.light-mode .aic-metric { background:#F9FAFB; }
+.aic-metric.primary { border-color:var(--aic-accent-border); background:var(--aic-accent-soft); }
+.app-shell.light-mode .aic-metric.primary { background:#F5F3FF; }
+.aic-metric-label { font-size:12px; color:var(--aic-text-muted); }
+.aic-metric strong { font-size:20px; font-weight:700; color:var(--aic-text); letter-spacing:-.01em; }
+.aic-metric small { font-size:12px; font-weight:600; }
+.aic-metric small.up { color:var(--aic-success); }
+.aic-source { display:block; margin-top:8px; color:var(--aic-text-muted); font-size:12px; }
+.aic-composer { padding:12px 16px 16px; border-top:1px solid var(--aic-border-soft); background:var(--aic-panel); }
+.aic-composer-label { display:flex; align-items:center; gap:6px; margin-bottom:8px; color:var(--aic-text-muted); font-size:12px; font-weight:600; }
+.aic-counter { margin-left:auto; color:var(--aic-text-muted); font-weight:500; }
+.aic-composer-row { display:flex; gap:10px; align-items:flex-end; }
+.aic-composer textarea { flex:1; min-height:56px; max-height:180px; padding:15px 16px; color:var(--aic-text); border:1px solid var(--aic-border); border-radius:12px; background:var(--aic-panel-2); font-size:14px; line-height:1.5; resize:vertical; transition:border-color 150ms ease,box-shadow 150ms ease; }
+.app-shell.light-mode .aic-composer textarea { background:#FFFFFF; }
+.aic-composer textarea::placeholder { color:var(--aic-text-muted); }
+.aic-composer textarea:focus { outline:none; border-color:var(--aic-accent); box-shadow:0 0 0 3px var(--aic-accent-soft); }
+.aic-send { width:56px; height:56px; flex:0 0 auto; display:grid; place-items:center; color:#fff; border:none; border-radius:12px; background:linear-gradient(140deg,#6D28D9,#8B5CF6); cursor:pointer; box-shadow:0 4px 14px rgba(139,92,246,.3); transition:transform 150ms ease,box-shadow 150ms ease; }
+.aic-send:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(139,92,246,.4); }
+.aic-composer-hints { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; color:var(--aic-text-muted); font-size:12px; }
+.aic-quick { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.aic-quick-tabs { display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; }
+.aic-quick-tabs button { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--aic-text-muted); font-size:12px; font-weight:600; cursor:pointer; transition:color 150ms ease,background 150ms ease,border-color 150ms ease; }
+.aic-quick-tabs button:hover { color:var(--aic-text-secondary); background:var(--aic-panel-2); }
+.aic-quick-tabs button.active { color:var(--aic-accent); background:var(--aic-accent-soft); border-color:var(--aic-accent-border); }
+.aic-quick-pills { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; }
+.aic-quick-pills button { flex:0 0 auto; padding:7px 12px; color:var(--aic-text-secondary); border:1px solid var(--aic-border); border-radius:999px; background:var(--aic-panel-2); font-size:12px; cursor:pointer; transition:color 150ms ease,border-color 150ms ease,transform 150ms ease; }
+.app-shell.light-mode .aic-quick-pills button { background:#FFFFFF; }
+.aic-quick-pills button:hover { color:var(--aic-text); border-color:var(--aic-accent-border); transform:translateY(-1px); }
+.app-shell.light-mode .aic-bubble.theirs .aic-bubble-body, .app-shell.light-mode .aic-bubble.mine .aic-bubble-body { color:#111827; }
+</style>
+</head>
+<body>
+<div class="demo-toolbar">
+  <h1>AI Command — Redesign Preview</h1>
+  <span class="spacer"></span>
+  <button id="btn-dark" class="active" onclick="setTheme('dark')">Dark theme</button>
+  <button id="btn-light" onclick="setTheme('light')">Light theme</button>
+</div>
+
+<div id="dark" class="demo-section dark app-shell">
+  <h2>Dark theme</h2>
+  <p class="demo-note">Welcome screen + an example exchange. All figures in a real session come from live Shopify data — never invented.</p>
+  <div class="aic-shell">
+    <!-- header -->
+    <header class="aic-header">
+      <div class="aic-title">
+        <span class="aic-orb compact">✦</span>
+        <div><h2>AI Command</h2><p>One command controls everything</p></div>
+      </div>
+      <div class="aic-header-actions">
+        <span class="aic-status"><i></i>Live</span>
+        <button class="aic-button secondary">＋ New Chat</button>
+        <button class="aic-button ghost">History</button>
+        <button class="aic-button ghost icon-only">⚙</button>
+      </div>
+    </header>
+    <!-- plan bar -->
+    <div class="aic-planbar">
+      <div class="aic-planbar-left">
+        <span class="aic-planbar-plan">Trial</span>
+        <span class="aic-planbar-usage">Commands: 3/10 today</span>
+        <span class="aic-planbar-actions locked">Actions locked</span>
+      </div>
+      <button class="upgrade-plan-cta">Upgrade Plan →</button>
+    </div>
+    <!-- main -->
+    <div class="aic-main">
+      <div class="aic-scroll">
+        <div class="aic-welcome">
+          <span class="aic-welcome-icon">✦</span>
+          <h2>Welcome to AI Command</h2>
+          <p class="aic-welcome-sub">Your intelligent store assistant</p>
+          <p class="aic-welcome-lede">Ask anything about your store. Get instant insights backed by your real data.</p>
+          <div class="aic-capabilities">
+            <div class="aic-capabilities-head">✦ What I can help you with</div>
+            <div class="aic-capabilities-grid">
+              <button class="aic-capability"><span class="aic-capability-icon">📊</span><span class="aic-capability-copy"><strong>Store Analytics</strong><small>What’s my revenue this month?</small></span><span class="aic-capability-arrow">↗</span></button>
+              <button class="aic-capability"><span class="aic-capability-icon">👥</span><span class="aic-capability-copy"><strong>Customer Insights</strong><small>Who are my best customers?</small></span><span class="aic-capability-arrow">↗</span></button>
+              <button class="aic-capability"><span class="aic-capability-icon">📦</span><span class="aic-capability-copy"><strong>Inventory Management</strong><small>Which products are low stock?</small></span><span class="aic-capability-arrow">↗</span></button>
+              <button class="aic-capability"><span class="aic-capability-icon">💡</span><span class="aic-capability-copy"><strong>Business Recommendations</strong><small>How can I increase sales?</small></span><span class="aic-capability-arrow">↗</span></button>
+              <div class="aic-capability locked"><span class="aic-capability-icon">⚡</span><span class="aic-capability-copy"><strong>Store Actions</strong><small>Available on Commander Plan</small></span><span class="aic-capability-lock">Locked</span></div>
+            </div>
+          </div>
+          <div class="aic-popular">
+            <span class="aic-popular-label">Or try these popular questions</span>
+            <div class="aic-popular-chips">
+              <button>📊 Today’s revenue</button><button>👥 Top customers</button><button>📦 Low stock</button><button>💡 Growth ideas</button>
+            </div>
+          </div>
+          <div class="aic-welcome-plan">
+            <div class="aic-welcome-plan-copy">
+              <span class="aic-plan-badge">Trial</span>
+              <span class="aic-welcome-plan-usage">Commands used today: 3/10</span>
+              <span class="aic-welcome-plan-actions">Actions require Commander Plan</span>
+            </div>
+            <button class="upgrade-plan-cta">Upgrade Plan →</button>
+          </div>
+        </div>
+      </div>
+      <form class="aic-composer">
+        <div class="aic-composer-label">⌘ Type your command <span class="aic-counter">0/2000</span></div>
+        <div class="aic-composer-row">
+          <textarea placeholder="Ask anything about your store, or tell me what to do…" rows="2"></textarea>
+          <button class="aic-send">➤</button>
+        </div>
+        <div class="aic-composer-hints"><span>Enter to send · Shift+Enter for a new line</span><span>3/10 today</span></div>
+        <div class="aic-quick">
+          <div class="aic-quick-tabs"><button class="active">📊 Analytics</button><button>👥 Customers</button><button>📦 Products</button><button>💡 Growth</button></div>
+          <div class="aic-quick-pills"><button>Today’s revenue</button><button>Weekly report</button><button>Store health</button></div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="light" class="demo-section light app-shell light-mode" style="display:none">
+  <h2>Light theme</h2>
+  <p class="demo-note">Crisp boundaries, strong contrast — no more pastel wash.</p>
+  <div class="aic-shell">
+    <header class="aic-header">
+      <div class="aic-title">
+        <span class="aic-orb compact">✦</span>
+        <div><h2>AI Command</h2><p>One command controls everything</p></div>
+      </div>
+      <div class="aic-header-actions">
+        <span class="aic-status"><i></i>Live</span>
+        <button class="aic-button secondary">＋ New Chat</button>
+        <button class="aic-button ghost">History</button>
+        <button class="aic-button ghost icon-only">⚙</button>
+      </div>
+    </header>
+    <div class="aic-planbar">
+      <div class="aic-planbar-left">
+        <span class="aic-planbar-plan">Growth</span>
+        <span class="aic-planbar-usage">Commands: 118/200 today</span>
+        <span class="aic-planbar-actions locked">Actions locked</span>
+      </div>
+      <button class="upgrade-plan-cta">Upgrade Plan →</button>
+    </div>
+    <div class="aic-main">
+      <div class="aic-scroll">
+        <article class="aic-bubble mine">
+          <div class="aic-bubble-meta"><span class="aic-avatar user">You</span><time>2:30 PM</time></div>
+          <div class="aic-bubble-body"><p>What’s my revenue this month?</p></div>
+        </article>
+        <article class="aic-bubble theirs">
+          <div class="aic-bubble-meta"><span class="aic-avatar ai">✦ AI Command</span><time>2:30 PM</time></div>
+          <div class="aic-bubble-body">
+            <p>Your store’s revenue for this period is $8,940, which is 23% higher than the previous period ($7,240). Orders: 42. Average order value: $213.</p>
+            <div class="aic-metrics">
+              <div class="aic-metric primary"><span class="aic-metric-label">Revenue this period</span><strong>$8,940</strong><small class="up">↑ 23% vs prior period</small></div>
+              <div class="aic-metric"><span class="aic-metric-label">Orders</span><strong>42</strong></div>
+              <div class="aic-metric"><span class="aic-metric-label">Avg. order value</span><strong>$213</strong></div>
+            </div>
+            <small class="aic-source">Source: analytics_revenue_daily</small>
+            <div class="aic-bubble-actions">
+              <button class="aic-chip-action" title="Copy">⧉</button>
+              <button class="aic-chip-action" title="Regenerate">↻</button>
+              <button class="aic-chip-action" title="Good">👍</button>
+              <button class="aic-chip-action" title="Poor">👎</button>
+            </div>
+          </div>
+        </article>
+      </div>
+      <form class="aic-composer">
+        <div class="aic-composer-label">⌘ Type your command <span class="aic-counter">0/2000</span></div>
+        <div class="aic-composer-row">
+          <textarea placeholder="Ask anything about your store, or tell me what to do…" rows="2"></textarea>
+          <button class="aic-send">➤</button>
+        </div>
+        <div class="aic-composer-hints"><span>Enter to send · Shift+Enter for a new line</span><span>118/200 today</span></div>
+        <div class="aic-quick">
+          <div class="aic-quick-tabs"><button class="active">📊 Analytics</button><button>👥 Customers</button><button>📦 Products</button><button>💡 Growth</button></div>
+          <div class="aic-quick-pills"><button>Today’s revenue</button><button>Weekly report</button><button>Store health</button></div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function setTheme(theme) {
+  document.getElementById('dark').style.display = theme === 'dark' ? '' : 'none'
+  document.getElementById('light').style.display = theme === 'light' ? '' : 'none'
+  document.getElementById('btn-dark').classList.toggle('active', theme === 'dark')
+  document.getElementById('btn-light').classList.toggle('active', theme === 'light')
+  document.body.style.background = theme === 'light' ? '#F8FAFC' : '#0B0B0B'
+}
+</script>
+</body>
+</html>

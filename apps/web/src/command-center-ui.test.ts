@@ -1,24 +1,28 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ActivityFeed, AgentCard, AgentMenu, CommandCenterEmpty, CommandCenterHero, CommandCenterSkeleton, LockedAgentCard, RunAllBanner, Tooltip, UpcomingModuleCard, UpcomingModuleDrawer } from './command-center.js'
+import { ActivityFeed, AgentCard, AgentMenu, CommandCenterEmpty, CommandCenterHero, CommandCenterSkeleton, GrowthModuleCard, GrowthModuleDrawer, LockedAgentCard, RunAllBanner, Sparkline, Tooltip } from './command-center.js'
 import {
+  GROWTH_MODULES,
   IDLE_RUN_STATE,
   PLAN_LABELS,
-  UPCOMING_MODULES,
   agentCategory,
   agentImpactSummary,
   agentStatusLabel,
+  dailySeries,
   formatBudget,
   groupLockedByPlan,
+  growthModuleAccess,
   healthTrend,
   insightsToday,
   parseSseFrame,
+  periodTotals,
   reduceRunAll,
   relativeTime,
   storeHealthDisplay,
+  trendDirection,
   unlockedAgents,
-  upcomingModuleAccess,
+  visibleAgents,
 } from './command-center-model.js'
 import type { AgentOverviewEntry, PlanTier } from './command-center-model.js'
 import type { Recommendation } from './model.js'
@@ -143,9 +147,9 @@ describe('PR45 component rendering', () => {
   it('renders an unlocked agent card with actions, stats, and menu', () => {
     const agent = overviewFor('commander')[0]
     if (!agent) throw new Error('missing agent')
-    const html = renderToStaticMarkup(createElement(AgentCard, { agent, activity: [recommendation], running: false, onOpen: () => undefined, onRun: () => undefined, onTogglePause: () => undefined }))
+    const html = renderToStaticMarkup(createElement(AgentCard, { agent, activity: [recommendation], onOpen: () => undefined, onTogglePause: () => undefined }))
     expect(html).toContain('Revenue Agent')
-    expect(html).toContain('Run now')
+    expect(html).not.toContain('Run now')
     expect(html).toContain('View details')
     expect(html).toContain('insights today')
     expect(html).toContain('aria-haspopup="menu"')
@@ -165,17 +169,16 @@ describe('PR45 component rendering', () => {
   it('renders real KPI data in the hero, not hard-coded strings', () => {
     const html = renderToStaticMarkup(createElement(CommandCenterHero, {
       health: { score: 74, method: 'deterministic-v1', components: [{ key: 'revenue_momentum', score: 80, weight: .35, reason: '' }] },
-      cost: { storeId: 's', day: 'd', microDollars: 500_000, capMicroDollars: 5_000_000, remainingMicroDollars: 4_500_000, calls: 12 },
-      recent: [recommendation],
+      summary: { counts: { PENDING: 0, APPROVED: 2, REJECTED: 0, EXECUTED: 1, FAILED: 0, EXPIRED: 0 }, total: 3, pendingImpact: [], approvedThisMonth: { count: 2, impact: [] }, byAgent: [], byRule: [], approvalRate: { allTime: 100, last30d: 100 }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [{ day: '2026-08-18', generated: 2, approved: 1 }, { day: '2026-08-17', generated: 1, approved: 1 }], plan: 'growth', usage: { feature: 'ai_recommendations_month', used: 3, limit: 150, remaining: 147 } },
       overview: { plan: 'growth', unlockedCount: 5, totalCount: 7, agents: [...overviewFor('growth')] },
     }))
     expect(html).toContain('74')
-    expect(html).toContain('$0.50')
-    expect(html).toContain('12 calls today')
     expect(html).toContain('Store Health Score')
-    expect(html).toContain('AI Spend Today')
-    expect(html).toContain('Insights Generated Today')
-    expect(html).toContain('Daily budget cap protects your AI costs')
+    expect(html).toContain('AI Actions Completed')
+    expect(html).toContain('Insights Today')
+    expect(html).toContain('Active agents')
+    expect(html).not.toContain('AI Spend Today')
+    expect(html).not.toContain('calls today')
   })
   it('renders the activity feed rows and the empty state', () => {
     const agents = [...overviewFor('commander')]
@@ -209,13 +212,13 @@ describe('PR45 component rendering', () => {
 
 describe('PR49 store health empty states', () => {
   it('shows an honest empty state when there are too few orders', () => {
-    expect(storeHealthDisplay({ score: null, method: 'deterministic-v1', components: [], orderCount: 3, historyDays: 2 })).toEqual({ kind: 'empty', message: 'Not enough data — need 10+ orders' })
+    expect(storeHealthDisplay({ score: null, method: 'deterministic-v1', components: [], orderCount: 3, historyDays: 2 })).toEqual({ kind: 'empty', message: 'Not enough data yet — need 10+ orders to calculate health score' })
   })
   it('shows a calculating state for thin but present order history', () => {
-    expect(storeHealthDisplay({ score: null, method: 'deterministic-v1', components: [], orderCount: 40, historyDays: 3 })).toEqual({ kind: 'empty', message: 'Calculating… check back tomorrow' })
+    expect(storeHealthDisplay({ score: null, method: 'deterministic-v1', components: [], orderCount: 40, historyDays: 3 })).toEqual({ kind: 'empty', message: 'Store health calculating… check back in 24 hours' })
   })
-  it('keeps a real zero score visible with a Critical tone', () => {
-    expect(storeHealthDisplay({ score: 0, method: 'deterministic-v1', components: [], orderCount: 120, historyDays: 30 })).toEqual({ kind: 'score', score: 0, tone: 'critical', label: 'Critical' })
+  it('never labels a low score "Critical" — panic-free language', () => {
+    expect(storeHealthDisplay({ score: 0, method: 'deterministic-v1', components: [], orderCount: 120, historyDays: 30 })).toEqual({ kind: 'score', score: 0, tone: 'critical', label: 'Needs attention' })
   })
   it('labels healthy and warning scores', () => {
     const healthy = storeHealthDisplay({ score: 82, method: 'deterministic-v1', components: [] })
@@ -225,6 +228,7 @@ describe('PR49 store health empty states', () => {
   })
   it('falls back gracefully for null health payloads', () => {
     expect(storeHealthDisplay(null).kind).toBe('empty')
+    expect(storeHealthDisplay(null)).toEqual({ kind: 'empty', message: 'Not enough data yet' })
   })
 })
 
@@ -242,51 +246,66 @@ describe('PR49 section organization', () => {
   })
 })
 
-describe('PR49 upcoming AI Growth Command modules', () => {
-  it('defines all four upcoming modules', () => {
-    expect(UPCOMING_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'INSIGHTS_HUB', 'AI_COMMAND'])
-    expect(UPCOMING_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
+describe('PR49 shipped AI Growth Command modules', () => {
+  it('defines all four modules with a real destination path', () => {
+    expect(GROWTH_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'PATTERN_AI', 'AI_COMMAND'])
+    expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'patternai', 'ai-command'])
+    expect(GROWTH_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
   })
   it('marks GrowthIQ (formerly AI Executive) as Requires Growth on lower plans only', () => {
-    const module = UPCOMING_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
     if (!module) throw new Error('missing module')
-    expect(upcomingModuleAccess(module, 'trial')).toMatchObject({ badge: 'requires', badgeLabel: 'Requires Growth', requiresUpgrade: true, upgradePlan: 'growth' })
-    expect(upcomingModuleAccess(module, 'start')).toMatchObject({ badge: 'requires', requiresUpgrade: true })
-    expect(upcomingModuleAccess(module, 'growth')).toMatchObject({ badge: 'available', badgeLabel: 'Available', requiresUpgrade: false })
-    expect(upcomingModuleAccess(module, 'commander').tierLabel).toBe('+ Investor PDFs')
+    expect(module.label).toBe('GrowthIQ')
+    expect(growthModuleAccess(module, 'trial')).toMatchObject({ badge: 'requires', badgeLabel: 'Requires Growth', requiresUpgrade: true, upgradePlan: 'growth' })
+    expect(growthModuleAccess(module, 'start')).toMatchObject({ badge: 'requires', requiresUpgrade: true })
+    expect(growthModuleAccess(module, 'growth')).toMatchObject({ badge: 'available', badgeLabel: 'Available', requiresUpgrade: false })
+    expect(growthModuleAccess(module, 'commander').tierLabel).toBe('+ Investor PDFs')
   })
-  it('keeps Store Coach and Insights Hub available on every plan', () => {
-    for (const id of ['STORE_COACH', 'INSIGHTS_HUB'] as const) {
-      const module = UPCOMING_MODULES.find((entry) => entry.id === id)
+  it('keeps Store Coach and PatternAI available on every plan', () => {
+    for (const id of ['STORE_COACH', 'PATTERN_AI'] as const) {
+      const module = GROWTH_MODULES.find((entry) => entry.id === id)
       if (!module) throw new Error('missing module')
-      expect(upcomingModuleAccess(module, 'trial').badge).toBe('available')
-      expect(upcomingModuleAccess(module, 'commander').requiresUpgrade).toBe(false)
+      expect(growthModuleAccess(module, 'trial').badge).toBe('available')
+      expect(growthModuleAccess(module, 'commander').requiresUpgrade).toBe(false)
     }
   })
   it('gates AI Command actions to Commander', () => {
-    const module = UPCOMING_MODULES.find((entry) => entry.id === 'AI_COMMAND')
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_COMMAND')
     if (!module) throw new Error('missing module')
-    expect(upcomingModuleAccess(module, 'trial').tierLabel).toBe('Info only')
-    expect(upcomingModuleAccess(module, 'trial').note).toContain('Commander')
-    expect(upcomingModuleAccess(module, 'commander').tierLabel).toBe('+ Full Actions')
+    expect(growthModuleAccess(module, 'trial').tierLabel).toBe('Info only')
+    expect(growthModuleAccess(module, 'trial').note).toContain('Commander')
+    expect(growthModuleAccess(module, 'commander').tierLabel).toBe('+ Full Actions')
   })
-  it('renders an upcoming module card as Coming soon with plan gating', () => {
-    const module = UPCOMING_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
+  it('renders a shipped module card as Available (never Coming soon)', () => {
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'STORE_COACH')
     if (!module) throw new Error('missing module')
-    const html = renderToStaticMarkup(createElement(UpcomingModuleCard, { module, plan: 'start', onOpen: () => undefined, onUpgrade: () => undefined }))
+    const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'trial', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
+    expect(html).toContain('Store Coach')
+    expect(html).toContain('Available')
+    expect(html).toContain('Open Store Coach')
+    expect(html).not.toContain('Coming soon')
+    expect(html).not.toContain('Launching soon')
+  })
+  it('renders the GrowthIQ card with the rebranded label and gated CTA', () => {
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
+    if (!module) throw new Error('missing module')
+    const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'start', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('GrowthIQ')
-    expect(html).toContain('Coming soon')
+    expect(html).not.toContain('AI Executive')
+    // Start plan: gated by the growth tier — CTA stays "Upgrade Plan".
     expect(html).toContain('Requires Growth')
-    expect(html).toContain('AI Employee')
-    expect(html).toContain('View details')
+    expect(html).toContain('Upgrade Plan')
+    expect(html).not.toContain('Upgrade to Growth')
   })
-  it('renders the upcoming module info drawer with a plan matrix', () => {
-    const module = UPCOMING_MODULES.find((entry) => entry.id === 'STORE_COACH')
+  it('renders the module info drawer with a plan matrix and an Open CTA', () => {
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'STORE_COACH')
     if (!module) throw new Error('missing module')
-    const html = renderToStaticMarkup(createElement(UpcomingModuleDrawer, { module, plan: 'trial', onClose: () => undefined, onUpgrade: () => undefined }))
+    const html = renderToStaticMarkup(createElement(GrowthModuleDrawer, { module, plan: 'trial', onClose: () => undefined, onOpen: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('Store Coach')
     expect(html).toContain('Plan availability')
     expect(html).toContain('You are here')
+    expect(html).toContain('Open Store Coach')
+    expect(html).not.toContain('coming soon')
   })
 })
 
@@ -306,7 +325,46 @@ describe('PR49 tooltips and empty states', () => {
   it('renders the getting-started guide in the empty state', () => {
     const html = renderToStaticMarkup(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))
     expect(html).toContain('Connect Shopify')
-    expect(html).toContain('Run your agents')
+    expect(html).toContain('Agents run automatically')
     expect(html).toContain('Review and act')
+  })
+})
+
+describe('AI actions and insights KPI helpers', () => {
+  const now = new Date('2026-08-18T12:00:00Z')
+  it('zero-fills a daily series across the last 7 days', () => {
+    const series = dailySeries([{ day: '2026-08-18', generated: 2, approved: 1 }], 'generated', 7, now)
+    expect(series).toHaveLength(7)
+    expect(series.map((point) => point.value)).toEqual([0, 0, 0, 0, 0, 0, 2])
+    expect(series[series.length - 1]?.day).toBe('2026-08-18')
+  })
+  it('computes current vs previous week totals and a percentage change', () => {
+    const trend = [
+      { day: '2026-08-05', generated: 1, approved: 0 },
+      { day: '2026-08-15', generated: 3, approved: 0 },
+    ]
+    const totals = periodTotals(dailySeries(trend, 'generated', 14, now))
+    expect(totals.current).toBe(3)
+    expect(totals.previous).toBe(1)
+    expect(totals.changePercent).toBe(200)
+  })
+  it('returns a null change when there is no prior baseline', () => {
+    const totals = periodTotals(dailySeries([], 'generated', 14, now))
+    expect(totals.current).toBe(0)
+    expect(totals.previous).toBe(0)
+    expect(totals.changePercent).toBeNull()
+    expect(trendDirection(totals.changePercent)).toBe('new')
+  })
+  it('hides the Pricing and Campaign agents from the display roster', () => {
+    const visible = visibleAgents(overviewFor('commander'))
+    expect(visible.map((agent) => agent.id)).not.toContain('PRICING_AGENT')
+    expect(visible.map((agent) => agent.id)).not.toContain('CAMPAIGN_AGENT')
+    expect(visible).toHaveLength(5)
+  })
+  it('renders a theme-adaptive sparkline with per-day hover labels', () => {
+    const html = renderToStaticMarkup(createElement(Sparkline, { points: [{ day: '2026-08-17', value: 2 }, { day: '2026-08-18', value: 4 }], ariaLabel: 'Insights generated' }))
+    expect(html).toContain('role="img"')
+    expect(html).toContain('aria-label="Insights generated"')
+    expect(html).toContain('2026-08-17: 2')
   })
 })

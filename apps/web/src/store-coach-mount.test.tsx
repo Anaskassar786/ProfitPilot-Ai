@@ -42,7 +42,7 @@ function mockBackend(): void {
 beforeEach(() => {
   consoleErrors.length = 0
   ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  window.history.replaceState({}, '', '/ai-growth-command/coach?storeId=mount-test')
+  window.history.replaceState({}, '', '/ai-growth-command/coach?storeId=mount-test&shop=mount-test.myshopify.com')
   window.localStorage.clear()
   const originalError = console.error
   vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
@@ -82,16 +82,16 @@ describe('Store Coach app mount (PR #48)', () => {
   it('renders the AI Growth Command deep link without crashing', async () => {
     await expect(mountApp()).resolves.toBeUndefined()
   })
-  it('shows Store Coach, GrowthIQ, and Insights Hub as separate sidebar entries', async () => {
+  it('shows Store Coach, GrowthIQ, and PatternAI as separate sidebar entries', async () => {
     await mountApp()
     const nav = document.querySelector('.side-nav')
     expect(nav?.textContent ?? '').toContain('Store Coach')
     expect(nav?.textContent ?? '').toContain('GrowthIQ')
-    expect(nav?.textContent ?? '').toContain('Insights Hub')
+    expect(nav?.textContent ?? '').toContain('PatternAI')
     const labels = [...(nav?.querySelectorAll('.nav-item') ?? [])].map((item) => item.textContent ?? '')
     expect(labels.some((text) => text.includes('Store Coach'))).toBe(true)
     expect(labels.some((text) => text.includes('GrowthIQ'))).toBe(true)
-    expect(labels.some((text) => text.includes('Insights Hub'))).toBe(true)
+    expect(labels.some((text) => text.includes('PatternAI'))).toBe(true)
   })
   it('does not nest Store Coach and GrowthIQ as tabs inside one page', async () => {
     await mountApp()
@@ -103,10 +103,34 @@ describe('Store Coach app mount (PR #48)', () => {
   it('shows the educational empty states for a store with no huddle yet', async () => {
     await mountApp()
     const main = document.querySelector('.coach-main')
-    expect(main?.textContent ?? '').toContain('Your Store Coach is preparing today')
-    expect(main?.textContent ?? '').toContain('All clear! No urgent actions today')
-    expect(main?.textContent ?? '').toContain('Set your first weekly goal')
+    expect(main?.textContent ?? '').toContain('Welcome to Store Coach!')
+    expect(main?.textContent ?? '').toContain('Generate My First Briefing')
+    expect(main?.textContent ?? '').toContain('All caught up')
+    expect(main?.textContent ?? '').toContain("Let’s set your first weekly goal")
     expect(main?.textContent ?? '').toContain('Complete your first huddle to earn your first badge!')
+  })
+  it('greets the merchant personally with streak and huddle actions', async () => {
+    await mountApp()
+    const hero = document.querySelector('.coach-hero')
+    expect(hero?.textContent ?? '').toMatch(/Good (morning|afternoon|evening)|Burning the midnight oil/)
+    expect(hero?.textContent ?? '').toContain('Mount Test')
+    expect(hero?.textContent ?? '').toContain('Streak: 0 days')
+    const actions = [...(hero?.querySelectorAll('button') ?? [])].map((button) => button.textContent ?? '')
+    expect(actions.some((label) => label.includes('Start Morning Huddle'))).toBe(true)
+    expect(actions.some((label) => label.includes('Ask Coach'))).toBe(true)
+  })
+  it('shows the plan card with factual inclusions and Upgrade Plan wording', async () => {
+    await mountApp()
+    const planCard = document.querySelector('.coach-plan-card')
+    expect(planCard?.textContent ?? '').toContain('YOUR PLAN')
+    expect(planCard?.textContent ?? '').toContain('2 priorities per day')
+    const upgradeButtons = [...(planCard?.querySelectorAll('button') ?? [])].filter((button) => /upgrade/i.test(button.textContent ?? ''))
+    expect(upgradeButtons.length).toBeGreaterThan(0)
+    for (const button of upgradeButtons) expect(button.textContent?.trim()).toBe('Upgrade Plan')
+  })
+  it('never uses “Upgrade to <tier>” wording anywhere on the page', async () => {
+    await mountApp()
+    expect(document.body.textContent ?? '').not.toMatch(/Upgrade to (Start|Growth|Commander)/i)
   })
   it('opens GrowthIQ from its own sidebar entry', async () => {
     await mountApp()

@@ -95,6 +95,24 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     inventory: inventoryRepository,
     analytics: f7.dataPlane.analytics,
     recommendations: f7.ai.recommendations,
+    workflows: {
+      list: async (tenant, query) => {
+        const page = await f7.automation.workflows.list(tenant, query)
+        return {
+          items: page.items.map((workflow) => ({
+            id: workflow.id,
+            name: workflow.name,
+            status: workflow.status,
+            category: workflow.category,
+            nodeCount: workflow.nodeCount,
+            lastRunAt: workflow.lastRunAt,
+            successCount: workflow.successCount,
+            failureCount: workflow.failureCount,
+          })),
+          total: page.total,
+        }
+      },
+    },
   })
   const commandActions = new ProductionCommandActions({
     customers: customerRepository,
@@ -117,6 +135,10 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
         const run = await execution.start({ ...workflow, definitionHash: workflow.definitionHash, activatedAt: workflow.activatedAt }, { triggerType: 'MANUAL', triggerEventId: `ai-command:${workflowId}`, context: { source: 'ai-command' } })
         void execution.execute({ ...workflow, definitionHash: workflow.definitionHash, activatedAt: workflow.activatedAt }, run.id)
         return { runId: run.id, status: run.status }
+      },
+      setStatus: async (tenant, workflowId, status) => {
+        const updated = await f7.automation.workflows.setStatus(tenant, workflowId, status, 'ai-command')
+        return updated ? { id: updated.id, name: updated.name, status: updated.status } : null
       },
     },
     reports: {

@@ -75,11 +75,12 @@ export function GrowthIqMark({ size = 24, withBadge = true, title = 'GrowthIQ' }
 
 /**
  * Sidebar/breadcrumb icon adapter. The workspace nav renders icons with the
- * Lucide calling convention (`size` + `strokeWidth`); this wrapper maps that
- * onto GrowthIqMark so the brand mark can be used as a nav icon without
- * touching the shared nav rendering.
+ * shared icon contract (`size` + `strokeWidth` + `className`); this wrapper
+ * maps that onto GrowthIqMark so the brand mark can be used as a nav icon
+ * without touching the shared nav rendering.
  */
-export function GrowthIqNavIcon({ size = 17 }: Readonly<{ size?: number; strokeWidth?: number }>) {
+export function GrowthIqNavIcon(props: Readonly<{ size?: number | string; strokeWidth?: number; className?: string }>) {
+  const size = typeof props.size === 'number' ? props.size : Number.parseInt(String(props.size ?? 17), 10) || 17
   return <GrowthIqMark size={size} />
 }
 
