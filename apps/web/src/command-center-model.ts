@@ -26,7 +26,7 @@ export type AgentOverview = Readonly<{ plan: PlanTier; unlockedCount: number; to
 
 export type CostSummaryView = Readonly<{ storeId: string; day: string; microDollars: number; capMicroDollars: number; remainingMicroDollars: number; calls: number }>
 export type CostBreakdownRow = Readonly<{ agent: string; model: string; microDollars: number; calls: number; promptTokens: number; completionTokens: number }>
-export type StoreHealthResult = Readonly<{ score: number | null; method: string; components: readonly Readonly<{ key: string; score: number | null; weight: number; reason: string }>[] }>
+export type StoreHealthResult = Readonly<{ score: number | null; method: string; components: readonly Readonly<{ key: string; score: number | null; weight: number; reason: string }>[]; orderCount?: number; historyDays?: number | null }>
 export type RuleCatalogEntry = Readonly<{ id: string; name: string; agent: string; purpose: string; threshold: string; inputs: readonly string[]; impact: string }>
 export type AgentActivityItem = Readonly<{ id: string; agent: string; ruleId: string; title: string; reason: string; impactValue: number; impactLabel: string; currency: string; status: string; explanationStatus: string; confidence: number; confidenceLevel: string; version: number; createdAt: string }>
 
@@ -142,6 +142,34 @@ export function healthTrend(health: StoreHealthResult | null): 'up' | 'down' | '
   return 'flat'
 }
 
+export type HealthTone = 'healthy' | 'warning' | 'critical'
+export type StoreHealthDisplay =
+  | Readonly<{ kind: 'score'; score: number; tone: HealthTone; label: string }>
+  | Readonly<{ kind: 'empty'; message: string }>
+
+/** Minimum closed-period orders before a health score is meaningful. */
+export const MIN_ORDERS_FOR_HEALTH = 10
+/** Minimum days of order history before momentum windows are meaningful. */
+export const MIN_HISTORY_DAYS_FOR_HEALTH = 7
+
+/**
+ * Distinguishes a real (possibly zero) score from a not-enough-data state so
+ * the hero never shows a bare "0/100" for a store with no evidence.
+ */
+export function storeHealthDisplay(health: StoreHealthResult | null): StoreHealthDisplay {
+  if (!health) return { kind: 'empty', message: 'Not enough data' }
+  if (health.score !== null) {
+    const tone: HealthTone = health.score === 0 ? 'critical' : health.score >= 75 ? 'healthy' : health.score >= 50 ? 'warning' : 'critical'
+    const label = tone === 'healthy' ? 'Healthy' : tone === 'warning' ? 'Needs attention' : 'Critical'
+    return { kind: 'score', score: health.score, tone, label }
+  }
+  const orderCount = health.orderCount
+  if (orderCount === undefined) return { kind: 'empty', message: 'Not enough data' }
+  if (orderCount < MIN_ORDERS_FOR_HEALTH) return { kind: 'empty', message: `Not enough data — need ${MIN_ORDERS_FOR_HEALTH}+ orders` }
+  if (health.historyDays !== undefined && health.historyDays !== null && health.historyDays < MIN_HISTORY_DAYS_FOR_HEALTH) return { kind: 'empty', message: 'Calculating… check back tomorrow' }
+  return { kind: 'empty', message: 'Not enough data' }
+}
+
 /** Parses one SSE frame block into a RunAllEvent, tolerating unknown events. */
 export function parseSseFrame(frame: string): RunAllEvent | null {
   let event = ''
@@ -166,4 +194,181 @@ function asStringArray(value: unknown): readonly string[] { return Array.isArray
 function asSkipped(value: unknown): readonly Readonly<{ agent: string; reason: string }>[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => typeof item === 'object' && item !== null && 'agent' in item ? [{ agent: String((item as Record<string, unknown>).agent), reason: String((item as Record<string, unknown>).reason ?? '') }] : [])
+}
+
+/* ── Agent categories (PR49 section organization) ─────────────────────── */
+
+export type AgentCategory = 'AI Employees' | 'Communication' | 'Strategic Overview'
+export const AGENT_CATEGORY_ORDER: readonly AgentCategory[] = ['AI Employees', 'Communication', 'Strategic Overview']
+
+export function agentCategory(agent: Readonly<{ id: string }>): AgentCategory {
+  if (agent.id === 'CAMPAIGN_AGENT') return 'Communication'
+  if (agent.id === 'EXECUTIVE_AGENT') return 'Strategic Overview'
+  return 'AI Employees'
+}
+
+/* ── Agent guide content for the detail drawer (static copy, no fake data) ── */
+
+export type AgentGuide = Readonly<{
+  description: string
+  whatItDoes: readonly string[]
+  sampleInsights: readonly string[]
+  useCases: readonly string[]
+  dataSources: readonly string[]
+}>
+
+const FALLBACK_GUIDE: AgentGuide = {
+  description: 'Explains deterministic store evidence in plain language — never inventing a number.',
+  whatItDoes: ['Reads real store evidence', 'Explains signals in plain language', 'Never invents numbers'],
+  sampleInsights: ['A signal this agent watches will appear here after a run.'],
+  useCases: ['Review recommendations', 'Act on evidence-backed insights'],
+  dataSources: ['Synced store data'],
+}
+
+export const AGENT_GUIDES: Readonly<Record<string, AgentGuide>> = {
+  REVENUE_AGENT: {
+    description: 'Explains closed-period revenue momentum so you can double down on wins and catch drops before they compound.',
+    whatItDoes: ['Compares the last 30 days of revenue against the previous 30', 'Flags accelerating and slipping revenue momentum', 'Grounds every explanation in your real revenue rows'],
+    sampleInsights: ['Revenue is up 18% versus the previous 30 days — here is what is driving the streak.', 'Revenue momentum is slipping: down 12% period over period.', 'No new revenue signals in the current evidence.'],
+    useCases: ['Spot growth trends early', 'Catch declines before they compound', 'Prepare week-over-week revenue check-ins'],
+    dataSources: ['analytics.revenue_daily', 'analytics.orders_daily'],
+  },
+  INVENTORY_AGENT: {
+    description: 'Tracks stock cover and dead inventory so cash never sits idle on a shelf.',
+    whatItDoes: ['Flags products on pace to sell out within your cover window', 'Finds inventory with zero sales locking up cash', 'Uses real velocity — never guesses'],
+    sampleInsights: ['Two products will sell out within a week at current velocity — reorder now.', 'A product has had zero sales for 120 days — consider a clearance.', 'Inventory cover looks healthy across your catalog.'],
+    useCases: ['Avoid stockouts on best sellers', 'Free cash locked in dead stock', 'Plan reorders from real velocity'],
+    dataSources: ['products.inventory_units', 'products.average_daily_units', 'products.units_sold_120d'],
+  },
+  CUSTOMER_AGENT: {
+    description: 'Finds churn risks and reorder windows in your customer base — never using personally identifiable information.',
+    whatItDoes: ['Detects high-value customers going quiet', 'Times reorder nudges for returning customers', 'Works from opaque customer keys — never names or emails'],
+    sampleInsights: ['A high-value customer has gone quiet for 80 days. A win-back nudge is due.', 'A returning customer is outside their reorder window.', 'No churn-risk customers match the current thresholds.'],
+    useCases: ['Win back at-risk customers', 'Time repeat-purchase campaigns', 'Protect customer lifetime value'],
+    dataSources: ['customers.lifetime_value', 'customers.last_order_at', 'customers.order_count'],
+  },
+  PRICING_AGENT: {
+    description: 'Spots margin-safe price test opportunities from real cost and demand data.',
+    whatItDoes: ['Finds products clearing your margin floor with active demand', 'Models a measured uplift window', 'Never invents a cost or a price'],
+    sampleInsights: ['A best-seller clears your margin floor — a measured 5% test is available.', 'No pricing opportunities clear the margin threshold right now.', 'Your margin floor is protected across active products.'],
+    useCases: ['Test price on proven sellers', 'Protect gross margins', 'Model uplift before changing prices'],
+    dataSources: ['products.unit_price', 'products.unit_cost', 'products.average_daily_units'],
+  },
+  CAMPAIGN_AGENT: {
+    description: 'Drafts compliant recovery and welcome campaigns from live checkout and customer signals.',
+    whatItDoes: ['Recovers checkouts inside the 48-hour window', 'Welcomes first orders while they are fresh', 'Writes concise, compliant campaign language'],
+    sampleInsights: ['Three abandoned checkouts are still inside the 48-hour recovery window.', 'A new customer placed their first order two days ago — welcome them.', 'No checkouts are in the recovery window right now.'],
+    useCases: ['Recover abandoned checkouts', 'Welcome new customers', 'Draft campaign copy from real signals'],
+    dataSources: ['checkouts.total', 'checkouts.created_at', 'customers.order_count'],
+  },
+  PRODUCT_AGENT: {
+    description: 'Learns which products travel together and proposes cross-sell pairings.',
+    whatItDoes: ['Builds co-purchase pairs from real order line items', 'Proposes pairings above your co-purchase threshold', 'Never fabricates a pairing'],
+    sampleInsights: ['Customers who buy your top product add a companion item 12% of the time.', 'A pairing clears the co-purchase threshold — test a cross-sell.', 'No pairings clear the threshold in the current evidence.'],
+    useCases: ['Increase basket value', 'Discover natural bundles', 'Merchandise cross-sells'],
+    dataSources: ['orders.product_pairs', 'products.unit_price'],
+  },
+  EXECUTIVE_AGENT: {
+    description: 'Delivers a weekly plain-language digest of your deterministic store health.',
+    whatItDoes: ['Summarizes the store health score in plain language', 'Cites the weakest health component', 'Keeps every number grounded in evidence'],
+    sampleInsights: ['Store health is 74/100 this week — inventory cover is the weak component.', 'Store health is holding steady at 82/100.', 'A health digest will appear once closed-period data is available.'],
+    useCases: ['Weekly owner check-ins', 'Board-ready summaries', 'Spot the weakest part of the business'],
+    dataSources: ['health.score', 'health.components'],
+  },
+}
+
+export function agentGuide(id: string): AgentGuide {
+  return AGENT_GUIDES[id] ?? FALLBACK_GUIDE
+}
+
+/* ── Upcoming AI Growth Command modules (placeholders until PRs #48–#51 land) ── */
+
+export type UpcomingModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'INSIGHTS_HUB' | 'AI_COMMAND'
+export type UpcomingModule = Readonly<{
+  id: UpcomingModuleId
+  label: string
+  description: string
+  sampleInsight: string
+  /** Feature level for each plan tier, from the plan-gating matrix. */
+  planTiers: Readonly<Record<PlanTier, string>>
+  /** What merchants get once the module ships. */
+  features: readonly string[]
+}>
+
+export const UPCOMING_MODULES: readonly UpcomingModule[] = [
+  {
+    id: 'STORE_COACH',
+    label: 'Store Coach',
+    description: 'Your daily business advisor providing tactical coaching.',
+    sampleInsight: 'Your inventory cover slipped this week — here are three moves to recover it.',
+    planTiers: { trial: 'Basic', start: 'Full', growth: 'Advanced', commander: '+ Voice + PDF' },
+    features: ['Daily tactical coaching from your real store numbers', 'Plain-language action plans', 'Voice and PDF briefings on Commander'],
+  },
+  {
+    id: 'AI_EXECUTIVE',
+    label: 'AI Executive',
+    description: 'Strategic boardroom intelligence for big decisions.',
+    sampleInsight: 'Quarterly revenue is tracking 9% above plan — a board-ready summary is ready.',
+    planTiers: { trial: 'Sample', start: 'Basic', growth: 'Full', commander: '+ Investor PDFs' },
+    features: ['Boardroom-level strategic summaries', 'Investor-ready PDFs on Commander', 'Big-decision context from closed-period data'],
+  },
+  {
+    id: 'INSIGHTS_HUB',
+    label: 'Insights Hub',
+    description: 'Discovers hidden patterns and delivers deep insights.',
+    sampleInsight: 'We found a hidden pattern: weekend bundles outperform weekday discounts.',
+    planTiers: { trial: 'Limited', start: 'Basic', growth: 'Full', commander: '+ API + Real-time' },
+    features: ['Deep pattern discovery across your data', 'API and real-time streams on Commander', 'Hidden correlations surfaced automatically'],
+  },
+  {
+    id: 'AI_COMMAND',
+    label: 'AI Command',
+    description: 'Universal command center — control your store with text.',
+    sampleInsight: 'Ask “Which products should I reorder this week?” — get an evidence-backed answer.',
+    planTiers: { trial: 'Info only', start: 'Info only', growth: 'Info only', commander: '+ Full Actions' },
+    features: ['Universal text command for your store', 'Evidence-backed answers, never invented', 'Full store actions on Commander'],
+  },
+]
+
+export type UpcomingAccess = Readonly<{
+  tierLabel: string
+  badge: 'available' | 'requires'
+  badgeLabel: string
+  note: string | null
+  requiresUpgrade: boolean
+  upgradePlan: PlanTier | null
+}>
+
+/** Plan-gating decision for an upcoming module on the merchant's current plan. */
+export function upcomingModuleAccess(module: UpcomingModule, plan: PlanTier): UpcomingAccess {
+  if (module.id === 'AI_EXECUTIVE') {
+    const gated = plan === 'trial' || plan === 'start'
+    return {
+      tierLabel: module.planTiers[plan],
+      badge: gated ? 'requires' : 'available',
+      badgeLabel: gated ? 'Requires Growth' : 'Available',
+      note: gated ? 'Limited features on your current plan' : null,
+      requiresUpgrade: gated,
+      upgradePlan: 'growth',
+    }
+  }
+  if (module.id === 'AI_COMMAND') {
+    const actions = plan === 'commander'
+    return {
+      tierLabel: module.planTiers[plan],
+      badge: 'available',
+      badgeLabel: 'Available',
+      note: actions ? null : 'Full actions require Commander',
+      requiresUpgrade: !actions,
+      upgradePlan: 'commander',
+    }
+  }
+  return {
+    tierLabel: module.planTiers[plan],
+    badge: 'available',
+    badgeLabel: 'Available',
+    note: null,
+    requiresUpgrade: false,
+    upgradePlan: null,
+  }
 }

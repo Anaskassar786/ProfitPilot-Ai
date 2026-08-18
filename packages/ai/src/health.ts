@@ -1,7 +1,15 @@
 import type { StoreSnapshot } from './domain.js'
 
 export type HealthComponent = Readonly<{ key: string; score: number | null; weight: number; reason: string }>
-export type StoreHealth = Readonly<{ score: number | null; method: 'deterministic-v1'; components: readonly HealthComponent[] }>
+export type StoreHealth = Readonly<{
+  score: number | null
+  method: 'deterministic-v1'
+  components: readonly HealthComponent[]
+  /** Total closed-period order rows across the last two 30-day windows. */
+  orderCount: number
+  /** Days of order history between the earliest and latest order row (null when unknown). */
+  historyDays: number | null
+}>
 
 export function calculateStoreHealth(snapshot: StoreSnapshot): StoreHealth {
   const components: readonly HealthComponent[] = [
@@ -10,11 +18,27 @@ export function calculateStoreHealth(snapshot: StoreSnapshot): StoreHealth {
     inventoryHealth(snapshot),
     retentionHealth(snapshot),
   ]
+  const orderCount = snapshot.last30dOrders + snapshot.previous30dOrders
+  const historyDays = orderHistoryDays(snapshot)
   const available = components.filter((component) => component.score !== null)
-  if (available.length === 0) return { score: null, method: 'deterministic-v1', components }
+  if (available.length === 0) return { score: null, method: 'deterministic-v1', components, orderCount, historyDays }
   const weighted = available.reduce((sum, component) => sum + (component.score ?? 0) * component.weight, 0)
   const weights = available.reduce((sum, component) => sum + component.weight, 0)
-  return { score: Math.round(weighted / weights), method: 'deterministic-v1', components }
+  return { score: Math.round(weighted / weights), method: 'deterministic-v1', components, orderCount, historyDays }
+}
+
+/**
+ * Days between the earliest and latest order row. Used to distinguish a store
+ * with genuine (but thin) order history from one that simply has not synced
+ * enough data yet — the Command Center renders different empty states for each.
+ */
+function orderHistoryDays(snapshot: StoreSnapshot): number | null {
+  const days = snapshot.orders.map((order) => order.day).filter((day) => day.length === 10 && Number.isFinite(Date.parse(`${day}T00:00:00Z`)))
+  if (days.length === 0) return null
+  const earliest = days.reduce((min, day) => (day < min ? day : min))
+  const latest = snapshot.dataFreshAt && snapshot.dataFreshAt.length === 10 ? snapshot.dataFreshAt : days.reduce((max, day) => (day > max ? day : max))
+  const span = Math.round((Date.parse(`${latest}T00:00:00Z`) - Date.parse(`${earliest}T00:00:00Z`)) / 86_400_000)
+  return Number.isFinite(span) ? Math.max(0, span) : null
 }
 
 function momentum(key: string, current: number, previous: number, weight: number): HealthComponent {

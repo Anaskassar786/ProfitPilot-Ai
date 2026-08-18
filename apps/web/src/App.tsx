@@ -153,7 +153,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   customers: { title: 'Customers', description: 'Customer data stays tenant-scoped and minimized by default.', icon: Users },
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
-  'command-center': { title: 'AI Command Center', description: 'Seven agents explain deterministic store evidence. They never invent numbers.', icon: Bot },
+  'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
@@ -670,7 +670,7 @@ function ProductsPage({ context, catalog, analytics, onSync }: { context: Worksp
 function EmptyDataPage({ page, context, onSync }: { page: SectionId; context: WorkspaceContext; onSync: (module: string) => Promise<void> }) { const meta = pageMeta[page]; const Icon = meta.icon; return <PageLayout eyebrow="Store data" title={meta.title} description={meta.description}><EmptyState icon={Icon} title={`No ${meta.title.toLowerCase()} data yet`} description={context.storeId ? 'This section is wired to the foundation and will render once its source module has real rows.' : 'Connect Shopify first. ProfitPilot does not ship demo records.'} action={context.storeId ? `Sync ${meta.title}` : 'Connect Shopify'} onAction={() => void onSync(page)} /></PageLayout> }
 
 function CommandCenterPage({ context, onToast, onNavigate }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigate: (page: string) => void }) {
-  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your intelligent workforce, always on duty. Every number is deterministic evidence — agents only explain, never invent.">
+  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your AI workforce, always working for you. Every insight backed by real data — never invented.">
     <CommandCenterWorkspace context={context} onToast={onToast} onNavigate={onNavigate} />
   </PageLayout>
 }
