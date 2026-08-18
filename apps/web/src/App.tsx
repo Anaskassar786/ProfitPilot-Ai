@@ -173,7 +173,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'ai-growth-command': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'ai-executive': { title: 'AI Executive', description: 'Boardroom-grade strategy — reports, benchmarks, scenarios, and risks from your real store data.', icon: Landmark },
-  automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
+  automation: { title: 'Automation', description: 'Automate the busywork — recover carts, welcome customers, and stay on top of stock.', icon: Workflow },
   'insights-hub': { title: 'Insights Hub', description: 'Where data becomes wisdom — discoveries, lessons, personas, and Why? answers from your real synced data.', icon: FlaskConical },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
