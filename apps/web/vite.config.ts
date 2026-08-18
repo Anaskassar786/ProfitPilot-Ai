@@ -10,6 +10,10 @@ export default defineConfig({
     allowedHosts: true,
     headers: { 'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws:; object-src 'none'" },
     proxy: {
+      // PatternAI deep links are client-side routes. Without this bypass the
+      // broad '/ai' rule below would forward /ai-growth-command/patternai to
+      // the API and the dev server would answer a page refresh with JSON.
+      '^/ai-growth-command/patternai': { target: 'http://127.0.0.1:5173', bypass: () => '/index.html' },
       '/sync': 'http://127.0.0.1:3000',
       '/analytics': 'http://127.0.0.1:3000',
       '/catalog': 'http://127.0.0.1:3000',
@@ -36,6 +40,11 @@ export default defineConfig({
       '/forecasting': 'http://127.0.0.1:3000',
       '/reports': 'http://127.0.0.1:3000',
       '/store-coach': 'http://127.0.0.1:3000',
+      // PatternAI (formerly Insights Hub): both prefixes are proxied so the
+      // dev server never answers module API calls with the SPA shell.
+      '/patternai': 'http://127.0.0.1:3000',
+      '/insights': 'http://127.0.0.1:3000',
+      '/public-api': 'http://127.0.0.1:3000',
     },
   },
   build: { chunkSizeWarningLimit: 700 },

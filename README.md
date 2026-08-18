@@ -93,8 +93,8 @@ Store Coach is the merchant's personal AI business advisor and the first
 section of the new **AI Growth Command** module (`/ai-growth-command`). Daily
 huddles, plan-capped priorities, tracked goals, 50-badge achievements, a
 30-day progress dashboard with modern charts, SSE-streamed grounded chat, and
-Sunday Brevo digests. Executive Briefing (PR #49) and Insights Hub (PR #50)
-arrive as tabs in the same page; Campaigns now shows a "Coming Soon"
+Sunday Brevo digests. Executive Briefing (PR #49) and PatternAI (PR #50)
+arrive as sibling sections of AI Growth Command; Campaigns now shows a "Coming Soon"
 placeholder (existing templates are preserved, not deleted).
 
 - **Zero fake data** — every number is read from synced store rows; AI output
@@ -144,11 +144,13 @@ The Automation hub is a tenant-scoped Shopify workflow system with a React Flow 
 
 Workflow limits are enforced by the API: Trial 2, Start 5, Growth 20, and Commander unlimited. AI workflow nodes and AI templates are Commander-only. Sensitive actions are payload-bound to expiring approval records, run logs redact PII, and all PostgreSQL workflow operations use tenant context.
 
-## Insights Hub (PR #50)
+## PatternAI (formerly Insights Hub)
 
-"Where data becomes wisdom" — the third module of AI Growth Command. It discovers hidden patterns (weekly rhythms, anomalies, product affinities, momentum), compiles lessons grounded in the store's own history, clusters customers into named personas (RFM, ≥50 customers, anonymized aggregates only), answers Why? questions with ranked root causes, watches business trends, runs product/period/segment/category/channel comparisons, compounds a searchable knowledge base, remembers everything on a plan-windowed timeline, and forecasts revenue/orders/stockouts with honest confidence intervals and post-window accuracy grading.
+"Discover the patterns that drive your business" — the discovery module of AI Growth Command, at `/ai-growth-command/patternai`. It discovers hidden patterns (weekly rhythms, anomalies, product affinities, momentum), compiles lessons grounded in the store's own history, clusters customers into named personas (RFM, ≥50 customers, anonymized aggregates only), answers Why? questions with ranked root causes, watches business trends, runs product/period/segment/category/channel comparisons, compounds a searchable knowledge base, remembers everything on a plan-windowed timeline, and forecasts revenue/orders/stockouts with honest confidence intervals and post-window accuracy grading.
 
-Everything is computed deterministically from real synced analytics — thin data produces educational empty states, never invented numbers; trial explores via clearly labeled samples. The AI narrator (dedicated OpenRouter key, free-tier Nemotron models, $0/day budget) may only rephrase engine output through the language firewall. Locked capabilities return 402 `UPGRADE_REQUIRED` with a generic **Upgrade Plan** CTA. Charts are custom theme-adaptive SVGs (bubble/radar/heatmap/area-gradient/scatter/timeline/word-cloud/network/treemap — no line or donut charts). Commander adds a Bearer-key public API (`/public-api/insights/*`, 100 req/h) documented at `/public-api/insights/openapi.json`. Auto-discovery sweeps run daily 02:00 UTC via the worker. See `docs/INSIGHTS_HUB.md`.
+Everything is computed deterministically from real synced analytics — thin data produces educational empty states, never invented numbers; trial explores via clearly labeled samples. The AI narrator (dedicated OpenRouter key, free-tier Nemotron models, $0/day budget) may only rephrase engine output through the language firewall. Locked capabilities return 402 `UPGRADE_REQUIRED` with a generic **Upgrade Plan** CTA. Charts are custom theme-adaptive SVGs (bubble/radar/heatmap/area-gradient/scatter/timeline/word-cloud/network/treemap — no line or donut charts). Commander adds a Bearer-key public API (`/public-api/insights/*`, 100 req/h) documented at `/public-api/insights/openapi.json`. Auto-discovery sweeps run daily 02:00 UTC via the worker.
+
+The module is branded **PatternAI**, with a five-node neural-constellation mark and a dark (`#0B0D14`) / light (`#FAFBFC`) design system in `apps/web/src/patternai.css`. Storage keeps the original `insights_*` table names and the `INSIGHTS_HUB_*` environment block; the HTTP surface answers on both `/patternai/*` and `/insights/*`, and pre-rebrand `/ai-growth-command/insights` links still resolve. Migration `0025_patternai_id_types.sql` widens the module's id columns to `text` — the uuid/text mismatch in `0024` was what made the page 500. `GET /patternai/health?storeId=…` reports per-section storage readiness. See `docs/PATTERN_AI.md`.
 - `@profitpilot/forecasting` — deterministic seasonality, demand, stockout, and RFM formula foundation
 - `@profitpilot/reporting` — closed-period reports, custom PDF writers, DB/R2 vault, and delivery status
 - `@profitpilot/monitoring` — error/Sentry monitoring, access review, launch controls, queue ops, and p95 load-budget measurements

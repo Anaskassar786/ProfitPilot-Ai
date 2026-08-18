@@ -95,11 +95,12 @@ Every velocity-derived insight requires at least 30 days of sales history in
 `{ status: 'insufficient_data', message }` explaining how many days are still
 missing instead of an estimate.
 
-## Insights Hub (PR #50)
+## PatternAI (formerly Insights Hub)
 
-All Insights Hub figures are deterministic computations over real synced store data; AI narration is firewall-checked styling only. Every route takes `storeId`; locked capabilities return 402 with `reason: 'UPGRADE_REQUIRED'` and the generic `cta: 'Upgrade Plan'`. Merchant endpoints are rate-limited to 25 req/min/store. Full reference: `docs/INSIGHTS_HUB.md`.
+All PatternAI figures are deterministic computations over real synced store data; AI narration is firewall-checked styling only. Every route takes `storeId`; locked capabilities return 402 with `reason: 'UPGRADE_REQUIRED'` and the generic `cta: 'Upgrade Plan'`. Merchant endpoints are rate-limited to 25 req/min/store. Every route is served on both the canonical `/patternai/*` prefix and the pre-rebrand `/insights/*` prefix; `GET /patternai/health` reports per-section storage readiness. Full reference: `docs/PATTERN_AI.md`.
 
-- `GET /insights/overview?storeId=` — plan, feature matrix, usage meters, counts, data readiness, preferences.
+- `GET /patternai/health?storeId=` — per-section storage diagnostics: `{ ok, plan, narration, autoDiscovery, sections[] }`.
+- `GET /insights/overview?storeId=` — plan, feature matrix, usage meters, counts, data readiness, preferences, and `degraded[]` (sections that could not load this render).
 - Discoveries — `GET /insights/discoveries?storeId=&status=&category=&limit=&cursor=`, `GET /insights/discoveries/feed`, `POST /insights/discoveries/generate`, `GET /insights/discoveries/:id`, `POST /insights/discoveries/:id/status` (`NEW|REVIEWED|SAVED|DISMISSED|ACTED_ON`).
 - Lessons — `GET /insights/lessons[/recommended][/:id]`, `POST /insights/lessons/generate`, `POST /insights/lessons/:id/read|rate|bookmark`.
 - Patterns — `GET /insights/patterns?type=`, `POST /insights/patterns/detect`, `POST /insights/patterns/:id/alert`, `DELETE /insights/patterns/:id`.

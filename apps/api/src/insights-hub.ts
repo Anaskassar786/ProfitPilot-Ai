@@ -1,5 +1,5 @@
 /**
- * Insights Hub — API service layer (PR #50).
+ * PatternAI (formerly Insights Hub) — API service layer.
  *
  * Orchestrates the deterministic engine in @profitpilot/ai with tenant-scoped
  * persistence (migration 0024), plan gating, monthly usage metering, per-
@@ -483,14 +483,43 @@ const jsonArr = (value: unknown): readonly unknown[] => (Array.isArray(value) ? 
 const strArr = (value: unknown): readonly string[] => jsonArr(value).filter((item): item is string => typeof item === 'string')
 const bool = (value: unknown): boolean => value === true || value === 't'
 
-export class PostgresInsightsHubRepository implements InsightsHubRepository {
-  public constructor(private readonly database: SqlExecutor) {}
+/**
+ * Postgres error codes that mean "this deployment's schema is not ready yet"
+ * rather than "the merchant did something wrong":
+ *   42P01 undefined_table, 42703 undefined_column, 42883 undefined_function,
+ *   3F000 invalid_schema_name.
+ *
+ * When migration 0025 has not been applied yet (or a table was dropped by an
+ * operator), reads degrade to "no rows" instead of taking the whole page down
+ * with a 500. Writes still surface a real, actionable error.
+ */
+const SCHEMA_NOT_READY_CODES: ReadonlySet<string> = new Set(['42P01', '42703', '42883', '3F000'])
 
-  private query<Value>(storeId: StoreId, sql: string, values: readonly unknown[], map: (row: Row) => Value): Promise<readonly Value[]> {
-    return withTenantContext(this.database, storeId, async (client) => {
-      const result = await client.query<Row>(sql, values)
-      return result.rows.map(map)
-    })
+export function isSchemaNotReadyError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' && SCHEMA_NOT_READY_CODES.has(code)
+}
+
+export type InsightsRepositoryLogger = Readonly<{ warn: (message: string, context?: Readonly<Record<string, string>>) => void }>
+
+export class PostgresInsightsHubRepository implements InsightsHubRepository {
+  public constructor(private readonly database: SqlExecutor, private readonly logger: InsightsRepositoryLogger | null = null) {}
+
+  private async query<Value>(storeId: StoreId, sql: string, values: readonly unknown[], map: (row: Row) => Value): Promise<readonly Value[]> {
+    try {
+      return await withTenantContext(this.database, storeId, async (client) => {
+        const result = await client.query<Row>(sql, values)
+        return result.rows.map(map)
+      })
+    } catch (error: unknown) {
+      // Graceful fallback: a not-yet-migrated table must never crash the page.
+      if (isSchemaNotReadyError(error)) {
+        this.logger?.warn('PatternAI storage is not migrated yet — returning an empty result', { code: String((error as { code?: unknown }).code), statement: sql.slice(0, 120) })
+        return []
+      }
+      throw error
+    }
   }
   private async one<Value>(storeId: StoreId, sql: string, values: readonly unknown[], map: (row: Row) => Value): Promise<Value | null> {
     return (await this.query(storeId, sql, values, map))[0] ?? null
@@ -1030,8 +1059,15 @@ export type InsightsOverview = Readonly<{
   preferences: InsightsPreferences
   autoDiscoveryRan: boolean
   trial: boolean
+  /** Sections that could not be loaded this render — the page still ships. */
+  degraded: readonly string[]
   generatedAt: string
 }>
+
+/** An honest, all-zero dataset: used when the data plane is briefly unreachable. */
+export function emptyInsightsDataset(storeId: StoreId): InsightsDataset {
+  return { storeId, currency: 'USD', revenueDaily: [], ordersDaily: [], productSalesDaily: [], products: [], customers: [], productPairs: [], hours: [] }
+}
 
 export type InsightsServiceDependencies = Readonly<{
   dataset: InsightsDatasetSources
@@ -1040,6 +1076,7 @@ export type InsightsServiceDependencies = Readonly<{
   billingState?: ((storeId: StoreId) => Promise<BillingState | null>) | null
   narrator?: InsightsNarrator | null
   env: InsightsHubEnvConfig
+  logger?: InsightsRepositoryLogger | null
   now?: () => number
 }>
 
@@ -1065,7 +1102,7 @@ export class InsightsHubService {
     if (!this.deps.billingState) return
     const state = await this.deps.billingState(storeId)
     if (state === 'PAST_DUE' || state === 'SUSPENDED' || state === 'CANCELLED' || state === 'PENDING_CONFIRMATION') {
-      throw new AppError('PAYMENT_REQUIRED', 'Your trial or subscription is not active. Upgrade Subscription to continue using Insights Hub.', 402, { reason: 'SUBSCRIPTION_REQUIRED', cta: 'Upgrade Subscription', upgradePath: '/billing' })
+      throw new AppError('PAYMENT_REQUIRED', 'Your trial or subscription is not active. Upgrade Subscription to continue using PatternAI.', 402, { reason: 'SUBSCRIPTION_REQUIRED', cta: 'Upgrade Subscription', upgradePath: '/billing' })
     }
   }
 
@@ -1092,29 +1129,45 @@ export class InsightsHubService {
     let autoDiscoveryRan = false
     // Auto-discovery (Part 4): when due and enabled, run in-band so the feed
     // a merchant opens always reflects fresh data. Frequency is plan-shaped.
+    // It is best-effort: a failing sweep can never block the page render.
     if (this.deps.env.autoDiscoveryEnabled && plan !== 'trial') {
-      const preferences = await this.preferences(storeId)
-      const due = await repository.getLastDiscoveryRun(storeId)
-      if (preferences.autoDiscoveryEnabled && autoDiscoveryDue(preferences, plan, due, this.now())) {
-        autoDiscoveryRan = await this.runDiscoveryPipeline(storeId, plan, true).then((result) => result.generated > 0 || result.patternsDetected > 0).catch(() => false)
-        await repository.setLastDiscoveryRun(storeId, this.iso())
+      try {
+        const preferences = await this.preferences(storeId)
+        const due = await repository.getLastDiscoveryRun(storeId)
+        if (preferences.autoDiscoveryEnabled && autoDiscoveryDue(preferences, plan, due, this.now())) {
+          autoDiscoveryRan = await this.runDiscoveryPipeline(storeId, plan, true).then((result) => result.generated > 0 || result.patternsDetected > 0).catch(() => false)
+          await repository.setLastDiscoveryRun(storeId, this.iso()).catch(() => undefined)
+        }
+      } catch { autoDiscoveryRan = false }
+    }
+    // Every panel resolves independently. One slow or broken section degrades
+    // to its empty value and is reported in `degraded[]` — the page always
+    // renders, which is what killed the old Insights Hub experience.
+    const degraded: string[] = []
+    const safe = async <Value>(section: string, load: () => Promise<Value>, fallback: Value): Promise<Value> => {
+      try {
+        return await load()
+      } catch (error: unknown) {
+        degraded.push(section)
+        this.deps.logger?.warn('PatternAI overview section degraded', { section, error: error instanceof Error ? error.message : String(error) })
+        return fallback
       }
     }
     const [dataset, newD, allD, patterns, lessons, personas, investigations, trends, predictions, comparisons, knowledgeCount, usedDiscoveries, usedInvestigations, preferences] = await Promise.all([
-      this.datasetFor(storeId),
-      repository.listDiscoveries(storeId, { status: 'NEW', limit: 100, cursor: 0 }),
-      repository.listDiscoveries(storeId, { limit: 500, cursor: 0 }),
-      repository.listPatterns(storeId, null),
-      repository.listLessons(storeId, null),
-      repository.listPersonas(storeId),
-      repository.listInvestigations(storeId, 100),
-      repository.listTrends(storeId, null),
-      repository.listPredictions(storeId, null),
-      repository.listComparisons(storeId, null, 100),
-      repository.countKnowledge(storeId),
-      repository.countDiscoveriesThisMonth(storeId, this.monthStart()),
-      repository.countInvestigationsThisMonth(storeId, this.monthStart()),
-      this.preferences(storeId),
+      safe('dataset', () => this.datasetFor(storeId), emptyInsightsDataset(storeId)),
+      safe('discoveries', () => repository.listDiscoveries(storeId, { status: 'NEW', limit: 100, cursor: 0 }), [] as readonly InsightDiscovery[]),
+      safe('discoveries', () => repository.listDiscoveries(storeId, { limit: 500, cursor: 0 }), [] as readonly InsightDiscovery[]),
+      safe('patterns', () => repository.listPatterns(storeId, null), [] as readonly InsightPattern[]),
+      safe('lessons', () => repository.listLessons(storeId, null), [] as readonly InsightLesson[]),
+      safe('personas', () => repository.listPersonas(storeId), [] as readonly InsightPersona[]),
+      safe('investigations', () => repository.listInvestigations(storeId, 100), [] as readonly InsightInvestigation[]),
+      safe('trends', () => repository.listTrends(storeId, null), [] as readonly InsightTrend[]),
+      safe('predictions', () => repository.listPredictions(storeId, null), [] as readonly InsightPrediction[]),
+      safe('comparisons', () => repository.listComparisons(storeId, null, 100), [] as readonly InsightComparison[]),
+      safe('knowledge', () => repository.countKnowledge(storeId), 0),
+      safe('usage', () => repository.countDiscoveriesThisMonth(storeId, this.monthStart()), 0),
+      safe('usage', () => repository.countInvestigationsThisMonth(storeId, this.monthStart()), 0),
+      safe('preferences', () => this.preferences(storeId), defaultInsightsPreferences(storeId)),
     ])
     const limits = INSIGHTS_PLAN_LIMITS[plan]
     const features = Object.fromEntries((['discoveries', 'lessons', 'patterns', 'personas', 'investigations', 'trends', 'comparisons', 'knowledge', 'timeline', 'predictions', 'autoDiscovery', 'export', 'share', 'apiAccess', 'externalTrends', 'anomalyAlerts'] as const).map((feature) => [feature, insightsFeatureAccess(plan, feature).allowed])) as Readonly<Record<InsightsFeature, boolean>>
@@ -1144,6 +1197,7 @@ export class InsightsHubService {
       preferences,
       autoDiscoveryRan,
       trial: plan === 'trial',
+      degraded: [...new Set(degraded)],
       generatedAt: this.iso(),
     }
   }
@@ -1197,13 +1251,61 @@ export class InsightsHubService {
 
   public async discoveryFeed(storeId: StoreId): Promise<Readonly<{ plan: PlanTier; trial: boolean; readiness: InsightsDataReadiness; discoveries: readonly InsightDiscovery[] }>> {
     const plan = await this.planFor(storeId)
-    const readiness = insightsDataReadiness(await this.datasetFor(storeId))
+    // The feed is the first thing a merchant sees: dataset and storage failures
+    // degrade to an educational empty state instead of a page-wide crash.
+    const dataset = await this.datasetFor(storeId).catch((error: unknown) => {
+      this.deps.logger?.warn('PatternAI dataset unavailable for the discovery feed', { error: error instanceof Error ? error.message : String(error) })
+      return emptyInsightsDataset(storeId)
+    })
+    const readiness = insightsDataReadiness(dataset)
     if (plan === 'trial') {
-      const dataset = await this.datasetFor(storeId)
       return { plan, trial: true, readiness, discoveries: trialSampleDiscoveries(dataset, this.iso()) }
     }
-    const discoveries = await this.deps.repository.listDiscoveries(storeId, { limit: 50, cursor: 0 })
+    const discoveries = await this.deps.repository.listDiscoveries(storeId, { limit: 50, cursor: 0 }).catch((error: unknown) => {
+      this.deps.logger?.warn('PatternAI discovery storage unavailable', { error: error instanceof Error ? error.message : String(error) })
+      return [] as readonly InsightDiscovery[]
+    })
     return { plan, trial: false, readiness, discoveries }
+  }
+
+  /**
+   * Operator diagnostics for the module: which storage sections answer, which
+   * plan the store is on, and whether AI narration is configured. Used by
+   * `GET /patternai/health` so a broken deploy is one request away from a
+   * root cause instead of a guessing game in the Railway logs.
+   */
+  public async health(storeId: StoreId): Promise<Readonly<{ ok: boolean; plan: PlanTier; narration: boolean; autoDiscovery: boolean; sections: readonly Readonly<{ section: string; ok: boolean; detail: string }>[]; checkedAt: string }>> {
+    const repository = this.deps.repository
+    const probes: ReadonlyArray<readonly [string, () => Promise<unknown>]> = [
+      ['dataset', () => this.datasetFor(storeId)],
+      ['discoveries', () => repository.listDiscoveries(storeId, { limit: 1, cursor: 0 })],
+      ['lessons', () => repository.listLessons(storeId, null)],
+      ['patterns', () => repository.listPatterns(storeId, null)],
+      ['personas', () => repository.listPersonas(storeId)],
+      ['investigations', () => repository.listInvestigations(storeId, 1)],
+      ['trends', () => repository.listTrends(storeId, null)],
+      ['comparisons', () => repository.listComparisons(storeId, null, 1)],
+      ['knowledge', () => repository.countKnowledge(storeId)],
+      ['timeline', () => repository.listTimeline(storeId, this.iso().slice(0, 10), null)],
+      ['predictions', () => repository.listPredictions(storeId, null)],
+      ['preferences', () => this.preferences(storeId)],
+    ]
+    const sections = await Promise.all(probes.map(async ([section, probe]) => {
+      try {
+        await probe()
+        return { section, ok: true, detail: 'ready' }
+      } catch (error: unknown) {
+        return { section, ok: false, detail: error instanceof Error ? error.message : String(error) }
+      }
+    }))
+    return {
+      ok: sections.every((section) => section.ok),
+      plan: await this.planFor(storeId),
+      narration: this.deps.narrator !== null && this.deps.narrator !== undefined,
+      autoDiscovery: this.deps.env.autoDiscoveryEnabled,
+      sections,
+      checkedAt: this.iso(),
+    }
   }
 
   public async getDiscovery(storeId: StoreId, id: string): Promise<InsightDiscovery> {
@@ -1423,16 +1525,26 @@ export class InsightsHubService {
 
   public async listTrends(storeId: StoreId, type: string | null): Promise<Readonly<{ plan: PlanTier; freshness: string; trends: readonly InsightTrend[] }>> {
     const plan = await this.planFor(storeId)
-    let trends = await this.deps.repository.listTrends(storeId, type)
+    // `business` and `market` are *views*, not stored enum values. Passing them
+    // through to the repository filtered every row out, which is why the Trend
+    // Watcher rendered "0 signals" while the overview counted several. Storage
+    // is filtered only by real TrendType values; views are applied after.
+    const view = type === 'business' || type === 'market' ? type : null
+    const storedFilter = view === null && type !== null && type !== 'all' ? type : null
+    let trends = await this.deps.repository.listTrends(storeId, storedFilter)
     const freshness = INSIGHTS_PLAN_LIMITS[plan].trendsFreshness
     if (trends.length === 0 && this.deps.env.trendMonitoring && plan !== 'trial') {
       // First visit: compute once so the dashboard is not empty when data allows.
       const dataset = await this.datasetFor(storeId)
       const detected = detectTrends(dataset, this.iso())
       if (detected.length > 0) trends = await this.deps.repository.upsertTrends(storeId, detected)
-      if (type && type !== 'all') trends = trends.filter((trend) => trend.trendType === type)
+      if (storedFilter !== null) trends = trends.filter((trend) => trend.trendType === storedFilter)
     }
-    return { plan, freshness, trends: type === 'market' ? trends.filter((trend) => trend.dataSource !== 'INTERNAL') : type === 'business' ? trends.filter((trend) => trend.trendType === 'BUSINESS') : trends }
+    if (view === 'market') return { plan, freshness, trends: trends.filter((trend) => trend.dataSource !== 'INTERNAL') }
+    // The business view is the merchant's own store: everything computed from
+    // internal data, whatever bucket the detector assigned it to.
+    if (view === 'business') return { plan, freshness, trends: trends.filter((trend) => trend.dataSource === 'INTERNAL') }
+    return { plan, freshness, trends }
   }
 
   public async marketTrends(storeId: StoreId): Promise<Readonly<{ available: false; message: string; trends: readonly never[] } | { available: true; message: string; trends: readonly InsightTrend[] }>> {
@@ -1441,7 +1553,7 @@ export class InsightsHubService {
     if (!access.allowed) throw insightsUpgradeError('externalTrends', plan)
     const external = (await this.deps.repository.listTrends(storeId, null)).filter((trend) => trend.dataSource !== 'INTERNAL')
     if (!this.deps.env.externalTrends) return { available: false, message: 'External trend monitoring is disabled for this workspace (INSIGHTS_HUB_EXTERNAL_TRENDS=false).', trends: [] }
-    if (external.length === 0) return { available: false, message: 'No external market trend feed is connected yet. Market trends appear here only when a verified public benchmark source is configured — Insights Hub never invents market data.', trends: [] }
+    if (external.length === 0) return { available: false, message: 'No external market trend feed is connected yet. Market trends appear here only when a verified public benchmark source is configured — PatternAI never invents market data.', trends: [] }
     return { available: true, message: 'External market trends from the connected benchmark feed.', trends: external }
   }
 
@@ -1628,7 +1740,7 @@ export class InsightsHubService {
   public async generateApiKey(storeId: StoreId): Promise<Readonly<{ apiKey: string; masked: string; rateLimitPerHour: number | null }>> {
     await this.assertSubscriptionLive(storeId)
     const plan = await this.assertFeature(storeId, 'apiAccess')
-    if (!this.deps.env.apiAccessEnabled) throw new AppError('DEPENDENCY_ERROR', 'Insights Hub API access is disabled on this workspace (INSIGHTS_HUB_API_ACCESS_ENABLED=false).', 503)
+    if (!this.deps.env.apiAccessEnabled) throw new AppError('DEPENDENCY_ERROR', 'PatternAI API access is disabled on this workspace (INSIGHTS_HUB_API_ACCESS_ENABLED=false).', 503)
     const apiKey = generateInsightsApiKey()
     await this.deps.repository.updateApiKey(storeId, apiKey, maskApiKey(apiKey), true)
     return { apiKey, masked: maskApiKey(apiKey), rateLimitPerHour: INSIGHTS_PLAN_LIMITS[plan].apiRateLimitPerHour ?? this.deps.env.apiRateLimit }
@@ -1656,13 +1768,13 @@ export class InsightsHubService {
 
   /** Authenticates a public API call by Bearer key; enforces the hourly cap. */
   public async authenticatePublicApi(apiKey: string, endpoint: string): Promise<StoreId> {
-    if (!this.deps.env.apiAccessEnabled) throw new AppError('DEPENDENCY_ERROR', 'Insights Hub public API is disabled on this workspace.', 503)
+    if (!this.deps.env.apiAccessEnabled) throw new AppError('DEPENDENCY_ERROR', 'PatternAI public API is disabled on this workspace.', 503)
     const storeId = await this.deps.repository.findStoreByApiKey(apiKey)
-    if (!storeId) throw new AppError('UNAUTHORIZED', 'Invalid or revoked Insights Hub API key', 401, { hint: 'Generate a key in Insights Hub → API Access' })
+    if (!storeId) throw new AppError('UNAUTHORIZED', 'Invalid or revoked PatternAI API key', 401, { hint: 'Generate a key in PatternAI → API access' })
     const since = new Date(this.now() - 3_600_000).toISOString()
     const used = await this.deps.repository.countApiUsageSince(storeId, since)
     const limit = this.deps.env.apiRateLimit
-    if (used >= limit) throw new AppError('RATE_LIMITED', `Insights Hub API rate limit reached (${limit} requests/hour). Retry later.`, 429, { limit, used, cta: null })
+    if (used >= limit) throw new AppError('RATE_LIMITED', `PatternAI API rate limit reached (${limit} requests/hour). Retry later.`, 429, { limit, used, cta: null })
     await this.deps.repository.recordApiUsage(storeId, endpoint, 0, Math.max(0, limit - used - 1))
     return storeId
   }
@@ -1701,7 +1813,7 @@ export type InsightsHubBootstrap = Readonly<{
 }>
 
 /**
- * Builds the dedicated OpenRouter client for Insights Hub. Uses ONLY
+ * Builds the dedicated OpenRouter client for PatternAI. Uses ONLY
  * INSIGHTS_HUB_API_KEY — never the shared command-center keys — with the
  * Nemotron primary/fallback pair. Returns null when disabled or unkeyed so
  * the service degrades to pure deterministic output.

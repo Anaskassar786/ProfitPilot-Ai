@@ -5,7 +5,7 @@
  *  - NO line charts, NO donut/pie charts. We ship bubble, radar, heatmap,
  *    area-with-gradient, scatter, timeline, word cloud, network, treemap and
  *    diverging comparison bars instead.
- *  - Both themes: every stroke/fill flows through the `--ih-*` CSS custom
+ *  - Both themes: every stroke/fill flows through the `--pa-*` CSS custom
  *    properties defined in insights-hub.css (dark default, `.light-mode`
  *    overrides), never a hard-coded page color.
  *  - SSR-safe: components render through renderToStaticMarkup in tests, so
@@ -25,11 +25,11 @@ function axisGrid(width: number, height: number, pad: { left: number; right: num
   const lines: ReactNode[] = []
   for (let index = 0; index <= columns; index += 1) {
     const x = pad.left + ((width - pad.left - pad.right) * index) / columns
-    lines.push(<line key={`v${index}`} className="ih-chart-grid" x1={x} y1={pad.top} x2={x} y2={height - pad.bottom} />)
+    lines.push(<line key={`v${index}`} className="pa-chart-grid" x1={x} y1={pad.top} x2={x} y2={height - pad.bottom} />)
   }
   for (let index = 0; index <= rows; index += 1) {
     const y = pad.top + ((height - pad.top - pad.bottom) * index) / rows
-    lines.push(<line key={`h${index}`} className="ih-chart-grid" x1={pad.left} y1={y} x2={width - pad.right} y2={y} />)
+    lines.push(<line key={`h${index}`} className="pa-chart-grid" x1={pad.left} y1={y} x2={width - pad.right} y2={y} />)
   }
   return <g>{lines}</g>
 }
@@ -48,18 +48,18 @@ export function InsightsBubbleChart({ points, width = 560, height = 300, xLabel,
   const scaleX = (value: number) => pad.left + (width - pad.left - pad.right) * value
   const scaleY = (value: number) => height - pad.bottom - (height - pad.top - pad.bottom) * value
   return (
-    <svg className="ih-chart ih-bubble-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={points.length > 0 ? `${points.length} plotted signals` : 'No signals to plot'}>
+    <svg className="pa-chart pa-bubble-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={points.length > 0 ? `${points.length} plotted signals` : 'No signals to plot'}>
       {axisGrid(width, height, pad)}
-      <text className="ih-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
-      <text className="ih-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
+      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
+      <text className="pa-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
       {points.map((point) => (
-        <g key={point.id} className={`ih-bubble tone-${point.tone ?? 'violet'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
+        <g key={point.id} className={`pa-bubble tone-${point.tone ?? 'violet'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
           <circle cx={scaleX(point.x)} cy={scaleY(point.y)} r={point.r ?? 12}>
             <title>{point.label}</title>
           </circle>
         </g>
       ))}
-      {points.length === 0 && <text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Nothing to plot yet</text>}
+      {points.length === 0 && <text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Nothing to plot yet</text>}
     </svg>
   )
 }
@@ -78,24 +78,24 @@ export function InsightsRadarChart({ traits, size = 260 }: { traits: readonly Re
   const ring = (scaleValue: number) => Array.from({ length: count }, (_, index) => pointAt(index, scaleValue)).join(' ')
   const shape = traits.length > 0 ? traits.map((trait, index) => pointAt(index, Math.max(0, Math.min(1, trait.score)))).join(' ') : ''
   return (
-    <svg className="ih-chart ih-radar-chart" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Persona trait radar">
+    <svg className="pa-chart pa-radar-chart" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Persona trait radar">
       <defs>
         <radialGradient id={gradientId}>
-          <stop offset="0%" className="ih-radar-fill-start" />
-          <stop offset="100%" className="ih-radar-fill-end" />
+          <stop offset="0%" className="pa-radar-fill-start" />
+          <stop offset="100%" className="pa-radar-fill-end" />
         </radialGradient>
       </defs>
-      {[0.25, 0.5, 0.75, 1].map((scaleValue) => <polygon key={scaleValue} className="ih-radar-ring" points={ring(scaleValue)} />)}
+      {[0.25, 0.5, 0.75, 1].map((scaleValue) => <polygon key={scaleValue} className="pa-radar-ring" points={ring(scaleValue)} />)}
       {traits.map((trait, index) => {
         const angle = (Math.PI * 2 * index) / count - Math.PI / 2
         const lx = center + Math.cos(angle) * (radius + 18)
         const ly = center + Math.sin(angle) * (radius + 18)
-        return <text key={trait.trait} className="ih-radar-label" x={lx} y={ly} textAnchor="middle" dominantBaseline="middle">{trait.trait}<title>{`${trait.trait}: ${Math.round(trait.score * 100)}%`}</title></text>
+        return <text key={trait.trait} className="pa-radar-label" x={lx} y={ly} textAnchor="middle" dominantBaseline="middle">{trait.trait}<title>{`${trait.trait}: ${Math.round(trait.score * 100)}%`}</title></text>
       })}
-      {shape && <polygon className="ih-radar-shape" points={shape} fill={`url(#${gradientId})`} />}
+      {shape && <polygon className="pa-radar-shape" points={shape} fill={`url(#${gradientId})`} />}
       {traits.map((trait, index) => {
         const [x, y] = pointAt(index, Math.max(0, Math.min(1, trait.score))).split(',')
-        return <circle key={`dot-${trait.trait}`} className="ih-radar-dot" cx={x} cy={y} r={3}><title>{`${trait.trait}: ${Math.round(trait.score * 100)}%`}</title></circle>
+        return <circle key={`dot-${trait.trait}`} className="pa-radar-dot" cx={x} cy={y} r={3}><title>{`${trait.trait}: ${Math.round(trait.score * 100)}%`}</title></circle>
       })}
     </svg>
   )
@@ -116,19 +116,19 @@ export function InsightsHeatmap({ cells, xLabels, yLabels, emptyLabel = 'No cade
   const max = Math.max(1, ...cells.map((entry) => entry.value))
   const lookup = new Map(cells.map((entry) => [`${entry.x}:${entry.y}`, entry]))
   return (
-    <svg className="ih-chart ih-heatmap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Activity heatmap">
-      {xLabels.map((label, index) => <text key={`x${label}`} className="ih-heatmap-label" x={pad.left + index * cell.w + cell.w / 2} y={12} textAnchor="middle">{label}</text>)}
-      {yLabels.map((label, index) => <text key={`y${label}`} className="ih-heatmap-label" x={pad.left - 6} y={pad.top + index * cell.h + cell.h / 2 + 3} textAnchor="end">{label}</text>)}
+    <svg className="pa-chart pa-heatmap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Activity heatmap">
+      {xLabels.map((label, index) => <text key={`x${label}`} className="pa-heatmap-label" x={pad.left + index * cell.w + cell.w / 2} y={12} textAnchor="middle">{label}</text>)}
+      {yLabels.map((label, index) => <text key={`y${label}`} className="pa-heatmap-label" x={pad.left - 6} y={pad.top + index * cell.h + cell.h / 2 + 3} textAnchor="end">{label}</text>)}
       {yLabels.map((_, y) => xLabels.map((__, x) => {
         const entry = lookup.get(`${x}:${y}`)
         const intensity = entry ? entry.value / max : 0
         return (
-          <rect key={`${x}-${y}`} className="ih-heatmap-cell" style={{ opacity: entry ? 0.15 + 0.85 * intensity : 0.05 }} x={pad.left + x * cell.w + 1.5} y={pad.top + y * cell.h + 1.5} width={cell.w - 3} height={cell.h - 3} rx={4}>
+          <rect key={`${x}-${y}`} className="pa-heatmap-cell" style={{ opacity: entry ? 0.15 + 0.85 * intensity : 0.05 }} x={pad.left + x * cell.w + 1.5} y={pad.top + y * cell.h + 1.5} width={cell.w - 3} height={cell.h - 3} rx={4}>
             <title>{entry?.label ?? `${yLabels[y]} ${xLabels[x]}: ${entry?.value ?? 0}`}</title>
           </rect>
         )
       }))}
-      {cells.length === 0 && <text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">{emptyLabel}</text>}
+      {cells.length === 0 && <text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">{emptyLabel}</text>}
     </svg>
   )
 }
@@ -144,7 +144,7 @@ export function InsightsAreaBand({ series, width = 560, height = 240, formatValu
   const gradientId = useId()
   const pad = { left: 46, right: 14, top: 14, bottom: 30 }
   if (series.length === 0) {
-    return <svg className="ih-chart ih-area-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No forecast series"><text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Forecast series pending</text></svg>
+    return <svg className="pa-chart pa-area-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No forecast series"><text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Forecast series pending</text></svg>
   }
   const maxValue = Math.max(...series.map((point) => point.upper), 1)
   const minValue = Math.min(...series.map((point) => point.lower), 0)
@@ -158,23 +158,23 @@ export function InsightsAreaBand({ series, width = 560, height = 240, formatValu
   const midPath = midPoints.map((point) => `${point.x},${point.y}`).join(' ')
   const format = formatValue ?? ((value: number) => String(Math.round(value)))
   return (
-    <svg className="ih-chart ih-area-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Prediction band with confidence interval">
+    <svg className="pa-chart pa-area-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Prediction band with confidence interval">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" className="ih-area-stop-start" />
-          <stop offset="100%" className="ih-area-stop-end" />
+          <stop offset="0%" className="pa-area-stop-start" />
+          <stop offset="100%" className="pa-area-stop-end" />
         </linearGradient>
       </defs>
       {axisGrid(width, height, pad, 4, 3)}
-      <polygon className="ih-area-band" points={`${bandTop} ${bandBottom}`} fill={`url(#${gradientId})`} />
-      <polygon className="ih-area-mid" points={`${midPath} ${px(series.length - 1)},${py(minValue)} ${px(0)},${py(minValue)}`} />
+      <polygon className="pa-area-band" points={`${bandTop} ${bandBottom}`} fill={`url(#${gradientId})`} />
+      <polygon className="pa-area-mid" points={`${midPath} ${px(series.length - 1)},${py(minValue)} ${px(0)},${py(minValue)}`} />
       {midPoints.map((point, index) => (
-        <circle key={`${point.day}-${index}`} className="ih-area-dot" cx={point.x} cy={point.y} r={3.4}>
+        <circle key={`${point.day}-${index}`} className="pa-area-dot" cx={point.x} cy={point.y} r={3.4}>
           <title>{`${point.day}: ${format(point.value)} (range ${format(series[index]?.lower ?? 0)}–${format(series[index]?.upper ?? 0)})`}</title>
         </circle>
       ))}
-      <text className="ih-chart-axis-label" x={pad.left} y={height - 8}>{series[0]?.day}</text>
-      <text className="ih-chart-axis-label" x={width - pad.right - 8} y={height - 8} textAnchor="end">{series[series.length - 1]?.day}</text>
+      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{series[0]?.day}</text>
+      <text className="pa-chart-axis-label" x={width - pad.right - 8} y={height - 8} textAnchor="end">{series[series.length - 1]?.day}</text>
     </svg>
   )
 }
@@ -193,16 +193,16 @@ export function InsightsScatter({ points, width = 560, height = 280, xLabel, yLa
   const scaleX = (value: number) => pad.left + (width - pad.left - pad.right) * value
   const scaleY = (value: number) => height - pad.bottom - (height - pad.top - pad.bottom) * value
   return (
-    <svg className="ih-chart ih-scatter-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Trend signal scatter">
+    <svg className="pa-chart pa-scatter-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Trend signal scatter">
       {axisGrid(width, height, pad)}
-      <text className="ih-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
-      <text className="ih-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
+      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
+      <text className="pa-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
       {points.map((point) => (
-        <g key={point.id} className={`ih-scatter-dot tone-${point.tone ?? 'cyan'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
+        <g key={point.id} className={`pa-scatter-dot tone-${point.tone ?? 'cyan'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
           <circle cx={scaleX(point.x)} cy={scaleY(point.y)} r={point.r ?? 5}><title>{point.label}</title></circle>
         </g>
       ))}
-      {points.length === 0 && <text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">No signals yet</text>}
+      {points.length === 0 && <text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">No signals yet</text>}
     </svg>
   )
 }
@@ -210,12 +210,12 @@ export function InsightsScatter({ points, width = 560, height = 280, xLabel, yLa
 /* ── Word cloud (knowledge tags / lesson themes) ───────────────────────── */
 
 export function InsightsWordCloud({ words, onSelect }: { words: readonly Readonly<{ tag: string; weight: number }>[]; onSelect?: (tag: string) => void }) {
-  if (words.length === 0) return <div className="ih-wordcloud empty">Tags appear here as your knowledge base grows.</div>
+  if (words.length === 0) return <div className="pa-wordcloud empty">Tags appear here as your knowledge base grows.</div>
   const max = Math.max(...words.map((word) => word.weight), 1)
   return (
-    <div className="ih-wordcloud" role="list" aria-label="Knowledge tag cloud">
+    <div className="pa-wordcloud" role="list" aria-label="Knowledge tag cloud">
       {words.map((word, index) => (
-        <button key={word.tag} role="listitem" className={`ih-word depth-${index % 4}`} style={{ fontSize: `${12 + 12 * (word.weight / max)}px` }} onClick={() => onSelect?.(word.tag)} title={`${word.tag} · ${word.weight} ${word.weight === 1 ? 'entry' : 'entries'}`}>
+        <button key={word.tag} role="listitem" className={`pa-word depth-${index % 4}`} style={{ fontSize: `${12 + 12 * (word.weight / max)}px` }} onClick={() => onSelect?.(word.tag)} title={`${word.tag} · ${word.weight} ${word.weight === 1 ? 'entry' : 'entries'}`}>
           {word.tag}
         </button>
       ))}
@@ -232,7 +232,7 @@ export function InsightsTimelineStrip({ events, width = 860, height = 120, onSel
   onSelect?: (id: string) => void
 }) {
   const pad = { left: 16, right: 16, top: 26, bottom: 30 }
-  if (events.length === 0) return <svg className="ih-chart ih-timeline-strip" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Empty timeline"><text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Your insight timeline starts here</text></svg>
+  if (events.length === 0) return <svg className="pa-chart pa-timeline-strip" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Empty timeline"><text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Your insight timeline starts here</text></svg>
   const sorted = [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   const min = Date.parse(sorted[0]?.at ?? '') || 0
   const max = Date.parse(sorted[sorted.length - 1]?.at ?? '') || 1
@@ -243,19 +243,19 @@ export function InsightsTimelineStrip({ events, width = 860, height = 120, onSel
     return pad.top + ((height - pad.top - pad.bottom) * (hash % 3)) / 2.4
   }
   return (
-    <svg className="ih-chart ih-timeline-strip" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${events.length} timeline events`}>
-      <line className="ih-chart-grid" x1={pad.left} y1={height - pad.bottom} x2={width - pad.right} y2={height - pad.bottom} />
+    <svg className="pa-chart pa-timeline-strip" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${events.length} timeline events`}>
+      <line className="pa-chart-grid" x1={pad.left} y1={height - pad.bottom} x2={width - pad.right} y2={height - pad.bottom} />
       {sorted.map((event) => {
         const x = pad.left + ((Date.parse(event.at) - min) / span) * (width - pad.left - pad.right)
         return (
-          <g key={event.id} className={`ih-timeline-node tone-${event.tone}`} onClick={() => onSelect?.(event.id)} role={onSelect ? 'button' : undefined}>
-            <line className="ih-timeline-stem" x1={x} y1={lane(event.id)} x2={x} y2={height - pad.bottom} />
+          <g key={event.id} className={`pa-timeline-node tone-${event.tone}`} onClick={() => onSelect?.(event.id)} role={onSelect ? 'button' : undefined}>
+            <line className="pa-timeline-stem" x1={x} y1={lane(event.id)} x2={x} y2={height - pad.bottom} />
             <circle cx={x} cy={lane(event.id)} r={5}><title>{event.label}</title></circle>
           </g>
         )
       })}
-      <text className="ih-chart-axis-label" x={pad.left} y={height - 8}>{sorted[0]?.at.slice(0, 10)}</text>
-      <text className="ih-chart-axis-label" x={width - pad.right - 8} y={height - 8} textAnchor="end">{sorted[sorted.length - 1]?.at.slice(0, 10)}</text>
+      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{sorted[0]?.at.slice(0, 10)}</text>
+      <text className="pa-chart-axis-label" x={width - pad.right - 8} y={height - 8} textAnchor="end">{sorted[sorted.length - 1]?.at.slice(0, 10)}</text>
     </svg>
   )
 }
@@ -273,24 +273,24 @@ export function InsightsNetworkGraph({ nodes, edges, size = 320, onSelect }: { n
     return [node.id, { x: center + Math.cos(angle) * radius, y: center + Math.sin(angle) * radius }] as const
   }))
   return (
-    <svg className="ih-chart ih-network" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Linked insights network">
+    <svg className="pa-chart pa-network" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Linked insights network">
       {edges.map((edge, index) => {
         const from = positions.get(edge.from)
         const to = positions.get(edge.to)
         if (!from || !to) return null
-        return <line key={`${edge.from}-${edge.to}-${index}`} className="ih-network-edge" x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+        return <line key={`${edge.from}-${edge.to}-${index}`} className="pa-network-edge" x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
       })}
       {nodes.map((node) => {
         const position = positions.get(node.id)
         if (!position) return null
         return (
-          <g key={node.id} className={`ih-network-node kind-${node.kind.toLowerCase()}`} onClick={() => onSelect?.(node.id)} role={onSelect ? 'button' : undefined}>
+          <g key={node.id} className={`pa-network-node kind-${node.kind.toLowerCase()}`} onClick={() => onSelect?.(node.id)} role={onSelect ? 'button' : undefined}>
             <circle cx={position.x} cy={position.y} r={13}><title>{node.label}</title></circle>
-            <text className="ih-network-label" x={position.x} y={position.y + 26} textAnchor="middle">{node.label.length > 14 ? `${node.label.slice(0, 14)}…` : node.label}</text>
+            <text className="pa-network-label" x={position.x} y={position.y + 26} textAnchor="middle">{node.label.length > 14 ? `${node.label.slice(0, 14)}…` : node.label}</text>
           </g>
         )
       })}
-      {nodes.length === 0 && <text className="ih-chart-empty" x={center} y={center} textAnchor="middle">Link discoveries and lessons to see the graph</text>}
+      {nodes.length === 0 && <text className="pa-chart-empty" x={center} y={center} textAnchor="middle">Link discoveries and lessons to see the graph</text>}
     </svg>
   )
 }
@@ -304,7 +304,7 @@ export function InsightsTreeMap({ blocks, width = 560, height = 240, onSelect }:
   onSelect?: (id: string) => void
 }) {
   const total = blocks.reduce((sum, block) => sum + Math.max(0, block.value), 0)
-  if (blocks.length === 0 || total <= 0) return <svg className="ih-chart ih-treemap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No concentration data"><text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Concentration appears once products sell</text></svg>
+  if (blocks.length === 0 || total <= 0) return <svg className="pa-chart pa-treemap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No concentration data"><text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Concentration appears once products sell</text></svg>
   // Simple slice-and-dice layout: stable, deterministic, no external deps.
   const sorted = [...blocks].sort((a, b) => b.value - a.value)
   const rects: { id: string; label: string; x: number; y: number; w: number; h: number; share: number }[] = []
@@ -327,14 +327,14 @@ export function InsightsTreeMap({ blocks, width = 560, height = 240, onSelect }:
     remaining = tail
   }
   return (
-    <svg className="ih-chart ih-treemap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue concentration treemap">
+    <svg className="pa-chart pa-treemap" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue concentration treemap">
       {rects.map((rect, index) => (
-        <g key={rect.id} className={`ih-treemap-block depth-${index % 5}`} onClick={() => onSelect?.(rect.id)} role={onSelect ? 'button' : undefined}>
+        <g key={rect.id} className={`pa-treemap-block depth-${index % 5}`} onClick={() => onSelect?.(rect.id)} role={onSelect ? 'button' : undefined}>
           <rect x={rect.x + 1.5} y={rect.y + 1.5} width={Math.max(0, rect.w - 3)} height={Math.max(0, rect.h - 3)} rx={6}>
             <title>{`${rect.label} — ${Math.round(rect.share * 100)}%`}</title>
           </rect>
-          {rect.w > 84 && rect.h > 30 && <text className="ih-treemap-label" x={rect.x + 10} y={rect.y + 20}>{rect.label.length > 18 ? `${rect.label.slice(0, 18)}…` : rect.label}</text>}
-          {rect.w > 84 && rect.h > 46 && <text className="ih-treemap-value" x={rect.x + 10} y={rect.y + 36}>{Math.round(rect.share * 100)}%</text>}
+          {rect.w > 84 && rect.h > 30 && <text className="pa-treemap-label" x={rect.x + 10} y={rect.y + 20}>{rect.label.length > 18 ? `${rect.label.slice(0, 18)}…` : rect.label}</text>}
+          {rect.w > 84 && rect.h > 46 && <text className="pa-treemap-value" x={rect.x + 10} y={rect.y + 36}>{Math.round(rect.share * 100)}%</text>}
         </g>
       ))}
     </svg>
@@ -349,22 +349,22 @@ export function InsightsComparisonBars({ rows, formatValue }: {
 }) {
   const format = formatValue ?? ((value: number | null) => (value === null ? '—' : String(Math.round(value))))
   return (
-    <div className="ih-compare-bars" role="img" aria-label="Side-by-side comparison">
+    <div className="pa-compare-bars" role="img" aria-label="Side-by-side comparison">
       {rows.map((row) => {
         const max = Math.max(Math.abs(row.a ?? 0), Math.abs(row.b ?? 0), 1)
         const aPct = row.a === null ? 0 : (Math.abs(row.a) / max) * 100
         const bPct = row.b === null ? 0 : (Math.abs(row.b) / max) * 100
         return (
-          <div key={row.metric} className="ih-compare-row">
-            <div className="ih-compare-metric">{row.metric}</div>
-            <div className="ih-compare-track">
-              <div className={`ih-compare-bar a ${row.winner === 'A' ? 'wins' : ''}`} style={{ width: `${aPct}%` }}><span>{format(row.a)}</span></div>
-              <div className={`ih-compare-bar b ${row.winner === 'B' ? 'wins' : ''}`} style={{ width: `${bPct}%` }}><span>{format(row.b)}</span></div>
+          <div key={row.metric} className="pa-compare-row">
+            <div className="pa-compare-metric">{row.metric}</div>
+            <div className="pa-compare-track">
+              <div className={`pa-compare-bar a ${row.winner === 'A' ? 'wins' : ''}`} style={{ width: `${aPct}%` }}><span>{format(row.a)}</span></div>
+              <div className={`pa-compare-bar b ${row.winner === 'B' ? 'wins' : ''}`} style={{ width: `${bPct}%` }}><span>{format(row.b)}</span></div>
             </div>
           </div>
         )
       })}
-      {rows.length === 0 && <div className="ih-compare-empty">Run a comparison to see metrics side by side.</div>}
+      {rows.length === 0 && <div className="pa-compare-empty">Run a comparison to see metrics side by side.</div>}
     </div>
   )
 }
@@ -377,11 +377,11 @@ export function InsightsFlowChart({ stages, width = 560, height = 200, onSelect 
   height?: number
   onSelect?: (id: string) => void
 }) {
-  if (stages.length === 0) return <svg className="ih-chart ih-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No flow data"><text className="ih-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Funnel appears as discoveries move through review</text></svg>
+  if (stages.length === 0) return <svg className="pa-chart pa-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No flow data"><text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Funnel appears as discoveries move through review</text></svg>
   const max = Math.max(...stages.map((stage) => stage.value), 1)
   const columnWidth = (width - 24) / stages.length
   return (
-    <svg className="ih-chart ih-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Discovery review funnel">
+    <svg className="pa-chart pa-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Discovery review funnel">
       {stages.map((stage, index) => {
         const barHeight = Math.max(10, ((height - 64) * stage.value) / max)
         const x = 12 + index * columnWidth + columnWidth * 0.18
@@ -391,14 +391,14 @@ export function InsightsFlowChart({ stages, width = 560, height = 200, onSelect 
           <g key={stage.id}>
             {next && (
               <path
-                className="ih-flow-ribbon"
+                className="pa-flow-ribbon"
                 d={`M ${x + columnWidth * 0.64} ${y + barHeight / 2} C ${x + columnWidth * 0.9} ${y + barHeight / 2}, ${x + columnWidth} ${height - 30 - Math.max(10, ((height - 64) * next.value) / max) + Math.max(10, ((height - 64) * next.value) / max) / 2}, ${12 + (index + 1) * columnWidth + columnWidth * 0.18} ${height - 30 - Math.max(10, ((height - 64) * next.value) / max) + Math.max(10, ((height - 64) * next.value) / max) / 2}`}
               />
             )}
-            <g className="ih-flow-stage" onClick={() => onSelect?.(stage.id)} role={onSelect ? 'button' : undefined}>
+            <g className="pa-flow-stage" onClick={() => onSelect?.(stage.id)} role={onSelect ? 'button' : undefined}>
               <rect x={x} y={y} width={columnWidth * 0.64} height={barHeight} rx={7}><title>{`${stage.label}: ${stage.value}`}</title></rect>
-              <text className="ih-flow-value" x={x + columnWidth * 0.32} y={y - 7} textAnchor="middle">{stage.value}</text>
-              <text className="ih-flow-label" x={x + columnWidth * 0.32} y={height - 12} textAnchor="middle">{stage.label}</text>
+              <text className="pa-flow-value" x={x + columnWidth * 0.32} y={y - 7} textAnchor="middle">{stage.value}</text>
+              <text className="pa-flow-label" x={x + columnWidth * 0.32} y={height - 12} textAnchor="middle">{stage.label}</text>
             </g>
           </g>
         )

@@ -1,11 +1,16 @@
 /**
- * Insights Hub — HTTP router (PR #50 Part 2).
+ * PatternAI (formerly Insights Hub) — HTTP router.
  *
  * Every endpoint: tenant middleware (storeId), plan gating with 402
  * UPGRADE_REQUIRED + generic "Upgrade Plan" CTA, per-store rate limiting
  * (25 req/min), and the standard { ok, data, meta } response envelope.
  * Commander-only public API endpoints authenticate via Bearer API key and
  * enforce the hourly cap from INSIGHTS_HUB_API_RATE_LIMIT.
+ *
+ * Rebrand note: every route is served under BOTH `/patternai/*` (the new
+ * canonical prefix) and the original `/insights/*` prefix, so existing
+ * installations, bookmarks, and the public API keep working unchanged while
+ * the product surface moves to PatternAI. Table names are untouched.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -26,6 +31,11 @@ export type InsightsHubRouteDependencies = Readonly<{
   rateLimiter?: InsightsRateLimiter
 }>
 
+/** Canonical `/patternai/*` path plus the legacy `/insights/*` alias. */
+export function patternAiPaths(suffix: string): string[] {
+  return [`/patternai/${suffix}`, `/insights/${suffix}`]
+}
+
 export function createInsightsHubRouter(dependencies: InsightsHubRouteDependencies): Router {
   const router = Router()
   const env = dependencies.env ?? insightsHubEnvConfig(process.env)
@@ -41,11 +51,11 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
   }
 
   const rateLimit = (request: Request): void => {
-    if (!env.enabled) throw new AppError('DEPENDENCY_ERROR', 'Insights Hub is disabled on this workspace (INSIGHTS_HUB_ENABLED=false).', 503)
+    if (!env.enabled) throw new AppError('DEPENDENCY_ERROR', 'PatternAI is disabled on this workspace (INSIGHTS_HUB_ENABLED=false).', 503)
     let store = 'anonymous'
     try { store = tenant(request) } catch { store = String(request.ip ?? 'anonymous') }
     const verdict = limiter.consume(store)
-    if (!verdict.allowed) throw new AppError('RATE_LIMITED', `Insights Hub rate limit reached. Retry in ${verdict.retryAfterSeconds}s.`, 429, { retryAfterSeconds: verdict.retryAfterSeconds, limitPerMinute: env.rateLimitPerStore })
+    if (!verdict.allowed) throw new AppError('RATE_LIMITED', `PatternAI rate limit reached. Retry in ${verdict.retryAfterSeconds}s.`, 429, { retryAfterSeconds: verdict.retryAfterSeconds, limitPerMinute: env.rateLimitPerStore })
   }
 
   const handle = (handler: (request: Request, response: Response) => Promise<void>) => async (request: Request, response: Response, next: (error: unknown) => void): Promise<void> => {
@@ -112,15 +122,24 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
 
   /* ── Overview + usage ────────────────────────────────────────────────── */
 
-  router.get('/insights/overview', handle(async (request, response) => {
+  // Diagnostics first: `GET /patternai/health?storeId=…` reports which storage
+  // sections answer and which do not. When a deploy is missing a migration the
+  // answer is here in one request instead of buried in the platform logs.
+  router.get(patternAiPaths('health'), async (request: Request, response: Response, next: (error: unknown) => void) => {
+    try {
+      send(request, response, await service.health(tenant(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.get(patternAiPaths('overview'), handle(async (request, response) => {
     send(request, response, await service.overview(tenant(request)))
   }))
 
-  router.get('/insights/usage', handle(async (request, response) => {
+  router.get(patternAiPaths('usage'), handle(async (request, response) => {
     send(request, response, await service.usageSummary(tenant(request)))
   }))
 
-  router.get('/insights/cost-summary', handle(async (request, response) => {
+  router.get(patternAiPaths('cost-summary'), handle(async (request, response) => {
     // The provider tier is :free — the honest cost summary states that, with
     // the model identity surfaced for the cost meter drawer.
     send(request, response, {
@@ -129,17 +148,17 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
       estimatedCostUsd: 0,
       currency: 'USD',
       models: [...env.models],
-      note: 'Insights Hub runs on free-tier Nemotron models; the cost meter records calls with a $0 rate. Set INSIGHTS_HUB_DAILY_BUDGET_USD when switching to paid models.',
+      note: 'PatternAI runs on free-tier Nemotron models; the cost meter records calls with a $0 rate. Set INSIGHTS_HUB_DAILY_BUDGET_USD when switching to paid models.',
     })
   }))
 
   /* ── Discoveries ─────────────────────────────────────────────────────── */
 
-  router.get('/insights/discoveries/feed', handle(async (request, response) => {
+  router.get(patternAiPaths('discoveries/feed'), handle(async (request, response) => {
     send(request, response, await service.discoveryFeed(tenant(request)))
   }))
 
-  router.get('/insights/discoveries', handle(async (request, response) => {
+  router.get(patternAiPaths('discoveries'), handle(async (request, response) => {
     const store = tenant(request)
     const status = enumParam(request, 'status', DISCOVERY_STATUSES)
     const category = enumParam(request, 'category', DISCOVERY_CATEGORIES)
@@ -148,15 +167,15 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     send(request, response, { items: await service.listDiscoveries(store, { status: status ?? undefined, category: category ?? undefined, limit: limitParam(request, 20), cursor }) })
   }))
 
-  router.post('/insights/discoveries/generate', handle(async (request, response) => {
+  router.post(patternAiPaths('discoveries/generate'), handle(async (request, response) => {
     send(request, response, await service.generateDiscoveriesForStore(tenant(request)), 201)
   }))
 
-  router.get('/insights/discoveries/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('discoveries/:id'), handle(async (request, response) => {
     send(request, response, await service.getDiscovery(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/discoveries/:id/status', handle(async (request, response) => {
+  router.post(patternAiPaths('discoveries/:id/status'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const status = body.status
     if (typeof status !== 'string' || !(DISCOVERY_STATUSES as readonly string[]).includes(status)) throw new AppError('VALIDATION_ERROR', `status must be one of ${DISCOVERY_STATUSES.join(', ')}`, 400, { status: String(status) })
@@ -165,122 +184,122 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
 
   /* ── Lessons ─────────────────────────────────────────────────────────── */
 
-  router.get('/insights/lessons/recommended', handle(async (request, response) => {
+  router.get(patternAiPaths('lessons/recommended'), handle(async (request, response) => {
     send(request, response, await service.recommendedLessons(tenant(request)))
   }))
 
-  router.get('/insights/lessons', handle(async (request, response) => {
+  router.get(patternAiPaths('lessons'), handle(async (request, response) => {
     const category = enumParam(request, 'category', DISCOVERY_CATEGORIES)
     send(request, response, { items: await service.listLessons(tenant(request), category) })
   }))
 
-  router.post('/insights/lessons/generate', handle(async (request, response) => {
+  router.post(patternAiPaths('lessons/generate'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const category = typeof body.category === 'string' && (DISCOVERY_CATEGORIES as readonly string[]).includes(body.category) ? (body.category as DiscoveryCategory) : null
     if (body.category !== undefined && category === null) throw new AppError('VALIDATION_ERROR', `category must be one of ${DISCOVERY_CATEGORIES.join(', ')}`, 400, { category: String(body.category) })
     send(request, response, await service.generateLessons(tenant(request), category), 201)
   }))
 
-  router.get('/insights/lessons/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('lessons/:id'), handle(async (request, response) => {
     send(request, response, await service.getLesson(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/lessons/:id/read', handle(async (request, response) => {
+  router.post(patternAiPaths('lessons/:id/read'), handle(async (request, response) => {
     send(request, response, await service.markLessonRead(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/lessons/:id/rate', handle(async (request, response) => {
+  router.post(patternAiPaths('lessons/:id/rate'), handle(async (request, response) => {
     send(request, response, await service.rateLesson(tenant(request), paramId(request), ratingBody(request)))
   }))
 
-  router.post('/insights/lessons/:id/bookmark', handle(async (request, response) => {
+  router.post(patternAiPaths('lessons/:id/bookmark'), handle(async (request, response) => {
     send(request, response, await service.bookmarkLesson(tenant(request), paramId(request), bodyBoolean(request, 'bookmarked', true)))
   }))
 
   /* ── Patterns ────────────────────────────────────────────────────────── */
 
-  router.get('/insights/patterns', handle(async (request, response) => {
+  router.get(patternAiPaths('patterns'), handle(async (request, response) => {
     const type = enumParam(request, 'type', PATTERN_TYPES)
     send(request, response, await service.listPatterns(tenant(request), type))
   }))
 
-  router.post('/insights/patterns/detect', handle(async (request, response) => {
+  router.post(patternAiPaths('patterns/detect'), handle(async (request, response) => {
     send(request, response, await service.detectPatternsForStore(tenant(request)), 201)
   }))
 
-  router.get('/insights/patterns/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('patterns/:id'), handle(async (request, response) => {
     send(request, response, await service.getPattern(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/patterns/:id/alert', handle(async (request, response) => {
+  router.post(patternAiPaths('patterns/:id/alert'), handle(async (request, response) => {
     send(request, response, await service.setPatternAlerts(tenant(request), paramId(request), bodyBoolean(request, 'enabled', true)))
   }))
 
-  router.delete('/insights/patterns/:id', handle(async (request, response) => {
+  router.delete(patternAiPaths('patterns/:id'), handle(async (request, response) => {
     await service.invalidatePattern(tenant(request), paramId(request))
     send(request, response, { invalidated: true })
   }))
 
   /* ── Personas ────────────────────────────────────────────────────────── */
 
-  router.get('/insights/personas', handle(async (request, response) => {
+  router.get(patternAiPaths('personas'), handle(async (request, response) => {
     send(request, response, await service.listPersonas(tenant(request)))
   }))
 
-  router.post('/insights/personas/generate', handle(async (request, response) => {
+  router.post(patternAiPaths('personas/generate'), handle(async (request, response) => {
     send(request, response, await service.generatePersonas(tenant(request)), 201)
   }))
 
-  router.get('/insights/personas/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('personas/:id'), handle(async (request, response) => {
     send(request, response, await service.getPersona(tenant(request), paramId(request)))
   }))
 
-  router.get('/insights/personas/:id/customers', handle(async (request, response) => {
+  router.get(patternAiPaths('personas/:id/customers'), handle(async (request, response) => {
     send(request, response, await service.personaCustomers(tenant(request), paramId(request)))
   }))
 
   /* ── Why? investigations ─────────────────────────────────────────────── */
 
-  router.post('/insights/investigations', handle(async (request, response) => {
+  router.post(patternAiPaths('investigations'), handle(async (request, response) => {
     const question = bodyString(request, 'question', 400)
     send(request, response, await service.investigateQuestion(tenant(request), question), 201)
   }))
 
-  router.get('/insights/investigations', handle(async (request, response) => {
+  router.get(patternAiPaths('investigations'), handle(async (request, response) => {
     send(request, response, { items: await service.listInvestigations(tenant(request), limitParam(request, 20)) })
   }))
 
-  router.get('/insights/investigations/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('investigations/:id'), handle(async (request, response) => {
     send(request, response, await service.getInvestigation(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/investigations/:id/rate', handle(async (request, response) => {
+  router.post(patternAiPaths('investigations/:id/rate'), handle(async (request, response) => {
     send(request, response, await service.rateInvestigation(tenant(request), paramId(request), ratingBody(request)))
   }))
 
   /* ── Trends ──────────────────────────────────────────────────────────── */
 
-  router.get('/insights/trends/business', handle(async (request, response) => {
+  router.get(patternAiPaths('trends/business'), handle(async (request, response) => {
     send(request, response, await service.listTrends(tenant(request), 'business'))
   }))
 
-  router.get('/insights/trends/market', handle(async (request, response) => {
+  router.get(patternAiPaths('trends/market'), handle(async (request, response) => {
     send(request, response, await service.marketTrends(tenant(request)))
   }))
 
-  router.get('/insights/trends', handle(async (request, response) => {
+  router.get(patternAiPaths('trends'), handle(async (request, response) => {
     const type = typeof request.query.type === 'string' ? request.query.type : 'all'
     if (!['all', 'BUSINESS', 'MARKET', 'EMERGING', 'DECLINING'].includes(type)) throw new AppError('VALIDATION_ERROR', 'invalid trend type', 400, { type })
     send(request, response, await service.listTrends(tenant(request), type))
   }))
 
-  router.post('/insights/trends/:id/alert', handle(async (request, response) => {
+  router.post(patternAiPaths('trends/:id/alert'), handle(async (request, response) => {
     send(request, response, await service.setTrendAlerts(tenant(request), paramId(request), bodyBoolean(request, 'enabled', true)))
   }))
 
   /* ── Comparisons ─────────────────────────────────────────────────────── */
 
-  router.post('/insights/comparisons', handle(async (request, response) => {
+  router.post(patternAiPaths('comparisons'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const type = body.comparisonType
     if (typeof type !== 'string' || !(COMPARISON_TYPES as readonly string[]).includes(type)) throw new AppError('VALIDATION_ERROR', `comparisonType must be one of ${COMPARISON_TYPES.join(', ')}`, 400, { comparisonType: String(type) })
@@ -289,35 +308,35 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     send(request, response, await service.createComparison(tenant(request), type as ComparisonType, subjectA, subjectB), 201)
   }))
 
-  router.get('/insights/comparisons', handle(async (request, response) => {
+  router.get(patternAiPaths('comparisons'), handle(async (request, response) => {
     const type = enumParam(request, 'type', COMPARISON_TYPES)
     send(request, response, { items: await service.listComparisons(tenant(request), type, limitParam(request, 20)) })
   }))
 
-  router.get('/insights/comparisons/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('comparisons/:id'), handle(async (request, response) => {
     send(request, response, await service.getComparison(tenant(request), paramId(request)))
   }))
 
-  router.delete('/insights/comparisons/:id', handle(async (request, response) => {
+  router.delete(patternAiPaths('comparisons/:id'), handle(async (request, response) => {
     await service.deleteComparison(tenant(request), paramId(request))
     send(request, response, { deleted: true })
   }))
 
   /* ── Knowledge base ──────────────────────────────────────────────────── */
 
-  router.post('/insights/knowledge/search', handle(async (request, response) => {
+  router.post(patternAiPaths('knowledge/search'), handle(async (request, response) => {
     const store = tenant(request)
     const q = bodyString(request, 'q', 200)
     send(request, response, { items: await service.listKnowledge(store, { limit: 50 }, q) })
   }))
 
-  router.get('/insights/knowledge', handle(async (request, response) => {
+  router.get(patternAiPaths('knowledge'), handle(async (request, response) => {
     const entryType = enumParam(request, 'type', KNOWLEDGE_ENTRY_TYPES)
     const tag = typeof request.query.tag === 'string' && request.query.tag.trim() ? request.query.tag.trim() : undefined
     send(request, response, { items: await service.listKnowledge(tenant(request), { entryType: entryType ?? undefined, tag, limit: limitParam(request, 50) }, null) })
   }))
 
-  router.post('/insights/knowledge', handle(async (request, response) => {
+  router.post(patternAiPaths('knowledge'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const entryType = body.entryType ?? 'NOTE'
     if (typeof entryType !== 'string' || !(KNOWLEDGE_ENTRY_TYPES as readonly string[]).includes(entryType)) throw new AppError('VALIDATION_ERROR', `entryType must be one of ${KNOWLEDGE_ENTRY_TYPES.join(', ')}`, 400, { entryType: String(entryType) })
@@ -328,11 +347,11 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     send(request, response, await service.createKnowledge(tenant(request), { entryType: entryType as KnowledgeEntryType, title, contentMarkdown: content, ...(tags ? { tags } : {}), ...(linked ? { linkedInsights: linked } : {}) }), 201)
   }))
 
-  router.get('/insights/knowledge/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('knowledge/:id'), handle(async (request, response) => {
     send(request, response, await service.getKnowledge(tenant(request), paramId(request)))
   }))
 
-  router.patch('/insights/knowledge/:id', handle(async (request, response) => {
+  router.patch(patternAiPaths('knowledge/:id'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const patch: { title?: string; contentMarkdown?: string; tags?: readonly string[] } = {}
     if (body.title !== undefined) patch.title = bodyString(request, 'title', 180)
@@ -347,7 +366,7 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     send(request, response, await service.updateKnowledge(tenant(request), paramId(request), patch))
   }))
 
-  router.delete('/insights/knowledge/:id', handle(async (request, response) => {
+  router.delete(patternAiPaths('knowledge/:id'), handle(async (request, response) => {
     await service.deleteKnowledge(tenant(request), paramId(request))
     send(request, response, { deleted: true })
   }))
@@ -367,31 +386,31 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     send(request, response, await service.timeline(tenant(request), days, types))
   }
 
-  router.get('/insights/timeline/filter', handle(async (request, response) => {
+  router.get(patternAiPaths('timeline/filter'), handle(async (request, response) => {
     const type = enumParam(request, 'type', TIMELINE_TYPES)
     await timelineHandler(request, response, type ? [type] : null)
   }))
 
-  router.get('/insights/timeline', handle(async (request, response) => {
+  router.get(patternAiPaths('timeline'), handle(async (request, response) => {
     await timelineHandler(request, response, null)
   }))
 
   /* ── Predictions ─────────────────────────────────────────────────────── */
 
-  router.get('/insights/predictions', handle(async (request, response) => {
+  router.get(patternAiPaths('predictions'), handle(async (request, response) => {
     const horizon = enumParam(request, 'horizon', PREDICTION_HORIZONS)
     send(request, response, await service.listPredictions(tenant(request), horizon))
   }))
 
-  router.post('/insights/predictions/generate', handle(async (request, response) => {
+  router.post(patternAiPaths('predictions/generate'), handle(async (request, response) => {
     send(request, response, await service.generatePredictions(tenant(request)), 201)
   }))
 
-  router.get('/insights/predictions/:id', handle(async (request, response) => {
+  router.get(patternAiPaths('predictions/:id'), handle(async (request, response) => {
     send(request, response, await service.getPrediction(tenant(request), paramId(request)))
   }))
 
-  router.post('/insights/predictions/:id/validate', handle(async (request, response) => {
+  router.post(patternAiPaths('predictions/:id/validate'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const actual = body.actualValue
     if (typeof actual !== 'number' || !Number.isFinite(actual)) throw new AppError('VALIDATION_ERROR', 'actualValue must be a number', 400, { actualValue: String(actual) })
@@ -400,11 +419,11 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
 
   /* ── Preferences ─────────────────────────────────────────────────────── */
 
-  router.get('/insights/preferences', handle(async (request, response) => {
+  router.get(patternAiPaths('preferences'), handle(async (request, response) => {
     send(request, response, await service.preferences(tenant(request)))
   }))
 
-  router.patch('/insights/preferences', handle(async (request, response) => {
+  router.patch(patternAiPaths('preferences'), handle(async (request, response) => {
     const body = bodyRecord(request)
     const patch: InsightsPreferencesPatch = {}
     if (body.autoDiscoveryEnabled !== undefined) {
@@ -445,29 +464,29 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
 
   /* ── API access management (Commander) ───────────────────────────────── */
 
-  router.post('/insights/api-access/generate-key', handle(async (request, response) => {
+  router.post(patternAiPaths('api-access/generate-key'), handle(async (request, response) => {
     send(request, response, await service.generateApiKey(tenant(request)), 201)
   }))
 
-  router.post('/insights/api-access/regenerate', handle(async (request, response) => {
+  router.post(patternAiPaths('api-access/regenerate'), handle(async (request, response) => {
     // Regeneration issues a fresh key; the old key stops resolving instantly.
     send(request, response, await service.generateApiKey(tenant(request)), 201)
   }))
 
-  router.get('/insights/api-access/key', handle(async (request, response) => {
+  router.get(patternAiPaths('api-access/key'), handle(async (request, response) => {
     const status = await service.apiAccessStatus(tenant(request))
     send(request, response, { maskedKey: status.maskedKey, enabled: status.enabled, plan: status.plan, rateLimitPerHour: status.rateLimitPerHour })
   }))
 
-  router.get('/insights/api-access/usage', handle(async (request, response) => {
+  router.get(patternAiPaths('api-access/usage'), handle(async (request, response) => {
     send(request, response, await service.apiAccessStatus(tenant(request)))
   }))
 
-  router.get('/insights/api-access/documentation', handle(async (request, response) => {
+  router.get(patternAiPaths('api-access/documentation'), handle(async (request, response) => {
     send(request, response, {
       specUrl: '/public-api/insights/openapi.json',
-      guideUrl: '/legal/docs/insights-hub-api',
-      docsFile: 'docs/INSIGHTS_HUB.md#public-api-commander',
+      guideUrl: '/legal/docs/patternai-api',
+      docsFile: 'docs/PATTERN_AI.md#public-api-commander',
       authentication: 'Authorization: Bearer ihk_<key>',
       rateLimit: { perHour: env.apiRateLimit, perDay: env.apiRateLimit * 10 },
       endpoints: ['/public-api/insights/discoveries', '/public-api/insights/patterns', '/public-api/insights/personas', '/public-api/insights/predictions', '/public-api/insights/trends'],
@@ -480,7 +499,7 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
     try {
       const authorization = request.header('authorization') ?? ''
       const key = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
-      if (!key) throw new AppError('UNAUTHORIZED', 'Missing Insights Hub API key. Use Authorization: Bearer ihk_<key>', 401)
+      if (!key) throw new AppError('UNAUTHORIZED', 'Missing PatternAI API key. Use Authorization: Bearer ihk_<key>', 401)
       const store = await service.authenticatePublicApi(key, endpoint)
       send(request, response, await handler(store, request))
     } catch (error: unknown) { next(error) }
@@ -513,7 +532,7 @@ export function createInsightsHubRouter(dependencies: InsightsHubRouteDependenci
 
   /* ── Auto-discovery trigger (worker / scheduler) ─────────────────────── */
 
-  router.post('/insights/auto-discovery/run', handle(async (request, response) => {
+  router.post(patternAiPaths('auto-discovery/run'), handle(async (request, response) => {
     // Used by the worker sweep (Part 4): runs the daily pipeline when due.
     const store = tenant(request)
     const result = await service.generateDiscoveriesForStore(store)
@@ -532,7 +551,7 @@ export function insightsOpenApiSpec(env: InsightsHubEnvConfig): Readonly<Record<
     get: {
       operationId: `listInsights${name}`,
       summary: description,
-      tags: ['Insights Hub'],
+      tags: ['PatternAI'],
       security,
       responses: {
         '200': { description: 'Successful response', content: { 'application/json': { schema: envelope(schema) } } },
@@ -543,10 +562,10 @@ export function insightsOpenApiSpec(env: InsightsHubEnvConfig): Readonly<Record<
   })
   return {
     openapi: '3.1.0',
-    info: { title: 'ProfitPilot Insights Hub Public API', version: '1.0.0', description: 'Commander-tier programmatic access to AI discoveries, patterns, personas, predictions, and trends. All data is computed from the merchant’s real synced store data.' },
+    info: { title: 'ProfitPilot PatternAI Public API', version: '1.0.0', description: 'Commander-tier programmatic access to AI discoveries, patterns, personas, predictions, and trends. All data is computed from the merchant’s real synced store data.' },
     servers: [{ url: '/' }],
     components: {
-      securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', description: 'Insights Hub API key (ihk_...) generated in Insights Hub → API Access' } },
+      securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', description: 'PatternAI API key (ihk_...) generated in PatternAI → API access' } },
       schemas: { Discovery: discoverySchema },
     },
     paths: {
