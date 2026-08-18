@@ -589,7 +589,6 @@ function ReportCard({
             Generated: {formatUtcDate(run.createdAt)} · Period: {formatPeriodRange(run.period.start, run.period.end)}
             {bytes !== null ? ` · ${formatBytes(bytes)}` : ''}
           </p>
-          {raw ? null : null}
         </div>
       </div>
       <div className={`reports-status ${status.tone}`}>
