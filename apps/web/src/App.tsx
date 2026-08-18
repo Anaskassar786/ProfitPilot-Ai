@@ -131,10 +131,9 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI employee',
     items: [
-      { id: 'ai-growth-command', label: 'AI Growth Command', icon: GraduationCap, tag: 'NEW', tagTone: 'new' },
+      { id: 'ai-growth-command', label: 'AI Growth Command', icon: GraduationCap, badge: 'NEW' },
       { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
-      { id: 'ai-growth-command', label: 'AI Growth Command', icon: Landmark, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'ai-command', label: 'AI Command', icon: Sparkles, tag: 'AI', badge: 'NEW' },
     ],
@@ -689,20 +688,6 @@ function CommandCenterPage({ context, onToast, onNavigate }: { context: Workspac
   return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your AI workforce, always working for you. Every insight backed by real data — never invented.">
     <CommandCenterWorkspace context={context} onToast={onToast} onNavigate={onNavigate} />
   </PageLayout>
-}
-
-/** PR #48: the AI Growth Command page hosts Store Coach now and the
-    Executive Briefing + Insights Hub tabs in future PRs (#49, #50). */
-function AiGrowthCommandPage({ context, onToast, onNavigateBilling }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigateBilling: () => void }) {
-  return (
-    <PageLayout
-      eyebrow="AI employee"
-      title="AI Growth Command"
-      description="Your Store Coach turns real store data into daily huddles, priorities, and goals. Executive Briefing and Insights Hub are coming soon."
-    >
-      <AiGrowthCommandWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
-    </PageLayout>
-  )
 }
 
 function RecommendationsPage({ context, recommendations, onEvidence, onDecide, onRefresh, onToast }: { context: WorkspaceContext; recommendations: readonly Recommendation[]; onEvidence: () => void; onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void>; onRefresh: () => void; onToast: (message: string, kind?: ToastKind) => void }) {

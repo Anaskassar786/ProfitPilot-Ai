@@ -88,18 +88,20 @@ describe('Store Coach app mount (PR #48)', () => {
     const newTag = [...(nav?.querySelectorAll('.nav-tag') ?? [])].find((tag) => tag.textContent === 'NEW')
     expect(newTag).toBeTruthy()
   })
-  it('shows the Campaigns sidebar entry muted with a Soon badge', async () => {
+  it('keeps the AI Growth Command nav entry with a NEW badge (Campaigns merged into AI Command)', async () => {
     await mountApp()
-    const campaigns = [...document.querySelectorAll('.nav-item')].find((item) => item.textContent?.includes('Campaigns'))
-    expect(campaigns).toBeTruthy()
-    expect(campaigns?.classList.contains('muted')).toBe(true)
-    expect(campaigns?.textContent ?? '').toContain('Soon')
+    const growth = [...document.querySelectorAll('.nav-item')].find((item) => item.textContent?.includes('AI Growth Command'))
+    expect(growth).toBeTruthy()
+    expect(growth?.textContent ?? '').toContain('NEW')
+    // Campaigns lives inside AI Command now; no muted sidebar entry is shown.
+    const muted = [...document.querySelectorAll('.nav-item')].filter((item) => item.classList.contains('muted'))
+    expect(muted).toHaveLength(0)
   })
-  it('renders the three AI Growth Command tabs with locked placeholders', async () => {
+  it('renders the AI Growth Command tabs: Store Coach, AI Executive, and a locked Insights Hub', async () => {
     await mountApp()
     const tabs = [...document.querySelectorAll('.coach-tab')].map((tab) => tab.textContent ?? '')
     expect(tabs.some((text) => text.includes('Store Coach'))).toBe(true)
-    expect(tabs.some((text) => text.includes('Executive Briefing') && text.includes('Coming Soon'))).toBe(true)
+    expect(tabs.some((text) => text.includes('AI Executive'))).toBe(true)
     expect(tabs.some((text) => text.includes('Insights Hub') && text.includes('Coming Soon'))).toBe(true)
   })
   it('shows the educational empty states for a store with no huddle yet', async () => {
@@ -110,14 +112,16 @@ describe('Store Coach app mount (PR #48)', () => {
     expect(main?.textContent ?? '').toContain('Set your first weekly goal')
     expect(main?.textContent ?? '').toContain('Complete your first huddle to earn your first badge!')
   })
-  it('renders the briefings and insights Coming Soon sections on navigation', async () => {
+  it('renders the Insights Hub Coming Soon section and hands AI Executive off to the boardroom surface', async () => {
     await mountApp()
-    const briefingTab = [...document.querySelectorAll('.coach-tab')].find((tab) => tab.textContent?.includes('Executive Briefing'))
-    await act(async () => { briefingTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(document.querySelector('.coach-coming-soon')?.textContent ?? '').toContain('Executive Briefing is coming soon')
     const insightsTab = [...document.querySelectorAll('.coach-tab')].find((tab) => tab.textContent?.includes('Insights Hub'))
     await act(async () => { insightsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(document.querySelector('.coach-coming-soon')?.textContent ?? '').toContain('Insights Hub is coming soon')
+    const executiveTab = [...document.querySelectorAll('.coach-tab')].find((tab) => tab.textContent?.includes('AI Executive'))
+    expect(executiveTab).toBeTruthy()
+    await act(async () => { executiveTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // The AI Executive surface mounts its own boardroom dashboard.
+    expect(document.querySelector('.exec-page') ?? document.querySelector('.coach-workspace')).toBeTruthy()
   })
   it('produces no console errors during the Store Coach mount', async () => {
     await mountApp()

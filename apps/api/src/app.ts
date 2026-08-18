@@ -37,19 +37,14 @@ import { createInventoryRouter } from './inventory-routes.js'
 import type { InventoryRouteDependencies } from './inventory-routes.js'
 import { createAnalyticsRouter } from './analytics-routes.js'
 import type { AnalyticsRouteDependencies } from './analytics-routes.js'
-<<<<<<< HEAD
 import { createExecutiveRouter } from './executive-routes.js'
 import type { ExecutiveRouteDependencies } from './executive-routes.js'
 import { createAiCommandRouter } from './ai-command-routes.js'
 import type { AiCommandRouteDependencies } from './ai-command-routes.js'
-
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; executive?: ExecutiveRouteDependencies; aiCommand?: AiCommandRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
-=======
 import { createStoreCoachRouter } from './store-coach-routes.js'
 import type { StoreCoachRouteDependencies } from './store-coach-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; storeCoach?: StoreCoachRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
->>>>>>> 05547f562d2005c8c7382f81e99abad6bd4e4ca6
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; executive?: ExecutiveRouteDependencies; aiCommand?: AiCommandRouteDependencies; storeCoach?: StoreCoachRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
