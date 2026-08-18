@@ -36,6 +36,7 @@ import {
   Inbox,
   Info,
   Keyboard,
+  Landmark,
   LayoutDashboard,
   LifeBuoy,
   LineChart,
@@ -109,6 +110,7 @@ import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
+import { AiGrowthCommandPage } from './executive.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -127,6 +129,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
     items: [
       { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
+      { id: 'ai-growth-command', label: 'AI Growth Command', icon: Landmark, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'campaigns', label: 'Campaigns', icon: Send, tag: 'Marketing' },
       { id: 'copilot', label: 'Copilot', icon: Sparkles, tag: 'Ask' },
@@ -154,6 +157,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
   'command-center': { title: 'AI Command Center', description: 'Seven agents explain deterministic store evidence. They never invent numbers.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
+  'ai-growth-command': { title: 'AI Growth Command', description: 'Store Coach for daily tactics, AI Executive for boardroom strategy, and the Insights Hub.', icon: Landmark },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
   campaigns: { title: 'Campaigns', description: 'Email customers from your verified merchant address after you approve a send.', icon: Send },
   copilot: { title: 'Copilot', description: 'A grounded query surface for the evidence packs built by ProfitPilot.', icon: Sparkles },
@@ -178,7 +182,7 @@ export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
   // the user expects instead of resetting to the dashboard.
-  const [activePage, setActivePage] = useState<SectionId>(() => (window.location.hash.startsWith('#/recommendations') ? 'recommendations' : 'dashboard'))
+  const [activePage, setActivePage] = useState<SectionId>(() => hashSection(window.location.hash) ?? 'dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -353,7 +357,8 @@ export default function App() {
     // not bounce back; entering it establishes the base route for deep links.
     try {
       if (page === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
-      else if (window.location.hash.startsWith('#/recommendations')) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      else if (page === 'ai-growth-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
+      else if (hashSection(window.location.hash) !== null) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     } catch { /* embedded browsers may restrict history access */ }
   }
 
@@ -361,8 +366,8 @@ export default function App() {
   // pages keeps the visible page in sync.
   useEffect(() => {
     const onHashNavigation = () => {
-      const onRecommendations = window.location.hash.startsWith('#/recommendations')
-      setActivePage((current) => (onRecommendations ? 'recommendations' : current === 'recommendations' ? 'dashboard' : current))
+      const section = hashSection(window.location.hash)
+      setActivePage((current) => (section !== null ? section : current === 'recommendations' || current === 'ai-growth-command' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -550,6 +555,7 @@ function PageRouter({
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
+  if (active === 'ai-growth-command') return <PageLayout eyebrow="AI employee" title="AI Growth Command" description="Store Coach for daily tactical coaching and AI Executive for CEO-level strategic intelligence."><AiGrowthCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns') return <CampaignsPage onPhaseGate={onPhaseGate} context={context} onToast={onToast} />
@@ -855,4 +861,10 @@ function storeNumberRecord(key: string, value: Readonly<Record<string, number>>)
 /** True for the 503 the API returns while a store's Shopify circuit is open. */
 function isCircuitOpen(error: unknown): boolean { return error instanceof ApiClientError && error.status === 503 && /circuit is open/i.test(error.message) }
 function errorMessage(error: unknown): string { if (error instanceof ApiClientError) return error.message; if (error instanceof Error) return error.message; return 'The API could not be reached.' }
+/** Resolves a deep-link hash to a workspace section id, or null. */
+function hashSection(hash: string): 'recommendations' | 'ai-growth-command' | null {
+  if (hash.startsWith('#/recommendations')) return 'recommendations'
+  if (hash.startsWith('#/ai-growth-command')) return 'ai-growth-command'
+  return null
+}
 function isTypingTarget(target: EventTarget | null): boolean { return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement }

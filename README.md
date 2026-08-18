@@ -52,6 +52,36 @@ The Recommendations page is a dedicated workspace (`apps/web/src/recommendations
 - **Feedback loop** — every decision appends to `ai_calibration_samples`; agent confidence caps hydrate from history at boot, so HIGH confidence is earned after 10+ merchant decisions.
 - **Execution bridge** — `POST /recommendations/:id/execute` runs the idempotent `ActionExecutor` (drafts only — `SEND_EMAIL` creates a reviewable campaign template), records `ai_executions`, and feeds the time-window attribution matcher that populates `ai_attribution_events` for `/billing/roi`.
 
+### AI Executive (PR #49)
+
+AI Executive — **"Your Boardroom in a Box"** — is the strategic half of the AI
+Growth Command page (`#/ai-growth-command/executive`), designed for CEO-level
+decisions rather than daily operations. It ships with its own
+`docs/AI_EXECUTIVE.md`.
+
+- **Zero fake data** — board reports, the eight-vital-sign health diagnosis,
+  the risk radar, opportunities, scenarios, and the dashboard are all computed
+  from real synced rows (`apps/api/src/executive-analytics.ts`). Missing
+  metrics are reported as "not measurable" instead of estimated.
+- **Grounded AI language** — OpenRouter (shared `STORE_COACH_API_KEY`,
+  `nvidia/nemotron-3-ultra:free` → `nvidia/nemotron-3-super:free` fallback)
+  writes narrative only; the language firewall rejects any invented number,
+  and deterministic templates keep every report complete without the provider.
+- **Plan-gated everywhere** — 402 `UPGRADE_REQUIRED` with upgrade context from
+  the API; aspirational locked overlays in the UI whose CTA is always
+  "Upgrade Plan" (never a plan name). Trial sees clearly-labeled sample
+  previews. Usage meters warn at 80% and block at 100%.
+- **Investor PDF (Commander)** — dependency-free PDF writer with cover page,
+  table of contents, vector charts, page numbers, white-label branding, async
+  job/poll generation, 30-day retention, plus a Brevo monthly board-report
+  email (PDF attached for Commander).
+- **Industry benchmarks (hybrid)** — curated public Shopify benchmark ladders
+  seeded in migration `0021`; anonymized internal aggregates arrive in Phase 2.
+- **Modern chart vocabulary** — area/gradient, radial gauge, sparkline,
+  stacked bar, waterfall, horizontal bar, bubble map, bullet, percentile bar,
+  and heatmap — all theme-adaptive (dark + light) with hover tooltips and
+  print-ready output. No line or donut charts.
+
 ### Workspace projects
 
 **Apps**

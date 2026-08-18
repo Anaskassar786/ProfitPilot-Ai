@@ -5,7 +5,7 @@ import type { AgentName, EntitlementKey } from './plans.js'
 import { agentsForPlan, PLAN_DEFINITIONS, requiredPlanForAgent } from './plans.js'
 
 export class UpgradeRequiredError extends AppError {
-  public constructor(feature: EntitlementKey | `agent:${string}`, plan: PlanTier, requiredPlan?: PlanTier) {
+  public constructor(feature: EntitlementKey | `agent:${string}` | `ai_executive:${string}`, plan: PlanTier, requiredPlan?: PlanTier) {
     const isAgentGate = feature.startsWith('agent:')
     super(isAgentGate ? 'FORBIDDEN' : 'PAYMENT_REQUIRED', `Upgrade required for ${feature}`, isAgentGate ? 403 : 402, { feature, plan, reason: 'UPGRADE_REQUIRED', ...(requiredPlan ? { requiredPlan } : {}) })
     this.name = 'UpgradeRequiredError'

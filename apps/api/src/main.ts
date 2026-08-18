@@ -4,6 +4,7 @@ import { loggerFromEnv } from '@profitpilot/logger'
 import { OAUTH_DIAGNOSTICS_VERSION, shopifyHmacSelfTest } from '@profitpilot/shopify'
 import { createApi } from './app.js'
 import { createF9Bootstrap } from './f9-bootstrap.js'
+import { createExecutiveBootstrap } from './executive-bootstrap.js'
 import { readinessChecksFromEnv } from './readiness.js'
 import { runMigrations } from './migrations.js'
 
@@ -46,16 +47,27 @@ const main = async (): Promise<void> => {
     await bootstrap.shopify.webhook?.finalize?.(event)
     await bootstrap.automation.triggers.handleWebhook(event)
   } } } : bootstrap?.shopify
+  const executive = bootstrap ? createExecutiveBootstrap(bootstrap, process.env, logger) : null
   const app = bootstrap === null
     ? createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), webDistPath })
-    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
+    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, ...(executive?.enabled ? { executive: executive.routes } : {}), f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
   if (webIndexExists) logger.info('Web app serving enabled', { webDistPath, exists: webDistExists, indexExists: webIndexExists })
+  if (executive?.enabled) logger.info('AI Executive module enabled', { models: executive.routes.costSummary ? 'configured' : 'default' })
   const server = app.listen(port, '0.0.0.0', () => logger.info('ProfitPilot API listening', { port, shopifyRoutes: bootstrap !== null, webApp: webIndexExists, startedInMs: Date.now() - startedAt }))
   const automationTick = bootstrap ? setInterval(() => {
     void Promise.all([bootstrap.automation.triggers.tickSchedules(), bootstrap.automation.triggers.resumeWaits(), bootstrap.automation.triggers.purgeExpiredData()]).catch((error: unknown) => logger.error('Automation scheduler tick failed', { error: error instanceof Error ? error.message : String(error) }))
   }, 60_000) : null
+  // PR #49: hourly check for stores whose monthly board-report day has
+  // arrived (per-store report_generation_day, 1-28). Cheap when nothing is
+  // due; generation + Brevo delivery reuse the same service as the API.
+  const executiveTick = executive?.enabled ? setInterval(() => {
+    void executive.tick().then((result) => {
+      if (result.generated > 0 || result.failed > 0) logger.info('AI Executive monthly tick', { ...result })
+    }).catch((error: unknown) => logger.error('AI Executive monthly tick failed', { error: error instanceof Error ? error.message : String(error) }))
+  }, 3_600_000) : null
   const shutdown = (): void => {
     if (automationTick) clearInterval(automationTick)
+    if (executiveTick) clearInterval(executiveTick)
     server.close(() => { void bootstrap?.database.close() })
   }
   process.once('SIGTERM', shutdown)
