@@ -1,83 +1,176 @@
-# AI Command — Ultra-Professional Redesign
+# AI Command — Ultra-Professional Transformation + New Logo + Complete Testing
 
-> The most important module of ProfitPilot AI, rebuilt from a basic demo into a
-> premium, enterprise-grade command center — with a perfect light theme, a
-> strict store-only scope, and zero fake data.
+> AI Command is the most powerful feature in ProfitPilot: one message controls
+> the entire store. This PR makes the surface look as premium as the engine —
+> with a brand-new Neural Command Node logo, a Claude/ChatGPT-grade light
+> theme, every empty space filled with real value, and a fully tested,
+> zero-fake-data experience.
 
-## Summary
+## Scope
 
-This PR transforms **AI Command** into an ultra-professional assistant that
-merchants feel they are paying premium for. It touches **only AI Command**
-(`apps/web/src/ai-command*`, `apps/api/src/ai-command-*`, `packages/ai/src/command.ts`).
-No other module was changed.
+**Only AI Command.** Touched files are `apps/web/src/ai-command*`,
+`apps/web/src/ai-command-logo.tsx`, `apps/web/public/ai-command-mark*.svg`,
+`apps/web/index.html` (favicon link), the AI Command entries in
+`apps/web/src/App.tsx` (sidebar + page meta), and the existing AI Command
+tests. **AI Command Center, Recommendations, Automation, Store Coach,
+GrowthIQ, PatternAI, and every other module are untouched.**
 
-### What changed
+## 1. New unique logo — "Neural Command Node" (replaces the sparkle)
 
-**1. Complete visual redesign (both themes)**
-- Full-height, elegant chat container with refined dark palette (`#0F0F0F` base,
-  `#1A1A1A` panels, purple `#8B5CF6` accent) and a rebuilt **light theme**
-  (`#FFFFFF` / `#FAFAFA`, visible `#E5E7EB` borders, `#7C3AED` accent) that is no
-  longer pastel or washed-out.
-- Premium welcome screen with an AI glow icon, a categorized capability showcase
-  (Store Analytics, Customer Insights, Inventory, Recommendations, Store Actions),
-  popular-question chips, and a plan-status footer.
-- Message bubbles with elegant avatars, subtle timestamps, smooth rise-in
-  animation, hover copy/regenerate/feedback actions, and 12px+ typography.
-- Prominent composer with a focused input, character counter, keyboard hints,
-  a gradient send button, and **categorized tab-style quick commands**
-  (Analytics / Customers / Products / Growth / Actions).
-- Persistent **plan status bar** (plan, commands used, actions locked/unlocked)
-  with `Upgrade Plan` CTA.
-- Rich data display: revenue/orders/AOV metric cards with period-over-period
-  change, a store-health ring gauge, and a polished data table for lists.
-- Animated thinking/loading state with a step list and streaming partial text.
+- A central command hub with five radiating connections and a command-prompt
+  chevron (`>`) in its core: *one command, everything it controls*.
+- A faint dashed orbit suggests the command ring reaching every corner of the
+  store; a purple gradient + glow matches the app branding.
+- React SVG component (`ai-command-logo.tsx`) with per-instance gradient ids
+  (safe on pages with many marks), scales from 16px sidebar icons to 64px
+  hero tiles, and ships `plain` / `badge` variants + a lucide-compatible
+  `AiCommandIcon` for the sidebar slot.
+- Theme-aware via CSS custom properties — reads perfectly on dark `#0F0F0F`
+  and light `#FFFFFF` canvases.
+- Applied everywhere AI Command is identified:
+  - Sidebar nav entry + page meta (App.tsx `ai-command` / `campaigns` /
+    `copilot`)
+  - Page header (ai-command-page.tsx)
+  - Workspace header orb, welcome hero, AI avatar, empty states, section
+    headers (the decorative sparkle is fully retired from AI Command)
+- Standalone SVG deliverables: `apps/web/public/ai-command-mark.svg`
+  (favicon, referenced from `index.html`), plus `-light.svg` and `-dark.svg`
+  theme variants.
 
-**2. Store-only scope (critical)**
-- New `detectOffTopic()` gate in `packages/ai/src/command.ts` runs before any
-  tool call and politely refuses off-topic questions (weather, poems, coding,
-  politics, health, legal, "are you ChatGPT?", etc.), redirecting to store help.
-- `STORE_SCOPE_GUIDANCE` added to the system prompt so the LLM path (when
-  configured) enforces the same boundary.
-- Store questions that mention Shopify/store/customers/products/etc. are always
-  kept in scope (e.g. "help me code a Shopify theme" is not treated as general
-  coding).
+## 2. Ultra-professional design — BOTH themes
 
-**3. Honesty invariants preserved & extended**
-- All responses continue to come from real Shopify tool results; no fabricated
-  numbers, no fake success. The new "Your activity" panel reports **real**
-  command/action/conversation/saved counts — nothing estimated.
+**Dark theme** (already strong — preserved and polished): `#0F0F0F` surfaces,
+purple `#8B5CF6` accent, layered shadows, soft glows.
 
-**4. Plan gating unchanged & enforced**
-- Trial/Start/Growth stay info-only; actions remain Commander-only with the
-  existing preview → approve flow. All CTAs say **"Upgrade Plan"** (never a
-  named tier).
+**Light theme** (completely rebuilt — was the weak point): crisp `#E5E7EB`
+borders, `#FFFFFF` / `#FAFAFA` surfaces, high-contrast `#111827` text,
+layered shadows (not flat pastel), purple `#7C3AED` accents. Both themes now
+share identical structure, interactions, and quality — both worthy of
+premium pricing.
+
+Highlights:
+
+- **Page header** — new logo prominent, dark prominent title, elegant
+  subtitle, live green pulse indicator, clean New Chat / History / Settings
+  actions.
+- **Trial status bar** — plan badge, command counter, h:mm countdown to
+  reset, actions locked/unlocked indicator, usage progress track, gradient
+  "Upgrade Plan" CTA. Tones shift green → amber → red as the limit nears.
+- **Welcome hero** — large animated logo tile, warm welcome, clear value
+  proposition.
+- **"What I can help you with"** — 4 category cards (Analytics / Customers /
+  Products / Growth) each with a colored icon tile, bold title, italic sample
+  question, arrow indicator, hover lift + border highlight.
+- **Store Actions card** — redesigned as an aspirational upgrade prompt for
+  non-Commander users (shows what's missing: email, tags, discounts,
+  automations + inline "Upgrade Plan"), or an "Enabled" success state on
+  Commander.
+- **Popular questions** — category-colored icon chips (purple / blue / green
+  / orange) with hover lift and press feedback.
+- **Command templates** — 8 pre-built templates (Analyze weekend sales, Find
+  at-risk customers, Check inventory alerts, Show growth opportunities,
+  Today's revenue, Recent orders, Store health check, Automation status),
+  each a beautiful card; clicking executes the real command against live
+  store data.
+- **Composer** — larger focused input, gradient send button, paperclip
+  future-feature indicator (disabled, titled), live character counter,
+  Enter/Shift+Enter hints as `kbd` chips, live auto-complete suggestions
+  while typing, categorized quick-command tabs with tone colors.
+- **Thinking state** — 4-step progress list (Understanding → Fetching →
+  Analyzing → Preparing) with done/active/pending states, an honest
+  "usually under 15 seconds" ETA, and a working **Cancel** button that aborts
+  the stream (client-side, no fake state).
+- **Response display** — metric cards with large tabular numerals, an inline
+  this-period-vs-previous bar chart built from the real tool result, store
+  health ring, polished tables with row hover, clear data source lines, plus
+  Copy / **Share** (Web Share API with clipboard fallback) / rate / save
+  actions on every AI message.
+
+## 3. Empty space filled with real value (right rail)
+
+Always-visible right rail on wide screens (stacks below on small screens):
+
+- **Usage ring** — gradient progress ring (green/amber/red by tone),
+  "X of N today", exact h:mm:ss countdown to reset, value message, and a
+  gradient Upgrade Plan CTA with benefits copy. Commander shows an
+  "Unlimited" state instead of a restrictive bar.
+- **Recent commands** — last 5 real conversations (timestamp, question
+  preview, answer preview); clicking reloads the conversation. Empty state is
+  welcoming, not blank.
+- **Your impact** — real counts only: commands executed, actions taken,
+  conversations, saved commands, plus a clearly-labelled time-saved estimate
+  ("~3 min per manual lookup"). A **7-day commands-per-day bar chart is
+  rendered from the real `/ai-command/usage/history` endpoint** — missing
+  days show 0, never invented values.
+- **What AI can do** — rotating showcase (5 capabilities) with category
+  icon, educational description and a runnable sample command; click dots to
+  pin, auto-rotates every 6s.
+
+## 4. History / Settings drawer
+
+History opens as a professional right drawer (backdrop + slide-in):
+conversations grouped by Today / Yesterday / This week / Older, with
+question + answer previews, search, save-as-command (star), archive, delete,
+and **Clear all**. Settings shows the preference toggles; saved commands and
+the real activity card live below.
+
+## 5. Zero fake data (verified)
+
+- Every number in the UI comes from the backend: usage, usage history,
+  conversations, saved commands, analytics tool results, action records.
+- No hardcoded revenue/order figures exist in any AI Command source file
+  (audit: `grep '\$[0-9]'` over the scope returns only SQL `$1` placeholders
+  and test assertions). The `$8,940` string appears only in tests asserting
+  it is *not* rendered.
+- Missing data is reported honestly ("I don't have customer data yet — sync
+  your Shopify customers first"), store-health shows "cannot be scored until
+  analytics or inventory rows exist", and action failures surface partial
+  results verbatim.
+- The "Your impact" panel labels the one derived figure (time saved) as an
+  estimate and documents its formula; everything else is a real count.
+
+## 6. Plan gating unchanged & enforced
+
+- Trial 10/day, Start 50/day, Growth 200/day (info-only), Commander
+  unlimited + full actions — limits come from the backend
+  `AI_COMMAND_PLAN_LIMITS`.
+- All CTAs say **"Upgrade Plan"** — never a named tier. `UpgradePlanButton`
+  is reused globally; no plan structure changed.
+- Approaching-limit (≥80%) shows a helpful amber warning; limit-reached shows
+  the reset countdown + upgrade CTA; commander shows an unlimited state.
+
+## 7. Store-only scope (preserved)
+
+- `detectOffTopic` + `STORE_SCOPE_GUIDANCE` keep answers store-only; the UI
+  renders off-topic refusals with redirect chips ("Today's revenue",
+  "Recent orders", "Store health").
+- Store questions mentioning Shopify/store/customers/products are always in
+  scope.
 
 ## Files changed
 
 | File | Change |
 | --- | --- |
-| `packages/ai/src/command.ts` | Store-scope gate (`detectOffTopic`, `renderOffTopicResponse`, `STORE_SCOPE_GUIDANCE`), `offtopic` content type, system-prompt scope rules |
-| `packages/ai/src/command.test.ts` | Tests for off-topic detection, refusal rendering, and service-boundary refusal |
-| `apps/web/src/ai-command.tsx` | Full component redesign: welcome, plan bar, message bubbles, rich data, quick commands, activity panel |
-| `apps/web/src/ai-command.css` | Full theme-adaptive CSS rewrite (dark + light) |
-| `apps/web/src/ai-command-model.ts` | `offtopic` content type + quick-command category helper |
-| `apps/web/ai-command-preview.html` | Standalone dark/light visual preview (not shipped in the bundle) |
+| `apps/web/src/ai-command-logo.tsx` | **New** — Neural Command Node mark (`AiCommandMark`, `AiCommandIcon`, wordmark) |
+| `apps/web/src/ai-command.tsx` | Full redesign: header, plan bar, welcome, capability cards, templates, composer + suggestions + cancel, right rail (usage ring / recent commands / impact / showcase), history drawer, rich responses with compare bars + share |
+| `apps/web/src/ai-command.css` | Full rewrite — premium dark + rebuilt light theme, all new components, responsive |
+| `apps/web/src/ai-command-model.ts` | `dailyResetCountdown`, `conversationPreview`, `firstAssistantAnswer`, `lastUserQuestion`, `usageHistoryBars`, `valueStats`, category tones/labels |
+| `apps/web/src/ai-command-hooks.ts` | Usage-history fetch, abortable streaming (`cancelThinking`) |
+| `apps/web/src/ai-command-api.ts` | `fetchAiCommandUsageHistory`, stream `signal` support |
+| `apps/web/src/ai-command-page.tsx` | Page header with new logo |
+| `apps/web/src/App.tsx` | AI Command nav + page-meta icons only (no other module touched) |
+| `apps/web/public/ai-command-mark.svg` (+ `-light`, `-dark`) | **New** — logo SVG deliverables |
+| `apps/web/index.html` | Favicon link to the new mark |
+| `apps/web/ai-command-preview.html` | Rebuilt static preview (dark + light, welcome + exchange) |
+| Tests (`ai-command-model.test.ts`, `ai-command-ui.test.ts`, `ai-command-routes.test.ts`) | 9 new tests (countdown, previews, usage bars, value stats, category mapping, logo render, plan gating, usage-history endpoint) |
 
 ## Testing
 
-- Full suite: **172 files / 1868 tests pass**, including the 23 AI Command
-  service tests, UI snapshot tests, and API route tests.
-- `typecheck` passes for all packages.
-- Existing strings preserved (`Welcome to AI Command`, `One command controls
-  everything`, `Type your command`, `Upgrade Plan`) so no regressions in the
-  UI contract.
-
-## Manual verification
-
-Open `apps/web/ai-command-preview.html` (or the included live preview) to see
-the welcome screen and an example exchange in **both** dark and light themes.
+- Full suite: **174 files / 1973 tests pass** (was 1964; +9 new).
+- `typecheck` passes for every package; production `vite build` succeeds.
+- Functional test report: `AI_COMMAND_ULTRA_PRO_FUNCTIONAL_TEST_REPORT.md`.
 
 ## Out of scope (intentionally untouched)
 
-AI Command Center, Recommendations, Automation, Store Coach, AI Executive,
-Insights Hub, and every other module.
+AI Command Center, Recommendations, Automation, Store Coach, AI Executive /
+GrowthIQ, PatternAI / Insights Hub, Reports, Billing, and all other modules.

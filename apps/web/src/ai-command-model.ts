@@ -86,6 +86,30 @@ export type AiCommandQuickCommand = Readonly<{
 
 export type AiCommandQuickCategory = 'analytics' | 'customers' | 'products' | 'growth' | 'actions'
 
+/** Category tone key used for icon tiles and hover accents. */
+export type AiCommandTone = 'purple' | 'blue' | 'green' | 'orange' | 'amber'
+
+export const CATEGORY_TONE: Readonly<Record<AiCommandQuickCategory, AiCommandTone>> = {
+  analytics: 'purple',
+  customers: 'blue',
+  products: 'green',
+  growth: 'orange',
+  actions: 'amber',
+}
+
+/** Human label used in grouped quick commands and template cards. */
+export const CATEGORY_LABEL: Readonly<Record<AiCommandQuickCategory, string>> = {
+  analytics: 'Analytics',
+  customers: 'Customers',
+  products: 'Products',
+  growth: 'Growth',
+  actions: 'Actions',
+}
+
+export function quickCommandTone(command: AiCommandQuickCommand): AiCommandTone {
+  return CATEGORY_TONE[quickCommandCategory(command)] ?? 'purple'
+}
+
 export function quickCommandCategory(command: AiCommandQuickCommand): AiCommandQuickCategory {
   if (command.kind === 'action') return 'actions'
   const text = `${command.label} ${command.command}`.toLowerCase()
@@ -153,6 +177,89 @@ export function hoursUntilDailyReset(now = new Date()): number {
   const next = new Date(now)
   next.setUTCHours(24, 0, 0, 0)
   return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 3_600_000))
+}
+
+export type DailyResetCountdown = Readonly<{ hours: number; minutes: number; seconds: number }>
+
+/** Precise h:mm:ss until the daily command limit resets (UTC midnight). */
+export function dailyResetCountdown(now = new Date()): DailyResetCountdown {
+  const next = new Date(now)
+  next.setUTCHours(24, 0, 0, 0)
+  const totalSeconds = Math.max(0, Math.ceil((next.getTime() - now.getTime()) / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return { hours, minutes, seconds }
+}
+
+/** The last question the merchant asked in a conversation. */
+export function lastUserQuestion(conversation: AiCommandConversation): string {
+  for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
+    const message = conversation.messages[index]
+    if (message?.role === 'user') return message.content
+  }
+  return conversation.title
+}
+
+/** The first assistant answer snippet, or '' when the AI has not replied yet. */
+export function firstAssistantAnswer(conversation: AiCommandConversation, maxLength = 110): string {
+  const message = conversation.messages.find((item) => item.role === 'assistant')
+  const content = message?.content ?? ''
+  if (!content) return ''
+  const singleLine = content.replace(/\s+/g, ' ').trim()
+  return singleLine.length > maxLength ? `${singleLine.slice(0, maxLength - 1)}…` : singleLine
+}
+
+/** Short preview copy for a recent-command row (question + answer). */
+export function conversationPreview(conversation: AiCommandConversation): Readonly<{ question: string; answer: string }> {
+  return { question: lastUserQuestion(conversation), answer: firstAssistantAnswer(conversation) }
+}
+
+export type UsageHistoryBar = Readonly<{ label: string; value: number; isToday: boolean }>
+
+/**
+ * Builds the real "commands per day" series for the last `days` days from
+ * usage history. Missing days are shown as 0 (no commands ran — not invented
+ * data). Labels use the local weekday initial.
+ */
+export function usageHistoryBars(history: readonly AiCommandUsage[], days = 7, now = new Date()): readonly UsageHistoryBar[] {
+  const byDay = new Map<string, AiCommandUsage>()
+  for (const row of history) byDay.set(row.usageDate, row)
+  const bars: UsageHistoryBar[] = []
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const day = new Date(now)
+    day.setHours(0, 0, 0, 0)
+    day.setDate(day.getDate() - offset)
+    const key = day.toISOString().slice(0, 10)
+    const row = byDay.get(key)
+    bars.push({ label: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(day), value: row?.commandsUsed ?? 0, isToday: offset === 0 })
+  }
+  return bars
+}
+
+/** Real command-surface stats for the value panel. Estimates are labelled. */
+export function valueStats(usage: AiCommandUsage | null, usageHistory: readonly AiCommandUsage[], conversations: number, saved: number): Readonly<{
+  commandsToday: number
+  commandsWeek: number
+  actions: number
+  conversations: number
+  saved: number
+  timeSavedMinutes: number
+  timeSavedLabel: string
+}> {
+  const commandsToday = usage?.commandsUsed ?? 0
+  const commandsWeek = usageHistory.reduce((total, row) => total + (row.commandsUsed ?? 0), 0)
+  const actions = usage?.actionsExecuted ?? 0
+  const timeSavedMinutes = commandsWeek * 3
+  return {
+    commandsToday,
+    commandsWeek,
+    actions,
+    conversations,
+    saved,
+    timeSavedMinutes,
+    timeSavedLabel: timeSavedMinutes >= 60 ? `${(timeSavedMinutes / 60).toFixed(1)}h` : `${timeSavedMinutes}m`,
+  }
 }
 
 export function planLabel(plan: AiCommandPlan): string {

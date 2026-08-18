@@ -122,6 +122,7 @@ import { CoachWidget } from './coach-widget.js'
 import { PatternAiWorkspace } from './patternai.js'
 import { PatternAiIcon } from './patternai-logo.js'
 import { GrowthIqNavIcon } from './growthiq-logo.js'
+import { AiCommandIcon } from './ai-command-logo.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -141,7 +142,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
-      { id: 'ai-command', label: 'AI Command', icon: Sparkles, tag: 'AI', badge: 'NEW' },
+      { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon, tag: 'AI', badge: 'NEW' },
     ],
   },
   {
@@ -179,9 +180,9 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'ai-executive': { title: 'GrowthIQ', description: 'Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports from your real store data.', icon: GrowthIqNavIcon },
   automation: { title: 'Automation', description: 'Automate the busywork — recover carts, welcome customers, and stay on top of stock.', icon: Workflow },
   patternai: { title: 'PatternAI', description: 'Discover the patterns that drive your business — discoveries, lessons, personas, and Why? answers computed from your real synced data.', icon: PatternAiIcon },
-  campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
-  copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
-  'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: Sparkles },
+  campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: AiCommandIcon },
+  copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
+  'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
   reports: { title: 'Reports', description: 'Closed-period PDF reports built from your real store data.', icon: FileBarChart },
   exports: { title: 'Exports', description: 'Export real synced records when the data plane has something to deliver.', icon: Download },
   support: { title: 'Support tickets', description: 'A direct, auditable line to the ProfitPilot team.', icon: LifeBuoy },
