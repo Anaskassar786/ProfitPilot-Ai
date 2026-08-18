@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-export const DEFAULT_AI_MODELS = ['nvidia/nemotron-nano-9b-v2:free', 'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-lightning:free'] as const
+export const DEFAULT_AI_MODELS = ['openai/gpt-oss-20b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'] as const
 export const DEFAULT_AI_TIMEOUT_MS = 25_000
 export type AiModel = string
 export type AiUsage = Readonly<{ promptTokens: number; completionTokens: number; totalTokens: number }>

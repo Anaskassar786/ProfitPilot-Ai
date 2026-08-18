@@ -25,7 +25,7 @@ describe('F4 idempotent action executor', () => {
     const executor = new ActionExecutor({ SEND_EMAIL: async () => ({ sent: true }) }, new InMemoryExecutionLedger(), () => 100)
     await expect(executor.execute({ id: 'e1', storeId: 's', actionType: 'SEND_EMAIL', payload: {}, approvalStatus: 'approved', mode: 'MANUAL', dailyCap: 2 })).resolves.toMatchObject({ status: 'EXECUTED' })
   })
-  it('requires approval even when fully automatic mode is selected', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'CREATE_RECOMMENDATION', payload: {}, mode: 'FULLY_AUTOMATIC', dailyCap: 2 }, new InMemoryExecutionLedger())).toThrow('approval'))
+  it('requires approval even when fully automatic mode is selected', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'CREATE_RECOMMENDATION', payload: {}, mode: 'FULLY_AUTOMATIC', dailyCap: 2 }, 0)).toThrow('approval'))
   it('enforces a per-store daily cap', async () => {
     const ledger = new InMemoryExecutionLedger()
     const executor = new ActionExecutor({ TAG_CUSTOMER: async () => ({ ok: true }) }, ledger, () => 100)
@@ -34,6 +34,6 @@ describe('F4 idempotent action executor', () => {
     await expect(executor.execute({ ...request, id: 'two' })).rejects.toThrow('safety cap')
   })
   it('fails if an action tool is not configured', async () => await expect(new ActionExecutor({}, new InMemoryExecutionLedger()).execute({ id: 'e1', storeId: 's', actionType: 'TAG_CUSTOMER', payload: {}, mode: 'MANUAL', dailyCap: 1 })).rejects.toThrow('not configured'))
-  it('rejects invalid safety caps', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'TAG_CUSTOMER', payload: {}, mode: 'MANUAL', dailyCap: 0 }, new InMemoryExecutionLedger())).toThrow(AppError))
-  it('rejects manual-only actions', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'CREATE_DISCOUNT', payload: {}, mode: 'MANUAL', approvalStatus: 'approved', dailyCap: 1 }, new InMemoryExecutionLedger())).not.toThrow())
+  it('rejects invalid safety caps', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'TAG_CUSTOMER', payload: {}, mode: 'MANUAL', dailyCap: 0 }, 0)).toThrow(AppError))
+  it('rejects manual-only actions', () => expect(() => assertPolicy({ id: 'e1', storeId: 's', actionType: 'CREATE_DISCOUNT', payload: {}, mode: 'MANUAL', approvalStatus: 'approved', dailyCap: 1 }, 0)).not.toThrow())
 })

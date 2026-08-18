@@ -6,6 +6,8 @@ import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, Cu
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { AnalyticsInsights } from './analytics-model.js'
+import type { AgentActivityItem, AgentOverview, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
+import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
@@ -258,8 +260,120 @@ export function fetchAgentStatuses(fetcher: Fetcher = fetch): Promise<readonly A
   return requestJson<readonly AgentStatus[]>('/ai/agents', {}, fetcher)
 }
 
+/* ── AI Command Center (PR45) ─────────────────────────────────────────── */
+
+export function fetchAgentOverview(storeId: string, fetcher: Fetcher = fetch): Promise<AgentOverview> {
+  return requestJson<AgentOverview>(`/ai/agents?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchAiCost(storeId: string, fetcher: Fetcher = fetch): Promise<CostSummaryView> {
+  return requestJson<CostSummaryView>(`/ai/cost?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchAiCostBreakdown(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CostBreakdownRow[]> {
+  return requestJson<readonly CostBreakdownRow[]>(`/ai/cost/breakdown?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchStoreHealth(storeId: string, fetcher: Fetcher = fetch): Promise<StoreHealthResult> {
+  return requestJson<StoreHealthResult>(`/ai/health?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchRuleCatalog(fetcher: Fetcher = fetch): Promise<readonly RuleCatalogEntry[]> {
+  return requestJson<readonly RuleCatalogEntry[]>('/ai/rules', {}, fetcher)
+}
+
+export function fetchAgentActivity(storeId: string, agentId: string, fetcher: Fetcher = fetch): Promise<readonly AgentActivityItem[]> {
+  return requestJson<readonly AgentActivityItem[]>(`/ai/agents/${encodeURIComponent(agentId)}/activity?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function setAgentPaused(storeId: string, agentId: string, paused: boolean, fetcher: Fetcher = fetch): Promise<Readonly<{ agent: string; paused: boolean }>> {
+  return requestJson(`/ai/agents/${encodeURIComponent(agentId)}?storeId=${encodeURIComponent(storeId)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paused }) }, fetcher)
+}
+
+export function runAgent(storeId: string, agentId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ recommendations: readonly Recommendation[]; deduplicated: number; cacheHits: number }>> {
+  return requestJson(`/ai/agents/${encodeURIComponent(agentId)}/run?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, fetcher)
+}
+
+/**
+ * Runs every unlocked agent and streams progress over SSE frames.
+ * The callback receives parsed events; the promise resolves when the stream ends.
+ */
+export async function runAllAgents(storeId: string, onEvent: (event: RunAllEvent) => void, fetcher: Fetcher = fetch): Promise<void> {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  if (!csrfToken) await initializeCsrf(fetcher)
+  if (csrfToken) headers.set('x-csrf-token', csrfToken)
+  const response = await fetcher(`/ai/run-all?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers, body: '{}' })
+  if (!response.ok || !response.body) {
+    let payload: unknown = null
+    try { payload = await response.json() } catch { payload = null }
+    throw failureFromPayload(payload, response.status)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const step = await reader.read()
+    if (step.done) break
+    buffer += decoder.decode(step.value, { stream: true })
+    let boundary: number
+    while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      const event = parseSseFrame(frame)
+      if (event) onEvent(event)
+    }
+  }
+}
+
+
+/**
+ * PR #46: the list endpoint returns a page envelope. This wrapper keeps the
+ * older array-shaped call sites (passive Jarvis card) working.
+ */
 export function fetchRecommendations(storeId: string, fetcher: Fetcher = fetch): Promise<readonly Recommendation[]> {
-  return requestJson<readonly Recommendation[]>(`/recommendations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+  return fetchRecommendationPage(storeId, {}, fetcher).then((page) => page.items as unknown as readonly Recommendation[])
+}
+
+export function fetchRecommendationPage(storeId: string, filters: import('./recommendations-model.js').RecommendationListFilters = {}, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationPage> {
+  const params = new URLSearchParams({ storeId })
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && String(value).length > 0) params.set(key, String(value))
+  }
+  return requestJson(`/recommendations?${params.toString()}`, {}, fetcher)
+}
+
+export function fetchRecommendationSummary(storeId: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationSummary> {
+  return requestJson(`/recommendations/summary?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchRecommendation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function verifyRecommendationEvidence(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').EvidenceVerification> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/evidence/verify?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function undoRecommendationDecision(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/undo?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, fetcher)
+}
+
+export function snoozeRecommendation(storeId: string, id: string, hours: number, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/snooze?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ hours }) }, fetcher)
+}
+
+export function executeRecommendation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ recommendation: import('./recommendations-model.js').RecommendationView; execution: Readonly<Record<string, unknown>> }>> {
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/execute?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, fetcher)
+}
+
+export function bulkDecideRecommendations(storeId: string, decisions: readonly Readonly<{ id: string; expectedVersion: number; decision: 'approve' | 'reject'; reason?: string }>[], fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').BulkDecisionResult> {
+  return requestJson(`/recommendations/bulk-decide?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, decisions }) }, fetcher)
+}
+
+export function decideRecommendationWithReason(storeId: string, id: string, expectedVersion: number, decision: 'approve' | 'reject', reason: string | null, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').RecommendationView> {
+  const body: Record<string, unknown> = { expectedVersion }
+  if (decision === 'reject' && reason) body.reason = reason
+  return requestJson(`/recommendations/${encodeURIComponent(id)}/${decision}?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, fetcher)
 }
 
 export type WorkflowRecord = Readonly<{ id: string; storeId: string; version: number; nodes: readonly Readonly<Record<string, unknown>>[]; status?: string; definitionHash?: string }>

@@ -6,6 +6,52 @@ ProfitPilot is an autonomous AI employee for Shopify merchants. The repository i
 
 F0 through F9 are complete. F9 adds persisted maintenance mode with critical endpoint exemptions, per-merchant AI/automation/suspension flags, audited admin controls, live queue/dead-letter inspection and retry, four-dependency readiness probes, optional Sentry grouping/release/performance monitoring, startup environment validation with Cloudflare R2 alias normalization, migration-on-start support, worker health on port 3100, production logging/shutdown behavior, Docker/Railway deployment files, and launch/security/runbook documentation. F9 is the final blueprint phase; deployment and Shopify App Store submission are operational follow-up steps, not a new product phase.
 
+## AI Command Center (PR45 overhaul)
+
+The AI Command Center is a plan-aware AI workforce dashboard backed entirely by
+deterministic evidence — agents explain numbers, they never invent them.
+
+**The seven agents and the plans that unlock them**
+
+| Agent | Rules routed to it | Unlocked from |
+|---|---|---|
+| Revenue Agent | `REVENUE_SPIKE`, `REVENUE_DROP` | Trial |
+| Inventory Agent | `STOCKOUT_RISK`, `DEAD_STOCK` | Trial |
+| Customer Agent | `CHURN_RISK`, `REPEAT_PURCHASE` | Start ($49/mo) |
+| Pricing Agent | `PRICING_UPLIFT` | Growth ($149/mo) |
+| Campaign Agent | `CART_ABANDONMENT`, `NEW_CUSTOMER_WELCOME` | Growth ($149/mo) |
+| Product Agent | `CROSS_SELL` | Commander ($349/mo) |
+| Executive Agent | `WEEKLY_HEALTH_DIGEST` | Commander ($349/mo) |
+
+Trial unlocks 2 agents, Start 3, Growth 5, Commander all 7 — enforced
+server-side (`agentsForPlan` / `assertAgentAccess` in `@profitpilot/billing`)
+and rendered as aspirational locked cards with upgrade CTAs in the UI. An
+expired trial must upgrade to a paid plan to keep using agents.
+
+**Engine guarantees**
+
+- All 11 deterministic rules are fed real data: velocity and dead-stock
+  windows derive from `analytics_product_sales`, unit cost from variant cost
+  fields, and cross-sell pairs from synced order line co-occurrence.
+- Re-running analysis refreshes still-pending `(rule, entity)` recommendations
+  instead of duplicating them.
+- AI spend is metered durably in `ai_cost_ledger` (per agent and model) with a
+  shared daily cap; approve/reject decisions persist to
+  `ai_calibration_samples` and calibrate per-agent confidence.
+- Identical evidence hits a 24h tenant-versioned explanation cache instead of
+  a second AI call; `run-all` executes with bounded concurrency and streams
+  SSE progress.
+### Recommendations (PR #46)
+
+The Recommendations page is a dedicated workspace (`apps/web/src/recommendations.tsx` + `recommendations-model.ts` + `recommendations.css`) backed by the full lifecycle API in `apps/api/src/ai-routes.ts`. Highlights:
+
+- **Working generation** — `POST /recommendations/analyze` runs eight deterministic rules over a real store snapshot (currency from synced orders; product velocity from `analytics_product_sales_daily`; co-purchase pairs from real order line items).
+- **Plan metering** — `ai_recommendations_month` (Trial 10 / Start 30 / Growth 150 / Commander unlimited) is enforced server-side via `billing_usage`, with a usage ring, near-limit warning, and hard-block upgrade CTA in the UI. Plan limits live in one place: `packages/types/src/plans.ts` (`PLAN_ENTITLEMENT_LIMITS`).
+- **Trust surfaces** — the evidence drawer renders every evidence fact with its source column, server-verifies the pack's SHA-256, and shows the decision trail. A "How it works" modal explains rules, sealing, calibration, and impact modeling.
+- **Decision lifecycle** — CAS approve/reject with optional reject reasons, 30-second undo, bulk decide (max 20), server-side snooze, rule-derived expiry (`EXPIRED` status), `decided_at`/`decided_by` audit fields, `audit_log` entries, and RBAC (owner/admin required for non-SAFE approvals; Jarvis decisions are atomic).
+- **Feedback loop** — every decision appends to `ai_calibration_samples`; agent confidence caps hydrate from history at boot, so HIGH confidence is earned after 10+ merchant decisions.
+- **Execution bridge** — `POST /recommendations/:id/execute` runs the idempotent `ActionExecutor` (drafts only — `SEND_EMAIL` creates a reviewable campaign template), records `ai_executions`, and feeds the time-window attribution matcher that populates `ai_attribution_events` for `/billing/roi`.
+
 ### Workspace projects
 
 **Apps**

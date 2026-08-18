@@ -41,7 +41,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     ...(logger ? { onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => logger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }) } : {}),
   })
   if (logger) void validateOpenRouterModels(provider, logger)
-  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
+  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
   const reports = createReports(f7, env)
@@ -52,7 +52,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     new PostgresOrderInsightUsage(f7.database),
     new PostgresOrderInsightAudit(f7.database),
     provider,
-    (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
+    (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
   )
   const customerRepository = new PostgresCustomerRepository(f7.database)
   const customerAudit = new PostgresCustomerInsightAudit(f7.database)
@@ -65,7 +65,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       customerUsage,
       customerAudit,
       provider,
-      (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
+      (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
     ),
   }
   const inventoryRepository = new PostgresInventoryRepository(f7.database)
@@ -81,7 +81,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       new PostgresInventoryInsightUsage(f7.database),
       new PostgresInventoryInsightAudit(f7.database),
       provider,
-      (storeId, generation) => { f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() }) },
+      (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
     ),
   }
   const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
@@ -111,12 +111,10 @@ function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | un
  */
 function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, JarvisActionTool>>> {
   const decide = async (storeId: string, recommendationId: string, status: 'APPROVED' | 'REJECTED') => {
-    // Recommendations use optimistic concurrency via version; Jarvis confirms
-    // the current pending version before applying the decision.
-    const result = await f7.database.query<{ version: number }>('SELECT version FROM ai_recommendations WHERE store_id = $1 AND id = $2 AND status = $3 LIMIT 1', [storeId, recommendationId, 'PENDING'])
-    const current = result.rows[0]
-    if (!current) throw new Error('That recommendation is not pending or could not be found.')
-    await f7.ai.recommendations.decide(storeId as import('@profitpilot/types').StoreId, recommendationId, current.version, status)
+    // PR #46: single atomic UPDATE guarded by status = 'PENDING'. The old
+    // SELECT-version-then-UPDATE pattern had a race window that could clobber
+    // a concurrent merchant decision.
+    await f7.ai.recommendations.decidePending(storeId as import('@profitpilot/types').StoreId, recommendationId, status, { decidedBy: 'jarvis' })
     return status === 'APPROVED' ? 'Recommendation approved — its workflow is now cleared to run.' : 'Recommendation rejected.'
   }
   return {

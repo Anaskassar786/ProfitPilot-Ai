@@ -6,7 +6,7 @@ import { Logger } from '@profitpilot/logger'
 import { storeId } from '@profitpilot/types'
 import { createApi } from './app.js'
 
-const recommendation: Recommendation = { id: 'r1', storeId: storeId('s'), agent: 'REVENUE_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Opportunity', reason: 'Evidence', impactValue: 100, impactLabel: 'impact', currency: 'USD', confidence: .75, confidenceLevel: 'MEDIUM', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { sha256: 'hash' }, explanation: null, explanationStatus: 'AI_UNAVAILABLE', model: null, version: 0, createdAt: '2024-01-01T00:00:00.000Z' }
+const recommendation: Recommendation = { id: 'r1', storeId: storeId('s'), agent: 'REVENUE_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Opportunity', reason: 'Evidence', impactValue: 100, impactLabel: 'impact', currency: 'USD', confidence: .75, confidenceLevel: 'MEDIUM', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { sha256: 'hash' }, explanation: null, explanationStatus: 'AI_UNAVAILABLE', model: null, version: 0, createdAt: '2024-01-01T00:00:00.000Z', entityKey: 'p1', expiresAt: null, decidedAt: null, decidedBy: null, rejectReason: null, snoozedUntil: null }
 const agents: readonly AgentStatus[] = [{ id: 'REVENUE_AGENT', label: 'Revenue Agent', promptVersion: '1.0.0', enabled: true, execution: 'UNCONFIGURED', languageOnly: true }]
 
 async function withServer<T>(handler: (base: string) => Promise<T>): Promise<T> {
@@ -22,7 +22,12 @@ async function withServer<T>(handler: (base: string) => Promise<T>): Promise<T> 
 
 describe('F4 AI API routes', () => {
   it('returns seven-agent status contracts', async () => await withServer(async (base) => expect((await fetch(`${base}/ai/agents`)).status).toBe(200)))
-  it('lists recommendations by tenant', async () => await withServer(async (base) => expect((await (await fetch(`${base}/recommendations?storeId=s`)).json()).data).toHaveLength(1)))
+  it('lists recommendations by tenant as a page envelope', async () => await withServer(async (base) => {
+    const payload = (await (await fetch(`${base}/recommendations?storeId=s`)).json()).data
+    expect(payload.items).toHaveLength(1)
+    expect(payload.total).toBe(1)
+    expect(payload.hasMore).toBe(false)
+  }))
   it('approves using CAS expectedVersion', async () => await withServer(async (base) => {
     const response = await fetch(`${base}/recommendations/r1/approve?storeId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedVersion: 0 }) })
     expect(response.status).toBe(200)

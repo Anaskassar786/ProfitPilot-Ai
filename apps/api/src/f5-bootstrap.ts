@@ -38,6 +38,9 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   }
   return {
     ...f4,
+    // PR45: the AI Command Center is plan-aware — the billing repository is
+    // the source of truth for which agents a store's tier unlocks.
+    ai: { ...f4.ai, plan: async (tenant) => (await repository.get(tenant))?.plan ?? 'trial' },
     billing: {
       repository,
       trials,
@@ -61,7 +64,7 @@ async function usage(database: { query<Row extends QueryResultRow>(text: string,
 async function roi(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, ai: F4Bootstrap['ai'], shopId: string) {
   const result = await database.query<RevenueRow>('SELECT COALESCE(SUM(revenue), 0) AS revenue FROM ai_attribution_events WHERE store_id = $1', [shopId])
   const revenue = Number(result.rows[0]?.revenue ?? 0)
-  return calculateRoi(revenue, ai.costs.summary(storeId(shopId)).microDollars)
+  return calculateRoi(revenue, (await Promise.resolve(ai.costs.summary(storeId(shopId)))).microDollars)
 }
 
 type TrialRow = QueryResultRow & { shop_id: string; started_at: Date; expires_at: Date; consumed: boolean; state: TrialRecord['state'] }
