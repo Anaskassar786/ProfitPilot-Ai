@@ -1237,7 +1237,7 @@ function HowRulesWork() {
 function SampleRecommendationPreview() {
   return (
     <div className="recs-sample-wrap">
-      <span className="recs-sample-caption"><FlaskConical size={13} /> Preview — this is what a recommendation looks like (sample, not your data)</span>
+      <span className="recs-sample-caption"><FlaskConical size={13} /> <strong className="recs-sample-caption-strong">Sample</strong> Preview — this is what a recommendation looks like (not your data)</span>
       <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
         <div className="recs-card-main">
           <div className="recs-card-top">
@@ -1281,6 +1281,7 @@ function SampleRecommendationPreview() {
           </span>
         </div>
       </article>
+      <p className="recs-sample-helper">This is a preview of what real recommendations look like. Click <strong>Discover Opportunities</strong> to generate real ones for your store.</p>
     </div>
   )
 }

@@ -43,7 +43,6 @@ import {
   Zap,
 } from 'lucide-react'
 import {
-  ApiClientError,
   decideRecommendation,
   fetchAgentActivity,
   fetchAgentOverview,
@@ -51,8 +50,6 @@ import {
   fetchRecommendationSummary,
   fetchRuleCatalog,
   fetchStoreHealth,
-  runAgent,
-  runAllAgents,
   setAgentPaused,
 } from './api.js'
 import type { Recommendation, WorkspaceContext } from './model.js'
@@ -60,7 +57,6 @@ import { formatMoney } from './model.js'
 import {
   AGENT_CATEGORY_ORDER,
   GROWTH_MODULES,
-  IDLE_RUN_STATE,
   PLAN_LABELS,
   PLAN_PRICES,
   agentCategory,
@@ -74,7 +70,6 @@ import {
   healthTrend,
   insightsToday,
   periodTotals,
-  reduceRunAll,
   relativeTime,
   storeHealthDisplay,
   trendDirection,
@@ -117,8 +112,6 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
   const [drawerAgent, setDrawerAgent] = useState<AgentOverviewEntry | null>(null)
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')
   const [growthModule, setGrowthModule] = useState<GrowthModule | null>(null)
-  const [runState, setRunState] = useState<RunAllState>(IDLE_RUN_STATE)
-  const [runningAgent, setRunningAgent] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!context.storeId) { setLoading(false); return }
@@ -147,29 +140,6 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
     onNavigate('billing')
   }, [onNavigate])
 
-  const runOne = useCallback(async (agent: AgentOverviewEntry) => {
-    if (!context.storeId) { onToast('Connect Shopify before running agents.', 'info'); return }
-    setRunningAgent(agent.id)
-    try {
-      const result = await runAgent(context.storeId, agent.id)
-      onToast(result.recommendations.length > 0 ? `${agent.label} produced ${result.recommendations.length} insight${result.recommendations.length === 1 ? '' : 's'}${result.deduplicated > 0 ? ` (${result.deduplicated} refreshed)` : ''}.` : `${agent.label} ran — no new signals in the current evidence.`, 'success')
-      void load()
-    } catch (error: unknown) {
-      onToast(runErrorMessage(error, agent), 'error')
-    } finally { setRunningAgent(null) }
-  }, [context.storeId, load, onToast])
-
-  const runAll = useCallback(async () => {
-    if (!context.storeId) { onToast('Connect Shopify before running agents.', 'info'); return }
-    setRunState({ ...IDLE_RUN_STATE, running: true })
-    try {
-      await runAllAgents(context.storeId, (event) => setRunState((state) => reduceRunAll(state, event)))
-      void load()
-    } catch (error: unknown) {
-      setRunState((state) => ({ ...state, running: false, error: error instanceof Error ? error.message : 'Run failed' }))
-    }
-  }, [context.storeId, load, onToast])
-
   const togglePause = useCallback(async (agent: AgentOverviewEntry) => {
     if (!context.storeId) return
     try {
@@ -182,7 +152,7 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
   const openDrawer = useCallback((agent: AgentOverviewEntry, tab: DrawerTab = 'overview') => { setDrawerAgent(agent); setDrawerTab(tab) }, [])
 
   if (!context.storeId) {
-    return <CommandCenterEmpty title="Connect Shopify to activate your AI team" body="The Command Center reads live evidence from your synced store. Connect a store and the seven agents will report for duty — no demo data, ever." />
+    return <CommandCenterEmpty title="Connect Shopify to activate your AI team" body="The Command Center reads live evidence from your synced store. Connect a store and your AI agents will report for duty — no demo data, ever." />
   }
   if (loading) return <CommandCenterSkeleton />
 
@@ -203,18 +173,12 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
 
       <CommandCenterHero health={health} summary={summary} overview={overview} />
 
-      {(runState.running || runState.result || runState.error) && <RunAllBanner state={runState} onDismiss={() => setRunState(IDLE_RUN_STATE)} />}
-
       <section className="cc-section" aria-label="Your AI team">
         <div className="cc-section-header">
           <div>
             <h2>Your AI team</h2>
             <p>{overview ? `${unlocked.length} of ${visible.length} agents unlocked on the ${PLAN_LABELS[overview.plan]} plan.` : 'Agents unlocked by your plan.'}</p>
           </div>
-          <button className="cc-button primary" onClick={() => void runAll()} disabled={runState.running || unlocked.length === 0}>
-            {runState.running ? <Loader2 size={15} className="cc-spin" /> : <Zap size={15} />}
-            {runState.running ? 'Running…' : 'Run All Agents'}
-          </button>
         </div>
         {AGENT_CATEGORY_ORDER.map((category) => {
           const categoryAgents = unlocked.filter((agent) => agentCategory(agent) === category)
@@ -228,9 +192,7 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
                     key={agent.id}
                     agent={agent}
                     activity={recent.filter((item) => item.agent === agent.id)}
-                    running={runningAgent === agent.id || (runState.running && runState.runnable.includes(agent.id))}
                     onOpen={(tab) => openDrawer(agent, tab)}
-                    onRun={() => void runOne(agent)}
                     onTogglePause={() => void togglePause(agent)}
                   />
                 ))}
@@ -297,7 +259,6 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
           rules={rules.filter((rule) => rule.agent === drawerAgent.id)}
           plan={overview?.plan ?? 'trial'}
           onClose={() => setDrawerAgent(null)}
-          onRun={() => void runOne(drawerAgent)}
           onTogglePause={() => void togglePause(drawerAgent)}
           onUpgrade={() => upgrade(drawerAgent.requiredPlan)}
           onToast={onToast}
@@ -316,12 +277,6 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
       )}
     </div>
   )
-}
-
-function runErrorMessage(error: unknown, agent: AgentOverviewEntry): string {
-  if (error instanceof ApiClientError && error.status === 403) return `${agent.label} needs the ${PLAN_LABELS[agent.requiredPlan]} plan. Upgrade to unlock it.`
-  if (error instanceof ApiClientError && error.status === 409) return `${agent.label} is paused. Resume it before running.`
-  return error instanceof Error ? error.message : 'The agent run failed.'
 }
 
 /* ── Hero KPIs ────────────────────────────────────────────────────────── */
@@ -432,17 +387,17 @@ export function Tooltip({ text, children }: { text: string; children?: ReactNode
 
 /* ── Agent cards ──────────────────────────────────────────────────────── */
 
-export function AgentCard({ agent, activity, running, onOpen, onRun, onTogglePause }: { agent: AgentOverviewEntry; activity: readonly Recommendation[]; running: boolean; onOpen: (tab: DrawerTab) => void; onRun: () => void; onTogglePause: () => void }) {
+export function AgentCard({ agent, activity, onOpen, onTogglePause }: { agent: AgentOverviewEntry; activity: readonly Recommendation[]; onOpen: (tab: DrawerTab) => void; onTogglePause: () => void }) {
   const Icon = AGENT_ICONS[agent.id] ?? Bot
   const tone = agentStatusTone(agent)
   const summary = agentImpactSummary(activity)
   const todayCount = insightsToday(activity)
   const confidence = summary.averageConfidence
   return (
-    <article className={`cc-agent-card ${tone} ${running ? 'is-running' : ''}`}>
+    <article className={`cc-agent-card ${tone}`}>
       <div className="cc-agent-card-top">
         <button type="button" className={`cc-agent-icon ${tone}`} onClick={() => onOpen('overview')} aria-label={`Open ${agent.label} details`}><Icon size={20} /></button>
-        <span className={`cc-status-pill ${tone}`}><i />{running ? 'Running' : agentStatusLabel(agent)}</span>
+        <span className={`cc-status-pill ${tone}`}><i />{agentStatusLabel(agent)}</span>
         <AgentMenu
           items={[
             { label: agent.paused ? 'Resume agent' : 'Pause agent', icon: agent.paused ? Play : Pause, onSelect: onTogglePause },
@@ -471,11 +426,7 @@ export function AgentCard({ agent, activity, running, onOpen, onRun, onTogglePau
         </div>
       )}
       <div className="cc-agent-actions">
-        <button type="button" className="cc-button secondary" onClick={() => onOpen('overview')}>View details</button>
-        <button type="button" className="cc-button primary" onClick={onRun} disabled={running || agent.paused}>
-          {running ? <Loader2 size={14} className="cc-spin" /> : <Play size={14} />}
-          {running ? 'Running…' : 'Run now'}
-        </button>
+        <button type="button" className="cc-button secondary full" onClick={() => onOpen('overview')}>View details <ChevronRight size={14} /></button>
       </div>
     </article>
   )
@@ -698,7 +649,7 @@ export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly
           <div className="cc-feed-empty">
             <ShieldCheck size={20} />
             <strong>No agent activity yet</strong>
-            <span>This is where you will see recommendations, runs, and insights from your agents. Run them to generate the first evidence-backed results — nothing here is ever invented.</span>
+            <span>This is where you will see recommendations and insights from your agents. They run automatically on their own schedule — nothing here is ever invented.</span>
             <div className="cc-feed-samples" aria-label="Example activity types">
               {SAMPLE_ACTIVITY_TYPES.map((sample) => {
                 const SampleIcon = sample.icon
@@ -744,7 +695,7 @@ export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly
 
 /* ── Detail drawer ────────────────────────────────────────────────────── */
 
-export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onClose, onRun, onTogglePause, onUpgrade, onToast, onChanged }: {
+export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onClose, onTogglePause, onUpgrade, onToast, onChanged }: {
   agent: AgentOverviewEntry
   tab: DrawerTab
   onTab: (tab: DrawerTab) => void
@@ -752,7 +703,6 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
   rules: readonly RuleCatalogEntry[]
   plan: PlanTier
   onClose: () => void
-  onRun: () => void
   onTogglePause: () => void
   onUpgrade: () => void
   onToast: (message: string, kind?: ToastKind) => void
@@ -870,9 +820,6 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                     {guide.dataSources.map((source) => <code key={source}><Database size={12} /> {source}</code>)}
                   </div>
                 </section>
-
-                <button type="button" className="cc-button primary full" onClick={onRun} disabled={agent.paused}><Play size={14} /> Run {agent.label} now</button>
-                {agent.paused && <p className="cc-drawer-note">This agent is paused. Resume it from Settings to run analyses.</p>}
               </div>
             )}
 
@@ -931,7 +878,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                 <div className="cc-setting-row">
                   <div>
                     <strong>Agent status</strong>
-                    <span>{agent.paused ? 'Paused — this agent is skipped by Run All and cannot run.' : 'Active — this agent runs on demand and with Run All.'}</span>
+                    <span>{agent.paused ? 'Paused — this agent is skipped and will not produce insights.' : 'Active — this agent runs automatically on the system schedule.'}</span>
                   </div>
                   <button type="button" className="cc-button secondary" onClick={onTogglePause}>{agent.paused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}</button>
                 </div>
@@ -1001,7 +948,7 @@ export function CommandCenterEmpty({ title, body }: { title: string; body: React
       <p>{body}</p>
       <ol className="cc-getting-started">
         <li><strong>1</strong><span><strong>Connect Shopify</strong><small>Sync real products, orders, and customers — no demo data.</small></span></li>
-        <li><strong>2</strong><span><strong>Run your agents</strong><small>Deterministic rules turn store evidence into recommendations.</small></span></li>
+        <li><strong>2</strong><span><strong>Agents run automatically</strong><small>Deterministic rules turn store evidence into recommendations.</small></span></li>
         <li><strong>3</strong><span><strong>Review and act</strong><small>Approve or reject each insight, and track real impact.</small></span></li>
       </ol>
     </div>

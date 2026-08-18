@@ -39,6 +39,7 @@ import {
   cellText,
   formatTimestamp,
   groupConversations,
+  hoursUntilDailyReset,
   planLabel,
   quickCommandCategory,
   remainingUndoSeconds,
@@ -166,11 +167,20 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
 
       <div className={`aic-layout ${historyOpen || settingsOpen ? 'with-side' : ''}`}>
         <section className="aic-main" aria-label="AI Command conversation">
-          {workspace.error && (
+          {workspace.error && workspace.limitReached && (
+            <div className="aic-banner limit" role="alert">
+              <AlertCircle size={16} />
+              <div className="aic-limit-copy">
+                <strong>You&apos;ve used all {workspace.usage?.limit ?? 10} commands for today.</strong>
+                <span>Come back tomorrow for {workspace.usage?.limit ?? 10} more (free) — resets in {hoursUntilDailyReset()} hour{hoursUntilDailyReset() === 1 ? '' : 's'}. Or upgrade for unlimited commands.</span>
+              </div>
+              <UpgradePlanButton plan={plan} onUpgrade={onNavigateBilling} />
+            </div>
+          )}
+          {workspace.error && !workspace.limitReached && (
             <div className="aic-banner error" role="alert">
               <AlertCircle size={16} />
               <span>{workspace.error}</span>
-              {workspace.limitReached && <UpgradePlanButton plan={plan} onUpgrade={onNavigateBilling} />}
             </div>
           )}
 
@@ -635,7 +645,13 @@ function UsageCard({ usage, plan, onUpgrade }: { usage: import('./ai-command-mod
     <section className={`aic-usage ${tone}`}>
       <div className="aic-usage-top"><span>Usage</span><strong>{usageLabel(usage, plan)}</strong></div>
       <div className="aic-usage-track" role="img" aria-label={usageLabel(usage, plan)}><i style={{ width: `${usagePercent(usage)}%` }} /></div>
-      {tone === 'red' && <div className="aic-usage-cta">You&apos;ve reached today&apos;s limit. <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} /></div>}
+      {tone === 'red' && (
+        <div className="aic-usage-cta">
+          <span>You&apos;ve used all {usage?.limit ?? ''} commands for today — nice work! You get {usage?.limit ?? ''} more free tomorrow (resets in {hoursUntilDailyReset()} hour{hoursUntilDailyReset() === 1 ? '' : 's'}).</span>
+          <span>Or <strong>Upgrade Plan</strong> for unlimited commands.</span>
+          <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
+        </div>
+      )}
       {tone === 'amber' && <div className="aic-usage-cta">Almost at your daily limit. <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} /></div>}
     </section>
   )

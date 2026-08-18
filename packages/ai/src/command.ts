@@ -11,6 +11,7 @@ export const AI_COMMAND_READ_TOOLS = [
   'get_recommendations',
   'get_inventory_status',
   'get_store_health',
+  'list_workflows',
 ] as const
 
 export const AI_COMMAND_WRITE_TOOLS = [
@@ -19,6 +20,8 @@ export const AI_COMMAND_WRITE_TOOLS = [
   'create_discount',
   'approve_recommendation',
   'trigger_workflow',
+  'pause_workflow',
+  'resume_workflow',
   'send_notification',
   'generate_report',
 ] as const
@@ -34,6 +37,8 @@ export const AI_COMMAND_ACTION_TYPES = [
   'GENERATE_REPORT',
   'APPROVE_RECOMMENDATION',
   'TRIGGER_WORKFLOW',
+  'PAUSE_WORKFLOW',
+  'RESUME_WORKFLOW',
   'SEND_NOTIFICATION',
   'SEARCH_DATA',
 ] as const
@@ -254,11 +259,14 @@ export const AI_COMMAND_TOOL_DEFINITIONS: readonly AiCommandToolDefinition[] = [
   { name: 'get_recommendations', description: 'Fetch real AI recommendations.', commanderOnly: false, parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'number' } } } },
   { name: 'get_inventory_status', description: 'Query real inventory levels.', commanderOnly: false, parameters: { type: 'object', properties: { filter: { type: 'string' }, threshold: { type: 'number' } } } },
   { name: 'get_store_health', description: 'Calculate store health from real analytics and inventory.', commanderOnly: false, parameters: { type: 'object', properties: {} } },
+  { name: 'list_workflows', description: 'List the real automation workflows and their run status.', commanderOnly: false, parameters: { type: 'object', properties: { status: { type: 'string' }, query: { type: 'string' } } } },
   { name: 'send_email', description: 'Preview then send email via the merchant-verified Brevo transport.', commanderOnly: true, parameters: { type: 'object', properties: { recipient_ids: { type: 'array', items: { type: 'string' } }, subject: { type: 'string' }, body: { type: 'string' } } } },
   { name: 'tag_customers', description: 'Preview then add or remove Shopify customer tags.', commanderOnly: true, parameters: { type: 'object', properties: { customer_ids: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } }, action: { type: 'string' } } } },
   { name: 'create_discount', description: 'Preview then create a Shopify discount with safety caps.', commanderOnly: true, parameters: { type: 'object', properties: { title: { type: 'string' }, type: { type: 'string' }, value: { type: 'number' }, usage_limit: { type: 'number' }, expires_at: { type: 'string' } } } },
   { name: 'approve_recommendation', description: 'CAS-approve a pending recommendation.', commanderOnly: true, parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, expected_version: { type: 'number' } } } },
   { name: 'trigger_workflow', description: 'Trigger an existing automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
+  { name: 'pause_workflow', description: 'Pause an active automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
+  { name: 'resume_workflow', description: 'Resume a paused automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
   { name: 'send_notification', description: 'Create an in-app merchant notification.', commanderOnly: true, parameters: { type: 'object', properties: { title: { type: 'string' }, message: { type: 'string' }, priority: { type: 'string' } } } },
   { name: 'generate_report', description: 'Generate a closed-period report from real data.', commanderOnly: true, parameters: { type: 'object', properties: { report_type: { type: 'string' }, date_range: { type: 'string' } } } },
 ]
@@ -278,6 +286,8 @@ const WRITE_INTENT: Readonly<Record<AiCommandWriteTool, RegExp>> = {
   create_discount: /\b(create|make|generate)\b.*\b(discount|coupon|promo code)\b/i,
   approve_recommendation: /\b(approve|accept)\b.*\brecommend/i,
   trigger_workflow: /\b(trigger|run|start)\b.*\b(workflow|automation)\b/i,
+  pause_workflow: /\b(pause|stop|disable|turn off)\b.*\b(workflow|automation)\b/i,
+  resume_workflow: /\b(resume|enable|turn on|unpause)\b.*\b(workflow|automation)\b/i,
   send_notification: /\b(notify|notification|alert me|send a notification)\b/i,
   generate_report: /\b(generate|create|build)\b.*\breport\b/i,
 }
@@ -295,6 +305,8 @@ export function toolToActionType(name: AiCommandToolName): AiCommandActionType {
   if (name === 'generate_report') return 'GENERATE_REPORT'
   if (name === 'approve_recommendation') return 'APPROVE_RECOMMENDATION'
   if (name === 'trigger_workflow') return 'TRIGGER_WORKFLOW'
+  if (name === 'pause_workflow') return 'PAUSE_WORKFLOW'
+  if (name === 'resume_workflow') return 'RESUME_WORKFLOW'
   if (name === 'send_notification') return 'SEND_NOTIFICATION'
   return 'SEARCH_DATA'
 }
@@ -330,6 +342,7 @@ export function parseInfoTools(query: string): readonly ToolCall[] {
   if (/\brecommend/.test(normalized)) push('get_recommendations', { status: 'PENDING', limit: 10 })
   if (/\b(stock|inventory|stockout|low stock)\b/.test(normalized)) push('get_inventory_status', { filter: /low|out/.test(normalized) ? 'low' : 'all' })
   if (/\b(health|how is my store|store status)\b/.test(normalized)) push('get_store_health', {})
+  if (/\b(automations?|workflows?)\b/.test(normalized)) push('list_workflows', {})
   if (calls.length === 0) {
     if (/\bhelp me grow|grow sales|increase sales\b/.test(normalized)) {
       push('get_analytics', { metric: 'summary', date_range: '30d' })
@@ -551,7 +564,7 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   const numbers: number[] = []
   for (const outcome of successes) {
     numbers.push(...outcome.numbers)
-    const rendered = renderOutcome(outcome)
+    const rendered = renderOutcome(outcome, query)
     lines.push(rendered.text)
     if (!structuredData && rendered.structured) structuredData = rendered.structured
   }
@@ -563,7 +576,7 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   return { content: lines.join('\n\n'), structuredData, numbers }
 }
 
-function renderOutcome(outcome: ToolSuccess): Readonly<{ text: string; structured: AiCommandStructuredData | null }> {
+function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: string; structured: AiCommandStructuredData | null }> {
   const data = isRecord(outcome.data) ? outcome.data : { value: outcome.data }
   if (outcome.name === 'get_analytics') {
     const revenue = numberish(data.revenue)
@@ -581,8 +594,21 @@ function renderOutcome(outcome: ToolSuccess): Readonly<{ text: string; structure
   if (outcome.name === 'search_customers') {
     const items = arrayOfRecords(data.items ?? data.customers)
     const count = numberish(data.count) ?? items.length
+    const total = numberish(data.total)
+    const normalizedQuery = query.toLowerCase()
+    const asksInactive = /\binactive\b/.test(normalizedQuery)
+    let text: string
+    if (count === 0 && asksInactive && total !== null && total > 0) {
+      text = 'Great news! All your customers are active. No inactive customers found based on our criteria (no orders in the last 30 days).'
+    } else if (count === 0 && (total === null || total === 0)) {
+      text = "I don't have customer data yet. Please sync your Shopify customers first — go to the Customers page to start syncing."
+    } else if (count === 0) {
+      text = 'No customers matched that query in the synced customer table.'
+    } else {
+      text = `I found ${count} customer${count === 1 ? '' : 's'} from your synced Shopify customers.`
+    }
     return {
-      text: count === 0 ? 'No customers matched that query in the synced customer table.' : `I found ${count} customer${count === 1 ? '' : 's'} from your synced Shopify customers.`,
+      text,
       structured: { type: 'customer_list', data: items, source: outcome.source, actions: ['email', 'tag', 'export'] },
     }
   }
@@ -627,6 +653,14 @@ function renderOutcome(outcome: ToolSuccess): Readonly<{ text: string; structure
     return {
       text: score === null ? 'Store health cannot be scored until analytics or inventory rows exist.' : `Store health score is ${score}/100 (${label}).`,
       structured: { type: 'store_health', data, source: outcome.source },
+    }
+  }
+  if (outcome.name === 'list_workflows') {
+    const items = arrayOfRecords(data.items ?? data.workflows)
+    const count = numberish(data.count) ?? items.length
+    return {
+      text: count === 0 ? 'You have no automations yet. Head to the Automation page to create your first workflow.' : `You have ${count} automation${count === 1 ? '' : 's'} — here is their current status from the automation ledger.`,
+      structured: { type: 'workflow_list', data: items, source: outcome.source, actions: ['trigger', 'pause', 'resume'] },
     }
   }
   return { text: 'I retrieved live store data for that request.', structured: { type: outcome.name, data, source: outcome.source } }
@@ -688,11 +722,14 @@ function moduleLabel(name: AiCommandToolName): string {
   if (name === 'get_recommendations') return 'Recommendations'
   if (name === 'get_inventory_status') return 'Inventory'
   if (name === 'get_store_health') return 'Store health'
+  if (name === 'list_workflows') return 'Automations'
   if (name === 'send_email') return 'Email'
   if (name === 'tag_customers') return 'Customers'
   if (name === 'create_discount') return 'Discounts'
   if (name === 'approve_recommendation') return 'Recommendations'
   if (name === 'trigger_workflow') return 'Automation'
+  if (name === 'pause_workflow') return 'Automation'
+  if (name === 'resume_workflow') return 'Automation'
   if (name === 'send_notification') return 'Notifications'
   return 'Reports'
 }
@@ -710,7 +747,9 @@ export function actionPreviewCopy(type: AiCommandActionType, params: Readonly<Re
     return `Action: Create discount "${String(params.title ?? 'Untitled')}" at ${String(params.value ?? '?')}% off, max ${String(params.usage_limit ?? '?')} uses.`
   }
   if (type === 'APPROVE_RECOMMENDATION') return `Action: Approve recommendation ${String(params.recommendation_id ?? '')}.`
-  if (type === 'TRIGGER_WORKFLOW') return `Action: Trigger workflow ${String(params.workflow_id ?? '')}.`
+  if (type === 'TRIGGER_WORKFLOW') return `Action: Trigger workflow ${workflowName(params)}.`
+  if (type === 'PAUSE_WORKFLOW') return `Action: Pause workflow ${workflowName(params)}.`
+  if (type === 'RESUME_WORKFLOW') return `Action: Resume workflow ${workflowName(params)}.`
   if (type === 'SEND_NOTIFICATION') return `Action: Send notification "${String(params.title ?? '')}".`
   if (type === 'GENERATE_REPORT') return `Action: Generate ${String(params.report_type ?? 'weekly')} report.`
   return 'Action preview is ready. Approve to execute against live services.'
@@ -1175,10 +1214,33 @@ export class AiCommandService {
       const first = items[0] ?? {}
       return { recommendation_id: String(first.id ?? ''), expected_version: Number(first.version ?? 0) }
     }
-    if (tool === 'trigger_workflow') return { workflow_id: /workflow[:\s]+([a-z0-9-]+)/i.exec(text)?.[1] ?? String(conversation.context.lastWorkflowId ?? '') }
+    if (tool === 'trigger_workflow' || tool === 'pause_workflow' || tool === 'resume_workflow') {
+      return this.resolveWorkflowParams(storeId, conversation, text)
+    }
     if (tool === 'send_notification') return { title: 'AI Command', message: text.slice(0, 240), priority: 'NORMAL' }
     if (tool === 'generate_report') return { report_type: /daily|weekly|monthly|quarterly/i.exec(text)?.[0]?.toUpperCase() ?? 'WEEKLY', date_range: '7d' }
     return {}
+  }
+
+  /** Resolve a workflow id (and friendly name) for trigger/pause/resume actions. */
+  private async resolveWorkflowParams(storeId: StoreId, conversation: AiCommandConversation, text: string): Promise<Record<string, unknown>> {
+    const explicitId = /workflow[:\s]+([a-z0-9-]+)/i.exec(text)?.[1]
+    const listed = await this.tools.run(storeId, { name: 'list_workflows', params: {} })
+    const workflows = listed.ok && isRecord(listed.data) ? arrayOfRecords(listed.data.items ?? listed.data.workflows) : []
+    if (explicitId) {
+      const match = workflows.find((workflow) => String(workflow.id ?? '') === explicitId)
+      return { workflow_id: explicitId, workflow_name: match && typeof match.name === 'string' ? match.name : null }
+    }
+    // Match by name substring: strip action verbs and pick the first workflow whose name appears in the text.
+    const haystack = text.toLowerCase()
+    const byName = workflows.find((workflow) => typeof workflow.name === 'string' && workflow.name.trim().length > 0 && haystack.includes(workflow.name.toLowerCase()))
+    if (byName && typeof byName.id === 'string') return { workflow_id: byName.id, workflow_name: typeof byName.name === 'string' ? byName.name : null }
+    const lastId = conversation.context.lastWorkflowId
+    if (typeof lastId === 'string' && lastId) {
+      const match = workflows.find((workflow) => String(workflow.id ?? '') === lastId)
+      return { workflow_id: lastId, workflow_name: match && typeof match.name === 'string' ? match.name : null }
+    }
+    return { workflow_id: '', workflow_name: null }
   }
 
   private async confirmLatest(storeId: StoreId, conversation: AiCommandConversation, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
@@ -1313,6 +1375,8 @@ export function summarizeActionResult(action: AiCommandActionRecord): string {
     if (!code) return 'Shopify did not return a discount code. The discount was not created.'
     return `Discount created. Code: ${code}.`
   }
+  if (action.actionType === 'PAUSE_WORKFLOW') return 'Workflow paused.'
+  if (action.actionType === 'RESUME_WORKFLOW') return 'Workflow resumed.'
   if (isRecord(action.executionResult) && typeof action.executionResult.message === 'string') return action.executionResult.message
   if (action.executionStatus === 'PARTIAL_SUCCESS') return 'The action completed with partial success. See the details below.'
   if (action.executionStatus === 'SUCCESS') return 'The action completed and the backend confirmed the result.'
@@ -1372,8 +1436,18 @@ function humanAction(tool: AiCommandWriteTool): string {
   if (tool === 'create_discount') return 'creating a discount'
   if (tool === 'approve_recommendation') return 'approving a recommendation'
   if (tool === 'trigger_workflow') return 'triggering a workflow'
+  if (tool === 'pause_workflow') return 'pausing a workflow'
+  if (tool === 'resume_workflow') return 'resuming a workflow'
   if (tool === 'send_notification') return 'sending a notification'
   return 'generating a report'
+}
+
+function workflowName(params: Readonly<Record<string, unknown>>): string {
+  const name = typeof params.workflow_name === 'string' && params.workflow_name.trim() ? params.workflow_name.trim() : ''
+  const id = typeof params.workflow_id === 'string' && params.workflow_id.trim() ? params.workflow_id.trim() : ''
+  if (name) return `“${name}”`
+  if (id) return id
+  return '(no workflow selected)'
 }
 
 function formatMoney(value: number): string {

@@ -147,9 +147,9 @@ describe('PR45 component rendering', () => {
   it('renders an unlocked agent card with actions, stats, and menu', () => {
     const agent = overviewFor('commander')[0]
     if (!agent) throw new Error('missing agent')
-    const html = renderToStaticMarkup(createElement(AgentCard, { agent, activity: [recommendation], running: false, onOpen: () => undefined, onRun: () => undefined, onTogglePause: () => undefined }))
+    const html = renderToStaticMarkup(createElement(AgentCard, { agent, activity: [recommendation], onOpen: () => undefined, onTogglePause: () => undefined }))
     expect(html).toContain('Revenue Agent')
-    expect(html).toContain('Run now')
+    expect(html).not.toContain('Run now')
     expect(html).toContain('View details')
     expect(html).toContain('insights today')
     expect(html).toContain('aria-haspopup="menu"')
@@ -313,7 +313,7 @@ describe('PR49 tooltips and empty states', () => {
   it('renders the getting-started guide in the empty state', () => {
     const html = renderToStaticMarkup(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))
     expect(html).toContain('Connect Shopify')
-    expect(html).toContain('Run your agents')
+    expect(html).toContain('Agents run automatically')
     expect(html).toContain('Review and act')
   })
 })

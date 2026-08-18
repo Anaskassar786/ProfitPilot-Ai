@@ -101,6 +101,10 @@ describe('AI Command safety parsers', () => {
     expect(detectWriteTool('Send email to VIP customers')).toBe('send_email')
     expect(detectWriteTool('Tag new customers as vip')).toBe('tag_customers')
     expect(detectWriteTool('Create a 15% weekend discount')).toBe('create_discount')
+    expect(detectWriteTool('Run my cart recovery workflow')).toBe('trigger_workflow')
+    expect(detectWriteTool('Pause the welcome email automation')).toBe('pause_workflow')
+    expect(detectWriteTool('Resume the abandoned cart workflow')).toBe('resume_workflow')
+    expect(detectWriteTool('Show my automations')).toBeNull()
     expect(parseConfirmIntent('confirm')).toBe('confirm')
     expect(parseConfirmIntent('undo')).toBe('undo')
     expect(parseConfirmIntent('cancel')).toBe('cancel')
@@ -273,6 +277,9 @@ describe('AI Command helpers', () => {
     expect(titleFromQuery('   What is my revenue this month?   ')).toBe('What is my revenue this month?')
     expect(toolToActionType('send_email')).toBe('SEND_EMAIL')
     expect(actionPreviewCopy('SEND_EMAIL', { recipient_ids: ['a', 'b'], subject: 'Hi' })).toContain('2 recipient')
+    expect(toolToActionType('pause_workflow')).toBe('PAUSE_WORKFLOW')
+    expect(toolToActionType('resume_workflow')).toBe('RESUME_WORKFLOW')
+    expect(parseInfoTools('Show my automations').map((call) => call.name)).toContain('list_workflows')
   })
   it('groups conversations and contextualizes quick commands', () => {
     const now = Date.parse('2026-08-18T18:00:00.000Z')
@@ -294,5 +301,15 @@ describe('AI Command helpers', () => {
     const rendered = formatToolAnswer('how are sales', outcomes)
     expect(rendered.content).toContain('$10')
     expect(rendered.content).toContain('orders sync missing')
+  })
+  it('answers inactive-customer questions honestly instead of raw errors', () => {
+    const allActive: readonly ToolOutcome[] = [{ ok: true, name: 'search_customers', data: { count: 0, total: 6, items: [], coverage: 'synced' }, source: 'sync_records.customers', numbers: [] }]
+    expect(formatToolAnswer('Show me inactive customers', allActive).content).toContain('All your customers are active')
+
+    const noData: readonly ToolOutcome[] = [{ ok: true, name: 'search_customers', data: { count: 0, total: 0, items: [], coverage: 'not synced' }, source: 'sync_records.customers', numbers: [] }]
+    expect(formatToolAnswer('Show me inactive customers', noData).content).toContain('sync your Shopify customers')
+
+    const notInactive: readonly ToolOutcome[] = [{ ok: true, name: 'search_customers', data: { count: 0, total: 6, items: [], coverage: 'synced' }, source: 'sync_records.customers', numbers: [] }]
+    expect(formatToolAnswer('Show my top customers', notInactive).content).toContain('No customers matched')
   })
 })
