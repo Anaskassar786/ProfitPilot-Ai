@@ -6,6 +6,7 @@ import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, Cu
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { AnalyticsInsights } from './analytics-model.js'
+import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult, DiscoveryStatus, GeneratedDiscoveries, InsightComparison, InsightDiscovery, InsightInvestigation, InsightKnowledgeEntry, InsightLesson, InsightPattern, InsightPersona, InsightPrediction, InsightTrend, InsightsDataReadiness, InsightsOverview, InsightsPreferences, InsightsUsageSummary, KnowledgeEntryType, MarketTrendsResult, PersonaCustomersResult, PersonaListResult, PredictionHorizon, PredictionListResult, TimelineEntityType, TimelineResult, TrendListResult } from './insights-hub-model.js'
 import type { AgentActivityItem, AgentOverview, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
@@ -484,6 +485,86 @@ export function fetchOpsQueue(stepUpToken: string, fetcher: Fetcher = fetch): Pr
 export function fetchOpsMetrics(stepUpToken: string, fetcher: Fetcher = fetch): Promise<OpsMetrics> { return requestJson('/admin/ops/metrics', { headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 export function retryOpsJob(stepUpToken: string, jobId: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson(`/admin/ops/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 
+/* ── Insights Hub (PR #50) ─────────────────────────────────────────────── */
+
+const insightsQuery = (storeId: string, extra = ''): string => `storeId=${encodeURIComponent(storeId)}${extra}`
+const insightsBody = (storeId: string, extra: Readonly<Record<string, unknown>> = {}): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, ...extra }) })
+const insightsPatch = (storeId: string, extra: Readonly<Record<string, unknown>>): RequestInit => ({ method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, ...extra }) })
+const insightsDelete = (storeId: string): RequestInit => ({ method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) })
+
+export function fetchInsightsOverview(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsOverview> { return requestJson<InsightsOverview>(`/insights/overview?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightsUsage(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsUsageSummary> { return requestJson<InsightsUsageSummary>(`/insights/usage?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightsCostSummary(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ estimatedCostUsd: number; dailyBudgetUsd: number; models: readonly string[]; note: string }>> { return requestJson(`/insights/cost-summary?${insightsQuery(storeId)}`, {}, fetcher) }
+
+export function fetchDiscoveryFeed(storeId: string, fetcher: Fetcher = fetch): Promise<DiscoveryFeedResult> { return requestJson<DiscoveryFeedResult>(`/insights/discoveries/feed?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchDiscoveries(storeId: string, filters: Readonly<{ status?: string; category?: string; limit?: number; cursor?: number }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightDiscovery[] }>> {
+  const extra = `${filters.status ? `&status=${encodeURIComponent(filters.status)}` : ''}${filters.category ? `&category=${encodeURIComponent(filters.category)}` : ''}${filters.limit ? `&limit=${filters.limit}` : ''}${filters.cursor ? `&cursor=${filters.cursor}` : ''}`
+  return requestJson(`/insights/discoveries?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+export function generateInsightsDiscoveries(storeId: string, fetcher: Fetcher = fetch): Promise<GeneratedDiscoveries> { return requestJson<GeneratedDiscoveries>('/insights/discoveries/generate', insightsBody(storeId), fetcher) }
+export function fetchInsightDiscovery(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightDiscovery> { return requestJson<InsightDiscovery>(`/insights/discoveries/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function setInsightDiscoveryStatus(storeId: string, id: string, status: DiscoveryStatus, fetcher: Fetcher = fetch): Promise<InsightDiscovery> { return requestJson<InsightDiscovery>(`/insights/discoveries/${encodeURIComponent(id)}/status`, insightsBody(storeId, { status }), fetcher) }
+
+export function fetchRecommendedLessons(storeId: string, fetcher: Fetcher = fetch): Promise<readonly InsightLesson[]> { return requestJson<readonly InsightLesson[]>(`/insights/lessons/recommended?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightLessons(storeId: string, category?: string, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightLesson[] }>> { return requestJson(`/insights/lessons?${insightsQuery(storeId, category ? `&category=${encodeURIComponent(category)}` : '')}`, {}, fetcher) }
+export function generateInsightLessons(storeId: string, category: string | null = null, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; lessons: readonly InsightLesson[] }>> { return requestJson('/insights/lessons/generate', insightsBody(storeId, category ? { category } : {}), fetcher) }
+export function fetchInsightLesson(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function markInsightLessonRead(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/read`, insightsBody(storeId), fetcher) }
+export function rateInsightLesson(storeId: string, id: string, rating: number, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/rate`, insightsBody(storeId, { rating }), fetcher) }
+export function bookmarkInsightLesson(storeId: string, id: string, bookmarked: boolean, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/bookmark`, insightsBody(storeId, { bookmarked }), fetcher) }
+
+export function fetchInsightPatterns(storeId: string, type?: string, fetcher: Fetcher = fetch): Promise<Readonly<{ plan: string; viewOnly: boolean; patterns: readonly InsightPattern[] }>> { return requestJson(`/insights/patterns?${insightsQuery(storeId, type ? `&type=${encodeURIComponent(type)}` : '')}`, {}, fetcher) }
+export function detectInsightPatterns(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ detected: number; patterns: readonly InsightPattern[] }>> { return requestJson('/insights/patterns/detect', insightsBody(storeId), fetcher) }
+export function setInsightPatternAlerts(storeId: string, id: string, enabled: boolean, fetcher: Fetcher = fetch): Promise<InsightPattern> { return requestJson<InsightPattern>(`/insights/patterns/${encodeURIComponent(id)}/alert`, insightsBody(storeId, { enabled }), fetcher) }
+export function invalidateInsightPattern(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ invalidated: boolean }>> { return requestJson(`/insights/patterns/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function fetchInsightPersonas(storeId: string, fetcher: Fetcher = fetch): Promise<PersonaListResult> { return requestJson<PersonaListResult>(`/insights/personas?${insightsQuery(storeId)}`, {}, fetcher) }
+export function generateInsightPersonas(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; personas: readonly InsightPersona[]; readiness: InsightsDataReadiness }>> { return requestJson('/insights/personas/generate', insightsBody(storeId), fetcher) }
+export function fetchInsightPersona(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightPersona> { return requestJson<InsightPersona>(`/insights/personas/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightPersonaCustomers(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<PersonaCustomersResult> { return requestJson<PersonaCustomersResult>(`/insights/personas/${encodeURIComponent(id)}/customers?${insightsQuery(storeId)}`, {}, fetcher) }
+
+export function askInsightsWhy(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>('/insights/investigations', insightsBody(storeId, { question }), fetcher) }
+export function fetchInsightInvestigations(storeId: string, limit = 20, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightInvestigation[] }>> { return requestJson(`/insights/investigations?${insightsQuery(storeId, `&limit=${limit}`)}`, {}, fetcher) }
+export function fetchInsightInvestigation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>(`/insights/investigations/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function rateInsightInvestigation(storeId: string, id: string, rating: number, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>(`/insights/investigations/${encodeURIComponent(id)}/rate`, insightsBody(storeId, { rating }), fetcher) }
+
+export function fetchBusinessTrends(storeId: string, fetcher: Fetcher = fetch): Promise<TrendListResult> { return requestJson<TrendListResult>(`/insights/trends/business?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchMarketTrends(storeId: string, fetcher: Fetcher = fetch): Promise<MarketTrendsResult> { return requestJson<MarketTrendsResult>(`/insights/trends/market?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightTrends(storeId: string, type = 'all', fetcher: Fetcher = fetch): Promise<TrendListResult> { return requestJson<TrendListResult>(`/insights/trends?${insightsQuery(storeId, `&type=${encodeURIComponent(type)}`)}`, {}, fetcher) }
+export function setInsightTrendAlerts(storeId: string, id: string, enabled: boolean, fetcher: Fetcher = fetch): Promise<InsightTrend> { return requestJson<InsightTrend>(`/insights/trends/${encodeURIComponent(id)}/alert`, insightsBody(storeId, { enabled }), fetcher) }
+
+export function createInsightComparison(storeId: string, comparisonType: ComparisonType, subjectA: string, subjectB: string, fetcher: Fetcher = fetch): Promise<InsightComparison> { return requestJson<InsightComparison>('/insights/comparisons', insightsBody(storeId, { comparisonType, subjectA, subjectB }), fetcher) }
+export function fetchInsightComparisons(storeId: string, type?: string, limit = 20, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightComparison[] }>> { return requestJson(`/insights/comparisons?${insightsQuery(storeId, `${type ? `&type=${encodeURIComponent(type)}` : ''}&limit=${limit}`)}`, {}, fetcher) }
+export function fetchInsightComparison(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightComparison> { return requestJson<InsightComparison>(`/insights/comparisons/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function deleteInsightComparison(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(`/insights/comparisons/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function searchInsightsKnowledge(storeId: string, q: string, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightKnowledgeEntry[] }>> { return requestJson('/insights/knowledge/search', insightsBody(storeId, { q }), fetcher) }
+export function fetchInsightsKnowledge(storeId: string, filters: Readonly<{ type?: string; tag?: string; limit?: number }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightKnowledgeEntry[] }>> {
+  const extra = `${filters.type ? `&type=${encodeURIComponent(filters.type)}` : ''}${filters.tag ? `&tag=${encodeURIComponent(filters.tag)}` : ''}${filters.limit ? `&limit=${filters.limit}` : ''}`
+  return requestJson(`/insights/knowledge?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+export function createInsightsKnowledge(storeId: string, entry: Readonly<{ entryType?: KnowledgeEntryType; title: string; contentMarkdown?: string; tags?: readonly string[]; linkedInsights?: readonly string[] }>, fetcher: Fetcher = fetch): Promise<InsightKnowledgeEntry> { return requestJson<InsightKnowledgeEntry>('/insights/knowledge', insightsBody(storeId, { ...entry }), fetcher) }
+export function updateInsightsKnowledge(storeId: string, id: string, patch: Readonly<{ title?: string; contentMarkdown?: string; tags?: readonly string[] }>, fetcher: Fetcher = fetch): Promise<InsightKnowledgeEntry> { return requestJson<InsightKnowledgeEntry>(`/insights/knowledge/${encodeURIComponent(id)}`, insightsPatch(storeId, { ...patch }), fetcher) }
+export function deleteInsightsKnowledge(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(`/insights/knowledge/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function fetchInsightsTimeline(storeId: string, options: Readonly<{ days?: number; type?: TimelineEntityType }> = {}, fetcher: Fetcher = fetch): Promise<TimelineResult> {
+  const extra = `${options.days ? `&days=${options.days}` : ''}${options.type ? `&type=${encodeURIComponent(options.type)}` : ''}`
+  const path = options.type ? '/insights/timeline/filter' : '/insights/timeline'
+  return requestJson<TimelineResult>(`${path}?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+
+export function fetchInsightPredictions(storeId: string, horizon?: PredictionHorizon, fetcher: Fetcher = fetch): Promise<PredictionListResult> { return requestJson<PredictionListResult>(`/insights/predictions?${insightsQuery(storeId, horizon ? `&horizon=${encodeURIComponent(horizon)}` : '')}`, {}, fetcher) }
+export function generateInsightPredictions(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; predictions: readonly InsightPrediction[] }>> { return requestJson('/insights/predictions/generate', insightsBody(storeId), fetcher) }
+export function validateInsightPrediction(storeId: string, id: string, actualValue: number, fetcher: Fetcher = fetch): Promise<InsightPrediction> { return requestJson<InsightPrediction>(`/insights/predictions/${encodeURIComponent(id)}/validate`, insightsBody(storeId, { actualValue }), fetcher) }
+
+export function fetchInsightsPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsPreferences> { return requestJson<InsightsPreferences>(`/insights/preferences?${insightsQuery(storeId)}`, {}, fetcher) }
+export function updateInsightsPreferences(storeId: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<InsightsPreferences> { return requestJson<InsightsPreferences>('/insights/preferences', insightsPatch(storeId, patch), fetcher) }
+
+export function fetchInsightsApiAccess(storeId: string, fetcher: Fetcher = fetch): Promise<ApiAccessStatus> { return requestJson<ApiAccessStatus>(`/insights/api-access/usage?${insightsQuery(storeId)}`, {}, fetcher) }
+export function generateInsightsApiKey(storeId: string, fetcher: Fetcher = fetch): Promise<ApiKeyReveal> { return requestJson<ApiKeyReveal>('/insights/api-access/generate-key', insightsBody(storeId), fetcher) }
+export function regenerateInsightsApiKey(storeId: string, fetcher: Fetcher = fetch): Promise<ApiKeyReveal> { return requestJson<ApiKeyReveal>('/insights/api-access/regenerate', insightsBody(storeId), fetcher) }
+export function fetchInsightsApiDocs(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ specUrl: string; authentication: string; rateLimit: Readonly<{ perHour: number; perDay: number }>; endpoints: readonly string[] }>> { return requestJson(`/insights/api-access/documentation?${insightsQuery(storeId)}`, {}, fetcher) }
+
 function embeddedSessionToken(): string | null {
   if (typeof window === 'undefined') return null
   const value = new URLSearchParams(window.location.search).get('id_token')?.trim()
@@ -507,3 +588,99 @@ function failureFromPayload(payload: unknown, status: number): ApiClientError {
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+// ---------------------------------------------------------------------------
+// PR #48 — Store Coach client
+// ---------------------------------------------------------------------------
+
+const coachPath = (path: string, storeId: string): string => `${path}?storeId=${encodeURIComponent(storeId)}`
+
+export function fetchCoachHuddle(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHuddle> { return requestJson(coachPath('/store-coach/huddle/today', storeId), {}, fetcher) }
+export function fetchCoachHuddleHistory(storeId: string, days: number, fetcher: Fetcher = fetch): Promise<readonly { id: string; huddleDate: string; content: Readonly<Record<string, unknown>>; viewedAt: number | null; createdAt: number }[]> { return requestJson(coachPath(`/store-coach/huddle/history?days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function markCoachHuddleViewed(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/huddle/${encodeURIComponent(id)}/viewed`, storeId), { method: 'POST' }, fetcher) }
+export function regenerateCoachHuddle(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHuddle> { return requestJson(coachPath('/store-coach/huddle/generate', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachPriorities(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPrioritiesView> { return requestJson(coachPath('/store-coach/priorities/today', storeId), {}, fetcher) }
+export function completeCoachPriority(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/priorities/${encodeURIComponent(id)}/complete`, storeId), { method: 'POST' }, fetcher) }
+export function dismissCoachPriority(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/priorities/${encodeURIComponent(id)}/dismiss`, storeId), { method: 'POST' }, fetcher) }
+export function regenerateCoachPriorities(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPrioritiesView> { return requestJson(coachPath('/store-coach/priorities/generate', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachGoals(storeId: string, status?: string, fetcher: Fetcher = fetch): Promise<readonly import('./store-coach-model.js').CoachGoal[]> { return requestJson(coachPath(status ? `/store-coach/goals?status=${encodeURIComponent(status)}` : '/store-coach/goals', storeId), {}, fetcher) }
+export function createCoachGoal(storeId: string, input: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath('/store-coach/goals', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, fetcher) }
+export function updateCoachGoal(storeId: string, id: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}`, storeId), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }, fetcher) }
+export function deleteCoachGoal(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}`, storeId), { method: 'DELETE' }, fetcher) }
+export function fetchCoachGoalSuggestions(storeId: string, fetcher: Fetcher = fetch): Promise<readonly import('./store-coach-model.js').CoachGoalSuggestion[]> { return requestJson(coachPath('/store-coach/goals/suggestions', storeId), {}, fetcher) }
+export function acceptCoachGoalSuggestion(storeId: string, suggestion: Readonly<Record<string, unknown>>, startDate: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath('/store-coach/goals/suggestion/accept-suggestion', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ suggestion, startDate }) }, fetcher) }
+export function fetchCoachGoalProgress(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoalProgress> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}/progress`, storeId), {}, fetcher) }
+
+export function fetchCoachAchievements(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ earned: readonly import('./store-coach-model.js').CoachAchievement[]; visible: number }>> { return requestJson(coachPath('/store-coach/achievements', storeId), {}, fetcher) }
+export function fetchCoachAvailableAchievements(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ earnedIds: readonly string[]; catalog: readonly import('./store-coach-model.js').CoachBadgeCatalogEntry[]; visible: number }>> { return requestJson(coachPath('/store-coach/achievements/available', storeId), {}, fetcher) }
+export function fetchCoachStreak(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachStreakView> { return requestJson(coachPath('/store-coach/streak', storeId), {}, fetcher) }
+
+export function fetchCoachProgressSummary(storeId: string, days: number, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachProgressSummary> { return requestJson(coachPath(`/store-coach/progress/summary?days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function fetchCoachProgressTrends(storeId: string, metric: string, days: number, fetcher: Fetcher = fetch): Promise<Readonly<{ metric: string; window: number; series: readonly Readonly<Record<string, string | number>>[] }>> { return requestJson(coachPath(`/store-coach/progress/trends?metric=${encodeURIComponent(metric)}&days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function fetchCoachActivityHeatmap(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHeatmapView> { return requestJson(coachPath('/store-coach/progress/heatmap', storeId), {}, fetcher) }
+export function fetchCoachProgressComparisons(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson(coachPath('/store-coach/progress/comparisons', storeId), {}, fetcher) }
+
+/** Streams the coach reply over SSE and resolves with the final message. */
+export async function streamCoachChat(storeId: string, message: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachMessage> {
+  let response: Response
+  try {
+    response = await fetcher(coachPath('/store-coach/chat', storeId), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}) },
+      body: JSON.stringify({ message }),
+    })
+  } catch (error: unknown) {
+    throw new ApiClientError(error instanceof Error ? error.message : 'Network request failed', 0, 'NETWORK_ERROR')
+  }
+  if (!response.ok || !response.body) {
+    let payload: unknown = null
+    try { payload = await response.json() } catch { payload = null }
+    throw failureFromPayload(payload, response.status)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalMessage: import('./store-coach-model.js').CoachMessage | null = null
+  for (;;) {
+    const step = await reader.read()
+    if (step.done) break
+    buffer += decoder.decode(step.value, { stream: true })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const rawFrame = buffer.slice(0, boundary).trim()
+      buffer = buffer.slice(boundary + 2)
+      boundary = buffer.indexOf('\n\n')
+      if (!rawFrame.startsWith('data:')) continue
+      const payload: unknown = JSON.parse(rawFrame.slice(5).trim())
+      if (!isRecord(payload)) continue
+      if (payload.type === 'delta' && typeof payload.text === 'string') onDelta(payload.text)
+      if (payload.type === 'done' && isRecord(payload.message)) finalMessage = payload.message as unknown as import('./store-coach-model.js').CoachMessage
+      if (payload.type === 'error') throw new ApiClientError(String(payload.message ?? 'Chat stream failed'), Number(payload.status ?? 502), String(payload.code ?? 'API_ERROR'))
+    }
+  }
+  if (!finalMessage) throw new ApiClientError('Chat stream ended without a reply', 0, 'STREAM_INCOMPLETE')
+  return finalMessage
+}
+
+export function fetchCoachChatHistory(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ id: string; messages: readonly import('./store-coach-model.js').CoachMessage[] }>> { return requestJson(coachPath('/store-coach/chat/history', storeId), {}, fetcher) }
+export function clearCoachChat(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ cleared: boolean }>> { return requestJson(coachPath('/store-coach/chat/clear', storeId), { method: 'POST' }, fetcher) }
+export function fetchCoachChatSuggestions(storeId: string, fetcher: Fetcher = fetch): Promise<readonly string[]> { return requestJson(coachPath('/store-coach/chat/suggestions', storeId), {}, fetcher) }
+
+export function fetchCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/current', storeId), {}, fetcher) }
+export function fetchCoachReviewHistory(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ reports: readonly Readonly<{ id: string; reportType: string; reportDate: string; createdAt: number; sentViaEmail: boolean }>[] }>> { return requestJson(coachPath('/store-coach/review/history', storeId), {}, fetcher) }
+export function regenerateCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/generate', storeId), { method: 'POST' }, fetcher) }
+export function fetchCoachReviewPdf(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ pdfUrl: string }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/pdf`, storeId), {}, fetcher) }
+export function emailCoachReview(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ sent: boolean }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/email`, storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPreferencesView> { return requestJson(coachPath('/store-coach/preferences', storeId), {}, fetcher) }
+export function updateCoachPreferences(storeId: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPreferencesView> { return requestJson(coachPath('/store-coach/preferences', storeId), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }, fetcher) }
+
+export function fetchCoachHealthScore(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHealthView> { return requestJson(coachPath('/store-coach/health-score', storeId), {}, fetcher) }
+export function fetchCoachOnboarding(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachOnboardingView> { return requestJson(coachPath('/store-coach/onboarding/status', storeId), {}, fetcher) }
+export function completeCoachOnboardingStep(storeId: string, step: number, fetcher: Fetcher = fetch): Promise<Readonly<{ currentStep: number; completed: boolean; skipped: boolean }>> { return requestJson(coachPath('/store-coach/onboarding/complete-step', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step }) }, fetcher) }
+export function skipCoachOnboarding(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ currentStep: number; completed: boolean; skipped: boolean }>> { return requestJson(coachPath('/store-coach/onboarding/skip', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachUsage(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachUsageView> { return requestJson(coachPath('/store-coach/usage', storeId), {}, fetcher) }
+export function fetchCoachCostSummary(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ tracked: boolean }>> { return requestJson(coachPath('/store-coach/cost-summary', storeId), {}, fetcher) }

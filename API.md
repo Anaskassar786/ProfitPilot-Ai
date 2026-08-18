@@ -95,6 +95,28 @@ Every velocity-derived insight requires at least 30 days of sales history in
 `{ status: 'insufficient_data', message }` explaining how many days are still
 missing instead of an estimate.
 
+## Insights Hub (PR #50)
+
+All Insights Hub figures are deterministic computations over real synced store data; AI narration is firewall-checked styling only. Every route takes `storeId`; locked capabilities return 402 with `reason: 'UPGRADE_REQUIRED'` and the generic `cta: 'Upgrade Plan'`. Merchant endpoints are rate-limited to 25 req/min/store. Full reference: `docs/INSIGHTS_HUB.md`.
+
+- `GET /insights/overview?storeId=` — plan, feature matrix, usage meters, counts, data readiness, preferences.
+- Discoveries — `GET /insights/discoveries?storeId=&status=&category=&limit=&cursor=`, `GET /insights/discoveries/feed`, `POST /insights/discoveries/generate`, `GET /insights/discoveries/:id`, `POST /insights/discoveries/:id/status` (`NEW|REVIEWED|SAVED|DISMISSED|ACTED_ON`).
+- Lessons — `GET /insights/lessons[/recommended][/:id]`, `POST /insights/lessons/generate`, `POST /insights/lessons/:id/read|rate|bookmark`.
+- Patterns — `GET /insights/patterns?type=`, `POST /insights/patterns/detect`, `POST /insights/patterns/:id/alert`, `DELETE /insights/patterns/:id`.
+- Personas — `GET /insights/personas[/:id[/customers]]`, `POST /insights/personas/generate` (aggregates only, no PII).
+- Why? — `POST /insights/investigations { question }`, `GET /insights/investigations[/:id]`, `POST /insights/investigations/:id/rate`.
+- Trends — `GET /insights/trends[/business|/market]`, `POST /insights/trends/:id/alert`. Market trends return an honest unavailable payload when no verified external feed exists.
+- Comparisons — `POST /insights/comparisons { comparisonType, subjectA, subjectB }`, `GET /insights/comparisons[/:id]`, `DELETE /insights/comparisons/:id`; CHANNEL comparisons honestly return `INSUFFICIENT_DATA` until channel attribution syncs.
+- Knowledge — `GET /insights/knowledge?type=&tag=`, `POST /insights/knowledge[/search]`, `PATCH|DELETE /insights/knowledge/:id`.
+- Timeline — `GET /insights/timeline?days=` and `/insights/timeline/filter?type=` (plan-windowed).
+- Predictions — `GET /insights/predictions?horizon=7_DAYS|30_DAYS|90_DAYS`, `POST /insights/predictions/generate`, `POST /insights/predictions/:id/validate { actualValue }`.
+- Preferences — `GET|PATCH /insights/preferences`.
+- Usage/billing — `GET /insights/usage`, `GET /insights/cost-summary` (free-tier models ⇒ $0/day default).
+- Commander public API — `POST /insights/api-access/generate-key|regenerate` (old key dies instantly), `GET /insights/api-access/key|usage|documentation`, then `GET /public-api/insights/discoveries|patterns|personas|predictions|trends` with `Authorization: Bearer ihk_…` (100 req/h, 1,000/day) and the OpenAPI 3.1 spec at `GET /public-api/insights/openapi.json`.
+- `POST /insights/auto-discovery/run` — worker/scheduler entry point for the daily (02:00 UTC) / weekly (Sunday) / real-time (Commander) sweeps.
+
+Insufficient-data surfaces explain the exact gap (e.g. personas need 50 customers) instead of returning estimates.
+
 ## AI recommendations (PR #46)
 
 All recommendation numbers are computed by deterministic rules over real synced

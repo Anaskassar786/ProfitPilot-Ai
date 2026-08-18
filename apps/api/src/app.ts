@@ -37,10 +37,16 @@ import { createInventoryRouter } from './inventory-routes.js'
 import type { InventoryRouteDependencies } from './inventory-routes.js'
 import { createAnalyticsRouter } from './analytics-routes.js'
 import type { AnalyticsRouteDependencies } from './analytics-routes.js'
+import { createExecutiveRouter } from './executive-routes.js'
+import type { ExecutiveRouteDependencies } from './executive-routes.js'
 import { createAiCommandRouter } from './ai-command-routes.js'
 import type { AiCommandRouteDependencies } from './ai-command-routes.js'
+import { createStoreCoachRouter } from './store-coach-routes.js'
+import type { StoreCoachRouteDependencies } from './store-coach-routes.js'
+import { createInsightsHubRouter } from './insights-hub-routes.js'
+import type { InsightsHubRouteDependencies } from './insights-hub-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; aiCommand?: AiCommandRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; executive?: ExecutiveRouteDependencies; aiCommand?: AiCommandRouteDependencies; storeCoach?: StoreCoachRouteDependencies; insightsHub?: InsightsHubRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -81,11 +87,14 @@ export function createApi(dependencies: ApiDependencies): Express {
   if (dependencies.customers) app.use(createCustomerRouter(dependencies.customers))
   if (dependencies.inventory) app.use(createInventoryRouter(dependencies.inventory))
   if (dependencies.ai) app.use(createAiRouter(dependencies.ai))
+  if (dependencies.executive) app.use(createExecutiveRouter(dependencies.executive))
   if (dependencies.billing) app.use(createBillingRouter(dependencies.billing))
   if (dependencies.admin) app.use(createAdminRouter(dependencies.admin))
   if (dependencies.f9) app.use(createF9Router(dependencies.f9))
   if (dependencies.automation) app.use(createAutomationRouter(dependencies.automation))
   if (dependencies.aiCommand) app.use(createAiCommandRouter(dependencies.aiCommand))
+  if (dependencies.storeCoach) app.use(createStoreCoachRouter(dependencies.storeCoach))
+  if (dependencies.insightsHub) app.use(createInsightsHubRouter(dependencies.insightsHub))
   const f8Dependencies = { ...(dependencies.jarvis ? { jarvis: dependencies.jarvis } : {}), ...(dependencies.copilot ? { copilot: dependencies.copilot } : {}), ...(dependencies.forecasting ? { forecasting: dependencies.forecasting } : {}), ...(dependencies.reports ? { reports: dependencies.reports } : {}) }
   app.use(createF8Router(f8Dependencies))
 
