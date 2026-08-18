@@ -33,6 +33,7 @@ export default defineConfig({
       '/copilot': 'http://127.0.0.1:3000',
       '/forecasting': 'http://127.0.0.1:3000',
       '/reports': 'http://127.0.0.1:3000',
+      '/store-coach': 'http://127.0.0.1:3000',
     },
   },
   build: { chunkSizeWarningLimit: 700 },

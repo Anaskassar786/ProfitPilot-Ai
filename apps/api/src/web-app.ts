@@ -28,6 +28,7 @@ const API_PATH_PREFIXES = [
   '/reports',
   '/security',
   '/session',
+  '/store-coach',
   '/settings',
   '/shopify',
   '/support',
