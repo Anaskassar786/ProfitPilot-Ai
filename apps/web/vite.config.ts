@@ -16,6 +16,7 @@ export default defineConfig({
       '/live': 'http://127.0.0.1:3000',
       '/ready': 'http://127.0.0.1:3000',
       '/ai': 'http://127.0.0.1:3000',
+      '/ai-command': 'http://127.0.0.1:3000',
       '/recommendations': 'http://127.0.0.1:3000',
       '/billing': 'http://127.0.0.1:3000',
       '/admin': 'http://127.0.0.1:3000',

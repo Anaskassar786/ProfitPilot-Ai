@@ -41,6 +41,10 @@ expired trial must upgrade to a paid plan to keep using agents.
 - Identical evidence hits a 24h tenant-versioned explanation cache instead of
   a second AI call; `run-all` executes with bounded concurrency and streams
   SSE progress.
+### AI Command (PR #51)
+
+The Copilot page is now **AI Command** (`/ai-command`, sidebar label “AI Command”). Merchants ask grounded questions against live module data. Commander users can preview and approve real actions (email via verified Brevo sender, Shopify tags/discounts, recommendation approval, workflow trigger, notifications, reports). Trial/Start/Growth stay info-only with an **Upgrade Plan** CTA. Campaigns is removed from the sidebar; campaign tables remain. See `docs/AI_COMMAND.md`.
+
 ### Recommendations (PR #46)
 
 The Recommendations page is a dedicated workspace (`apps/web/src/recommendations.tsx` + `recommendations-model.ts` + `recommendations.css`) backed by the full lifecycle API in `apps/api/src/ai-routes.ts`. Highlights:
@@ -105,7 +109,7 @@ For the web shell:
 corepack pnpm --filter @profitpilot/web dev
 ```
 
-The Vite proxy keeps browser calls relative while forwarding F2–F8 requests (`/sync`, `/analytics`, `/catalog`, `/ai`, `/recommendations`, `/billing`, `/admin`, `/automation`, `/campaigns`, `/exports`, `/support`, `/settings`, `/security`, `/legal`, `/jarvis`, `/copilot`, `/forecasting`, `/reports`) to the API during local development. Pass `?storeId=<tenant-id>&shop=<shop>.myshopify.com` to the web URL to load a real tenant context. In production, the API process serves `apps/web/dist` at `/` on the same origin and falls back to `index.html` for client-side routes.
+The Vite proxy keeps browser calls relative while forwarding F2–F8 requests (`/sync`, `/analytics`, `/catalog`, `/ai`, `/ai-command`, `/recommendations`, `/billing`, `/admin`, `/automation`, `/campaigns`, `/exports`, `/support`, `/settings`, `/security`, `/legal`, `/jarvis`, `/copilot`, `/forecasting`, `/reports`) to the API during local development. Pass `?storeId=<tenant-id>&shop=<shop>.myshopify.com` to the web URL to load a real tenant context. In production, the API process serves `apps/web/dist` at `/` on the same origin and falls back to `index.html` for client-side routes.
 
 No provider credentials are committed. Use `.env.example` as a shape only and inject real values through the deployment secret manager.
 
