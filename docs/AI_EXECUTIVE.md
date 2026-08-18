@@ -77,7 +77,7 @@ apps/web/src/executive.tsx            AI Growth Command tabs + CEO dashboard
 apps/web/src/executive-*.tsx          8 sub-pages (reports, benchmarks, …)
 apps/web/src/executive-charts.tsx     Theme-adaptive SVG charts
 apps/web/src/executive.css            Navy/gold executive design system
-migrations/0021_ai_executive.sql      Tables + RLS + seeded public benchmarks
+migrations/0022_ai_executive.sql      Tables + RLS + seeded public benchmarks
 ```
 
 ### Report generation flow

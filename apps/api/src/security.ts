@@ -223,6 +223,9 @@ export function assertSafeTenantValue(value: string): void {
 
 export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' | 'requireAuthentication'>): RequestHandler {
   return (request, _response, next): void => {
+    // /public-api/* carries its own Bearer credential (Insights Hub API
+    // keys, PR #50); JWT session auth must not consume those requests.
+    if (request.path.startsWith('/public-api/')) { next(); return }
     const token = bearerToken(request)
     const hasTenant = requestTenantValue(request) !== null
     if (!token) {

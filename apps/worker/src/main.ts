@@ -2,6 +2,7 @@ import { loggerFromEnv } from '@profitpilot/logger'
 import { InMemoryQueue, UpstashQueue } from '@profitpilot/queue'
 import { WorkerRuntime } from './worker.js'
 import { createWorkerHealthServer } from './health.js'
+import { createInsightsDiscoveryRunner } from './insights-discovery-job.js'
 
 const logger = loggerFromEnv(process.env)
 
@@ -33,10 +34,21 @@ const queue = isUpstash
     )
   : new InMemoryQueue()
 
+// PR #50: Insights Hub auto-discovery. The API owns the pipeline; the worker
+// keeps the clock and dispatches daily (2:00 UTC) / weekly (Sunday) sweeps.
+const insightsDiscovery = createInsightsDiscoveryRunner({
+  env: process.env,
+  fetcher: fetch,
+  log: (message, context) => logger.info(message, context ?? {}),
+})
+
 const runtime = new WorkerRuntime(
   queue,
   async (job) => {
     if (job.type === 'report_tick' || job.type === 'billing_reconcile' || job.type === 'trial_nudge' || job.type === 'sync') {
+      return
+    }
+    if ((await insightsDiscovery.handle(job)) === 'handled') {
       return
     }
     throw new Error(`No worker handler configured for ${job.type}`)

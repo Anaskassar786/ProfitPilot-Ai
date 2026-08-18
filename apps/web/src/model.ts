@@ -9,6 +9,7 @@ export type SectionId =
   | 'ai-growth-command'
   | 'recommendations'
   | 'automation'
+  | 'insights-hub'
   | 'campaigns'
   | 'copilot'
   | 'ai-command'

@@ -8,6 +8,8 @@ import { StoreCoachScheduler } from './store-coach-scheduler.js'
 import { createExecutiveBootstrap } from './executive-bootstrap.js'
 import { readinessChecksFromEnv } from './readiness.js'
 import { runMigrations } from './migrations.js'
+import { createInsightsHubBootstrap, InsightsHubService, PostgresInsightsHubRepository } from './insights-hub.js'
+import { buildStoreSnapshot } from './store-snapshot.js'
 
 const port = Number(process.env.PORT ?? '3000')
 const logger = loggerFromEnv(process.env)
@@ -49,9 +51,30 @@ const main = async (): Promise<void> => {
     await bootstrap.automation.triggers.handleWebhook(event)
   } } } : bootstrap?.shopify
   const executive = bootstrap ? createExecutiveBootstrap(bootstrap, process.env, logger) : null
+  // PR #55: Insights Hub runs on its own dedicated OpenRouter key + Nemotron
+  // models. When the key is absent the service still works — it degrades to
+  // pure deterministic output with no AI narration (never fake content).
+  const insights = createInsightsHubBootstrap(process.env)
+  const insightsHub = bootstrap === null
+    ? undefined
+    : {
+        service: new InsightsHubService({
+          dataset: {
+            snapshot: (storeId: import('@profitpilot/types').StoreId) => buildStoreSnapshot(storeId, bootstrap.dataPlane.analytics, bootstrap.database),
+            analytics: bootstrap.dataPlane.analytics,
+            orders: bootstrap.orders.repository,
+          },
+          repository: new PostgresInsightsHubRepository(bootstrap.database),
+          plan: async (storeId) => (await bootstrap.billing.repository.get(storeId))?.plan ?? 'trial',
+          billingState: async (storeId) => (await bootstrap.billing.repository.get(storeId))?.state ?? null,
+          narrator: insights.narrator,
+          env: insights.env,
+        }),
+        env: insights.env,
+      }
   const app = bootstrap === null
     ? createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), webDistPath })
-    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, aiCommand: bootstrap.aiCommand, storeCoach: { service: bootstrap.storeCoach.service }, ...(executive?.enabled ? { executive: executive.routes } : {}), f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
+    : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, aiCommand: bootstrap.aiCommand, storeCoach: { service: bootstrap.storeCoach.service }, ...(executive?.enabled ? { executive: executive.routes } : {}), ...(insightsHub ? { insightsHub } : {}), f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
   if (webIndexExists) logger.info('Web app serving enabled', { webDistPath, exists: webDistExists, indexExists: webIndexExists })
   if (executive?.enabled) logger.info('AI Executive module enabled', { models: executive.routes.costSummary ? 'configured' : 'default' })
   const server = app.listen(port, '0.0.0.0', () => logger.info('ProfitPilot API listening', { port, shopifyRoutes: bootstrap !== null, webApp: webIndexExists, startedInMs: Date.now() - startedAt }))

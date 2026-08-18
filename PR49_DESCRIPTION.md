@@ -10,7 +10,7 @@ Command Center, Automation, Recommendations, Store Coach, or Analytics.
 
 ## What ships
 
-**Database** — migration `0021_ai_executive.sql`: 9 tenant-isolated tables with
+**Database** — migration `0022_ai_executive.sql`: 9 tenant-isolated tables with
 RLS (reports, benchmarks, scenarios, health diagnoses, opportunities,
 decisions, risks, roadmaps, preferences) plus seeded public-source industry
 benchmark percentile ladders (10 categories × 7 metrics).

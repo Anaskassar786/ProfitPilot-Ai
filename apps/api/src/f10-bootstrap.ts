@@ -25,7 +25,7 @@ import {
 /**
  * PR #48 — Store Coach bootstrap. Builds on the F9 chain and adds the Store
  * Coach service: a dedicated OpenRouter client (STORE_COACH_API_KEY), the
- * Postgres repositories from migration 0021, the shared cost ledger, the
+ * Postgres repositories from migration 0023, the shared cost ledger, the
  * Brevo SMTP mailer for Sunday digests, and a Commander-only PDF writer.
  */
 

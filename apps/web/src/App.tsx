@@ -30,6 +30,7 @@ import {
   FileBarChart,
   FileText,
   Filter,
+  FlaskConical,
   Gauge,
   GitBranch,
   Globe2,
@@ -115,6 +116,7 @@ import { AiGrowthCommandPage } from './executive.js'
 import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
+import { InsightsHubWorkspace } from './insights-hub.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -136,6 +138,12 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'ai-command', label: 'AI Command', icon: Sparkles, tag: 'AI', badge: 'NEW' },
+    ],
+  },
+  {
+    label: 'AI Growth Command',
+    items: [
+      { id: 'insights-hub', label: 'Insights Hub', icon: FlaskConical, tag: 'NEW' },
     ],
   },
   {
@@ -162,6 +170,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
   'ai-growth-command': { title: 'AI Growth Command', description: 'Store Coach for daily tactics, AI Executive for boardroom strategy, and the Insights Hub.', icon: Landmark },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
+  'insights-hub': { title: 'Insights Hub', description: 'Where data becomes wisdom — discoveries, lessons, personas, and Why? answers from your real synced data.', icon: FlaskConical },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: Sparkles },
@@ -186,11 +195,14 @@ export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
   // the user expects instead of resetting to the dashboard.
+  // PR #55: /ai-growth-command/insights* deep links open Insights Hub; its
+  // sub-tabs manage their own detail segments from there.
   const [activePage, setActivePage] = useState<SectionId>(() => {
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
     if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
+    if (window.location.pathname.startsWith('/ai-growth-command/insights')) return 'insights-hub'
     if (window.location.pathname.startsWith('/ai-growth-command')) return 'ai-growth-command'
     if (window.location.pathname.startsWith('/automation')) return 'automation'
     return 'dashboard'
@@ -364,8 +376,11 @@ export default function App() {
     if (page === 'campaigns') showToast('Campaigns has been replaced by AI Command', 'info')
     if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
-    if (next === 'ai-growth-command' && !window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/ai-growth-command${window.location.search}`)
-    else if (next !== 'ai-growth-command' && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
+    // Insights Hub lives under /ai-growth-command/insights, so it has to be
+    // matched before the generic /ai-growth-command reset below.
+    if (next === 'insights-hub' && !window.location.pathname.startsWith('/ai-growth-command/insights')) window.history.pushState({}, '', `/ai-growth-command/insights${window.location.search}`)
+    else if (next === 'ai-growth-command' && (!window.location.pathname.startsWith('/ai-growth-command') || window.location.pathname.startsWith('/ai-growth-command/insights'))) window.history.pushState({}, '', `/ai-growth-command${window.location.search}`)
+    else if (next !== 'ai-growth-command' && next !== 'insights-hub' && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
     setActivePage(next)
     setMobileOpen(false)
     setCommandOpen(false)
@@ -379,16 +394,17 @@ export default function App() {
     } catch { /* embedded browsers may restrict history access */ }
   }
 
-  // Browser back/forward between the recommendations hash route and other
-  // pages keeps the visible page in sync.
+  // Browser back/forward between the recommendations hash route, the
+  // Insights Hub path route, and other pages keeps the visible page in sync.
   useEffect(() => {
     const onHashNavigation = () => {
       const section = hashSection(window.location.hash)
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
       if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
+      const onInsights = window.location.pathname.startsWith('/ai-growth-command/insights')
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onCoach ? 'ai-growth-command' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'automation' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onInsights ? 'insights-hub' : onCoach ? 'ai-growth-command' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'insights-hub' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -579,6 +595,7 @@ function PageRouter({
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
   if (active === 'ai-growth-command') return <AiGrowthCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
+  if (active === 'insights-hub') return <PageLayout eyebrow="AI Growth Command" title="Insights Hub" description="Where data becomes wisdom — discoveries, lessons, patterns, personas, and Why? answers computed from your real synced store data."><InsightsHubWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'reports') return <PageLayout eyebrow="Closed-period PDFs" title="Reports" description="Closed-period PDF reports, deterministic forecast methods, and honest delivery status."><ReportsWorkspace context={context} /></PageLayout>
