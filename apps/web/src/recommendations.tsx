@@ -641,31 +641,47 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
   // Prefer a currency the store actually uses when formatting an honest zero.
   const knownCurrency = summary.pendingImpact[0]?.currency ?? summary.approvedThisMonth.impact[0]?.currency ?? summary.recentDecisions[0]?.currency ?? null
   const zeroImpact = knownCurrency ? formatImpact(0, knownCurrency) : '0'
+  // Last 7 days of approved activity from the trend data (real backend values).
+  const last7DaysApproved = summary.generatedTrend.slice(-7).map((day) => day.approved)
   return (
     <div className="recs-kpis">
       <div className="recs-kpi">
         <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-label"><Gauge size={13} /> Revenue opportunity pending</span></Tip>
-        <strong className="recs-kpi-value accent">{summary.pendingImpact.length > 0 ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
-        {pendingCount === 0
-          ? <small>No pending recommendations yet</small>
-          : <small>{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
+        <div className="recs-kpi-row">
+          <RevenueRing hasImpact={pendingCount > 0} pendingCount={pendingCount} />
+          <div className="recs-kpi-value-stack">
+            <strong className="recs-kpi-value accent">{summary.pendingImpact.length > 0 ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
+            {pendingCount === 0
+              ? <small>No pending recommendations yet</small>
+              : <small>{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
+          </div>
+        </div>
       </div>
       <div className="recs-kpi">
         <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span></Tip>
-        <strong className="recs-kpi-value">{approvedCount}</strong>
-        {approvedCount === 0
-          ? <small>Approve recommendations to see the impact here</small>
-          : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+        <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvedCount}</strong>
+          {approvedCount === 0
+            ? <small>Approve recommendations to see the impact here</small>
+            : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+        </div>
+        <ApprovedBars values={last7DaysApproved} />
       </div>
       <div className="recs-kpi">
         <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span></Tip>
-        <strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
-        <small>{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
+        <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
+          <small>{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
+        </div>
+        <ApprovalRateBar rate={approvalRate} />
       </div>
       <div className="recs-kpi">
         <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-label"><Clock3 size={13} /> Avg time to decide</span></Tip>
-        <strong className="recs-kpi-value">{summary.averageDecisionMs === null ? '—' : formatDurationMs(summary.averageDecisionMs)}</strong>
-        <small>{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
+        <div className="recs-kpi-row">
+          <DecideSpeedometer ms={summary.averageDecisionMs} />
+          <div className="recs-kpi-value-stack">
+            <strong className="recs-kpi-value">{summary.averageDecisionMs === null ? '—' : formatDurationMs(summary.averageDecisionMs)}</strong>
+            <small>{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
+          </div>
+        </div>
       </div>
       <div className="recs-kpi usage">
         <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-label"><WandSparkles size={13} /> Monthly usage</span></Tip>
@@ -678,6 +694,78 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
         </div>
         {usage.limit !== null && <button className="text-button recs-upgrade-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></button>}
       </div>
+    </div>
+  )
+}
+
+/** Per-card unique micro-visualizations (PR light-theme polish pass). */
+function RevenueRing({ hasImpact, pendingCount }: { hasImpact: boolean; pendingCount: number }) {
+  // The ring fills proportionally to the pending count against a 5-item
+  // friendly scale, capped at full. Zero pending shows an empty ring with a
+  // checkmark so empty states still feel intentional, not broken.
+  const radius = 18
+  const circumference = 2 * Math.PI * radius
+  const ratio = hasImpact ? Math.min(1, pendingCount / 5) : 0
+  return (
+    <div className="recs-kpi-visual recs-kpi-radial" aria-hidden>
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="4" />
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" stroke="var(--green)" strokeWidth="4" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
+      </svg>
+      {hasImpact ? <TrendingUp size={14} style={{ position: 'absolute', color: 'var(--green)' }} /> : <CheckCircle2 size={14} style={{ position: 'absolute', color: 'var(--text-tertiary)' }} />}
+    </div>
+  )
+}
+
+function ApprovedBars({ values }: { values: readonly number[] }) {
+  const days = values.length === 0 ? [0, 0, 0, 0, 0, 0, 0] : values
+  const max = Math.max(1, ...days)
+  return (
+    <div className="recs-kpi-visual" aria-hidden>
+      <div className="recs-kpi-bars">
+        {days.map((value, index) => (
+          <span key={index} className={`bar ${value > 0 ? 'filled' : ''}`} style={{ height: `${Math.max(4, (value / max) * 36)}px` }} title={`${value} approved`} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ApprovalRateBar({ rate }: { rate: number | null }) {
+  const value = rate === null ? 0 : Math.min(100, Math.max(0, rate))
+  return (
+    <div className="recs-kpi-progress" aria-hidden>
+      <div className="recs-kpi-progress-track">
+        <div className="recs-kpi-progress-fill" style={{ width: `${value}%` }} />
+        <span className="recs-kpi-progress-marker" style={{ left: '70%' }} title="Healthy target" />
+      </div>
+      <div className="recs-kpi-progress-axis">
+        <span>0%</span>
+        <span className="target">70% · Good</span>
+        <span>100%</span>
+      </div>
+    </div>
+  )
+}
+
+function DecideSpeedometer({ ms }: { ms: number | null }) {
+  // Map 0 → 8h onto -90° → 90°. <1h is the green zone, 1-4h amber, >4h red.
+  const FAST = 60 * 60 * 1000
+  const SLOW = 4 * 60 * 60 * 1000
+  const MAX = 8 * 60 * 60 * 1000
+  const angle = ms === null ? -90 : Math.min(90, Math.max(-90, ((ms - 0) / MAX) * 180 - 90))
+  const zone = ms === null ? 'idle' : ms <= FAST ? 'fast' : ms <= SLOW ? 'mid' : 'slow'
+  return (
+    <div className="recs-kpi-visual" aria-hidden>
+      <svg className="recs-kpi-speedo" viewBox="0 0 100 56">
+        <path d="M 10,46 A 40,40 0 0,1 50,6" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
+        <path d="M 10,46 A 40,40 0 0,1 32,12" fill="none" className="recs-kpi-speedo-zone-fast" strokeWidth="6" strokeLinecap="round" />
+        <path d="M 32,12 A 40,40 0 0,1 68,12" fill="none" className="recs-kpi-speedo-zone-mid" strokeWidth="6" />
+        <path d="M 68,12 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-zone-slow" strokeWidth="6" strokeLinecap="round" />
+        <line x1="50" y1="46" x2="50" y2="14" stroke="var(--text)" strokeWidth="2.5" className="recs-kpi-speedo-needle" transform={`rotate(${angle} 50 46)`} />
+        <circle cx="50" cy="46" r="3" fill="var(--text)" />
+      </svg>
+      <span className="recs-kpi-speedo-label" data-zone={zone}>{ms === null ? '—' : zone === 'fast' ? 'Fast' : zone === 'mid' ? 'OK' : 'Slow'}</span>
     </div>
   )
 }
@@ -1237,7 +1325,10 @@ function HowRulesWork() {
 function SampleRecommendationPreview() {
   return (
     <div className="recs-sample-wrap">
-      <span className="recs-sample-caption"><FlaskConical size={13} /> <strong className="recs-sample-caption-strong">Sample</strong> Preview — this is what a recommendation looks like (not your data)</span>
+      <div className="recs-sample-banner">
+        <span className="recs-sample-badge-wrap"><span className="recs-sample-badge"><FlaskConical size={13} /> Sample Preview</span></span>
+        <p className="recs-sample-explanation">This is a preview of what a real recommendation looks like once your AI team discovers opportunities in your store — <em>not your data</em>. Click <strong>Discover Opportunities</strong> above to generate real recommendations.</p>
+      </div>
       <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
         <div className="recs-card-main">
           <div className="recs-card-top">
@@ -1273,15 +1364,16 @@ function SampleRecommendationPreview() {
           <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
           <span className="recs-sample-actions">
             <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button reject compact" disabled tabIndex={-1}>Skip This</button>
+              <button className="button reject compact" disabled tabIndex={-1} aria-label="Skip This — preview only, action unavailable">Skip This</button>
             </span>
             <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button approve compact" disabled tabIndex={-1}><Check size={13} /> Approve & Take Action</button>
+              <button className="button approve compact" disabled tabIndex={-1} aria-label="Approve — preview only, action unavailable"><Check size={13} /> Approve & Take Action</button>
             </span>
           </span>
         </div>
       </article>
       <p className="recs-sample-helper">This is a preview of what real recommendations look like. Click <strong>Discover Opportunities</strong> to generate real ones for your store.</p>
+      <p className="recs-sample-note"><Lightbulb size={13} /> When you have real recommendations, these buttons will be active.</p>
     </div>
   )
 }

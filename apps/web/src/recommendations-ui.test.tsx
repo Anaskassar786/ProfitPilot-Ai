@@ -203,6 +203,87 @@ describe('sample recommendation preview', () => {
     expect(html).toContain('$1,240')
     expect(html).toContain('Revenue at risk')
   })
+  it('shows a prominent SAMPLE PREVIEW badge with a clear explanation', () => {
+    const html = renderToStaticMarkup(createElement(SampleRecommendationPreview))
+    // Prominent amber badge — never ambiguous
+    expect(html).toContain('recs-sample-badge')
+    expect(html).toContain('Sample Preview')
+    expect(html).toContain('recs-sample-banner')
+    // The explanation names what to do next
+    expect(html).toContain('Discover Opportunities')
+    expect(html).toContain('recs-sample-explanation')
+    // A reinforcement note explains the disabled state
+    expect(html).toContain('recs-sample-note')
+    expect(html).toContain('these buttons will be active')
+  })
+  it('disables actions and exposes a screen-reader-friendly aria-label', () => {
+    const html = renderToStaticMarkup(createElement(SampleRecommendationPreview))
+    expect(html).toContain('aria-label="Skip This — preview only, action unavailable"')
+    expect(html).toContain('aria-label="Approve — preview only, action unavailable"')
+  })
+})
+
+describe('KPI hero micro-visualizations', () => {
+  it('renders a radial ring for revenue opportunity pending', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-radial')
+    expect(html).toContain('recs-kpi-radial-track')
+    expect(html).toContain('recs-kpi-radial-fill')
+  })
+  it('renders a 7-day mini bar chart for approved this month', () => {
+    const trend = Array.from({ length: 7 }, (_, index) => ({ day: `2026-08-${String(10 + index).padStart(2, '0')}`, generated: 5, approved: index }))
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ generatedTrend: trend }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-bars')
+    // 7 bars rendered
+    const barCount = (html.match(/class="bar filled|class="bar "/g) ?? []).length
+    expect(barCount).toBe(7)
+  })
+  it('renders a progress bar with a "Good" marker for approval rate', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-progress')
+    expect(html).toContain('recs-kpi-progress-track')
+    expect(html).toContain('recs-kpi-progress-fill')
+    expect(html).toContain('recs-kpi-progress-marker')
+    expect(html).toContain('70% · Good')
+    expect(html).toContain('0%')
+    expect(html).toContain('100%')
+  })
+  it('renders a speedometer with three colored zones for avg time to decide', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ averageDecisionMs: 5_400_000 }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-speedo')
+    expect(html).toContain('recs-kpi-speedo-zone-fast')
+    expect(html).toContain('recs-kpi-speedo-zone-mid')
+    expect(html).toContain('recs-kpi-speedo-zone-slow')
+    expect(html).toContain('recs-kpi-speedo-needle')
+    // 1h 30m (5,400,000ms) lands in the mid zone — "OK"
+    expect(html).toContain('data-zone="mid"')
+    expect(html).toContain('OK')
+  })
+  it('renders the speedometer idle zone when there is no decision history yet', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ averageDecisionMs: null }), usage: usageState(0, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-speedo')
+    expect(html).toContain('data-zone="idle"')
+  })
+  it('keeps the existing usage ring for monthly usage', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-usage-ring')
+    expect(html).toContain('4/10')
+  })
+  it('does not invent numbers in the visualizations when summary is empty', () => {
+    const empty = summary({ counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 }, total: 0, pendingImpact: [], approvedThisMonth: { count: 0, impact: [] }, approvalRate: { allTime: null, last30d: null }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [] })
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: empty, usage: usageState(0, 10), plan: 'trial', onUpgrade: noop }))
+    // All visualizations still render — but they show honest empty/idle states
+    expect(html).toContain('recs-kpi-radial')
+    expect(html).toContain('recs-kpi-bars')
+    expect(html).toContain('recs-kpi-progress')
+    expect(html).toContain('recs-kpi-speedo')
+    // The progress fill width is 0% (zero rate) — never a fabricated number
+    expect(html).toMatch(/width:\s*0%/)
+    // No "filled" bar in the chart
+    expect(html).not.toMatch(/class="bar filled"/)
+    // Speed needle is parked at the leftmost (idle) position
+    expect(html).toMatch(/rotate\(-90 50 46\)/)
+  })
 })
 
 describe('analysis progress modal', () => {
