@@ -205,10 +205,11 @@ export function StatVisualization({ visual, count, pending, label }: StatVizProp
  * share of the discovered total; clicking a stage filters the feed. This is
  * the only funnel in the app and it never draws a stage wider than its data.
  */
-export function DiscoveryPipelineFunnel({ funnel, activeStage, onSelect }: {
+export function DiscoveryPipelineFunnel({ funnel, activeStage, onSelect, onAction }: {
   funnel: DiscoveryFunnel
   activeStage?: DiscoveryFunnelStage['id'] | null
   onSelect?: (stage: DiscoveryFunnelStage) => void
+  onAction?: () => void
 }) {
   const gradientId = useId().replace(/[^a-zA-Z0-9]/g, '')
   return (
@@ -241,7 +242,9 @@ export function DiscoveryPipelineFunnel({ funnel, activeStage, onSelect }: {
         <span className="pa-funnel-conversion">
           Conversion <strong>{funnel.conversion === null ? '—' : formatPlainPercent(funnel.conversion)}</strong>
         </span>
-        <span className="pa-funnel-hint">{funnel.hint}</span>
+        {onAction && funnel.discovered > 0 && funnel.actedOn === 0
+          ? <button type="button" className="pa-funnel-action" onClick={onAction}>Take action on a discovery →</button>
+          : <span className="pa-funnel-hint">{funnel.hint}</span>}
       </footer>
     </div>
   )

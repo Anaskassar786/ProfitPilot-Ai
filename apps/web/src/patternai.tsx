@@ -23,6 +23,7 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronRight,
+  CircleDollarSign,
   Clock3,
   Compass,
   Copy,
@@ -33,7 +34,9 @@ import {
   Library,
   Lightbulb,
   Lock,
+  Megaphone,
   Network,
+  Package,
   Radar,
   RefreshCw,
   Scale,
@@ -213,14 +216,38 @@ export function InsightsUpgradeCta({ onNavigateBilling, compact = false }: { onN
   return <button className={`button primary ${compact ? 'compact' : ''}`} onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA} <ArrowRight size={12} /></button>
 }
 
+const LOCKED_FEATURE_PREVIEWS: Partial<Record<InsightsFeature, readonly string[]>> = {
+  discoveries: ['On-demand sweeps of newly synced orders', 'Evidence, confidence and measured impact on every finding', 'A review-to-action discovery pipeline'],
+  lessons: ['Briefings compiled from your own store history', 'Reading progress and merchant ratings', 'A private library that becomes more specific over time'],
+  patterns: ['Recurring rhythms and affinities', 'Occurrence counts and confidence evidence', 'Alerts when an established pattern breaks'],
+  personas: ['Behaviour-based customer groups', 'Measured customer share and lifetime value', 'Anonymized traits with the source evidence attached'],
+  investigations: ['Plain-language “why?” questions', 'Root causes ranked by measured impact', 'The exact store sources used to build each answer'],
+  comparisons: ['Product, period and segment comparisons', 'Side-by-side measured metrics', 'Honest insufficient-data verdicts when evidence is thin'],
+  knowledge: ['Searchable discoveries, lessons and notes', 'Links between related store learnings', 'Merchant-authored notes alongside PatternAI evidence'],
+  predictions: ['Forecast ranges rather than a single promise', 'Confidence, method and evidence disclosure', 'Accuracy grading after the forecast window closes'],
+  apiAccess: ['Read-only discovery and pattern endpoints', 'A revocable key with visible usage limits', 'OpenAPI documentation for your own tools'],
+  externalTrends: ['Verified benchmark sources only', 'Clear source and freshness labels', 'No generated or unverified market claims'],
+}
+
 export function InsightsLockedPanel({ feature, plan, overview, onNavigateBilling, note }: { feature: InsightsFeature; plan: PlanTier; overview: InsightsOverview | null; onNavigateBilling: () => void; note?: string }) {
   const lock = insightsFeatureLock(plan, feature, overview)
   if (!lock.locked) return null
+  const preview = LOCKED_FEATURE_PREVIEWS[feature] ?? ['Evidence-backed analysis from your synced store data', 'Clear sources and confidence on every result', 'A focused workspace for reviewing what PatternAI learns']
   return (
     <div className="pa-locked" data-feature={feature}>
-      <span className="pa-locked-icon"><Lock size={18} /></span>
-      <strong>This capability is locked on your current plan</strong>
+      <div className="pa-locked-heading">
+        <span className="pa-locked-icon"><Lock size={18} /></span>
+        <div>
+          <span className="pa-eyebrow">Locked preview</span>
+          <strong>This capability is locked on your current plan</strong>
+        </div>
+      </div>
       <p>{note ?? insightsUpgradeMessageText(feature)}</p>
+      <div className="pa-locked-preview" aria-label="Preview of this capability">
+        <span>What you&rsquo;ll be able to explore</span>
+        <ul>{preview.map((item) => <li key={item}><CheckCircle2 size={13} /> {item}</li>)}</ul>
+        <small>Preview only — no sample metrics or invented store results.</small>
+      </div>
       <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} />
     </div>
   )
@@ -469,12 +496,50 @@ const NAV_GROUPS: readonly NavGroup[] = [
 
 const ALL_NAV_ENTRIES: readonly NavEntry[] = NAV_GROUPS.flatMap((group) => group.entries)
 
+/**
+ * Compact data-quality snapshot for the hero. These are raw readiness fields
+ * returned by PatternAI's API — never estimates — and they explain what the
+ * discovery engine currently has available to study.
+ */
+export function PatternAiSnapshot({ overview }: { overview: InsightsOverview | null }) {
+  const readiness = overview?.readiness ?? null
+  const measures = [
+    { id: 'history', label: 'Days observed', value: readiness ? formatInsightNumber(readiness.revenueDays) : '—' },
+    { id: 'orders', label: 'Orders synced', value: readiness ? formatInsightNumber(readiness.totalOrders) : '—' },
+    { id: 'customers', label: 'Customers seen', value: readiness ? formatInsightNumber(readiness.customerCount) : '—' },
+    { id: 'products', label: 'Products selling', value: readiness ? formatInsightNumber(readiness.productsWithSales) : '—' },
+  ] as const
+  return (
+    <aside className="pa-snapshot" aria-label="Your discovery snapshot">
+      <div className="pa-snapshot-head">
+        <span className="pa-eyebrow">Your discovery snapshot</span>
+        <span className={`pa-data-status ${readiness?.canDiscover ? 'ready' : 'learning'}`}>
+          <span />{readiness ? (readiness.canDiscover ? 'Ready to discover' : 'Building evidence') : 'Checking data'}
+        </span>
+      </div>
+      <div className="pa-snapshot-measures">
+        {measures.map((measure) => <span key={measure.id}><strong>{measure.value}</strong><small>{measure.label}</small></span>)}
+      </div>
+      <p>{readiness?.discoverRequirement ?? 'PatternAI is checking the synced history available for evidence-backed discoveries.'}</p>
+    </aside>
+  )
+}
+
+function discoveryCadenceLabel(overview: InsightsOverview | null): string {
+  const preferences = overview?.preferences
+  if (!preferences?.autoDiscoveryEnabled) return 'Manual discovery sweeps'
+  if (preferences.discoveryFrequency === 'REALTIME') return 'Real-time discovery monitoring'
+  if (preferences.discoveryFrequency === 'WEEKLY') return 'Weekly auto-discovery'
+  return 'Daily auto-discovery'
+}
+
 /* ── Root workspace ────────────────────────────────────────────────────── */
 
 export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateBilling }: InsightsWorkspaceProps) {
   const [route, setRoute] = useState(() => parseInsightsRoute(typeof window === 'undefined' ? '' : window.location.pathname))
   const overviewState = useResource<InsightsOverview>(context.storeId ? () => api.fetchInsightsOverview(context.storeId ?? '') : null, [context.storeId])
   const [planPanelOpen, setPlanPanelOpen] = useState(false)
+  const [runningDiscovery, setRunningDiscovery] = useState(false)
 
   const go = useCallback((tab: InsightsTab, id: string | null = null) => {
     const path = insightsRoutePath(tab, id, typeof window === 'undefined' ? '' : window.location.search)
@@ -512,14 +577,18 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
   const runDiscovery = async () => {
     if (!context.storeId) { onToast('Connect your store to run a discovery sweep.', 'info'); return }
     if (lockedFor('discoveries')) { onToast('The discovery engine unlocks with a plan upgrade.', 'warning'); onNavigateBilling(); return }
+    if (runningDiscovery) return
+    setRunningDiscovery(true)
     try {
       const result = await api.generateInsightsDiscoveries(context.storeId)
       onToast(result.generated > 0 ? `PatternAI found ${result.generated} new discover${result.generated === 1 ? 'y' : 'ies'} in your data.` : 'Nothing new crossed the confidence bar — PatternAI stays quiet rather than guessing.', 'success')
       overviewState.reload()
       go('overview')
     } catch (error: unknown) {
-      if (error instanceof ApiClientError && error.status === 402) { onToast('Your discovery allowance for this month is used up.', 'warning'); onNavigateBilling() }
+      if (error instanceof ApiClientError && error.status === 402) { onToast('Your discovery allowance for this month is used up. Upgrade Plan to run another sweep.', 'warning'); onNavigateBilling() }
       else onToast(error instanceof Error ? error.message : 'The discovery sweep could not start.', 'error')
+    } finally {
+      setRunningDiscovery(false)
     }
   }
 
@@ -536,8 +605,8 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
           </div>
           <p className="pa-hero-body">PatternAI reads your synced Shopify history and surfaces the structures underneath it — the rhythms, the segments, the correlations you would never spot by eye. Every number below is computed from your store; nothing here is invented or borrowed from another shop.</p>
           <div className="pa-hero-actions">
-            <button className="pa-button primary" onClick={() => void runDiscovery()}>
-              <PatternAiDiscoverGlyph size={15} /> Run discovery
+            <button className="pa-button primary" onClick={() => void runDiscovery()} disabled={runningDiscovery} aria-busy={runningDiscovery}>
+              {runningDiscovery ? <RefreshCw size={15} className="pa-spin" /> : <PatternAiDiscoverGlyph size={15} />} {runningDiscovery ? 'Examining your data…' : 'Run discovery'}
             </button>
             <button className="pa-button ghost" onClick={() => go('settings')}><Settings2 size={14} /> Settings</button>
             <button className="pa-plan-chip" onClick={() => setPlanPanelOpen((open) => !open)} aria-expanded={planPanelOpen}>
@@ -545,6 +614,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
               <ChevronRight size={13} className={planPanelOpen ? 'pa-chip-caret open' : 'pa-chip-caret'} />
             </button>
           </div>
+          <PatternAiSnapshot overview={overview} />
         </div>
         <div className="pa-hero-stats" role="list" aria-label="PatternAI at a glance">
           {stats.map((stat) => (
@@ -561,9 +631,14 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
             <span className="pa-eyebrow">Discoveries this month</span>
             <MonthlyDiscoveryRing progress={monthly} />
             <p className="pa-allowance-caption">{monthly.caption}</p>
+            <div className="pa-allowance-guide">
+              <span><RefreshCw size={11} /> {discoveryCadenceLabel(overview)}</span>
+              <span><ShieldCheck size={11} /> Evidence threshold enforced</span>
+            </div>
+            <p className="pa-allowance-next">{(overview?.counts.newDiscoveries ?? 0) > 0 ? `${formatInsightNumber(overview?.counts.newDiscoveries ?? 0)} unread signal${overview?.counts.newDiscoveries === 1 ? '' : 's'} ready to review` : 'Your discovery feed is caught up'}</p>
             {monthly.unlimited
               ? <span className="pa-allowance-note">Your plan runs discovery on demand.</span>
-              : <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA} for more discoveries</button>}
+              : <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button>}
           </aside>
         )}
       </header>
@@ -572,8 +647,10 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
 
       {degraded && <div className="pa-banner warn"><TriangleAlert size={13} /> {degraded}</div>}
       {overview?.autoDiscoveryRan && <div className="pa-banner info"><Sparkles size={13} /> Auto-discovery just ran — this page reflects your freshest synced data.</div>}
-      {overview?.trial && <div className="pa-banner sample"><Compass size={13} /> Trial mode: clearly labelled samples show the shape of what PatternAI finds once a paid plan starts computing from your own store.</div>}
-      {overviewState.status === 'error' && !overviewState.upgradeRequired && <InsightsErrorPanel message={overviewState.message ?? 'The overview could not be loaded.'} onRetry={overviewState.reload} />}
+      {overview?.trial && <div className="pa-banner trial"><Compass size={13} /> <strong>Trial mode:</strong> clearly labelled samples show the shape of what PatternAI finds once a paid plan starts computing from your own store.</div>}
+      {overviewState.status === 'error' && (overviewState.upgradeRequired
+        ? <InsightsLockedPanel feature="discoveries" plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} note="PatternAI is paused on this workspace. Upgrade Plan to resume evidence-backed discovery." />
+        : <InsightsErrorPanel message={overviewState.message ?? 'The overview could not be loaded.'} onRetry={overviewState.reload} />)}
 
       <div className="pa-layout">
         <nav className="pa-nav" aria-label="PatternAI sections">
@@ -683,6 +760,81 @@ type TabProps = Readonly<{
   onExportLocked: () => void
 }>
 
+const CATEGORY_ICONS: Readonly<Record<DiscoveryCategory, LucideIcon>> = {
+  REVENUE: CircleDollarSign,
+  CUSTOMERS: Users,
+  PRODUCTS: Package,
+  OPERATIONS: Settings2,
+  MARKETING: Megaphone,
+  TIME: Clock3,
+}
+
+/**
+ * Professional replacement for the old single-block treemap. It always shows
+ * the complete category vocabulary, with each count and share calculated from
+ * the discoveries supplied by the API. Zero categories are visibly empty —
+ * they are not populated with illustrative values.
+ */
+export function CategorySignalBreakdown({ impact, activeCategory = 'ALL', onSelect }: {
+  impact: ReturnType<typeof discoveryImpactSummary>
+  activeCategory?: 'ALL' | DiscoveryCategory
+  onSelect?: (category: DiscoveryCategory) => void
+}) {
+  const counts = new Map(impact.blocks.map((block) => [block.id, block.value]))
+  return (
+    <div className="pa-category-breakdown" role="group" aria-label="Filter signals by category">
+      {DISCOVERY_CATEGORIES.map((category) => {
+        const Icon = CATEGORY_ICONS[category]
+        const count = counts.get(category) ?? 0
+        const share = impact.total > 0 ? Math.round((count / impact.total) * 100) : 0
+        return (
+          <button
+            key={category}
+            type="button"
+            className={`pa-category-signal tone-${category.toLowerCase()} ${activeCategory === category ? 'active' : ''} ${count === 0 ? 'empty' : ''}`}
+            onClick={() => onSelect?.(category)}
+            aria-pressed={activeCategory === category}
+            title={`Filter the discovery feed to ${DISCOVERY_CATEGORY_LABELS[category].toLowerCase()}`}
+          >
+            <span className="pa-category-signal-head"><span className="pa-category-signal-icon"><Icon size={14} /></span><strong>{DISCOVERY_CATEGORY_LABELS[category]}</strong></span>
+            <span className="pa-category-signal-count">{formatInsightNumber(count)} signal{count === 1 ? '' : 's'}</span>
+            <span className="pa-category-signal-meter"><span style={{ width: `${share}%` }} /></span>
+            <span className="pa-category-signal-share">{share}%</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function DiscoveryWorkflowGuide() {
+  const steps = [
+    { title: 'Discover', body: 'A signal clears the evidence threshold.' },
+    { title: 'Review', body: 'Open it and inspect the source numbers.' },
+    { title: 'Save or dismiss', body: 'Keep useful patterns; teach PatternAI what is noise.' },
+    { title: 'Close the loop', body: 'Mark acted on to measure discovery conversion.' },
+  ] as const
+  return (
+    <div className="pa-workflow-guide" aria-label="How to use discoveries">
+      <span className="pa-eyebrow">How the workflow works</span>
+      <ol>{steps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><small>{step.body}</small></div></li>)}</ol>
+    </div>
+  )
+}
+
+function DiscoveryReadingGuide() {
+  return (
+    <section className="pa-reading-guide" aria-label="How to read a discovery">
+      <div className="pa-reading-guide-title"><Lightbulb size={16} /><div><span className="pa-eyebrow">Read any discovery in three passes</span><p>Separate what happened from how certain it is and what is worth investigating next.</p></div></div>
+      <div className="pa-reading-guide-steps">
+        <span><strong>1 · Evidence</strong><small>The measured order, product, customer or time values behind the signal.</small></span>
+        <span><strong>2 · Confidence</strong><small>How strongly the available history supports the pattern — never a guarantee.</small></span>
+        <span><strong>3 · Impact</strong><small>“In play” appears only when the engine can attach an observed monetary value.</small></span>
+      </div>
+    </section>
+  )
+}
+
 /* ── Discoveries ───────────────────────────────────────────────────────── */
 
 function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
@@ -709,13 +861,17 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
   }
 
   const discoveries = list.data ?? feed.data?.discoveries ?? []
+  // The feed is the unfiltered source of truth for summary visuals. Toolbar
+  // filters affect the cards only, so clicking a stage/category never rewrites
+  // its own denominator or turns one category into a misleading 100% block.
+  const allDiscoveries = feed.data?.discoveries ?? discoveries
   const readiness = feed.data?.readiness ?? overview?.readiness ?? null
   const generationLocked = overview ? !overview.features.discoveries : plan === 'trial'
   const filtered = statusFilter !== 'ALL' || categoryFilter !== 'ALL'
-  const weekdayCells = useMemo(() => weekdayHeatCells(discoveries), [discoveries])
-  const hourCells = useMemo(() => hourHeatCells(discoveries), [discoveries])
-  const funnel = useMemo(() => discoveryFunnel(discoveries), [discoveries])
-  const impact = useMemo(() => discoveryImpactSummary(discoveries), [discoveries])
+  const weekdayCells = useMemo(() => weekdayHeatCells(allDiscoveries), [allDiscoveries])
+  const hourCells = useMemo(() => hourHeatCells(allDiscoveries), [allDiscoveries])
+  const funnel = useMemo(() => discoveryFunnel(allDiscoveries), [allDiscoveries])
+  const impact = useMemo(() => discoveryImpactSummary(allDiscoveries), [allDiscoveries])
   const strengthRows = useMemo(() => patternStrengthRows(readiness), [readiness])
   const activeStage = funnel.stages.find((stage) => statusFilter !== 'ALL' && stage.statuses[0] === statusFilter)?.id ?? (statusFilter === 'ALL' ? 'discovered' : null)
 
@@ -761,8 +917,9 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
       {feed.status === 'error' && (feed.upgradeRequired
         ? <InsightsLockedPanel feature="discoveries" plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} />
         : <InsightsErrorPanel message={feed.message ?? 'The discovery feed failed to load.'} onRetry={feed.reload} />)}
+      {list.status === 'error' && <InsightsErrorPanel message={list.message ?? 'The filtered discovery list failed to load.'} onRetry={list.reload} />}
 
-      {discoveries.length > 0 && (
+      {allDiscoveries.length > 0 && (
         <div className="pa-value-grid">
           <div className="pa-card pa-funnel-card">
             <div className="pa-card-head">
@@ -777,7 +934,9 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
                 const target = stage.statuses[0]
                 if (target) setStatusFilter(statusFilter === target ? 'ALL' : target)
               }}
+              onAction={() => setStatusFilter('NEW')}
             />
+            <DiscoveryWorkflowGuide />
           </div>
 
           <div className="pa-card pa-impact-card">
@@ -785,7 +944,18 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
               <span className="section-kicker"><Lightbulb size={11} /> WHAT PATTERNAI HAS FOUND</span>
               <small>Signals by category, counted from your own data</small>
             </div>
-            <InsightsTreeMap blocks={[...impact.blocks]} width={420} height={170} />
+            <CategorySignalBreakdown
+              impact={impact}
+              activeCategory={categoryFilter}
+              onSelect={(category) => setCategoryFilter(categoryFilter === category ? 'ALL' : category)}
+            />
+            <div className="pa-category-context">
+              <div><span className="pa-eyebrow">Pattern coverage</span><strong>{formatInsightNumber(impact.blocks.length)} of {formatInsightNumber(DISCOVERY_CATEGORIES.length)} categories active</strong></div>
+              <span className="pa-category-coverage" role="img" aria-label={`${impact.blocks.length} of ${DISCOVERY_CATEGORIES.length} categories have signals`}>
+                {DISCOVERY_CATEGORIES.map((category) => <i key={category} className={impact.blocks.some((block) => block.id === category) ? 'active' : ''} />)}
+              </span>
+              <p>Each discovery belongs to one measured category. Select a card to focus the feed; shares stay anchored to the complete discovery set.</p>
+            </div>
             <ul className="pa-impact-facts">
               {impact.mostActive && <li>Most active category: <strong>{impact.mostActive.label}</strong> ({formatInsightNumber(impact.mostActive.value)} signal{impact.mostActive.value === 1 ? '' : 's'})</li>}
               {impact.strongest && <li>Strongest insight: <strong>{impact.strongest.title}</strong> ({confidencePercent(impact.strongest.confidence)}% confidence)</li>}
@@ -827,6 +997,8 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
       <div className="pa-masonry">
         {discoveries.map((discovery) => <DiscoveryCard key={discovery.id} discovery={discovery} storeId={storeId} onOpen={() => go('discoveries', discovery.id)} onChanged={() => list.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
       </div>
+
+      {allDiscoveries.length > 0 && <DiscoveryReadingGuide />}
 
       <ExploreFurther go={go} storeId={storeId} overview={overview} plan={plan} />
     </section>
@@ -914,6 +1086,7 @@ export function ExploreFurther({ go, storeId, overview, plan }: {
               </span>
               <span className="pa-explore-viz">{viz}</span>
               <p>{blurb}</p>
+              {locked && <span className="pa-explore-locked-note"><Lock size={10} /> Opens with a plan upgrade</span>}
               <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
             </button>
           )
@@ -1315,6 +1488,7 @@ function PersonasTab(props: TabProps & { detailId: string | null }) {
         <div className="pa-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Users size={13} /> {generating ? 'Studying your customers…' : items.length > 0 ? 'Rebuild personas' : 'Identify personas'}</button></div>
       </div>
       {personas.status === 'loading' && <InsightsSkeleton rows={3} />}
+      {personas.status === 'error' && <InsightsErrorPanel message={personas.message ?? 'Customer personas failed to load.'} onRetry={personas.reload} />}
       {personas.status === 'ready' && items.length === 0 && readiness && (
         <InsightsEmptyState
           icon={Users}
@@ -1418,6 +1592,7 @@ function WhyTab(props: TabProps & { detailId: string | null }) {
       </div>
 
       {investigations.status === 'loading' && <InsightsSkeleton rows={3} />}
+      {investigations.status === 'error' && <InsightsErrorPanel message={investigations.message ?? 'Why? investigations failed to load.'} onRetry={investigations.reload} />}
       {investigations.status === 'ready' && (investigations.data?.length ?? 0) === 0 && (
         <InsightsEmptyState icon={HelpCircle} title="No investigations yet" body="Ask your first Why? question above. Every answer cites the exact rows of your data that support it." />
       )}
@@ -1512,9 +1687,13 @@ function TrendsTab({ storeId, overview, plan, onToast, onNavigateBilling, export
         <h3><Compass size={14} /> Market</h3>
         {locked
           ? <InsightsLockedPanel feature="externalTrends" plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} />
-          : market.status === 'ready' && market.data && !market.data.available
-            ? <div className="pa-honest-note"><Compass size={14} /><div><strong>Outside signals stay honest here</strong><p>{market.data.message}</p></div></div>
-            : (market.data?.trends ?? []).map((trend) => <TrendRow key={trend.id} trend={trend} storeId={storeId ?? ''} onChanged={() => market.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
+          : market.status === 'loading'
+            ? <InsightsSkeleton rows={2} />
+            : market.status === 'error'
+              ? <InsightsErrorPanel message={market.message ?? 'Verified market signals failed to load.'} onRetry={market.reload} />
+              : market.data && !market.data.available
+                ? <div className="pa-honest-note"><Compass size={14} /><div><strong>Outside signals stay honest here</strong><p>{market.data.message}</p></div></div>
+                : (market.data?.trends ?? []).map((trend) => <TrendRow key={trend.id} trend={trend} storeId={storeId ?? ''} onChanged={() => market.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
       </div>
     </section>
   )
@@ -1606,7 +1785,7 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
       )}
 
       {list.status === 'loading' && <InsightsSkeleton rows={3} />}
-      {list.status === 'ready' && (list.data?.length ?? 0) === 0 && !props.createMode && null}
+      {list.status === 'error' && <InsightsErrorPanel message={list.message ?? 'Comparisons failed to load.'} onRetry={list.reload} />}
       <div className="pa-comparison-list">
         {(list.data ?? []).map((comparison) => (
           <button key={comparison.id} className="pa-comparison-row" onClick={() => go('comparisons', comparison.id)}>
@@ -1736,6 +1915,7 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
       {activeTag && <div className="pa-banner info"><Network size={13} /> Filtering by tag “{activeTag}”. <button className="text-button" onClick={() => setActiveTag(null)}>Clear</button></div>}
 
       {list.status === 'loading' && <InsightsSkeleton rows={4} />}
+      {list.status === 'error' && <InsightsErrorPanel message={list.message ?? 'The knowledge base failed to load.'} onRetry={list.reload} />}
       {list.status === 'ready' && items.length === 0 && (
         <InsightsEmptyState icon={Library} title={searchResults ? 'Nothing matches that search' : 'The knowledge base is empty'} body={searchResults ? 'Try different words — the index searches titles, bodies, and tags.' : 'Insights, lessons, and your own notes accumulate here into a searchable company brain. Add your first note to start.'} />
       )}
@@ -1806,6 +1986,7 @@ function TimelineTab({ storeId, overview, plan, go, onNavigateBilling }: TabProp
       </div>
 
       {timeline.status === 'loading' && <InsightsSkeleton rows={5} />}
+      {timeline.status === 'error' && <InsightsErrorPanel message={timeline.message ?? 'The PatternAI timeline failed to load.'} onRetry={timeline.reload} />}
       {timeline.status === 'ready' && events.length === 0 && <InsightsEmptyState icon={History} title="The timeline is waiting for its first entry" body="Every discovery, lesson, pattern, persona, investigation, trend, comparison, and prediction lands here as it happens. Run a discovery sweep to begin." />}
       {events.length > 0 && <InsightsTimelineStrip events={events.map((event) => ({ id: event.id, at: event.eventAt, label: `${TIMELINE_TYPE_LABELS[event.entityType]}: ${event.description}`, tone: event.entityType.toLowerCase() }))} onSelect={(id) => { const event = events.find((entry) => entry.id === id); if (event) go(tabForTimelineEntity(event.entityType), event.entityId) }} />}
       <ol className="pa-timeline">
@@ -1869,6 +2050,7 @@ function PredictionsTab({ storeId, overview, plan, onToast, onNavigateBilling }:
 
       {readiness && !readiness.canPredict && <div className="pa-banner info"><Clock3 size={13} /> Forecasting needs {readiness.predictRequirement.need} days of revenue history — you have {readiness.predictRequirement.have}. The model gets more honest every day you sync.</div>}
       {predictions.status === 'loading' && <InsightsSkeleton rows={3} />}
+      {predictions.status === 'error' && <InsightsErrorPanel message={predictions.message ?? 'Predictions failed to load.'} onRetry={predictions.reload} />}
       {predictions.status === 'ready' && items.length === 0 && <InsightsEmptyState icon={Sparkles} title="No forecasts yet" body="Refresh forecasts and the engine projects revenue, orders, and stockouts from your real trend lines — every prediction ships with a confidence interval and an accuracy score once reality votes." />}
       <div className="pa-prediction-grid">
         {items.map((prediction) => <PredictionCard key={prediction.id} prediction={prediction} storeId={storeId} onChanged={() => predictions.reload()} onToast={onToast} />)}
@@ -1918,7 +2100,8 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
   }
 
   if (!storeId) return <InsightsEmptyState icon={Settings2} title="Connect your store first" body="Preferences shape how PatternAI studies your data." />
-  if (preferences.status === 'loading' || !preferences.data) return <InsightsSkeleton rows={4} />
+  if (preferences.status === 'loading') return <InsightsSkeleton rows={4} />
+  if (preferences.status === 'error' || !preferences.data) return <InsightsErrorPanel message={preferences.message ?? 'PatternAI settings failed to load.'} onRetry={preferences.reload} />
   const prefs = preferences.data
   const autoDiscoveryPlanLocked = overview ? !overview.features.autoDiscovery : plan === 'trial'
 

@@ -5,6 +5,7 @@ import type { OrdersMetric, ProductSalesMetric, RevenueMetric } from '@profitpil
 import { Logger } from '@profitpilot/logger'
 import { insightsHubEnvConfig, shiftDay } from '@profitpilot/ai'
 import type { PlanTier, StoreId } from '@profitpilot/types'
+import type { BillingState } from '@profitpilot/billing'
 import type { StoreSnapshot } from '@profitpilot/ai'
 import { createApi } from './app.js'
 import { InMemoryInsightsHubRepository, InsightsHubService, InsightsRateLimiter } from './insights-hub.js'
@@ -62,7 +63,7 @@ function snapshotFixture(): StoreSnapshot {
 
 type Harness = Readonly<{ base: string; repository: InMemoryInsightsHubRepository }>
 
-async function withServer<T>(plan: PlanTier, handler: (harness: Harness) => Promise<T>, options: Readonly<{ rateLimit?: number; env?: Readonly<Record<string, string | undefined>> }> = {}): Promise<T> {
+async function withServer<T>(plan: PlanTier, handler: (harness: Harness) => Promise<T>, options: Readonly<{ rateLimit?: number; env?: Readonly<Record<string, string | undefined>>; billingState?: BillingState | null }> = {}): Promise<T> {
   const analytics = new InMemoryAnalyticsRepository()
   seedAnalytics(analytics)
   const repository = new InMemoryInsightsHubRepository()
@@ -71,7 +72,7 @@ async function withServer<T>(plan: PlanTier, handler: (harness: Harness) => Prom
     dataset: { snapshot: async () => snapshotFixture(), analytics, orders: null },
     repository,
     plan: async () => plan,
-    billingState: async () => null,
+    billingState: async () => options.billingState ?? null,
     narrator: null,
     env,
   })
@@ -155,6 +156,15 @@ describe('Insights Hub — discoveries', () => {
     expect(body.error?.details.cta).toBe('Upgrade Plan')
     expect(body.error?.message).not.toContain('Upgrade to')
   }))
+
+  it('uses the generic Upgrade Plan CTA when the subscription is inactive', async () => withServer('growth', async ({ base }) => {
+    const { status, body } = await postJson(base, '/insights/discoveries/generate', { storeId: STORE })
+    expect(status).toBe(402)
+    expect(body.error?.details.reason).toBe('SUBSCRIPTION_REQUIRED')
+    expect(body.error?.details.cta).toBe('Upgrade Plan')
+    expect(body.error?.message).toContain('Upgrade Plan')
+    expect(body.error?.message).not.toMatch(/Upgrade (Subscription|to)/)
+  }, { billingState: 'PAST_DUE' }))
 
   it('generates real discoveries from synced data on paid plans', async () => withServer('growth', async ({ base }) => {
     const created = await postJson(base, '/insights/discoveries/generate', { storeId: STORE })

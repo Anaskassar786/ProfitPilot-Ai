@@ -1102,7 +1102,7 @@ export class InsightsHubService {
     if (!this.deps.billingState) return
     const state = await this.deps.billingState(storeId)
     if (state === 'PAST_DUE' || state === 'SUSPENDED' || state === 'CANCELLED' || state === 'PENDING_CONFIRMATION') {
-      throw new AppError('PAYMENT_REQUIRED', 'Your trial or subscription is not active. Upgrade Subscription to continue using PatternAI.', 402, { reason: 'SUBSCRIPTION_REQUIRED', cta: 'Upgrade Subscription', upgradePath: '/billing' })
+      throw new AppError('PAYMENT_REQUIRED', 'Your trial or subscription is not active. Upgrade Plan to continue using PatternAI.', 402, { reason: 'SUBSCRIPTION_REQUIRED', cta: 'Upgrade Plan', upgradePath: '/billing' })
     }
   }
 

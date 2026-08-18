@@ -39,12 +39,12 @@ const FEATURES_GROWTH = { discoveries: true, lessons: true, patterns: true, pers
 const FEATURES_TRIAL = { discoveries: false, lessons: false, patterns: false, personas: false, investigations: false, trends: true, comparisons: false, knowledge: false, timeline: true, predictions: false, autoDiscovery: false, export: false, share: false, apiAccess: false, externalTrends: false, anomalyAlerts: false }
 const REQUIRED_PLANS = { discoveries: 'start', lessons: 'start', patterns: 'start', personas: 'start', investigations: 'start', trends: 'trial', comparisons: 'start', knowledge: 'start', timeline: 'trial', predictions: 'start', autoDiscovery: 'start', export: 'growth', share: 'growth', apiAccess: 'commander', externalTrends: 'start', anomalyAlerts: 'growth' }
 
-const overview = (plan: 'trial' | 'growth') => ({
+const overview = (plan: 'trial' | 'growth' | 'commander') => ({
   plan,
-  features: plan === 'growth' ? FEATURES_GROWTH : FEATURES_TRIAL,
+  features: plan === 'trial' ? FEATURES_TRIAL : { ...FEATURES_GROWTH, apiAccess: plan === 'commander' },
   requiredPlans: REQUIRED_PLANS,
-  usage: plan === 'growth' ? { discoveries: { used: 7, limit: 20, remaining: 13 }, investigations: { used: 1, limit: 10, remaining: 9 } } : { discoveries: { used: 0, limit: 1, remaining: 1 }, investigations: { used: 0, limit: 0, remaining: 0 } },
-  counts: plan === 'growth'
+  usage: plan === 'trial' ? { discoveries: { used: 0, limit: 1, remaining: 1 }, investigations: { used: 0, limit: 0, remaining: 0 } } : { discoveries: { used: 7, limit: plan === 'commander' ? null : 20, remaining: plan === 'commander' ? null : 13 }, investigations: { used: 1, limit: plan === 'commander' ? null : 10, remaining: plan === 'commander' ? null : 9 } },
+  counts: plan !== 'trial'
     ? { newDiscoveries: 3, totalDiscoveries: 4, patterns: 2, lessons: 2, lessonsRead: 1, personas: 2, investigations: 1, trends: 2, predictions: 1, comparisons: 0, knowledge: 1 }
     : { newDiscoveries: 1, totalDiscoveries: 1, patterns: 0, lessons: 1, lessonsRead: 0, personas: 0, investigations: 0, trends: 0, predictions: 0, comparisons: 0, knowledge: 0 },
   readiness: READINESS,
@@ -77,8 +77,10 @@ const TRENDS = [{ id: 't1', storeId: 'fn-test', trendType: 'BUSINESS', category:
 const PREDICTIONS = [{ id: 'pr1', storeId: 'fn-test', predictionType: 'REVENUE', horizon: '7_DAYS', title: 'Revenue for the next 7 days', description: 'Weekday-seasonal blend.', predictedValue: 5210, predictedLow: 4300, predictedHigh: 6100, currency: 'USD', confidenceScore: 0.71, method: 'weekday-seasonal', series: [{ day: '2026-08-19', value: 700, lower: 560, upper: 860 }, { day: '2026-08-20', value: 740, lower: 590, upper: 900 }], basedOn: ['96 days'], predictedFor: '2026-08-25', actualValue: null, accuracyScore: null, createdAt: '2026-08-18T00:00:00.000Z' }]
 const KNOWLEDGE = [{ id: 'k1', storeId: 'fn-test', entryType: 'NOTE', title: 'Weekend playbook', contentMarkdown: 'Notes', tags: ['weekend'], linkedInsights: [], author: 'MERCHANT', createdAt: '2026-08-10T00:00:00.000Z', updatedAt: '2026-08-10T00:00:00.000Z', referenceCount: 1 }]
 const TIMELINE = [{ id: 'ev1', storeId: 'fn-test', eventType: 'DISCOVERY_CREATED', entityType: 'DISCOVERY', entityId: 'disc_rise', description: 'Discovery recorded', eventAt: '2026-08-18T09:00:00.000Z' }]
+const COMPARISON = { id: 'c1', storeId: 'fn-test', comparisonType: 'PERIOD', title: 'Last 30 days vs prior 30 days', subjectA: { label: 'Last 30 days' }, subjectB: { label: 'Prior 30 days' }, metrics: [{ metric: 'revenue', a: 5200, b: 4550, delta: 14, winner: 'A' }], winner: 'A', insights: ['Revenue increased from the measured prior period.'], createdAt: '2026-08-18T00:00:00.000Z' }
+const API_STATUS = { plan: 'commander', enabled: true, maskedKey: null, rateLimitPerHour: 100, usage: { requestsThisHour: 0, requestsToday: 0 }, recent: [] }
 
-let currentPlan: 'trial' | 'growth' = 'growth'
+let currentPlan: 'trial' | 'growth' | 'commander' = 'growth'
 let feedDiscoveries: unknown[] = [RISING, REVIEWED, ACTED]
 
 function mockBackend(): void {
@@ -112,14 +114,23 @@ function mockBackend(): void {
     if (url.includes('/lessons')) return ok({ items: LESSONS })
     if (url.includes('/patterns')) return ok({ plan: currentPlan, viewOnly: false, patterns: PATTERNS })
     if (url.includes('/personas')) return ok({ plan: currentPlan, personas: PERSONAS, readiness: READINESS })
+    if (url.includes('/investigations') && init?.method === 'POST') return ok(INVESTIGATIONS[0])
+    if (/\/investigations\/i1/.test(url)) return ok(INVESTIGATIONS[0])
     if (url.includes('/investigations')) return ok({ items: INVESTIGATIONS })
+    if (url.includes('/trends/market')) return ok({ available: false, message: 'No verified benchmark feed is connected.', trends: [] })
     if (url.includes('/trends')) return ok({ plan: currentPlan, freshness: 'DAILY', trends: TRENDS })
+    if (url.includes('/comparisons') && init?.method === 'POST') return ok(COMPARISON)
+    if (/\/comparisons\/c1/.test(url)) return ok(COMPARISON)
     if (url.includes('/comparisons')) return ok({ items: [] })
+    if (url.includes('/knowledge') && init?.method === 'POST') return ok(KNOWLEDGE[0])
     if (url.includes('/knowledge')) return ok({ items: KNOWLEDGE })
     if (url.includes('/timeline')) return ok({ plan: currentPlan, windowDays: 30, events: TIMELINE })
+    if (url.includes('/predictions/generate')) return ok({ generated: 1, predictions: PREDICTIONS })
     if (url.includes('/predictions')) return ok({ plan: currentPlan, horizons: ['7_DAYS'], predictions: PREDICTIONS, readiness: READINESS })
     if (url.includes('/preferences')) return ok(overview(currentPlan).preferences)
-    if (url.includes('/api-access')) return ok({ plan: currentPlan, enabled: false, maskedKey: null, rateLimitPerHour: null, usage: { requestsThisHour: 0, requestsToday: 0 }, recent: [] })
+    if (url.includes('/api-access/generate-key')) return ok({ apiKey: 'ihk_test_once', maskedKey: 'ihk_••••once', createdAt: '2026-08-18T00:00:00.000Z' })
+    if (url.includes('/api-access/documentation')) return ok({ specUrl: '/public-api/insights/openapi.json', authentication: 'Bearer', rateLimit: { perHour: 100, perDay: 1000 }, endpoints: ['/discoveries'] })
+    if (url.includes('/api-access')) return ok(currentPlan === 'commander' ? API_STATUS : { plan: currentPlan, enabled: false, maskedKey: null, rateLimitPerHour: null, usage: { requestsThisHour: 0, requestsToday: 0 }, recent: [] })
     return json(404, { ok: false, error: { code: 'NOT_FOUND', message: 'Not mocked', details: {} } })
   }))
 }
@@ -177,6 +188,18 @@ async function click(element: Element | null | undefined): Promise<void> {
   await settle()
 }
 
+async function change(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null | undefined, value: string): Promise<void> {
+  expect(element, 'field to change exists').toBeTruthy()
+  await act(async () => {
+    const field = element!
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), 'value')?.set
+    setter?.call(field, value)
+    field.dispatchEvent(new Event('change', { bubbles: true }))
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await settle()
+}
+
 const text = (): string => document.body.textContent ?? ''
 const navItem = (label: string): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>('.pa-nav-item')].find((item) => (item.textContent ?? '').includes(label))
 const buttonWith = (label: string): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>('button')].find((item) => (item.textContent ?? '').includes(label))
@@ -208,6 +231,20 @@ describe('PatternAI header', () => {
     expect(ring).not.toBeNull()
     expect(ring?.textContent).toContain('of 20 limit')
     expect(ring?.textContent).toContain('13 discoveries left this month')
+    expect(ring?.textContent).toContain('Daily auto-discovery')
+    expect(ring?.textContent).toContain('Evidence threshold enforced')
+  })
+
+  it('fills the hero with a real data-quality snapshot', async () => {
+    await mount()
+    const snapshot = document.querySelector('.pa-snapshot')
+    expect(snapshot).not.toBeNull()
+    expect(snapshot?.textContent).toContain('Your discovery snapshot')
+    expect(snapshot?.textContent).toContain('96')
+    expect(snapshot?.textContent).toContain('412')
+    expect(snapshot?.textContent).toContain('188')
+    expect(snapshot?.textContent).toContain('24')
+    expect(snapshot?.textContent).toContain('Ready to discover')
   })
 
   it('opens the plan panel and the settings tab from the header', async () => {
@@ -248,6 +285,26 @@ describe('discovery feed', () => {
     expect(select?.value).toBe('ACTED_ON')
   })
 
+  it('explains the workflow and makes zero conversion actionable', async () => {
+    feedDiscoveries = [RISING]
+    await mount()
+    const pipeline = document.querySelector('.pa-funnel-card')
+    expect(pipeline?.textContent).toContain('Conversion 0%')
+    expect(pipeline?.textContent).toContain('How the workflow works')
+    expect(pipeline?.textContent).toContain('Close the loop')
+    await click(buttonWith('Take action on a discovery'))
+    expect(document.querySelector<HTMLSelectElement>('select[aria-label="Filter by status"]')?.value).toBe('NEW')
+  })
+
+  it('filters from a category card without changing the all-data denominator', async () => {
+    await mount()
+    const product = [...document.querySelectorAll<HTMLElement>('.pa-category-signal')].find((card) => (card.textContent ?? '').includes('Products'))
+    await click(product)
+    expect(document.querySelector<HTMLSelectElement>('select[aria-label="Filter by category"]')?.value).toBe('PRODUCTS')
+    expect(document.querySelectorAll('.pa-category-signal')).toHaveLength(6)
+    expect(product?.textContent).toContain('33%')
+  })
+
   it('filters by status and category through the toolbar selects', async () => {
     await mount()
     const status = document.querySelector<HTMLSelectElement>('select[aria-label="Filter by status"]')!
@@ -268,14 +325,18 @@ describe('discovery feed', () => {
     expect(document.querySelector<HTMLSelectElement>('select[aria-label="Filter by status"]')?.value).toBe('ALL')
   })
 
-  it('shows the impact treemap and the pattern strength ladder', async () => {
+  it('shows the category signal breakdown and the pattern confidence ladder', async () => {
     await mount()
     expect(text()).toContain('WHAT PATTERNAI HAS FOUND')
-    expect(document.querySelector('.pa-treemap')).not.toBeNull()
+    const categories = [...document.querySelectorAll('.pa-category-signal')]
+    expect(categories).toHaveLength(6)
+    expect(categories.find((card) => (card.textContent ?? '').includes('Products'))?.textContent).toContain('1 signal')
+    expect(categories.find((card) => (card.textContent ?? '').includes('Operations'))?.textContent).toContain('0 signals')
+    expect(document.querySelector('.pa-impact-card .pa-treemap')).toBeNull()
     expect(text()).toContain('Most active category')
     expect(text()).toContain('PATTERN CONFIDENCE')
     expect(document.querySelectorAll('.pa-strength-row').length).toBe(5)
-    expect(text()).toContain('412 of 10 orders'.replace('412 of 10', '412 of 10')) // real counts, capped bar
+    expect(text()).toContain('412 of 10 orders')
   })
 
   it('renders a human discovery card with momentum and no product id', async () => {
@@ -304,6 +365,15 @@ describe('discovery feed', () => {
     await click(buttonWith('Explore'))
     expect(text()).toContain('Back to discoveries')
     expect(text()).toContain('The evidence')
+  })
+
+  it('fills the space after discovery cards with a confidence-reading guide', async () => {
+    await mount()
+    const guide = document.querySelector('.pa-reading-guide')
+    expect(guide?.textContent).toContain('Read any discovery in three passes')
+    expect(guide?.textContent).toContain('Evidence')
+    expect(guide?.textContent).toContain('Confidence')
+    expect(guide?.textContent).toContain('Impact')
   })
 
   it('renders the six Keep exploring cards, each with its own mini chart', async () => {
@@ -355,6 +425,64 @@ describe('every sub-page opens', () => {
   })
 })
 
+/* ── Sub-page feature interactions ────────────────────────────────────── */
+
+describe('sub-page feature interactions', () => {
+  it('asks a Why? question and renders the measured root-cause result', async () => {
+    await mount()
+    await click(navItem('Why? explorer'))
+    await change(document.querySelector<HTMLInputElement>('input[aria-label="Ask a why question"]'), 'Why did revenue drop last week?')
+    await click(buttonWith('Investigate'))
+    expect(calls.some((call) => call === 'POST /insights/investigations')).toBe(true)
+    expect(text()).toContain('Root causes, ranked by measured impact')
+    expect(text()).toContain('Fewer repeat orders')
+  })
+
+  it('runs the comparison builder, saves a knowledge note, filters the timeline, and refreshes forecasts', async () => {
+    await mount()
+
+    await click(navItem('Comparisons'))
+    const type = document.querySelector<HTMLSelectElement>('.pa-builder-grid select')
+    await change(type, 'PERIOD')
+    const subjects = [...document.querySelectorAll<HTMLInputElement>('.pa-builder-grid input')]
+    await change(subjects[0], '2026-07-01')
+    await change(subjects[1], '2026-06-01')
+    await click(buttonWith('Run comparison'))
+    expect(calls.some((call) => call === 'POST /insights/comparisons')).toBe(true)
+    expect(text()).toContain('Last 30 days vs prior 30 days')
+
+    await click(navItem('Knowledge base'))
+    await click(buttonWith('Add note'))
+    await change(document.querySelector<HTMLInputElement>('.pa-editor input[placeholder="What did we learn?"]'), 'Snowboard demand notes')
+    await change(document.querySelector<HTMLTextAreaElement>('.pa-editor textarea'), 'Measured demand pattern to revisit after the next sync.')
+    await click(buttonWith('Save note'))
+    expect(calls.some((call) => call === 'POST /insights/knowledge')).toBe(true)
+
+    await click(navItem('Timeline'))
+    await change(document.querySelector<HTMLSelectElement>('select[aria-label="Filter timeline by type"]'), 'DISCOVERY')
+    expect(calls.some((call) => call.includes('/insights/timeline/filter'))).toBe(true)
+
+    await click(navItem('Predictions'))
+    await click(buttonWith('Refresh forecasts'))
+    expect(calls.some((call) => call === 'POST /insights/predictions/generate')).toBe(true)
+    expect(toasts.join(' ')).toContain('Forecast updated')
+  })
+
+  it('saves settings and generates a one-time API key on Commander', async () => {
+    currentPlan = 'commander'
+    await mount()
+    await click(navItem('Settings'))
+    await click(document.querySelector<HTMLElement>('.pa-toggle[role="switch"]'))
+    expect(calls.some((call) => call === 'PATCH /insights/preferences')).toBe(true)
+
+    await click(navItem('API access'))
+    expect(text()).toContain('Programmatic access')
+    await click(buttonWith('Generate API key'))
+    expect(calls.some((call) => call === 'POST /insights/api-access/generate-key')).toBe(true)
+    expect(text()).toContain('ihk_test_once')
+  })
+})
+
 /* ── Plan gating ───────────────────────────────────────────────────────── */
 
 describe('plan gating on a trial store', () => {
@@ -366,6 +494,36 @@ describe('plan gating on a trial store', () => {
     expect(text()).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
     expect(document.querySelectorAll('.pa-nav-item.locked').length).toBeGreaterThan(3)
     expect(navItem('Customer personas')?.getAttribute('title')).toContain('Upgrade Plan')
+  })
+
+  it('opens every locked sub-page as an aspirational preview with a billing CTA', async () => {
+    currentPlan = 'trial'
+    await mount()
+    const lockedPages = [
+      { label: 'Customer personas', feature: 'personas' },
+      { label: 'Why? explorer', feature: 'investigations' },
+      { label: 'Comparisons', feature: 'comparisons' },
+      { label: 'Knowledge base', feature: 'knowledge' },
+      { label: 'Predictions', feature: 'predictions' },
+      { label: 'API access', feature: 'apiAccess' },
+    ] as const
+    for (const page of lockedPages) {
+      await click(navItem(page.label))
+      const panel = document.querySelector<HTMLElement>(`.pa-locked[data-feature="${page.feature}"]`)
+      expect(panel, `${page.label} locked panel`).not.toBeNull()
+      expect(panel?.querySelector('.pa-locked-icon')).not.toBeNull()
+      expect(panel?.textContent).toContain('What you’ll be able to explore')
+      expect(panel?.textContent).toContain('Preview only — no sample metrics or invented store results')
+      const cta = [...(panel?.querySelectorAll<HTMLElement>('button') ?? [])].find((button) => (button.textContent ?? '').trim().startsWith('Upgrade Plan'))
+      await click(cta)
+    }
+    await click(navItem('Trend watcher'))
+    const marketLock = document.querySelector<HTMLElement>('.pa-locked[data-feature="externalTrends"]')
+    expect(marketLock?.textContent).toContain('Verified benchmark sources only')
+    await click([...marketLock!.querySelectorAll<HTMLElement>('button')].find((button) => (button.textContent ?? '').includes('Upgrade Plan')))
+    expect(billingClicks).toBe(lockedPages.length + 1)
+    expect(text()).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
+    expect(consoleErrors).toEqual([])
   })
 
   it('routes the locked export button to billing instead of downloading', async () => {
