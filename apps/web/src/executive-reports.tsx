@@ -24,7 +24,7 @@ import type { ExecutivePageProps } from './executive-shared.js'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
-export function ExecutiveReportsPage({ context, plan, onToast, onUpgrade, initialReportId }: ExecutivePageProps & { initialReportId?: string | null }) {
+export function ExecutiveReportsPage({ context, plan, gates, onToast, onUpgrade, initialReportId, autoGenerate = false }: ExecutivePageProps & { initialReportId?: string | null; autoGenerate?: boolean }) {
   const storeId = context.storeId
   const [reports, setReports] = useState<readonly ExecutiveReport[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -35,6 +35,7 @@ export function ExecutiveReportsPage({ context, plan, onToast, onUpgrade, initia
   const [pdfJobId, setPdfJobId] = useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
   const pollTimer = useRef<number | null>(null)
+  const autoGenerateStarted = useRef(false)
 
   const load = async () => {
     if (!storeId) return
@@ -74,6 +75,13 @@ export function ExecutiveReportsPage({ context, plan, onToast, onUpgrade, initia
       setSelectedId(report.id)
     } catch (err: unknown) { onToast(errorMessageFrom(err), 'error') } finally { setGenerating(false) }
   }
+
+  useEffect(() => {
+    if (!autoGenerate || autoGenerateStarted.current || loadState !== 'ready' || !storeId) return
+    if (gates.reports && !gates.reports.allowed) return
+    autoGenerateStarted.current = true
+    void generate()
+  }, [autoGenerate, loadState, storeId, gates.reports])
 
   const downloadPdf = async () => {
     if (!storeId || !selected) return

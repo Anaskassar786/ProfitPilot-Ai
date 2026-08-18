@@ -8,7 +8,7 @@
  * (risk) maps, bullet (goal vs actual) charts, and heatmaps. No line and no
  * donut charts.
  */
-import { useId, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Radial health gauge
@@ -331,15 +331,74 @@ export type TrajectoryChartData = Readonly<{
   band: readonly Readonly<{ day: string; low: number; high: number }>[]
 }>
 
+export type TrajectoryHoverKind = 'Real' | 'Projected'
+
+export type TrajectoryHoverPoint = Readonly<{
+  index: number
+  x: number
+  y: number
+  day: string
+  value: number
+  kind: TrajectoryHoverKind
+}>
+
+export const TRAJECTORY_CHART_WIDTH = 760
+
+/** Formats a YYYY-MM-DD chart day without timezone shifts. */
+export function formatTrajectoryDay(day: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(day)
+  if (!match) return day
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[Number(match[2]) - 1]} ${Number(match[3])}, ${match[1]}`
+}
+
+/**
+ * Builds the hoverable plot points for the trajectory chart. Historical days
+ * are labeled Real; the 30-day trend extension is labeled Projected.
+ */
+export function buildTrajectoryHoverPoints(data: TrajectoryChartData, height = 200, padX = 10, padTop = 16, padBottom = 22, width = TRAJECTORY_CHART_WIDTH): readonly TrajectoryHoverPoint[] {
+  const all = [...data.historical, ...data.projected]
+  if (all.length < 2) return []
+  const max = Math.max(...all.map((point) => point.value), ...data.band.map((point) => point.high), 1)
+  const step = (width - padX * 2) / (all.length - 1)
+  const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / max) * (height - padTop - padBottom)
+  return all.map((point, index) => ({
+    index,
+    x: padX + index * step,
+    y: yAt(point.value),
+    day: point.day,
+    value: point.value,
+    kind: index < data.historical.length ? 'Real' : 'Projected',
+  }))
+}
+
+/** Maps a viewBox X coordinate to the nearest real or projected day. */
+export function nearestTrajectoryPoint(points: readonly TrajectoryHoverPoint[], viewX: number): TrajectoryHoverPoint | null {
+  if (points.length === 0) return null
+  let best = points[0]!
+  let bestDist = Math.abs(best.x - viewX)
+  for (const point of points) {
+    const dist = Math.abs(point.x - viewX)
+    if (dist < bestDist) {
+      best = point
+      bestDist = dist
+    }
+  }
+  return best
+}
+
 /**
  * Renders REAL synced revenue as a solid area, the measured trend extension
  * as a dashed line, and the residual-based confidence band as a soft wash.
- * Reading colors exclusively from CSS tokens keeps both themes honest.
+ * Pointer/touch tracking shows a crosshair + tooltip (date, value, Real /
+ * Projected) so the chart is interactive in both themes.
  */
 export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, label }: { data: TrajectoryChartData; height?: number; formatValue?: (value: number) => string; label: string }) {
   const gradientId = useId()
   const bandId = useId()
-  const width = 760
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const [hover, setHover] = useState<TrajectoryHoverPoint | null>(null)
+  const width = TRAJECTORY_CHART_WIDTH
   const padX = 10
   const padTop = 16
   const padBottom = 22
@@ -347,6 +406,18 @@ export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, labe
   const highs = data.band.map((point) => point.high)
   const max = Math.max(...all.map((point) => point.value), ...highs, 1)
   const n = all.length
+  const hoverPoints = useMemo(() => buildTrajectoryHoverPoints(data, height, padX, padTop, padBottom, width), [data, height])
+  const pointFromClient = useCallback((clientX: number): TrajectoryHoverPoint | null => {
+    const svg = svgRef.current
+    if (!svg) return nearestTrajectoryPoint(hoverPoints, clientX)
+    const rect = svg.getBoundingClientRect()
+    if (rect.width <= 0) return nearestTrajectoryPoint(hoverPoints, 0)
+    const viewX = ((clientX - rect.left) / rect.width) * width
+    return nearestTrajectoryPoint(hoverPoints, viewX)
+  }, [hoverPoints, width])
+  const onPointer = useCallback((event: { clientX: number }) => {
+    setHover(pointFromClient(event.clientX))
+  }, [pointFromClient])
   if (n < 2) return null
   const step = (width - padX * 2) / (n - 1)
   const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / max) * (height - padTop - padBottom)
@@ -361,9 +432,10 @@ export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, labe
   const bandBottom = data.band.map((point, index) => `${xAt(histCount + index).toFixed(1)},${yAt(point.low).toFixed(1)}`).reverse()
   const todayX = xAt(histCount - 1)
   const lastProjected = data.projected.at(-1)
+
   return (
     <div className="exec-area-chart gq-trajectory" role="img" aria-label={label}>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
+      <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--exec-accent)" stopOpacity="0.3" />
@@ -386,7 +458,43 @@ export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, labe
         <line x1={todayX} x2={todayX} y1={padTop} y2={height - padBottom} className="gq-trajectory-today" />
         <circle cx={todayX} cy={yAt(data.historical.at(-1)!.value)} r={4} className="exec-area-dot" />
         {lastProjected ? <circle cx={xAt(n - 1)} cy={yAt(lastProjected.value)} r={4} className="gq-trajectory-end" /> : null}
+        {hover && (
+          <g className="gq-trajectory-hover" pointerEvents="none">
+            <line x1={hover.x} x2={hover.x} y1={padTop} y2={height - padBottom} className="exec-chart-cursor gq-trajectory-cursor" />
+            <circle cx={hover.x} cy={hover.y} r={6} className="gq-trajectory-active-ring" />
+            <circle cx={hover.x} cy={hover.y} r={4.2} className="gq-trajectory-active-dot" />
+          </g>
+        )}
+        <rect
+          className="gq-trajectory-hit"
+          data-testid="gq-trajectory-hit"
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="transparent"
+          onPointerMove={onPointer}
+          onPointerDown={onPointer}
+          onPointerLeave={() => setHover(null)}
+          onPointerCancel={() => setHover(null)}
+          onMouseMove={onPointer}
+          onMouseLeave={() => setHover(null)}
+          onMouseOut={() => setHover(null)}
+        />
       </svg>
+      {hover && (
+        <div
+          className="gq-trajectory-tooltip"
+          data-testid="gq-trajectory-tooltip"
+          data-kind={hover.kind}
+          role="status"
+          style={{ left: `${(hover.x / width) * 100}%` }}
+        >
+          <span className="gq-trajectory-tooltip-kind">{hover.kind}</span>
+          <strong>{formatValue ? formatValue(hover.value) : String(Math.round(hover.value))}</strong>
+          <em>{formatTrajectoryDay(hover.day)}</em>
+        </div>
+      )}
       <div className="exec-chart-legend">
         <span>{data.historical[0]?.day.slice(5) ?? ''}</span>
         <span className="gq-trajectory-legend-mid">{lastProjected && formatValue ? `Projected ${formatValue(lastProjected.value)} / day in 30d` : 'today'}</span>

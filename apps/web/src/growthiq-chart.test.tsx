@@ -1,0 +1,118 @@
+// @vitest-environment jsdom
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  buildTrajectoryHoverPoints,
+  ExecutiveTrajectoryChart,
+  formatTrajectoryDay,
+  nearestTrajectoryPoint,
+  type TrajectoryChartData,
+} from './executive-charts.js'
+import { projectTrajectory } from './growthiq-strategic.js'
+
+const series = Array.from({ length: 8 }, (_, index) => ({
+  day: `2026-08-${String(11 + index).padStart(2, '0')}`,
+  value: 100 + index * 10,
+}))
+
+function chartData(): TrajectoryChartData {
+  const projection = projectTrajectory(series)!
+  return { historical: projection.historical, projected: projection.projected, band: projection.band }
+}
+
+describe('GrowthIQ trajectory hover math', () => {
+  it('labels historical days Real and the 30-day extension Projected', () => {
+    const points = buildTrajectoryHoverPoints(chartData())
+    expect(points.length).toBe(38) // 8 real + 30 projected
+    expect(points.slice(0, 8).every((point) => point.kind === 'Real')).toBe(true)
+    expect(points.slice(8).every((point) => point.kind === 'Projected')).toBe(true)
+    expect(points[0]!.day).toBe('2026-08-11')
+    expect(points.at(-1)!.day).toBe('2026-09-17')
+  })
+
+  it('maps a viewBox X to the nearest day', () => {
+    const points = buildTrajectoryHoverPoints(chartData())
+    expect(nearestTrajectoryPoint([], 10)).toBeNull()
+    expect(nearestTrajectoryPoint(points, points[0]!.x)!.day).toBe('2026-08-11')
+    expect(nearestTrajectoryPoint(points, points[0]!.x)!.kind).toBe('Real')
+    const last = points.at(-1)!
+    expect(nearestTrajectoryPoint(points, last.x)!.kind).toBe('Projected')
+    const mid = (points[3]!.x + points[4]!.x) / 2
+    const nearest = nearestTrajectoryPoint(points, mid)!
+    expect(['2026-08-14', '2026-08-15']).toContain(nearest.day)
+  })
+
+  it('formats chart days without timezone drift', () => {
+    expect(formatTrajectoryDay('2026-08-18')).toBe('Aug 18, 2026')
+    expect(formatTrajectoryDay('not-a-date')).toBe('not-a-date')
+  })
+})
+
+describe('GrowthIQ trajectory chart interaction', () => {
+  let root: Root | null = null
+  let container: HTMLDivElement | null = null
+
+  function dispatchPointer(target: Element, type: string, clientX: number, clientY: number): void {
+    const EventCtor = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent
+    target.dispatchEvent(new EventCtor(type, { bubbles: true, clientX, clientY }))
+  }
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => { root!.unmount() })
+      root = null
+    }
+    container?.remove()
+    container = null
+  })
+
+  it('shows a Real/Projected tooltip, date, and value on pointer move', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const data = chartData()
+    await act(async () => {
+      root!.render(createElement(ExecutiveTrajectoryChart, {
+        data,
+        label: 'Revenue trajectory with 30-day trend projection',
+        formatValue: (value: number) => `$${Math.round(value)}`,
+      }))
+    })
+    const svg = container.querySelector('svg') as SVGSVGElement
+    const hit = container.querySelector('[data-testid="gq-trajectory-hit"]') as SVGRectElement
+    expect(hit).not.toBeNull()
+    expect(container.querySelector('[data-testid="gq-trajectory-tooltip"]')).toBeNull()
+
+    svg.getBoundingClientRect = () => ({
+      x: 0, y: 0, left: 0, top: 0, right: 760, bottom: 200, width: 760, height: 200, toJSON: () => ({}),
+    })
+
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    await act(async () => {
+      dispatchPointer(hit, 'pointermove', 12, 80)
+      hit.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 12, clientY: 80 }))
+    })
+    const tooltip = container.querySelector('[data-testid="gq-trajectory-tooltip"]') as HTMLElement
+    expect(tooltip).not.toBeNull()
+    expect(tooltip.getAttribute('data-kind')).toBe('Real')
+    expect(tooltip.textContent).toContain('Real')
+    expect(tooltip.textContent).toContain('Aug 11, 2026')
+    expect(tooltip.textContent).toMatch(/\$\d+/)
+    expect(container.querySelector('.gq-trajectory-cursor')).not.toBeNull()
+    expect(container.querySelector('.gq-trajectory-active-dot')).not.toBeNull()
+
+    await act(async () => {
+      dispatchPointer(hit, 'pointermove', 750, 80)
+    })
+    const projected = container.querySelector('[data-testid="gq-trajectory-tooltip"]') as HTMLElement
+    expect(projected.getAttribute('data-kind')).toBe('Projected')
+    expect(projected.textContent).toContain('Projected')
+
+    await act(async () => {
+      hit.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, clientX: 750, clientY: 80 }))
+    })
+    expect(container.querySelector('[data-testid="gq-trajectory-tooltip"]')).toBeNull()
+  })
+})

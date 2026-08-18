@@ -24,12 +24,13 @@ const ROADMAP_TYPES: readonly Readonly<{ type: RoadmapType; label: string; featu
   { type: 'YEARLY', label: 'Yearly', feature: 'roadmap_yearly' },
 ]
 
-export function ExecutiveRoadmapsPage({ context, plan, gates, onToast, onUpgrade }: ExecutivePageProps) {
+export function ExecutiveRoadmapsPage({ context, plan, gates, onToast, onUpgrade, autoCompose = false }: ExecutivePageProps & { autoCompose?: boolean }) {
   const storeId = context.storeId
   const [roadmaps, setRoadmaps] = useState<readonly ExecutiveRoadmap[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [formOpen, setFormOpen] = useState(false)
+  const [formOpen, setFormOpen] = useState(autoCompose)
+  useEffect(() => { if (autoCompose) setFormOpen(true) }, [autoCompose])
   const [roadmapType, setRoadmapType] = useState<RoadmapType>('30_DAY')
   const [goal, setGoal] = useState('')
   const [generating, setGenerating] = useState(false)

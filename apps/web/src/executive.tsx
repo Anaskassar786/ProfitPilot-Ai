@@ -220,7 +220,7 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
   } else if (!dashboard) {
     content = <GrowthIqWelcomeState />
   } else if (page === 'reports') {
-    content = <ExecutiveReportsPage {...pageProps} initialReportId={detailId} />
+    content = <ExecutiveReportsPage {...pageProps} initialReportId={detailId === 'generate' ? null : detailId} autoGenerate={detailId === 'generate'} />
   } else if (page === 'benchmarks') {
     content = <ExecutiveBenchmarksPage {...pageProps} />
   } else if (page === 'scenarios') {
@@ -230,11 +230,11 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
   } else if (page === 'opportunities') {
     content = <ExecutiveOpportunitiesPage {...pageProps} />
   } else if (page === 'decisions') {
-    content = <ExecutiveDecisionsPage {...pageProps} />
+    content = <ExecutiveDecisionsPage {...pageProps} autoCompose={detailId === 'new'} />
   } else if (page === 'risks') {
     content = <ExecutiveRisksPage {...pageProps} />
   } else if (page === 'roadmaps') {
-    content = <ExecutiveRoadmapsPage {...pageProps} />
+    content = <ExecutiveRoadmapsPage {...pageProps} autoCompose={detailId === 'new'} />
   } else if (page === 'settings') {
     content = <ExecutiveSettingsPage {...pageProps} />
   } else {
@@ -259,7 +259,7 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
         <GrowthIqHeader plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
         <GrowthIqBaselineState
           readiness={{ hasStoreInfo: true, ordersSynced, daysSynced, minOrders: BASELINE_MIN_ORDERS, minDays: BASELINE_MIN_DAYS }}
-          onLogDecision={() => navigate('/decisions')}
+          onLogDecision={() => navigate('/decisions/new')}
           onViewSample={() => navigate('/reports')}
           onSync={onSync ? () => onSync('orders') : undefined}
         />
@@ -290,14 +290,14 @@ function GrowthIqHeader({ plan, onNavigate, onUpgrade }: { plan: PlanTier; onNav
         <div className="gq-header-copy">
           <div className="gq-header-title">
             <h2>GrowthIQ</h2>
-            <span className="exec-pill gold"><i />AI Growth Command</span>
+            <span className="exec-pill gold gq-command-badge"><i />AI Growth Command</span>
           </div>
           <p className="gq-tagline">Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports computed from your real store data.</p>
         </div>
       </div>
       <div className="exec-page-actions">
         <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/settings`)}><Settings size={14} /> Settings</button>
-        <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports`)}><FileBarChart size={14} /> Generate Report</button>
+        <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports/generate`)}><FileBarChart size={14} /> Generate Report</button>
         <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
       </div>
     </div>

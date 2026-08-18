@@ -68,9 +68,9 @@
   --exec-body: #475569;
   --exec-muted: #64748B;
   --exec-faint: #94A3B8;
-  --exec-grid: rgba(15, 23, 42, .07);
-  --exec-shadow: 0 1px 3px rgba(15, 23, 42, .05), 0 1px 2px rgba(15, 23, 42, .04);
-  --exec-shadow-lift: 0 2px 6px rgba(15, 23, 42, .06), 0 12px 28px -14px rgba(124, 58, 237, .22);
+  --exec-grid: #F1F5F9;
+  --exec-shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 1px 2px rgba(15, 23, 42, .05);
+  --exec-shadow-lift: 0 4px 12px rgba(15, 23, 42, .08), 0 14px 28px -14px rgba(124, 58, 237, .22);
 }
 
 /* ─── GrowthIQ brand ──────────────────────────────────────────────────────── */
@@ -596,7 +596,7 @@
 .gq-plan-head-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .gq-plan-toggle { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .gq-plan-details { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms ease; }
-.gq-plan-details.open { grid-template-rows: 1fr; }
+.gq-plan-details.plan-details.open { grid-template-rows: 1fr; }
 .gq-plan-details-inner {
   overflow: hidden;
   display: grid;
@@ -912,6 +912,56 @@
 .gq-trajectory-today { stroke: var(--exec-muted); stroke-width: 1; stroke-dasharray: 3 4; opacity: .65; }
 .gq-trajectory-end { fill: var(--exec-purple-deep); stroke: var(--exec-surface); stroke-width: 1.5; }
 .gq-trajectory-legend-mid { color: var(--exec-purple); font-weight: 650; }
+.gq-trajectory { touch-action: none; }
+.gq-trajectory-hit { cursor: crosshair; touch-action: none; }
+.gq-trajectory-cursor { stroke: var(--exec-purple); stroke-dasharray: 3 4; opacity: .75; }
+.gq-trajectory-active-ring { fill: color-mix(in srgb, var(--exec-purple) 22%, transparent); }
+.gq-trajectory-active-dot { fill: var(--exec-purple); stroke: var(--exec-surface); stroke-width: 2; }
+.gq-trajectory-tooltip {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
+  min-width: 138px;
+  padding: 8px 11px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--exec-border);
+  background: var(--exec-surface);
+  box-shadow: var(--exec-shadow-lift);
+  pointer-events: none;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: gq-tooltip-in 140ms ease;
+}
+.gq-trajectory-tooltip-kind {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--exec-purple);
+  font-family: var(--exec-sans);
+}
+.gq-trajectory-tooltip strong {
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--exec-heading);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--exec-sans);
+}
+.gq-trajectory-tooltip em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--exec-muted);
+  font-family: var(--exec-sans);
+}
+@keyframes gq-tooltip-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gq-trajectory-tooltip { animation: none; }
+}
 .gq-trajectory-insight > p { margin: 12px 0 0; font-size: 13px; color: var(--exec-body); line-height: 1.6; font-family: var(--exec-sans); }
 .gq-direction { font-style: normal; font-weight: 700; }
 .gq-direction.growing { color: var(--exec-positive); }
@@ -1070,4 +1120,109 @@
   .app-shell .exec-section h3, .app-shell .exec-section p, .app-shell .exec-metric-value,
   .app-shell .exec-report-list-item .exec-report-date { color: #111 !important; }
   .app-shell .exec-report-viewer p, .app-shell .exec-report-numbered li { color: #222 !important; }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Light theme contrast pass — scoped exclusively to .app-shell.light-mode so
+   the dark theme (already excellent) is never restyled. Every surface below
+   gets an explicit white card, visible #E2E8F0 border, and readable ink.
+   ──────────────────────────────────────────────────────────────────────────── */
+.app-shell.light-mode .exec-page { background: transparent; }
+.app-shell.light-mode .gq-header {
+  background:
+    radial-gradient(900px 180px at 12% -40%, rgba(124, 58, 237, .08), transparent 60%),
+    #FFFFFF;
+  border-color: #E2E8F0;
+}
+.app-shell.light-mode .gq-header-title h2 { color: #0F172A; }
+.app-shell.light-mode .gq-tagline { color: #475569; }
+.app-shell.light-mode .gq-command-badge,
+.app-shell.light-mode .gq-header .exec-pill.gold {
+  color: #FFFFFF;
+  background: #7C3AED;
+}
+.app-shell.light-mode .gq-command-badge i,
+.app-shell.light-mode .gq-header .exec-pill.gold i { background: #FFFFFF; }
+.app-shell.light-mode .gq-header .button.primary {
+  background: #7C3AED;
+  border-color: #7C3AED;
+  box-shadow: 0 6px 16px -6px rgba(124, 58, 237, .48);
+}
+.app-shell.light-mode .gq-header .button.secondary {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  color: #334155;
+}
+.app-shell.light-mode .gq-welcome {
+  background:
+    radial-gradient(760px 240px at 50% -80%, rgba(124, 58, 237, .07), transparent 60%),
+    #FFFFFF;
+  border-color: #E2E8F0;
+}
+.app-shell.light-mode .gq-welcome h2 { color: #0F172A; }
+.app-shell.light-mode .gq-welcome > p { color: #475569; }
+.app-shell.light-mode .gq-baseline-row { color: #475569; }
+.app-shell.light-mode .gq-baseline-row strong { color: #0F172A; }
+.app-shell.light-mode .gq-progress small { color: #64748B; }
+.app-shell.light-mode .exec-kicker { color: #7C3AED; }
+.app-shell.light-mode .exec-section-head h3 { color: #0F172A; }
+.app-shell.light-mode .gq-section-note { color: #475569; }
+.app-shell.light-mode .exec-area-stroke { stroke: #7C3AED; }
+.app-shell.light-mode .gq-trajectory-projection { stroke: #A78BFA; }
+.app-shell.light-mode .exec-chart-label { fill: #64748B; }
+.app-shell.light-mode .exec-chart-legend { color: #64748B; }
+.app-shell.light-mode .gq-direction.declining { color: #DC2626; }
+.app-shell.light-mode .gq-figure,
+.app-shell.light-mode .gq-fact,
+.app-shell.light-mode .gq-impact-card,
+.app-shell.light-mode .gq-action-card,
+.app-shell.light-mode .gq-actions-wrap .gq-action-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+}
+.app-shell.light-mode .gq-figure strong,
+.app-shell.light-mode .gq-impact-top strong,
+.app-shell.light-mode .gq-action-card strong { color: #0F172A; }
+.app-shell.light-mode .gq-figure span,
+.app-shell.light-mode .gq-impact-card p,
+.app-shell.light-mode .gq-action-card > span:last-child,
+.app-shell.light-mode .gq-actions-intro p { color: #475569; }
+.app-shell.light-mode .gq-insights {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+}
+.app-shell.light-mode .gq-insights-head h3 { color: #0F172A; }
+.app-shell.light-mode .gq-stat-list dt,
+.app-shell.light-mode .gq-insights-block h4 { color: #64748B; }
+.app-shell.light-mode .gq-stat-list dd { color: #0F172A; }
+.app-shell.light-mode .gq-tip {
+  background: #F8FAFC;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.app-shell.light-mode .gq-tip p { color: #475569; }
+.app-shell.light-mode .gq-not-yet {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+.app-shell.light-mode .gq-milestone.complete .gq-milestone-row strong { color: #166534; }
+.app-shell.light-mode .gq-milestone.locked { opacity: 1; }
+.app-shell.light-mode .gq-milestone.locked .gq-milestone-row strong,
+.app-shell.light-mode .gq-milestone.locked .gq-milestone-marker { color: #94A3B8; }
+.app-shell.light-mode .gq-milestone-count { color: #64748B; }
+.app-shell.light-mode .gq-milestone-eta { color: #475569; }
+.app-shell.light-mode .exec-page .text-button { color: #7C3AED; }
+.app-shell.light-mode .exec-page .text-button:hover { color: #6D28D9; }
+.app-shell.light-mode .gq-trajectory-tooltip {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+}
+.app-shell.light-mode .gq-plan-badge { color: #0F172A; }
+.app-shell.light-mode .gq-welcome-item { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .gq-welcome-item strong { color: #0F172A; }
+.app-shell.light-mode .gq-actions-wrap .gq-actions-panel {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
 }
