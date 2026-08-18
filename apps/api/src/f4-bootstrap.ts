@@ -173,8 +173,12 @@ const ATTRIBUTION_WINDOW_MS = 7 * 24 * 3_600_000
  */
 export async function matchAttribution(database: F2Bootstrap['database'], storeId: StoreId): Promise<number> {
   const executed = await database.query<ExecutedRow>(
+    // ai_executions.id is `text` while ai_recommendations.id is `uuid`, so the
+    // join needs an explicit cast — without it PostgreSQL raises
+    // "operator does not exist: uuid = text" and the .catch() below silently
+    // swallowed it, permanently zeroing out ROI attribution.
     `SELECT e.id, r.entity_key, e.created_at AS executed_at FROM ai_executions e
-       JOIN ai_recommendations r ON r.id = e.id AND r.store_id = e.store_id
+       JOIN ai_recommendations r ON r.id::text = e.id AND r.store_id = e.store_id
      WHERE e.store_id = $1 AND r.entity_key IS NOT NULL AND e.action_type IN ('SEND_EMAIL', 'CREATE_DISCOUNT', 'TAG_CUSTOMER')`,
     [storeId],
   ).catch(() => ({ rows: [] as readonly ExecutedRow[] }))
