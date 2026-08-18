@@ -765,3 +765,46 @@
   .coach-card, .coach-priority-card, .coach-time-preset, .coach-chat-suggestions button { transition: none; }
   .spin, .coach-typing i, .coach-skeleton-card, .coach-skeleton-quick, .coach-chat-skeleton span, .coach-suggestion-card.loading { animation: none; }
 }
+
+/* ── UNIQUE VISUALIZATIONS ───────────────────────────────────────────── */
+.coach-progression-path { display: flex; align-items: flex-start; gap: 0; padding: 14px 8px; }
+.coach-path-node { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+.coach-path-dot { width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; font-size: 13px; font-weight: 700; border: 2px solid var(--c-border-strong); background: var(--c-card-2); color: var(--c-text-3); }
+.coach-path-node.done .coach-path-dot { background: var(--c-green); color: #fff; border-color: var(--c-green); }
+.coach-path-node.active .coach-path-dot { background: var(--c-purple); color: #fff; border-color: var(--c-purple); box-shadow: 0 0 0 4px var(--c-purple-soft); animation: coachPulse 1.6s ease-in-out infinite; }
+.coach-path-node small { font-size: 11px; color: var(--c-text-3); text-align: center; }
+.coach-path-line { position: absolute; top: 13px; left: 60%; right: -40%; height: 2px; background: var(--c-border-strong); }
+.coach-path-line.done { background: var(--c-green); }
+
+.coach-milestone-bars { display: flex; flex-direction: column; gap: 8px; min-width: 160px; }
+.coach-milestone-track { height: 12px; border-radius: 999px; background: var(--c-card-3); overflow: hidden; border: 1px solid var(--c-border); }
+.coach-milestone-track span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--c-purple), var(--c-orange)); transition: width 0.6s ease; }
+.coach-milestone-labels { display: flex; align-items: baseline; gap: 8px; }
+.coach-milestone-labels strong { font-size: 22px; font-weight: 800; color: var(--c-text); }
+.coach-milestone-labels span { font-size: 12px; color: var(--c-text-3); }
+
+.coach-confidence-meter { position: relative; width: 72px; height: 96px; border: 1px solid var(--c-border-strong); border-radius: 12px; overflow: hidden; background: var(--c-card-2); display: grid; place-items: center; }
+.coach-confidence-liquid { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.coach-confidence-liquid span { width: 100%; background: linear-gradient(180deg, var(--c-purple), var(--c-blue)); opacity: 0.85; transition: height 0.6s ease; border-radius: 0 0 12px 12px; }
+.coach-confidence-center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; background: rgba(255,255,255,0.92); border-radius: 8px; padding: 4px 8px; }
+.app-shell.light-mode .coach-confidence-center { background: rgba(255,255,255,0.9); }
+.coach-confidence-center strong { font-size: 15px; font-weight: 800; color: var(--c-text); }
+.coach-confidence-center small { font-size: 11px; color: var(--c-text-3); }
+
+.coach-momentum-wave { display: flex; flex-direction: column; gap: 6px; }
+.coach-wave-days { display: flex; justify-content: space-between; font-size: 11px; color: var(--c-text-3); padding: 0 4px; }
+.coach-constellation { display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-inner); }
+.coach-constellation small { font-size: 12px; color: var(--c-text-3); }
+.coach-rhythm-beat { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.coach-beat-row { display: flex; align-items: center; gap: 10px; }
+.coach-beat-day { width: 32px; font-size: 12px; font-weight: 600; color: var(--c-text-2); }
+.coach-beat-bar { flex: 1; height: 10px; border-radius: 999px; background: var(--c-card-3); overflow: hidden; }
+.coach-beat-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--c-purple), var(--c-green)); }
+.coach-beat-row small { font-size: 12px; color: var(--c-text-3); min-width: 90px; }
+.coach-radar-small { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.coach-personality-radar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12px; color: var(--c-text-3); }
+.coach-illustration { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--c-purple), #6D28D9); color: #fff; flex: none; }
+.coach-briefing-bullets { margin: 8px 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--c-text-2); }
+.coach-sync-progress { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--c-text-2); }
+.coach-ai-redirect { display: flex; gap: 14px; align-items: flex-start; border-style: dashed; }
+.coach-redirect-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--c-purple-soft); color: var(--c-purple); flex: none; }
