@@ -8,7 +8,7 @@
  * (risk) maps, bullet (goal vs actual) charts, and heatmaps. No line and no
  * donut charts.
  */
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Radial health gauge
@@ -316,6 +316,114 @@ export function ExecutiveHeatmap({ cells, xLabels, yLabels, height = 190 }: { ce
         {cells.filter((cell) => cell.value > 0).map((cell) => (
           <text key={`v-${cell.x}-${cell.y}`} x={padX + cell.x * cellW + cellW / 2} y={padY + cell.y * cellH + cellH / 2 + 3} textAnchor="middle" className="exec-heat-value">{cell.label}</text>
         ))}
+      </svg>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Business trajectory — real history + dashed trend projection + band
+// ────────────────────────────────────────────────────────────────────────────
+
+export type TrajectoryChartData = Readonly<{
+  historical: readonly Readonly<{ day: string; value: number }>[]
+  projected: readonly Readonly<{ day: string; value: number }>[]
+  band: readonly Readonly<{ day: string; low: number; high: number }>[]
+}>
+
+/**
+ * Renders REAL synced revenue as a solid area, the measured trend extension
+ * as a dashed line, and the residual-based confidence band as a soft wash.
+ * Reading colors exclusively from CSS tokens keeps both themes honest.
+ */
+export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, label }: { data: TrajectoryChartData; height?: number; formatValue?: (value: number) => string; label: string }) {
+  const gradientId = useId()
+  const bandId = useId()
+  const width = 760
+  const padX = 10
+  const padTop = 16
+  const padBottom = 22
+  const all = [...data.historical, ...data.projected]
+  const highs = data.band.map((point) => point.high)
+  const max = Math.max(...all.map((point) => point.value), ...highs, 1)
+  const n = all.length
+  if (n < 2) return null
+  const step = (width - padX * 2) / (n - 1)
+  const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / max) * (height - padTop - padBottom)
+  const xAt = (index: number): number => padX + index * step
+  const histCount = data.historical.length
+  const histLine = data.historical.map((point, index) => `${xAt(index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ')
+  // The projection stroke starts at the last REAL point so the dashed line
+  // reads as a continuation, not a separate series.
+  const projectionPoints = [{ day: data.historical.at(-1)!.day, value: data.historical.at(-1)!.value }, ...data.projected]
+  const projLine = projectionPoints.map((point, index) => `${xAt(histCount - 1 + index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ')
+  const bandTop = data.band.map((point, index) => `${xAt(histCount + index).toFixed(1)},${yAt(point.high).toFixed(1)}`)
+  const bandBottom = data.band.map((point, index) => `${xAt(histCount + index).toFixed(1)},${yAt(point.low).toFixed(1)}`).reverse()
+  const todayX = xAt(histCount - 1)
+  const lastProjected = data.projected.at(-1)
+  return (
+    <div className="exec-area-chart gq-trajectory" role="img" aria-label={label}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--exec-accent)" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="var(--exec-accent)" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id={bandId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--exec-purple-deep)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="var(--exec-purple-deep)" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((fraction) => <line key={fraction} x1={padX} x2={width - padX} y1={padTop + fraction * (height - padTop - padBottom)} y2={padTop + fraction * (height - padTop - padBottom)} className="exec-chart-gridline" />)}
+        {/* Confidence band (projection only — history is fact, not a range). */}
+        {bandTop.length > 1 && <polygon points={`${xAt(histCount).toFixed(1)},${yAt(data.projected[0]!.value).toFixed(1)} ${bandTop.join(' ')} ${bandBottom.join(' ')}`} fill={`url(#${bandId})`} />}
+        {/* Real history: gradient area + solid stroke. */}
+        <polygon points={`${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} ${histLine} ${xAt(histCount - 1).toFixed(1)},${yAt(0).toFixed(1)}`} fill={`url(#${gradientId})`} />
+        {histCount > 1 && <polyline points={histLine} fill="none" className="exec-area-stroke" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+        {/* Trend extension: clearly dashed so it can never pass for fact. */}
+        <polyline points={projLine} fill="none" className="gq-trajectory-projection" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 5" vectorEffect="non-scaling-stroke" />
+        {/* "Today" divider and endpoint markers. */}
+        <line x1={todayX} x2={todayX} y1={padTop} y2={height - padBottom} className="gq-trajectory-today" />
+        <circle cx={todayX} cy={yAt(data.historical.at(-1)!.value)} r={4} className="exec-area-dot" />
+        {lastProjected ? <circle cx={xAt(n - 1)} cy={yAt(lastProjected.value)} r={4} className="gq-trajectory-end" /> : null}
+      </svg>
+      <div className="exec-chart-legend">
+        <span>{data.historical[0]?.day.slice(5) ?? ''}</span>
+        <span className="gq-trajectory-legend-mid">{lastProjected && formatValue ? `Projected ${formatValue(lastProjected.value)} / day in 30d` : 'today'}</span>
+        <span>{lastProjected ? `+30d` : ''}</span>
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Strategic position matrix (2×2 quadrant with the store's real position)
+// ────────────────────────────────────────────────────────────────────────────
+
+export function ExecutivePositionMatrix({ x, y, xLabel, yLabel, height = 240 }: { x: number; y: number; xLabel: string; yLabel: string; height?: number }) {
+  const width = 340
+  const pad = 30
+  const plotW = width - pad * 2
+  const plotH = height - pad * 2
+  const dotX = pad + Math.min(Math.max(x, 0), 100) / 100 * plotW
+  const dotY = pad + (1 - Math.min(Math.max(y, 0), 100) / 100) * plotH
+  return (
+    <div className="gq-matrix" role="img" aria-label={`Strategic position: ${xLabel.toLowerCase()} ${Math.round(x)} of 100, ${yLabel.toLowerCase()} ${Math.round(y)} of 100`}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height }}>
+        <rect x={pad} y={pad} width={plotW / 2} height={plotH / 2} className="gq-matrix-quad q3" />
+        <rect x={pad + plotW / 2} y={pad} width={plotW / 2} height={plotH / 2} className="gq-matrix-quad q4" />
+        <rect x={pad} y={pad + plotH / 2} width={plotW / 2} height={plotH / 2} className="gq-matrix-quad q1" />
+        <rect x={pad + plotW / 2} y={pad + plotH / 2} width={plotW / 2} height={plotH / 2} className="gq-matrix-quad q2" />
+        <line x1={width / 2} x2={width / 2} y1={pad} y2={height - pad} className="exec-chart-gridline" />
+        <line x1={pad} x2={width - pad} y1={height / 2} y2={height / 2} className="exec-chart-gridline" />
+        <text x={pad + 6} y={pad + 15} className="exec-chart-label">Momentum</text>
+        <text x={width - pad - 6} y={pad + 15} textAnchor="end" className="exec-chart-label">Scale</text>
+        <text x={pad + 6} y={height - pad - 7} className="exec-chart-label">Foundation</text>
+        <text x={width - pad - 6} y={height - pad - 7} textAnchor="end" className="exec-chart-label">Established</text>
+        <text x={width / 2} y={height - 5} textAnchor="middle" className="exec-chart-label">{xLabel} →</text>
+        <text x={13} y={height / 2} textAnchor="middle" className="exec-chart-label" transform={`rotate(-90 13 ${height / 2})`}>{yLabel} →</text>
+        <circle cx={dotX} cy={dotY} r={7} className="gq-matrix-pulse" />
+        <circle cx={dotX} cy={dotY} r={5} className="gq-matrix-dot" />
       </svg>
     </div>
   )

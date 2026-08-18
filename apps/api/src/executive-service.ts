@@ -533,7 +533,7 @@ async function loadExecutiveDashboard(context: ExecutiveContext, storeId: StoreI
   const usage = await executiveUsage(context, storeId)
   const gates = await executiveGates(context, storeId)
   const ladders = laddersFromRows(await context.repository.benchmarkRows(preferences.benchmarkCategory))
-  const { snapshot, analytics, catalog } = await buildExecutiveFacts(context, storeId, preferences.benchmarkCategory)
+  const { facts, snapshot, analytics, catalog } = await buildExecutiveFacts(context, storeId, preferences.benchmarkCategory)
   const detected = detectBenchmarkCategory(catalog)
   const category = preferences.benchmarkCategory !== 'Other' ? preferences.benchmarkCategory : detected ?? 'Other'
   const categorySource = preferences.benchmarkCategory !== 'Other' ? 'PREFERENCE' as const : detected !== null ? 'AUTO_DETECTED' as const : 'DEFAULT' as const
@@ -566,6 +566,16 @@ async function loadExecutiveDashboard(context: ExecutiveContext, storeId: StoreI
     gates,
     revenueSeries,
     ordersSeries,
+    // Real synced totals for the strategic layers (trajectory, milestones,
+    // digest). Everything counts from synced rows — nothing is estimated.
+    totals: {
+      customers: snapshot.customers.length,
+      products: snapshot.products.length,
+      syncedOrders: analytics.orders.reduce((sum, row) => sum + row.orderCount, 0),
+      syncedRevenue: analytics.revenue.reduce((sum, row) => sum + row.grossRevenue, 0),
+      daysSynced: analytics.revenue.length,
+    },
+    topProducts: facts.topProducts.map((product) => ({ title: product.title, revenue: product.revenue120d, sharePct: product.sharePct })),
     generatedAt: new Date(now).toISOString(),
   }
 }

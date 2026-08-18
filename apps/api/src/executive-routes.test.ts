@@ -97,6 +97,13 @@ describe('PR49 executive endpoints', () => {
       expect(dashboard.gates.pdf.allowed).toBe(false)
       expect(dashboard.gates.reports.allowed).toBe(true)
       expect(dashboard.usage.features.length).toBeGreaterThan(10)
+      // Strategic-layer rollups: real synced totals, never estimates. The
+      // harness syncs 60 days × 4 orders × $280 and 3 customers / 3 products.
+      expect(dashboard.totals).toEqual({ customers: 3, products: 3, syncedOrders: 240, syncedRevenue: 16_800, daysSynced: 60 })
+      expect(dashboard.topProducts[0].title).toBe('Hero Hoodie')
+      expect(dashboard.topProducts[0].revenue).toBe(7_200)
+      expect(dashboard.topProducts[0].sharePct).toBeGreaterThan(71)
+      expect(dashboard.topProducts[0].sharePct).toBeLessThan(72)
     })
   })
 
