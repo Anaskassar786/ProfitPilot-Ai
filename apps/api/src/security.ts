@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
+import { isMissingRelationError } from './ai-keys.js'
 import { isShopifyApiError } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
@@ -298,6 +299,9 @@ export function getAuthContext(request: Request): AuthContext | null {
 export function normalizeRequestError(error: unknown): AppError {
   if (isRecord(error) && error.type === 'entity.too.large') return new AppError('VALIDATION_ERROR', 'Request payload is too large', 413)
   if (isRecord(error) && error.type === 'entity.parse.failed') return new AppError('VALIDATION_ERROR', 'Malformed JSON payload', 400)
+  if (isMissingRelationError(error) || (error instanceof Error && isMissingRelationError(error.cause))) {
+    return new AppError('DEPENDENCY_ERROR', 'Required database tables are missing. Pending migrations will apply on the next API restart (or set RUN_MIGRATIONS=true).', 503, { reason: 'SCHEMA_MISSING' })
+  }
   if (isShopifyApiError(error) || (isRecord(error) && error.name === 'ShopifyApiError')) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 502
     const message = error instanceof Error ? error.message : 'Shopify API error'

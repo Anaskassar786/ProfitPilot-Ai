@@ -112,7 +112,8 @@ import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
-import { AiGrowthCommandPage } from './executive.js'
+import { AiExecutivePage } from './executive.js'
+import { StoreCoachWorkspace } from './store-coach.js'
 import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
@@ -133,7 +134,6 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI employee',
     items: [
-      { id: 'ai-growth-command', label: 'AI Growth Command', icon: GraduationCap, badge: 'NEW' },
       { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
@@ -143,6 +143,8 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI Growth Command',
     items: [
+      { id: 'store-coach', label: 'Store Coach', icon: GraduationCap, tag: 'NEW' },
+      { id: 'ai-executive', label: 'AI Executive', icon: Landmark, tag: 'NEW' },
       { id: 'insights-hub', label: 'Insights Hub', icon: FlaskConical, tag: 'NEW' },
     ],
   },
@@ -168,7 +170,9 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
   'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
-  'ai-growth-command': { title: 'AI Growth Command', description: 'Store Coach for daily tactics, AI Executive for boardroom strategy, and the Insights Hub.', icon: Landmark },
+  'ai-growth-command': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
+  'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
+  'ai-executive': { title: 'AI Executive', description: 'Boardroom-grade strategy — reports, benchmarks, scenarios, and risks from your real store data.', icon: Landmark },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
   'insights-hub': { title: 'Insights Hub', description: 'Where data becomes wisdom — discoveries, lessons, personas, and Why? answers from your real synced data.', icon: FlaskConical },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
@@ -202,8 +206,10 @@ export default function App() {
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
     if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
+    if (window.location.hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
     if (window.location.pathname.startsWith('/ai-growth-command/insights')) return 'insights-hub'
-    if (window.location.pathname.startsWith('/ai-growth-command')) return 'ai-growth-command'
+    if (window.location.pathname.startsWith('/ai-growth-command/executive')) return 'ai-executive'
+    if (window.location.pathname.startsWith('/ai-growth-command')) return 'store-coach'
     if (window.location.pathname.startsWith('/automation')) return 'automation'
     return 'dashboard'
   })
@@ -376,11 +382,11 @@ export default function App() {
     if (page === 'campaigns') showToast('Campaigns has been replaced by AI Command', 'info')
     if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
-    // Insights Hub lives under /ai-growth-command/insights, so it has to be
-    // matched before the generic /ai-growth-command reset below.
-    if (next === 'insights-hub' && !window.location.pathname.startsWith('/ai-growth-command/insights')) window.history.pushState({}, '', `/ai-growth-command/insights${window.location.search}`)
-    else if (next === 'ai-growth-command' && (!window.location.pathname.startsWith('/ai-growth-command') || window.location.pathname.startsWith('/ai-growth-command/insights'))) window.history.pushState({}, '', `/ai-growth-command${window.location.search}`)
-    else if (next !== 'ai-growth-command' && next !== 'insights-hub' && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
+    // Each AI Growth Command module is its own sidebar page with its own
+    // pathname (same pattern Insights Hub already used).
+    const growthTarget = growthCommandPath(next)
+    if (growthTarget && !window.location.pathname.startsWith(growthTarget)) window.history.pushState({}, '', `${growthTarget}${window.location.search}`)
+    else if (!growthTarget && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
     setActivePage(next)
     setMobileOpen(false)
     setCommandOpen(false)
@@ -389,7 +395,7 @@ export default function App() {
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
-      else if (next === 'ai-growth-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
+      else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
       else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     } catch { /* embedded browsers may restrict history access */ }
   }
@@ -402,9 +408,10 @@ export default function App() {
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
       if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
       const onInsights = window.location.pathname.startsWith('/ai-growth-command/insights')
+      const onExecutive = window.location.pathname.startsWith('/ai-growth-command/executive') || window.location.hash.startsWith('#/ai-growth-command/executive')
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onInsights ? 'insights-hub' : onCoach ? 'ai-growth-command' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'insights-hub' || current === 'automation' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onInsights ? 'insights-hub' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'insights-hub' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -593,7 +600,8 @@ function PageRouter({
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
-  if (active === 'ai-growth-command') return <AiGrowthCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'ai-growth-command' || active === 'store-coach') return <StoreCoachWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'ai-executive') return <AiExecutivePage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
   if (active === 'insights-hub') return <PageLayout eyebrow="AI Growth Command" title="Insights Hub" description="Where data becomes wisdom — discoveries, lessons, patterns, personas, and Why? answers computed from your real synced store data."><InsightsHubWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
@@ -914,9 +922,17 @@ function storeNumberRecord(key: string, value: Readonly<Record<string, number>>)
 function isCircuitOpen(error: unknown): boolean { return error instanceof ApiClientError && error.status === 503 && /circuit is open/i.test(error.message) }
 function errorMessage(error: unknown): string { if (error instanceof ApiClientError) return error.message; if (error instanceof Error) return error.message; return 'The API could not be reached.' }
 /** Resolves a deep-link hash to a workspace section id, or null. */
-function hashSection(hash: string): 'recommendations' | 'ai-growth-command' | null {
+function hashSection(hash: string): 'recommendations' | 'ai-executive' | 'store-coach' | null {
   if (hash.startsWith('#/recommendations')) return 'recommendations'
-  if (hash.startsWith('#/ai-growth-command')) return 'ai-growth-command'
+  if (hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
+  if (hash.startsWith('#/ai-growth-command')) return 'store-coach'
+  return null
+}
+
+function growthCommandPath(page: SectionId): string | null {
+  if (page === 'insights-hub') return '/ai-growth-command/insights'
+  if (page === 'ai-executive') return '/ai-growth-command/executive'
+  if (page === 'store-coach' || page === 'ai-growth-command') return '/ai-growth-command/coach'
   return null
 }
 function isTypingTarget(target: EventTarget | null): boolean { return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement }

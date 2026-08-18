@@ -7,6 +7,8 @@ export type SectionId =
   | 'analytics'
   | 'command-center'
   | 'ai-growth-command'
+  | 'store-coach'
+  | 'ai-executive'
   | 'recommendations'
   | 'automation'
   | 'insights-hub'

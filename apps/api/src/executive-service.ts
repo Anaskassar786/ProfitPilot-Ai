@@ -17,6 +17,7 @@
  * - Upgrade CTAs always say "Upgrade Plan" — the UI never names a plan.
  */
 import { AppError, limitFor, PLAN_TIERS } from '@profitpilot/types'
+import { isMissingRelationError } from './ai-keys.js'
 import type { EntitlementKey, PlanTier, StoreId } from '@profitpilot/types'
 import { UpgradeRequiredError } from '@profitpilot/billing'
 import type { AnalyticsSnapshot, CatalogProduct } from '@profitpilot/db'
@@ -507,6 +508,17 @@ export async function generateReportPdf(context: ExecutiveContext, storeId: Stor
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function executiveDashboard(context: ExecutiveContext, storeId: StoreId): Promise<ExecutiveDashboard> {
+  try {
+    return await loadExecutiveDashboard(context, storeId)
+  } catch (error: unknown) {
+    if (isMissingRelationError(error) || (error instanceof Error && isMissingRelationError(error.cause))) {
+      throw new AppError('DEPENDENCY_ERROR', 'AI Executive tables are missing (migration 0022_ai_executive). Restart the API so pending migrations can apply.', 503, { reason: 'SCHEMA_MISSING', migration: '0022' })
+    }
+    throw error
+  }
+}
+
+async function loadExecutiveDashboard(context: ExecutiveContext, storeId: StoreId): Promise<ExecutiveDashboard> {
   const [plan, preferences, latestReport, latestDiagnosis, opportunities, risks, scenarios, roadmaps, decisions] = await Promise.all([
     context.plan(storeId),
     context.repository.getPreferences(storeId),

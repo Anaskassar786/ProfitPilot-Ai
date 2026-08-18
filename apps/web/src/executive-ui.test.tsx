@@ -72,8 +72,6 @@ describe('PR49 plan gating UI', () => {
     expect(tabs).toContain('AI Executive')
     expect(tabs).toContain('Store Coach')
     expect(tabs).toContain('Insights Hub')
-    expect(tabs).toContain('Coming soon')
-    expect(tabs).toContain('NEW')
   })
 
   it('renders skeletons and coming-soon panels for loading/empty states', () => {

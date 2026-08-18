@@ -10,6 +10,7 @@ import { readinessChecksFromEnv } from './readiness.js'
 import { runMigrations } from './migrations.js'
 import { createInsightsHubBootstrap, InsightsHubService, PostgresInsightsHubRepository } from './insights-hub.js'
 import { buildStoreSnapshot } from './store-snapshot.js'
+import { shouldRunMigrations } from './ai-keys.js'
 
 const port = Number(process.env.PORT ?? '3000')
 const logger = loggerFromEnv(process.env)
@@ -45,7 +46,14 @@ const main = async (): Promise<void> => {
   }
 
   const bootstrap = createStoreCoachBootstrap(process.env, logger)
-  if (bootstrap && process.env.RUN_MIGRATIONS === 'true') await runMigrations(bootstrap.database)
+  // Production deploys must apply pending SQL (0022 AI Executive, 0023 Store
+  // Coach, …) or the new pages 500 with "relation does not exist". Operators
+  // can still opt out with RUN_MIGRATIONS=false.
+  if (bootstrap && shouldRunMigrations(process.env)) {
+    const applied = await runMigrations(bootstrap.database)
+    if (applied.length > 0) logger.info('Applied pending database migrations', { applied: applied.join(',') })
+    else logger.info('Database schema is up to date')
+  }
   const shopify = bootstrap?.shopify.webhook ? { ...bootstrap.shopify, webhook: { ...bootstrap.shopify.webhook, finalize: async (event: Parameters<NonNullable<typeof bootstrap.shopify.webhook>['handle']>[0]) => {
     await bootstrap.shopify.webhook?.finalize?.(event)
     await bootstrap.automation.triggers.handleWebhook(event)

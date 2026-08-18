@@ -195,22 +195,15 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
 // Workspace
 // ---------------------------------------------------------------------------
 
-export function AiGrowthCommandWorkspace({ context, onToast, onNavigateBilling, onOpenExecutive }: { context: WorkspaceContext; onToast: CoachToast; onNavigateBilling: () => void; onOpenExecutive?: () => void }) {
+export function StoreCoachWorkspace({ context, onToast, onNavigateBilling }: { context: WorkspaceContext; onToast: CoachToast; onNavigateBilling: () => void }) {
   const [view, navigate] = useCoachView()
   const [data, loadState, error, reload] = useCoachData(context.storeId)
   const plan: CoachPlan = data.usage?.plan ?? data.preferences?.plan ?? data.huddle?.plan ?? 'trial'
   const [onboardingOpen, setOnboardingOpen] = useState(false)
 
-  const activeTab: CoachView = view === 'briefing' ? 'briefing' : view === 'insights' ? 'insights' : 'coach'
-
   return (
     <div className="coach-workspace">
       <CoachHeader plan={plan} health={data.health} usage={data.usage} onNavigate={navigate} onToast={onToast} onSettings={() => navigate('settings')} onOnboarding={() => setOnboardingOpen(true)} />
-      <div className="coach-tabs" role="tablist" aria-label="AI Growth Command sections">
-        <CoachTab active={activeTab === 'coach'} icon={Bot} label="Store Coach" tagline="Daily huddles, goals & chat" onClick={() => navigate('coach')} />
-        <CoachTab active={false} icon={BookOpenCheck} label="AI Executive" tagline="Boardroom-grade strategy" onClick={() => onOpenExecutive?.()} />
-        <CoachTab active={activeTab === 'insights'} icon={Lightbulb} label="Insights Hub" tagline="Deep pattern discovery" locked onClick={() => navigate('insights')} />
-      </div>
 
       {error && loadState === 'error' ? (
         <CoachErrorState error={error} onRetry={reload} onNavigateBilling={onNavigateBilling} />
@@ -237,15 +230,8 @@ export function AiGrowthCommandWorkspace({ context, onToast, onNavigateBilling, 
   )
 }
 
-function CoachTab({ active, icon: Icon, label, tagline, locked, onClick }: { active: boolean; icon: LucideIcon; label: string; tagline: string; locked?: boolean; onClick: () => void }) {
-  return (
-    <button className={`coach-tab ${active ? 'active' : ''} ${locked ? 'locked' : ''}`} role="tab" aria-selected={active} onClick={onClick}>
-      <span className="coach-tab-icon"><Icon size={18} />{locked && <LockKeyhole size={11} className="coach-tab-lock" />}</span>
-      <span className="coach-tab-copy"><strong>{label}</strong><small>{tagline}</small></span>
-      {locked && <span className="coming-soon-pill">Coming Soon</span>}
-    </button>
-  )
-}
+/** @deprecated Use StoreCoachWorkspace — Store Coach is its own sidebar page. */
+export const AiGrowthCommandWorkspace = StoreCoachWorkspace
 
 function CoachHeader({ plan, health, usage, onNavigate, onToast, onSettings, onOnboarding }: { plan: CoachPlan; health: CoachData['health']; usage: CoachUsageView | null; onNavigate: (view: CoachView) => void; onToast: CoachToast; onSettings: () => void; onOnboarding: () => void }) {
   const chatUsed = usage ? `${usage.chatMessagesToday} / ${usage.chatLimit}` : null

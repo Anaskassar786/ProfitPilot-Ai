@@ -27,6 +27,7 @@ import type { ExecutiveEmailDelivery } from './executive-email.js'
 import { FileExecutivePdfStore, InMemoryExecutivePdfStore } from './executive-pdf.js'
 import type { ExecutivePdfStore } from './executive-pdf.js'
 import type { F9Bootstrap } from './f9-bootstrap.js'
+import { resolveApiKeys } from './ai-keys.js'
 
 export type ExecutiveBootstrap = Readonly<{
   routes: ExecutiveRouteDependencies
@@ -71,8 +72,9 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   const enabled = env.AI_EXECUTIVE_ENABLED?.trim() !== 'false'
   const database = f9.database
   const repository = new PostgresExecutiveRepository(database)
+  const resolvedKeys = resolveApiKeys(env)
   const provider = new OpenRouterClient({
-    keys: [env.STORE_COACH_API_KEY].filter((key): key is string => typeof key === 'string' && key.trim().length > 0),
+    keys: resolvedKeys.keys,
     models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
     timeoutMs: 60_000,
     maxRetries: 1,
@@ -130,6 +132,12 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   }
 
   const tick = async (): Promise<MonthlyTickResult> => runMonthlyReportTick(context, logger)
+  logger.info('AI Executive AI provider', {
+    configured: provider.configured,
+    keySource: resolvedKeys.source ?? 'none',
+    modelCount: provider.models.length,
+    enabled,
+  })
   return { routes, tick, enabled }
 }
 

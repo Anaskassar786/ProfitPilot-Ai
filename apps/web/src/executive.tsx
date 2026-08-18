@@ -1,12 +1,10 @@
 /**
  * PR #49 — AI Executive: "Your Boardroom in a Box".
  *
- * The AI Growth Command page hosts three tabs — Store Coach (coming soon),
- * AI Executive (this module), and Insights Hub (coming soon, PR #50). The
- * AI Executive tab renders the CEO dashboard and deep-linkable sub-pages
- * through hash routes:
+ * AI Executive is its own sidebar page (same pattern as Insights Hub).
+ * Deep-linkable sub-pages use hash routes:
  *
- *   #/ai-growth-command/executive[/reports|/reports/:id|/benchmarks|
+ *   /ai-growth-command/executive#/ai-growth-command/executive[/reports|/reports/:id|/benchmarks|
  *     /scenarios|/health|/opportunities|/decisions|/risks|/roadmaps|/settings]
  *
  * The dashboard is plan-aware: every locked section renders an aspirational
@@ -21,7 +19,7 @@ import type { ExecutiveDashboard, ExecutiveGate, ExecutiveUsage } from './execut
 import { EXECUTIVE_FEATURE_NAMES, executiveDateLabel, executiveMonthLabel, formatExecutiveMoney } from './executive-model.js'
 import { fetchExecutiveDashboard } from './executive-api.js'
 import { ExecutiveAreaChart, ExecutiveHorizontalBars, ExecutiveRadialGauge, ExecutiveSparkline, ExecutiveTrendArrow } from './executive-charts.js'
-import { ComingSoonPanel, ExecutiveEmptyState, ExecutiveErrorState, ExecutiveSkeleton, ExecutiveStatusPill, GrowthCommandTabs, ExecutiveUsageBar } from './executive-ui.js'
+import { ExecutiveEmptyState, ExecutiveErrorState, ExecutiveSkeleton, ExecutiveStatusPill, ExecutiveUsageBar } from './executive-ui.js'
 import { ExecutiveReportsPage } from './executive-reports.js'
 import { ExecutiveBenchmarksPage } from './executive-benchmarks.js'
 import { ExecutiveScenariosPage } from './executive-scenarios.js'
@@ -33,7 +31,6 @@ import { ExecutiveRoadmapsPage } from './executive-roadmaps.js'
 import { ExecutiveSettingsPage } from './executive-settings.js'
 import { errorMessageFrom } from './executive-shared.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
-import { AiGrowthCommandWorkspace as StoreCoachWorkspace } from './store-coach.js'
 
 const EXECUTIVE_ROUTE_PREFIX = '#/ai-growth-command/executive'
 
@@ -43,37 +40,12 @@ export type ExecutiveWorkspaceProps = Readonly<{
   onNavigateBilling: () => void
 }>
 
-export function AiGrowthCommandPage({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
-  // One AI Growth Command surface, two sections: Store Coach (daily tactical
-  // coaching) and AI Executive (boardroom strategy). The hash selects the
-  // section so #/ai-growth-command/executive deep links still work, and the
-  // tabs cross-link both ways.
-  const [surface, setSurface] = useState<'coach' | 'executive'>(() => (window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX) ? 'executive' : 'coach'))
-  useEffect(() => {
-    const onHash = () => setSurface(window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX) ? 'executive' : 'coach')
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [])
-
-  const openCoach = () => {
-    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`) } catch { /* restricted history */ }
-    setSurface('coach')
-  }
-  const openExecutive = () => {
-    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${EXECUTIVE_ROUTE_PREFIX}`) } catch { /* restricted history */ }
-    setSurface('executive')
-  }
-
-  if (surface === 'coach') {
-    return <StoreCoachWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} onOpenExecutive={openExecutive} />
-  }
-  return (
-    <div className="exec-page">
-      <GrowthCommandTabs active="executive" onNavigate={(tab) => { if (tab === 'store-coach') openCoach() }} />
-      <ExecutiveWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
-    </div>
-  )
+export function AiExecutivePage({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
+  return <ExecutiveWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
 }
+
+/** @deprecated AI Executive is its own sidebar page. */
+export const AiGrowthCommandPage = AiExecutivePage
 
 function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
   const [route, setRoute] = useState<string>(() => parseExecutiveRoute(window.location.hash))
