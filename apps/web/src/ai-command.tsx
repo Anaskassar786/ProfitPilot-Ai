@@ -106,6 +106,13 @@ const TEMPLATES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; titl
   { icon: RefreshCw, tone: 'blue', title: 'Automation status', command: 'Show automation status' },
 ]
 
+const FOLLOW_UP_ACTIONS: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; label: string; prompt: string }>[] = [
+  { icon: Users, tone: 'blue', label: 'Ask about customers', prompt: 'Who are my best customers?' },
+  { icon: Package, tone: 'green', label: 'Check inventory', prompt: 'Which products are low stock?' },
+  { icon: BarChart3, tone: 'purple', label: 'Revenue analysis', prompt: 'How is my revenue trending this month?' },
+  { icon: TrendingUp, tone: 'orange', label: 'Growth ideas', prompt: 'Help me increase sales' },
+]
+
 const SHOWCASES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; title: string; description: string; sample: string }>[] = [
   { icon: BarChart3, tone: 'purple', title: 'Live analytics', description: 'Ask for revenue, orders, or average order value and get today’s real numbers — with a comparison to the prior period.', sample: 'What’s my revenue today?' },
   { icon: Users, tone: 'blue', title: 'Customer intelligence', description: 'Spot your best customers or at-risk segments straight from your synced Shopify customer table.', sample: 'Who are my best customers?' },
@@ -189,6 +196,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
         <div className="aic-title">
           <span className="aic-orb"><AiCommandMark size={26} variant="badge" /></span>
           <div>
+            <div className="aic-eyebrow">Universal command center</div>
             <h2>AI Command</h2>
             <p>One command controls everything</p>
           </div>
@@ -249,6 +257,9 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
               />
             ))}
             {workspace.busy && <ThinkingCard steps={workspace.thinking} streaming={workspace.streaming} onCancel={workspace.cancelThinking} />}
+            {messages.length > 0 && !workspace.busy && (
+              <PostChatActivity usageHistory={workspace.usageHistory} now={now} onPrompt={sendText} />
+            )}
           </div>
 
           <form className="aic-composer" onSubmit={submit}>
@@ -508,6 +519,59 @@ function WelcomeScreen({ plan, usage, now, onPrompt, onUpgrade }: {
         </div>
         {!commander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
       </div>
+    </div>
+  )
+}
+
+export function PostChatActivity({ usageHistory, now, onPrompt }: {
+  usageHistory: readonly import('./ai-command-model.js').AiCommandUsage[]
+  now: number
+  onPrompt: (value: string) => void
+}) {
+  const bars = usageHistoryBars(usageHistory, 7, new Date(now))
+  const total = bars.reduce((sum, bar) => sum + bar.value, 0)
+  const savedMinutes = total * 3
+  const savedLabel = savedMinutes >= 60 ? `${(savedMinutes / 60).toFixed(1)}h` : `${savedMinutes}m`
+  const maxDot = Math.max(1, ...bars.map((bar) => bar.value))
+  return (
+    <div className="aic-postchat">
+      <section className="aic-quickactions" aria-label="Quick follow-up actions">
+        <div className="aic-postchat-head">
+          <Zap size={14} /> Quick follow-ups
+        </div>
+        <div className="aic-quickactions-grid">
+          {FOLLOW_UP_ACTIONS.map((action) => (
+            <button key={action.label} type="button" className={`tone-${action.tone}`} onClick={() => onPrompt(action.prompt)}>
+              <span className="aic-chip-icon"><action.icon size={13} /></span> {action.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="aic-activity" aria-label="Your command activity for the last 7 days">
+        <div className="aic-postchat-head">
+          <TrendingUp size={14} /> Your Command Activity
+          <small>Last 7 days · real usage</small>
+        </div>
+        <div className="aic-activity-track">
+          {bars.map((bar, index) => (
+            <span
+              key={`${bar.label}-${index}`}
+              className={`aic-activity-day ${bar.isToday ? 'today' : ''} ${bar.value === 0 ? 'empty' : ''}`}
+              style={{ '--dot-scale': Math.max(0.55, bar.value / maxDot) } as CSSProperties}
+              title={`${bar.label}: ${bar.value} command${bar.value === 1 ? '' : 's'}`}
+            >
+              <span className="aic-activity-dot"><i /></span>
+              <strong>{bar.value}</strong>
+              <small>{bar.label}</small>
+            </span>
+          ))}
+        </div>
+        <div className="aic-activity-footer">
+          <span>Total: {total} commands</span>
+          <span>Time saved: ~{savedLabel}</span>
+        </div>
+      </section>
     </div>
   )
 }

@@ -35,27 +35,27 @@
 }
 
 .app-shell.light-mode .aic-shell {
-  --aic-bg: #FFFFFF;
-  --aic-panel: #FAFAFA;
+  --aic-bg: #F8FAFC;
+  --aic-panel: #FFFFFF;
   --aic-panel-2: #FFFFFF;
-  --aic-border: #E5E7EB;
-  --aic-border-soft: #E5E7EB;
-  --aic-text: #111827;
-  --aic-text-secondary: #4B5563;
-  --aic-text-muted: #6B7280;
+  --aic-border: #E2E8F0;
+  --aic-border-soft: #E2E8F0;
+  --aic-text: #0F172A;
+  --aic-text-secondary: #475569;
+  --aic-text-muted: #64748B;
   --aic-accent: #7C3AED;
   --aic-accent-strong: #6D28D9;
-  --aic-accent-soft: rgba(124, 58, 237, .08);
-  --aic-accent-border: rgba(124, 58, 237, .25);
-  --aic-user-bg: #F3F4F6;
-  --aic-user-border: #E5E7EB;
+  --aic-accent-soft: rgba(124, 58, 237, .1);
+  --aic-accent-border: rgba(124, 58, 237, .35);
+  --aic-user-bg: #F3E8FF;
+  --aic-user-border: rgba(124, 58, 237, .25);
   --aic-ai-bg: #FFFFFF;
-  --aic-ai-border: #E5E7EB;
-  --aic-success: #059669;
+  --aic-ai-border: #E2E8F0;
+  --aic-success: #16A34A;
   --aic-warning: #D97706;
   --aic-danger: #DC2626;
-  --aic-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px rgba(16, 24, 40, .06);
-  --aic-ring-track: rgba(107, 114, 128, .18);
+  --aic-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 24px rgba(16, 24, 40, .05);
+  --aic-ring-track: rgba(107, 114, 128, .2);
 }
 
 /* ── Brand mark ─────────────────────────────────────────────────────────── */
@@ -1829,3 +1829,290 @@
 .app-shell.light-mode .aic-welcome p,
 .app-shell.light-mode .aic-empty p,
 .app-shell.light-mode .aic-title p { color: #4B5563; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AI Command — eyebrow
+   "Universal command center" small uppercase label above the main title.
+   ═══════════════════════════════════════════════════════════════════════ */
+.aic-eyebrow {
+  margin: 0 0 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--aic-accent);
+  line-height: 1.2;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AI Command — post-chat activity
+   Fills the empty space below an active conversation with a Quick follow-up
+   panel plus a unique "Your Command Activity" 7-day timeline (real usage).
+   ═══════════════════════════════════════════════════════════════════════ */
+.aic-postchat {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Push to the bottom of the scroll area so the empty space below the
+     conversation is filled with real content instead of a dead gap. */
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid var(--aic-border-soft);
+}
+.aic-postchat-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--aic-text);
+}
+.aic-postchat-head svg { color: var(--aic-accent); }
+.aic-postchat-head small {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--aic-text-muted);
+}
+.aic-quickactions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 8px;
+}
+.aic-quickactions-grid button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 9px;
+  border: 1px solid var(--aic-border);
+  border-radius: 999px;
+  background: var(--aic-panel-2);
+  color: var(--aic-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.aic-quickactions-grid button:hover {
+  color: var(--aic-text);
+  border-color: var(--aic-accent-border);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 24, 40, .08);
+}
+.aic-activity {
+  border: 1px solid var(--aic-border);
+  border-radius: 14px;
+  background: var(--aic-panel-2);
+  padding: 14px 16px 12px;
+  box-shadow: var(--aic-shadow);
+}
+.aic-activity-track {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 0 2px 2px;
+  position: relative;
+}
+.aic-activity-track::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--aic-border-soft);
+}
+.aic-activity-day {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.aic-activity-dot {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--aic-panel-2);
+  border: 1px solid var(--aic-border);
+}
+.aic-activity-dot i {
+  --dot-scale: 1;
+  width: calc(10px * var(--dot-scale));
+  height: calc(10px * var(--dot-scale));
+  border-radius: 999px;
+  background: var(--aic-accent);
+  box-shadow: 0 0 6px var(--aic-accent-border);
+  transition: width 300ms ease, height 300ms ease;
+}
+.aic-activity-day.empty .aic-activity-dot i {
+  background: var(--aic-ring-track);
+  box-shadow: none;
+}
+.aic-activity-day.today .aic-activity-dot i {
+  background: var(--aic-success);
+  box-shadow: 0 0 8px var(--aic-success);
+}
+.aic-activity-day strong {
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--aic-text);
+  font-variant-numeric: tabular-nums;
+}
+.aic-activity-day.empty strong { color: var(--aic-text-muted); }
+.aic-activity-day small {
+  font-size: 10.5px;
+  color: var(--aic-text-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.aic-activity-day.today small { color: var(--aic-accent); font-weight: 700; }
+.aic-activity-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--aic-border-soft);
+  font-size: 12px;
+  color: var(--aic-text-secondary);
+}
+.aic-activity-footer span:first-child { font-weight: 700; color: var(--aic-text); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AI Command — LIGHT THEME (high-contrast, Claude/ChatGPT-grade)
+   Loaded last so these win. Dark theme is never matched (all rules are
+   scoped to `.app-shell.light-mode .aic-*`). Palette per spec:
+   canvas #F8FAFC, ink #0F172A, secondary #475569, muted #64748B,
+   borders #E2E8F0, purple #7C3AED, amber surfaces #FEF3C7/#FDE68A.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Page canvas */
+.app-shell.light-mode .aic-shell { background: #F8FAFC; }
+
+/* Header: eyebrow, title, subtitle, orb (logo) */
+.app-shell.light-mode .aic-eyebrow { color: #7C3AED; }
+.app-shell.light-mode .aic-title h2 { color: #0F172A; }
+.app-shell.light-mode .aic-title p { color: #475569; }
+.app-shell.light-mode .aic-orb { background: #F3E8FF; border-color: rgba(124, 58, 237, .25); }
+
+/* Sub-header bar */
+.app-shell.light-mode .aic-header {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+.app-shell.light-mode .aic-header .aic-status { color: #475569; border-color: #E2E8F0; background: #F8FAFC; }
+.app-shell.light-mode .aic-header .aic-status i { background: #16A34A; box-shadow: 0 0 8px #16A34A; }
+.app-shell.light-mode .aic-header .aic-status.busy i { background: #7C3AED; box-shadow: 0 0 8px #7C3AED; }
+.app-shell.light-mode .aic-button.secondary { color: #0F172A; border-color: #CBD5E1; background: #FFFFFF; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
+.app-shell.light-mode .aic-button.ghost { color: #64748B; border-color: #E2E8F0; background: transparent; }
+.app-shell.light-mode .aic-button.ghost:hover { color: #0F172A; background: #F3E8FF; border-color: #7C3AED; }
+
+/* Plan status bar (trial) */
+.app-shell.light-mode .aic-planbar { background: linear-gradient(90deg, #FEF3C7, #FDE68A); border-color: #FCD34D; }
+.app-shell.light-mode .aic-planbar.unlimited { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-planbar-plan { background: #7C3AED; color: #FFFFFF; border-color: #7C3AED; }
+.app-shell.light-mode .aic-planbar-usage { color: #92400E; }
+.app-shell.light-mode .aic-planbar-reset { color: #64748B; }
+.app-shell.light-mode .aic-planbar-actions.locked { color: #DC2626; }
+.app-shell.light-mode .aic-planbar-actions.unlocked { color: #16A34A; }
+.app-shell.light-mode .aic-planbar-track { background: #FDE68A; }
+
+/* Welcome */
+.app-shell.light-mode .aic-welcome-icon { background: #F3E8FF; border-color: rgba(124, 58, 237, .3); box-shadow: 0 8px 30px rgba(124, 58, 237, .18); }
+.app-shell.light-mode .aic-welcome h2 { color: #0F172A; }
+.app-shell.light-mode .aic-welcome-sub { color: #7C3AED; }
+.app-shell.light-mode .aic-welcome-lede { color: #475569; }
+.app-shell.light-mode .aic-welcome-limit { background: #FEF3C7; border-color: #FCD34D; color: #92400E; }
+.app-shell.light-mode .aic-welcome-plan { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-welcome-plan-usage { color: #475569; }
+.app-shell.light-mode .aic-welcome-plan-actions { color: #DC2626; }
+.app-shell.light-mode .aic-welcome-plan .aic-plan-badge { background: #7C3AED; color: #FFFFFF; border-color: #7C3AED; }
+
+/* "What I can help with" panel */
+.app-shell.light-mode .aic-capabilities { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-capability { background: #F8FAFC; }
+.app-shell.light-mode .aic-capability:hover { background: #F3E8FF; }
+.app-shell.light-mode .aic-capability-copy strong { color: #0F172A; }
+.app-shell.light-mode .aic-capability-copy small { color: #475569; }
+.app-shell.light-mode .aic-capability.store-actions.locked { background: #FEF3C7; }
+.app-shell.light-mode .aic-capability-lock { color: #DC2626; }
+.app-shell.light-mode .aic-capability-lock.unlocked { color: #16A34A; }
+.app-shell.light-mode .aic-mini-upgrade { background: #7C3AED; border-color: #7C3AED; }
+
+/* Popular questions pills */
+.app-shell.light-mode .aic-popular-chips button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
+.app-shell.light-mode .aic-popular-chips button:hover { border-color: #7C3AED; background: #F3E8FF; color: #0F172A; }
+
+/* Popular command templates */
+.app-shell.light-mode .aic-templates { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-template { background: #FFFFFF; }
+.app-shell.light-mode .aic-template:hover { background: #F3E8FF; }
+.app-shell.light-mode .aic-template-copy strong { color: #0F172A; }
+.app-shell.light-mode .aic-template-copy small { color: #475569; }
+
+/* Composer / input */
+.app-shell.light-mode .aic-composer { background: #FFFFFF; }
+.app-shell.light-mode .aic-composer-label { color: #475569; }
+.app-shell.light-mode .aic-counter { color: #94A3B8; }
+.app-shell.light-mode .aic-composer textarea { background: #FFFFFF; border-color: #E2E8F0; color: #0F172A; }
+.app-shell.light-mode .aic-composer textarea::placeholder { color: #94A3B8; }
+.app-shell.light-mode .aic-composer textarea:focus { border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124, 58, 237, .15); }
+.app-shell.light-mode .aic-send { background: #7C3AED; box-shadow: 0 4px 14px rgba(124, 58, 237, .3); }
+
+/* Category tabs */
+.app-shell.light-mode .aic-quick-tabs button { color: #475569; background: #F8FAFC; }
+.app-shell.light-mode .aic-quick-tabs button:hover { background: #F3E8FF; color: #0F172A; }
+.app-shell.light-mode .aic-quick-tabs button.active,
+.app-shell.light-mode .aic-quick-tabs button.active.tone-purple,
+.app-shell.light-mode .aic-quick-tabs button.active.tone-blue,
+.app-shell.light-mode .aic-quick-tabs button.active.tone-green,
+.app-shell.light-mode .aic-quick-tabs button.active.tone-orange,
+.app-shell.light-mode .aic-quick-tabs button.active.tone-amber {
+  background: #7C3AED;
+  color: #FFFFFF;
+  border-color: #7C3AED;
+}
+
+/* Quick command pills */
+.app-shell.light-mode .aic-quick-pills button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
+.app-shell.light-mode .aic-quick-pills button:hover { border-color: #7C3AED; color: #0F172A; }
+
+/* Side rail */
+.app-shell.light-mode .aic-side-block { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-side-block h3 { color: #0F172A; }
+.app-shell.light-mode .aic-usage-ring { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-ring-inner { background: #FFFFFF; }
+.app-shell.light-mode .aic-value-stat { background: #F8FAFC; }
+.app-shell.light-mode .aic-value-stat strong { color: #0F172A; }
+.app-shell.light-mode .aic-value-chart-head small { color: #64748B; }
+.app-shell.light-mode .aic-showcase { background: #FFFFFF; border-color: #E2E8F0; }
+
+/* Message bubbles */
+.app-shell.light-mode .aic-bubble.mine .aic-bubble-body { background: #F3E8FF; color: #0F172A; border-color: rgba(124, 58, 237, .2); }
+.app-shell.light-mode .aic-bubble.theirs .aic-bubble-body { background: #FFFFFF; color: #0F172A; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-bubble-meta { color: #94A3B8; }
+.app-shell.light-mode .aic-source { color: #64748B; }
+.app-shell.light-mode .aic-steps summary { color: #475569; }
+.app-shell.light-mode .aic-thinking { background: #FFFFFF; border-color: #E2E8F0; }
+
+/* Limit banner */
+.app-shell.light-mode .aic-banner.limit { background: #FEF3C7; color: #92400E; border-color: #FCD34D; }
+
+/* Post-chat activity */
+.app-shell.light-mode .aic-quickactions-grid button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
+.app-shell.light-mode .aic-quickactions-grid button:hover { border-color: #7C3AED; background: #F3E8FF; color: #0F172A; }
+.app-shell.light-mode .aic-activity { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-activity-footer { color: #475569; }
