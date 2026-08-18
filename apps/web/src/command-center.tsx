@@ -6,28 +6,38 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
+  Bell,
+  BookOpen,
   Bot,
   Box,
   Briefcase,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Command,
+  Database,
   Gauge,
+  GraduationCap,
+  Info,
   ListFilter,
   Loader2,
   LockKeyhole,
+  Microscope,
   Minus,
   MoreHorizontal,
   Package,
   Pause,
   Play,
   RefreshCw,
+  Rocket,
   Send,
   Settings2,
   ShieldCheck,
   Sparkles,
   Tag,
+  Target,
   TrendingUp,
   Users,
   WandSparkles,
@@ -50,9 +60,12 @@ import {
 import type { Recommendation, WorkspaceContext } from './model.js'
 import { formatMoney } from './model.js'
 import {
+  AGENT_CATEGORY_ORDER,
   IDLE_RUN_STATE,
   PLAN_LABELS,
   PLAN_PRICES,
+  agentCategory,
+  agentGuide,
   agentImpactSummary,
   agentStatusLabel,
   agentStatusTone,
@@ -62,9 +75,12 @@ import {
   insightsToday,
   reduceRunAll,
   relativeTime,
+  storeHealthDisplay,
   unlockedAgents,
+  upcomingModuleAccess,
 } from './command-center-model.js'
-import type { AgentActivityItem, AgentOverview, AgentOverviewEntry, CostSummaryView, PlanTier, RuleCatalogEntry, RunAllState, StoreHealthResult } from './command-center-model.js'
+import { UPCOMING_MODULES } from './command-center-model.js'
+import type { AgentActivityItem, AgentOverview, AgentOverviewEntry, CostSummaryView, PlanTier, RuleCatalogEntry, RunAllState, StoreHealthResult, UpcomingModule } from './command-center-model.js'
 
 export const AGENT_ICONS: Readonly<Record<string, LucideIcon>> = {
   REVENUE_AGENT: TrendingUp,
@@ -74,6 +90,13 @@ export const AGENT_ICONS: Readonly<Record<string, LucideIcon>> = {
   CAMPAIGN_AGENT: Send,
   PRODUCT_AGENT: Package,
   EXECUTIVE_AGENT: Briefcase,
+}
+
+export const UPCOMING_MODULE_ICONS: Readonly<Record<string, LucideIcon>> = {
+  STORE_COACH: GraduationCap,
+  AI_EXECUTIVE: Briefcase,
+  INSIGHTS_HUB: Microscope,
+  AI_COMMAND: Command,
 }
 
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
@@ -91,6 +114,7 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
   const [loadError, setLoadError] = useState<string | null>(null)
   const [drawerAgent, setDrawerAgent] = useState<AgentOverviewEntry | null>(null)
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')
+  const [upcomingModule, setUpcomingModule] = useState<UpcomingModule | null>(null)
   const [runState, setRunState] = useState<RunAllState>(IDLE_RUN_STATE)
   const [runningAgent, setRunningAgent] = useState<string | null>(null)
 
@@ -189,16 +213,45 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
             {runState.running ? 'Running…' : 'Run All Agents'}
           </button>
         </div>
+        {AGENT_CATEGORY_ORDER.map((category) => {
+          const categoryAgents = unlocked.filter((agent) => agentCategory(agent) === category)
+          if (categoryAgents.length === 0) return null
+          return (
+            <div key={category} className="cc-category">
+              <div className="cc-category-label"><span>{category}</span><small>{categoryAgents.length} agent{categoryAgents.length === 1 ? '' : 's'}</small></div>
+              <div className="cc-agent-grid">
+                {categoryAgents.map((agent) => (
+                  <AgentCard
+                    key={agent.id}
+                    agent={agent}
+                    activity={recent.filter((item) => item.agent === agent.id)}
+                    running={runningAgent === agent.id || (runState.running && runState.runnable.includes(agent.id))}
+                    onOpen={(tab) => openDrawer(agent, tab)}
+                    onRun={() => void runOne(agent)}
+                    onTogglePause={() => void togglePause(agent)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </section>
+
+      <section className="cc-section" aria-label="AI Growth Command">
+        <div className="cc-section-header">
+          <div>
+            <h2>AI Growth Command</h2>
+            <p>New advanced modules joining your AI workforce. Coming soon — here is what each one will do.</p>
+          </div>
+        </div>
         <div className="cc-agent-grid">
-          {unlocked.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              activity={recent.filter((item) => item.agent === agent.id)}
-              running={runningAgent === agent.id || (runState.running && runState.runnable.includes(agent.id))}
-              onOpen={(tab) => openDrawer(agent, tab)}
-              onRun={() => void runOne(agent)}
-              onTogglePause={() => void togglePause(agent)}
+          {UPCOMING_MODULES.map((module) => (
+            <UpcomingModuleCard
+              key={module.id}
+              module={module}
+              plan={overview?.plan ?? 'trial'}
+              onOpen={() => setUpcomingModule(module)}
+              onUpgrade={(plan) => upgrade(plan)}
             />
           ))}
         </div>
@@ -247,6 +300,15 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
           onChanged={() => void load()}
         />
       )}
+
+      {upcomingModule && (
+        <UpcomingModuleDrawer
+          module={upcomingModule}
+          plan={overview?.plan ?? 'trial'}
+          onClose={() => setUpcomingModule(null)}
+          onUpgrade={(plan) => upgrade(plan)}
+        />
+      )}
     </div>
   )
 }
@@ -263,32 +325,51 @@ export function CommandCenterHero({ health, cost, recent, overview }: { health: 
   const budget = formatBudget(cost)
   const trend = healthTrend(health)
   const today = insightsToday(recent)
+  const healthDisplay = storeHealthDisplay(health)
   const TrendIcon = trend === 'up' ? ArrowUpRight : trend === 'down' ? ArrowDownRight : Minus
   return (
     <section className="cc-hero" aria-label="Live intelligence">
       <div className="cc-kpi">
         <div className="cc-kpi-top"><span className="cc-kpi-icon health"><Gauge size={18} /></span><span className={`cc-kpi-trend ${trend}`}><TrendIcon size={14} />{trend === 'flat' ? 'steady' : trend}</span></div>
-        <strong>{health?.score ?? '—'}<small>{health?.score !== null && health !== null ? '/100' : ''}</small></strong>
-        <span>Store health score</span>
+        {healthDisplay.kind === 'score' ? (
+          <>
+            <strong>{healthDisplay.score}<small>/100</small></strong>
+            <span className={`cc-kpi-status ${healthDisplay.tone}`}>{healthDisplay.label}</span>
+          </>
+        ) : (
+          <strong className="cc-kpi-empty">{healthDisplay.message}</strong>
+        )}
+        <Tooltip text="A deterministic score from your revenue, orders, inventory cover, and customer retention. It needs enough closed-period history to be meaningful.">Store Health Score</Tooltip>
       </div>
       <div className="cc-kpi">
         <div className="cc-kpi-top"><span className="cc-kpi-icon budget"><Activity size={18} /></span><span className="cc-kpi-note">{cost ? `${cost.calls} calls today` : 'no calls yet'}</span></div>
         <strong>{budget.spent}<small> of {budget.cap}</small></strong>
         <div className="cc-gauge" role="img" aria-label={`AI budget ${budget.percent}% used`}><i style={{ width: `${budget.percent}%` }} /></div>
-        <span>AI budget today</span>
+        <Tooltip text="Daily budget cap protects your AI costs">AI Spend Today</Tooltip>
       </div>
       <div className="cc-kpi">
         <div className="cc-kpi-top"><span className="cc-kpi-icon insights"><WandSparkles size={18} /></span></div>
         <strong>{today}</strong>
-        <span>Insights today</span>
+        <Tooltip text="Recommendations created by your AI agents">Insights Generated Today</Tooltip>
       </div>
       <div className="cc-kpi">
         <div className="cc-kpi-top"><span className="cc-kpi-icon agents"><Bot size={18} /></span><span className="cc-kpi-note">{overview ? PLAN_LABELS[overview.plan] : ''} plan</span></div>
         <strong>{overview ? overview.unlockedCount : '—'}<small> of {overview?.totalCount ?? 7}</small></strong>
         <div className="cc-agent-dots" aria-hidden="true">{(overview?.agents ?? []).map((agent) => <i key={agent.id} className={agent.locked ? 'locked' : 'active'} />)}</div>
-        <span>Active agents</span>
+        <Tooltip text={`${overview ? overview.unlockedCount : 0} agents active on your current plan`}>Active agents</Tooltip>
       </div>
     </section>
+  )
+}
+
+/* ── Tooltip ──────────────────────────────────────────────────────────── */
+
+export function Tooltip({ text, children }: { text: string; children?: ReactNode }) {
+  return (
+    <span className="cc-tip" data-tip={text} title={text}>
+      {children}
+      <Info size={12} aria-hidden="true" />
+    </span>
   )
 }
 
@@ -346,7 +427,6 @@ export function AgentCard({ agent, activity, running, onOpen, onRun, onTogglePau
 export function LockedAgentCard({ agent, onUpgrade, onLearnMore }: { agent: AgentOverviewEntry; onUpgrade: () => void; onLearnMore: () => void }) {
   const Icon = AGENT_ICONS[agent.id] ?? Bot
   const planLabel = PLAN_LABELS[agent.requiredPlan]
-  const price = PLAN_PRICES[agent.requiredPlan]
   return (
     <article className="cc-agent-card locked">
       <div className="cc-agent-card-top">
@@ -355,7 +435,7 @@ export function LockedAgentCard({ agent, onUpgrade, onLearnMore }: { agent: Agen
         <AgentMenu
           items={[
             { label: 'Learn more', icon: Sparkles, onSelect: onLearnMore },
-            { label: `Upgrade to ${planLabel}`, icon: ArrowUpRight, onSelect: onUpgrade },
+            { label: 'Upgrade Plan', icon: ArrowUpRight, onSelect: onUpgrade },
           ]}
           label={`${agent.label} actions`}
         />
@@ -367,10 +447,113 @@ export function LockedAgentCard({ agent, onUpgrade, onLearnMore }: { agent: Agen
       <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“{agent.sampleInsight}”</span></blockquote>
       <div className="cc-agent-actions">
         <button type="button" className="cc-button upgrade" onClick={onUpgrade}>
-          <Zap size={14} /> Upgrade to {planLabel}{price ? ` · ${price}` : ''}
+          <Zap size={14} /> Upgrade Plan
         </button>
       </div>
     </article>
+  )
+}
+
+/* ── Upcoming AI Growth Command modules ───────────────────────────────── */
+
+export function UpcomingModuleCard({ module, plan, onOpen, onUpgrade }: { module: UpcomingModule; plan: PlanTier; onOpen: () => void; onUpgrade: (plan: PlanTier) => void }) {
+  const Icon = UPCOMING_MODULE_ICONS[module.id] ?? Sparkles
+  const access = upcomingModuleAccess(module, plan)
+  return (
+    <article className="cc-agent-card upcoming">
+      <div className="cc-agent-card-top">
+        <span className="cc-agent-icon upcoming-icon"><Icon size={20} /></span>
+        <span className="cc-status-pill upcoming"><i />Coming soon</span>
+        <AgentMenu
+          items={[
+            { label: 'Learn more', icon: Sparkles, onSelect: onOpen },
+            ...(access.requiresUpgrade && access.upgradePlan ? [{ label: 'Upgrade Plan', icon: ArrowUpRight, onSelect: () => onUpgrade(access.upgradePlan as PlanTier) }] : []),
+          ]}
+          label={`${module.label} actions`}
+        />
+      </div>
+      <div className="cc-agent-title as-text">
+        <h3>{module.label}</h3>
+        <span className="cc-category-chip">AI Employee</span>
+      </div>
+      <p className="cc-agent-tagline">{module.description}</p>
+      <div className="cc-plan-badge-row">
+        <span className={`cc-plan-badge ${access.badge}`}><LockKeyhole size={12} /> {access.badgeLabel}</span>
+        <span className="cc-tier-label">On your plan: {access.tierLabel}</span>
+      </div>
+      {access.note && <p className="cc-upcoming-note">{access.note}</p>}
+      <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“{module.sampleInsight}”</span></blockquote>
+      <div className="cc-agent-actions">
+        <button type="button" className="cc-button secondary" onClick={onOpen}>View details</button>
+        <button type="button" className="cc-button primary" disabled title="Launching soon"><Rocket size={14} /> Coming soon</button>
+      </div>
+    </article>
+  )
+}
+
+export function UpcomingModuleDrawer({ module, plan, onClose, onUpgrade }: { module: UpcomingModule; plan: PlanTier; onClose: () => void; onUpgrade: (plan: PlanTier) => void }) {
+  const Icon = UPCOMING_MODULE_ICONS[module.id] ?? Sparkles
+  const access = upcomingModuleAccess(module, plan)
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    closeRef.current?.focus()
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="cc-drawer-root" role="dialog" aria-modal="true" aria-label={`${module.label} details`}>
+      <div className="cc-drawer-backdrop" onClick={onClose} />
+      <aside className="cc-drawer">
+        <header className="cc-drawer-header">
+          <span className="cc-agent-icon upcoming-icon"><Icon size={22} /></span>
+          <div>
+            <h2>{module.label}</h2>
+            <p>{module.description}</p>
+          </div>
+          <button ref={closeRef} type="button" className="cc-menu-trigger" aria-label="Close details" onClick={onClose}><X size={17} /></button>
+        </header>
+        <div className="cc-drawer-body">
+          <div className="cc-coming-soon-banner"><Rocket size={16} /><span>This module is coming soon. Here is what it will do for you.</span></div>
+
+          <section className="cc-drawer-section">
+            <h3>What it does</h3>
+            <ul className="cc-bullet-list">
+              {module.features.map((feature) => <li key={feature}>{feature}</li>)}
+            </ul>
+          </section>
+
+          <section className="cc-drawer-section">
+            <h3>Sample insight</h3>
+            <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“{module.sampleInsight}”</span></blockquote>
+          </section>
+
+          <section className="cc-drawer-section">
+            <h3>Plan availability</h3>
+            <div className="cc-plan-matrix">
+              {(['trial', 'start', 'growth', 'commander'] as const).map((tier) => (
+                <div key={tier} className={`cc-plan-matrix-row ${tier === plan ? 'current' : ''}`}>
+                  <strong>{PLAN_LABELS[tier]}</strong>
+                  <span>{module.planTiers[tier]}</span>
+                  {tier === plan && <em>You are here</em>}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="cc-drawer-section">
+            <h3>Category</h3>
+            <span className="cc-category-chip">AI Employee</span>
+          </section>
+
+          {access.requiresUpgrade && access.upgradePlan && (
+            <button type="button" className="cc-button upgrade" onClick={() => onUpgrade(access.upgradePlan as PlanTier)}><Zap size={14} /> Upgrade Plan</button>
+          )}
+        </div>
+      </aside>
+    </div>
   )
 }
 
@@ -434,8 +617,15 @@ function prettyAgent(id: string): string {
 
 /* ── Activity feed ────────────────────────────────────────────────────── */
 
+const SAMPLE_ACTIVITY_TYPES = [
+  { icon: WandSparkles, label: 'Recommendation created', detail: 'e.g. “Reorder Espresso Grinder Pro before stockout”' },
+  { icon: Play, label: 'Agent run completed', detail: 'e.g. “Revenue Agent analyzed 3 signals in 12s”' },
+  { icon: Check, label: 'Insight approved', detail: 'e.g. “Pricing uplift test approved by you”' },
+] as const
+
 export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly Recommendation[]; agents: readonly AgentOverviewEntry[]; onOpenAgent: (agentId: string) => void }) {
   const items = recent.slice(0, 15)
+  const [learnOpen, setLearnOpen] = useState(false)
   return (
     <section className="cc-section" aria-label="Recent agent activity">
       <div className="cc-section-header">
@@ -449,13 +639,36 @@ export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly
           <div className="cc-feed-empty">
             <ShieldCheck size={20} />
             <strong>No agent activity yet</strong>
-            <span>Run your agents to generate the first evidence-backed insights. Nothing here is ever invented.</span>
+            <span>This is where you will see recommendations, runs, and insights from your agents. Run them to generate the first evidence-backed results — nothing here is ever invented.</span>
+            <div className="cc-feed-samples" aria-label="Example activity types">
+              {SAMPLE_ACTIVITY_TYPES.map((sample) => {
+                const SampleIcon = sample.icon
+                return (
+                  <div key={sample.label} className="cc-feed-sample">
+                    <SampleIcon size={14} />
+                    <div><strong>{sample.label}</strong><span>{sample.detail}</span></div>
+                  </div>
+                )
+              })}
+            </div>
+            <button type="button" className="cc-button ghost" aria-expanded={learnOpen} onClick={() => setLearnOpen((value) => !value)}>
+              <BookOpen size={14} /> {learnOpen ? 'Hide how agents work' : 'Learn how agents work'}
+            </button>
+            {learnOpen && (
+              <ol className="cc-how-it-works">
+                <li><strong>1 · Sync</strong><span>Real Shopify data becomes a deterministic store snapshot.</span></li>
+                <li><strong>2 · Rules fire</strong><span>Eleven deterministic rules flag evidence — no numbers are invented.</span></li>
+                <li><strong>3 · AI explains</strong><span>Language summarizes the evidence and never adds new numbers.</span></li>
+                <li><strong>4 · You decide</strong><span>Approve or reject each recommendation and track the impact.</span></li>
+              </ol>
+            )}
           </div>
         )}
         {items.map((item) => {
           const agent = agents.find((entry) => entry.id === item.agent)
+          const fresh = item.createdAt.slice(0, 10) === new Date().toISOString().slice(0, 10)
           return (
-            <button type="button" key={item.id} className="cc-feed-row" onClick={() => onOpenAgent(item.agent)}>
+            <button type="button" key={item.id} className={`cc-feed-row ${fresh ? 'is-fresh' : ''}`} onClick={() => onOpenAgent(item.agent)}>
               <span className={`cc-feed-dot ${item.agent.toLowerCase()}`} aria-hidden="true" />
               <span className="cc-feed-agent">{agent?.label ?? prettyAgent(item.agent)}</span>
               <span className="cc-feed-title">{item.title}</span>
@@ -505,6 +718,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
   }, [storeId, agent.id])
 
   const summary = useMemo(() => agentImpactSummary(activity ?? []), [activity])
+  const guide = agentGuide(agent.id)
 
   const decideInline = async (item: AgentActivityItem, decision: 'approve' | 'reject') => {
     try {
@@ -537,7 +751,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
               <h3>Rules this agent will run for you</h3>
               {rules.map((rule) => <div key={rule.id} className="cc-rule-row"><strong>{rule.name}</strong><span>{rule.purpose}</span></div>)}
             </div>
-            <button type="button" className="cc-button upgrade" onClick={onUpgrade}><Zap size={14} /> Upgrade to {PLAN_LABELS[agent.requiredPlan]}</button>
+            <button type="button" className="cc-button upgrade" onClick={onUpgrade}><Zap size={14} /> Upgrade Plan</button>
           </div>
         ) : (
           <>
@@ -562,6 +776,42 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                   <span><Clock3 size={13} /> Last insight {summary.lastRunAt ? relativeTime(summary.lastRunAt) : 'never'}</span>
                   <span><Tag size={13} /> Prompt v{agent.promptVersion}</span>
                 </div>
+
+                <section className="cc-drawer-section">
+                  <h3>About this agent</h3>
+                  <p className="cc-drawer-note">{guide.description}</p>
+                </section>
+
+                <section className="cc-drawer-section">
+                  <h3>What it does</h3>
+                  <ul className="cc-bullet-list">
+                    {guide.whatItDoes.map((point) => <li key={point}>{point}</li>)}
+                  </ul>
+                </section>
+
+                <section className="cc-drawer-section">
+                  <h3>Sample insights</h3>
+                  <div className="cc-sample-stack">
+                    {guide.sampleInsights.map((insight) => (
+                      <blockquote key={insight} className="cc-sample-insight"><Sparkles size={13} /><span>“{insight}”</span></blockquote>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="cc-drawer-section">
+                  <h3>Best used for</h3>
+                  <ul className="cc-bullet-list">
+                    {guide.useCases.map((useCase) => <li key={useCase}>{useCase}</li>)}
+                  </ul>
+                </section>
+
+                <section className="cc-drawer-section">
+                  <h3>Data it uses</h3>
+                  <div className="cc-data-chips">
+                    {guide.dataSources.map((source) => <code key={source}><Database size={12} /> {source}</code>)}
+                  </div>
+                </section>
+
                 <button type="button" className="cc-button primary full" onClick={onRun} disabled={agent.paused}><Play size={14} /> Run {agent.label} now</button>
                 {agent.paused && <p className="cc-drawer-note">This agent is paused. Resume it from Settings to run analyses.</p>}
               </div>
@@ -575,7 +825,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                     <div className="cc-rule-row-top"><strong>{rule.name}</strong><code>{rule.id}</code></div>
                     <span>{rule.purpose}</span>
                     <div className="cc-rule-facts">
-                      <em>Threshold: {rule.threshold}</em>
+                      <em>Triggers when: {rule.threshold}</em>
                       <em>Impact: {rule.impact}</em>
                     </div>
                     <small>Inputs: {rule.inputs.join(' · ')}</small>
@@ -588,6 +838,13 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
               <div className="cc-drawer-body">
                 {activity === null && <div className="cc-drawer-loading"><Loader2 size={16} className="cc-spin" /> Loading activity…</div>}
                 {activity !== null && activity.length === 0 && <p className="cc-drawer-note">No recommendations from this agent yet. Run it to generate the first ones.</p>}
+                {activity !== null && activity.length > 0 && (
+                  <div className="cc-activity-summary">
+                    <div><strong>{activity.filter((item) => item.status === 'APPROVED' || item.status === 'EXECUTED').length}</strong><span>succeeded</span></div>
+                    <div><strong>{activity.filter((item) => item.status === 'REJECTED' || item.status === 'FAILED').length}</strong><span>declined / failed</span></div>
+                    <div><strong>{formatMoney(summary.totalImpact, summary.currency)}</strong><span>impact generated</span></div>
+                  </div>
+                )}
                 {(activity ?? []).slice(0, 10).map((item) => (
                   <div key={item.id} className="cc-activity-item">
                     <div className="cc-activity-item-top">
@@ -621,6 +878,29 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                 </div>
                 <div className="cc-setting-row">
                   <div>
+                    <strong>Notification preferences</strong>
+                    <span>Choose which events email you. Coming soon.</span>
+                  </div>
+                  <Bell size={16} className="cc-setting-muted" aria-hidden="true" />
+                </div>
+                {rules.length > 0 && (
+                  <div className="cc-setting-row">
+                    <div>
+                      <strong>Rule thresholds</strong>
+                      <span>{rules.map((rule) => `${rule.name}: ${rule.threshold}`).join(' · ')}</span>
+                    </div>
+                    <Target size={16} className="cc-setting-muted" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="cc-setting-row">
+                  <div>
+                    <strong>Auto-run schedule</strong>
+                    <span>Run this agent automatically on a recurring schedule. Coming soon.</span>
+                  </div>
+                  <CalendarClock size={16} className="cc-setting-muted" aria-hidden="true" />
+                </div>
+                <div className="cc-setting-row">
+                  <div>
                     <strong>Prompt version</strong>
                     <span>v{agent.promptVersion} · language-only, read-only, evidence-grounded.</span>
                   </div>
@@ -646,7 +926,10 @@ export function CommandCenterSkeleton() {
   return (
     <div className="cc-workspace" aria-busy="true" aria-label="Loading AI Command Center">
       <div className="cc-hero">{[0, 1, 2, 3].map((index) => <div key={index} className="cc-kpi cc-skeleton" />)}</div>
-      <div className="cc-agent-grid">{[0, 1, 2, 3, 4, 5, 6].map((index) => <div key={index} className="cc-agent-card cc-skeleton" />)}</div>
+      <div className="cc-skeleton-section">
+        <div className="cc-skeleton-heading" />
+        <div className="cc-agent-grid">{[0, 1, 2, 3, 4, 5, 6].map((index) => <div key={index} className="cc-agent-card cc-skeleton" />)}</div>
+      </div>
     </div>
   )
 }
@@ -657,6 +940,11 @@ export function CommandCenterEmpty({ title, body }: { title: string; body: React
       <span className="cc-empty-orb"><Bot size={26} /></span>
       <h2>{title}</h2>
       <p>{body}</p>
+      <ol className="cc-getting-started">
+        <li><strong>1</strong><span><strong>Connect Shopify</strong><small>Sync real products, orders, and customers — no demo data.</small></span></li>
+        <li><strong>2</strong><span><strong>Run your agents</strong><small>Deterministic rules turn store evidence into recommendations.</small></span></li>
+        <li><strong>3</strong><span><strong>Review and act</strong><small>Approve or reject each insight, and track real impact.</small></span></li>
+      </ol>
     </div>
   )
 }

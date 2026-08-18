@@ -52,6 +52,16 @@ describe('deterministic store health', () => {
     const empty = { ...buildStoreContext(raw), products: [], customers: [], last30dRevenue: 0, previous30dRevenue: 0, last30dOrders: 0, previous30dOrders: 0 }
     expect(calculateStoreHealth(empty).score).toBeNull()
   })
+  it('reports closed-period order count and order history span for empty states', () => {
+    const health = calculateStoreHealth(buildStoreContext(raw))
+    expect(health.orderCount).toBe(30)
+    expect(health.historyDays).toBeNull() // no raw order rows → span unknown
+    const withOrders = calculateStoreHealth({
+      ...buildStoreContext(raw),
+      orders: [{ orderKey: 'o1', total: 10, day: '2024-06-02', productIds: ['stock'], customerKey: null }, { orderKey: 'o2', total: 10, day: '2024-06-12', productIds: ['stock'], customerKey: null }],
+    })
+    expect(withOrders.historyDays).toBe(10)
+  })
   it('handles a new positive revenue baseline', () => {
     const health = calculateStoreHealth({ ...buildStoreContext(raw), previous30dRevenue: 0, previous30dOrders: 0 })
     expect(health.components.find((component) => component.key === 'revenue_momentum')?.score).toBe(100)
