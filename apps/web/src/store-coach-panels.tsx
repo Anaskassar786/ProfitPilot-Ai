@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  Bot,
   Check,
   Clock3,
+  Compass,
   Lightbulb,
   LockKeyhole,
-  MessageSquare,
   Mic,
   Send,
   Sparkles,
@@ -122,7 +121,7 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
         ) : messages.length === 0 && !streaming ? (
           <div className="coach-chat-empty">
             <div className="coach-chat-persona">
-              <span className="coach-orb small"><Bot size={18} /></span>
+              <span className="coach-orb small"><Compass size={18} /></span>
               <div>
                 <strong>Coach <span className="coach-chat-personality">{PERSONALITY_META[personality].label} mode</span></strong>
                 <p>Hi! I’m here to help with anything about your store. I have access to your real synced data and every answer is checked against it before it reaches you — if a number isn’t there yet, I’ll say so and tell you what to sync.</p>
@@ -139,7 +138,7 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
           <>
             {messages.map((message, index) => (
               <div className={`coach-message ${message.role}`} key={`${message.timestamp}-${index}`}>
-                <span className="coach-message-avatar">{message.role === 'coach' ? <Bot size={14} /> : 'You'}</span>
+                <span className="coach-message-avatar">{message.role === 'coach' ? <Compass size={14} /> : 'You'}</span>
                 <div className="coach-message-bubble">
                   <p>{message.content}</p>
                   <div className="coach-message-meta">
@@ -152,7 +151,7 @@ export function CoachChatPanel({ storeId, plan, onToast, onNavigateBilling, comp
             ))}
             {streaming !== null && (
               <div className="coach-message coach">
-                <span className="coach-message-avatar"><Bot size={14} /></span>
+                <span className="coach-message-avatar"><Compass size={14} /></span>
                 <div className="coach-message-bubble">
                   <p>{streaming || <span className="coach-typing"><i /><i /><i /></span>}</p>
                 </div>
@@ -207,7 +206,7 @@ const ONBOARDING_STEPS = [
   { step: 2, title: 'Choose your personality', description: 'The Coach adapts its tone. Pick the voice that fits how you like to work.' },
   { step: 3, title: 'Set your huddle time', description: 'Your daily briefing arrives at a time that suits you — in your store’s own timezone.' },
   { step: 4, title: 'Set your first goal', description: 'Goals give the Coach a north star. AI suggestions are derived from your real trend.' },
-  { step: 5, title: 'Try chat', description: 'Ask anything about your store. Answers are checked against your actual numbers before they reach you.' },
+  { step: 5, title: 'You’re ready', description: 'Daily briefings, priorities, and weekly goals — that’s your coach. For a longer conversation, AI Command is next door.' },
 ] as const
 
 export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast }: { storeId: string; plan?: CoachPlan; onClose: () => void; onToast: CoachToast }) {
@@ -253,7 +252,7 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
     <div className="modal-overlay">
       <div className="modal-card coach-onboarding-modal">
         <div className="coach-onboarding-head">
-          <span className="coach-orb"><Bot size={22} /></span>
+          <span className="coach-orb"><Compass size={22} /></span>
           <div>
             <div className="section-kicker"><span className="kicker-dot purple" />STORE COACH ONBOARDING</div>
             <h2>Meet Store Coach</h2>
@@ -274,8 +273,8 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
           <p>{current.description}</p>
           {visibleStep === 1 && (
             <div className="coach-onboarding-preview">
-              <span className="coach-message-avatar"><Bot size={14} /></span>
-              <div className="coach-message-bubble"><p>Good morning. I’m Store Coach. I read your synced orders and revenue every day, and I only ever quote numbers that actually exist in your data.</p></div>
+              <span className="coach-message-avatar"><Compass size={14} /></span>
+              <div className="coach-message-bubble"><p>Good morning. I’m your store growth coach. I’ll look at your recent sales and customers every day, and I only ever quote numbers that actually exist in your store.</p></div>
             </div>
           )}
           {visibleStep === 2 && (

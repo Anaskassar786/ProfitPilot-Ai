@@ -61,21 +61,21 @@
 .app-shell.light-mode .coach-workspace {
   --c-purple: #7C3AED;
   --c-purple-strong: #6D28D9;
-  --c-purple-soft: rgba(124, 58, 237, 0.09);
+  --c-purple-soft: rgba(124, 58, 237, 0.10);
   /* Darker warm tones than the raw brand ramp so 12px text passes WCAG AA on white */
   --c-orange: #C2410C;
-  --c-orange-soft: rgba(234, 88, 12, 0.09);
+  --c-orange-soft: rgba(234, 88, 12, 0.10);
   --c-green: #059669;
-  --c-green-soft: rgba(5, 150, 105, 0.10);
+  --c-green-soft: rgba(5, 150, 105, 0.11);
   --c-red: #DC2626;
   --c-red-soft: rgba(220, 38, 38, 0.08);
   --c-gold: #B45309;
-  --c-gold-soft: rgba(217, 119, 6, 0.10);
+  --c-gold-soft: rgba(217, 119, 6, 0.11);
   --c-blue: #2563EB;
-  --c-blue-soft: rgba(37, 99, 235, 0.08);
+  --c-blue-soft: rgba(37, 99, 235, 0.09);
   --c-card: #FFFFFF;
-  --c-card-2: #FAFAFB;
-  --c-card-3: #F4F4F6;
+  --c-card-2: #FAFBFC;
+  --c-card-3: #F3F4F6;
   --c-border: #E5E7EB;
   --c-border-strong: #D1D5DB;
   --c-text: #111827;
@@ -86,11 +86,12 @@
   --coach-chart-grid: #E5E7EB;
   --coach-chart-text: #6B7280;
   --coach-chart-comparison: #0891B2;
-  --c-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 16px rgba(16, 24, 40, 0.06);
-  --c-shadow-lift: 0 6px 10px rgba(16, 24, 40, 0.06), 0 16px 32px rgba(16, 24, 40, 0.10);
-  --c-hero: radial-gradient(120% 160% at 0% 0%, rgba(124, 58, 237, 0.07), transparent 52%),
-            linear-gradient(165deg, #FFFFFF, #FCFCFE);
-  --c-inner: #FAFAFB;
+  --c-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --c-shadow-lift: 0 8px 16px rgba(16, 24, 40, 0.07), 0 20px 36px rgba(124, 58, 237, 0.08);
+  --c-hero: radial-gradient(120% 160% at 0% 0%, rgba(124, 58, 237, 0.09), transparent 52%),
+            radial-gradient(90% 130% at 100% 100%, rgba(234, 88, 12, 0.06), transparent 55%),
+            linear-gradient(165deg, #FFFFFF, #FAFBFC);
+  --c-inner: #FAFBFC;
 }
 
 /* ── Layout ────────────────────────────────────────────────────────────── */
@@ -139,7 +140,7 @@
 .app-shell.light-mode .coach-avatar-presence { border-color: #FFFFFF; }
 .coach-hero-copy { min-width: 0; }
 .coach-hero-eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.coach-hero-brand { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-purple); }
+.coach-hero-brand { font-size: 13px; font-weight: 650; letter-spacing: 0.01em; text-transform: none; color: var(--c-purple); }
 .coach-plan-badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--c-border-strong); color: var(--c-text-2); background: var(--c-card-2); }
 .coach-plan-badge.trial { color: var(--c-text-2); }
 .coach-plan-badge.start { color: var(--c-blue); border-color: color-mix(in srgb, var(--c-blue) 35%, transparent); background: var(--c-blue-soft); }
@@ -268,6 +269,10 @@
 .coach-priority-time { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--c-text-3); }
 .coach-priority-card h3 { font-size: 15px; font-weight: 650; color: var(--c-text); line-height: 1.4; margin: 0; letter-spacing: -0.01em; }
 .coach-priority-card p { font-size: 13px; color: var(--c-text-2); line-height: 1.55; margin: 0; flex: 1; }
+.coach-priority-why { font-size: 12.5px !important; color: var(--c-text-2) !important; font-weight: 550; flex: none !important; }
+.coach-building-priorities { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--c-purple) 35%, transparent); background: var(--c-purple-soft); }
+.coach-building-priorities strong { display: block; font-size: 15px; color: var(--c-text); margin-bottom: 4px; }
+.coach-building-priorities p { font-size: 13px; color: var(--c-text-2); line-height: 1.55; margin: 0; }
 .coach-priority-impact { display: flex; align-items: baseline; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--c-border-strong); }
 .coach-priority-impact strong { font-size: 19px; font-weight: 750; color: var(--c-text); letter-spacing: -0.02em; }
 .coach-priority-impact span { font-size: 12px; color: var(--c-text-3); }
@@ -716,8 +721,27 @@
 .campaigns-coming-soon-note { font-size: 12px; color: var(--text-tertiary); max-width: 480px; }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */
+/* ── Human-friendly value, best days, style ─────────────────────────────── */
+.coach-value-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.coach-tip-card, .coach-wins-card, .coach-lesson-card { min-height: 100%; }
+.coach-tip-card p, .coach-wins-card p, .coach-lesson-card p { font-size: 14px; color: var(--c-text-2); line-height: 1.6; margin: 0; }
+.coach-win-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.coach-win-list li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--c-text-2); line-height: 1.5; }
+.coach-win-list li svg { color: var(--c-green); flex: none; margin-top: 2px; }
+.coach-win-note { font-size: 13px; color: var(--c-text); font-weight: 600; }
+.coach-bestdays-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.coach-bestday-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 10px; border: 1px solid var(--c-border); background: var(--c-inner); }
+.coach-bestday-card span { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--c-text-3); }
+.coach-bestday-card strong { font-size: 18px; font-weight: 750; letter-spacing: -0.02em; color: var(--c-text); }
+.coach-bestday-card p { font-size: 13px; color: var(--c-text-2); line-height: 1.55; margin: 0; }
+.coach-style-lede { font-size: 14px; color: var(--c-text-2); margin: 0 0 14px; }
+.coach-ask-cta { display: flex; gap: 16px; align-items: flex-start; }
+.coach-ask-cta strong { display: block; font-size: 16px; color: var(--c-text); margin-bottom: 6px; }
+.coach-ask-cta p { font-size: 14px; color: var(--c-text-2); line-height: 1.55; margin: 0 0 12px; }
+.coach-plan-teaser p { font-size: 13px; color: var(--c-text-2); margin: 0; line-height: 1.5; }
+
 @media (max-width: 1100px) {
-  .coach-priority-grid, .coach-metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .coach-priority-grid, .coach-metric-grid, .coach-value-grid, .coach-bestdays-grid { grid-template-columns: repeat(2, 1fr); }
   .coach-briefing-grid { grid-template-columns: 1fr; }
   .coach-badge-grid { grid-template-columns: repeat(2, 1fr); }
   .coach-goals-layout, .coach-settings-grid { grid-template-columns: 1fr; }
