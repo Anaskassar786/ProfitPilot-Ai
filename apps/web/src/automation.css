@@ -2736,14 +2736,14 @@
 .light-mode .run-status.completed {
   color: #166534;
   background: #dcfce7;
-  border-color: #bbf7d0;
+  border-color: #86efac;
 }
 .light-mode .automation-status.paused,
 .light-mode .run-status.waiting,
 .light-mode .run-status.approval_required {
   color: #92400e;
   background: #fef3c7;
-  border-color: #fde68a;
+  border-color: #fcd34d;
 }
 .light-mode .automation-status.draft,
 .light-mode .run-status.queued {
@@ -3585,8 +3585,8 @@
 }
 
 .light-mode .automation-page .automation-plan-banner.reached {
-  background: linear-gradient(135deg, #fef3c7, #fecaca);
-  border-color: #fca5a5;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d;
 }
 
 .light-mode .automation-page .automation-plan-banner.drafts {
@@ -3606,13 +3606,13 @@
 .light-mode .automation-page .template-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .light-mode .automation-page .template-card-pro:hover,
 .light-mode .automation-page .template-card:hover {
   background: #ffffff;
-  border-color: #7c3aed;
+  border-color: #a78bfa;
   box-shadow: 0 8px 16px rgba(124, 58, 237, 0.15);
 }
 
@@ -3969,5 +3969,116 @@
 
 .light-mode .automation-page .auto-drafts {
   background: #f8fafc;
+}
+
+/* ---------- Light theme: plan banners & approval banner ---------- */
+
+/* "Almost at your limit" banner (the 80% variant without a modifier class). */
+.light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d;
+}
+
+.light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) strong,
+.light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) span {
+  color: #92400e;
+}
+
+.light-mode .automation-page .automation-plan-banner button,
+.light-mode .automation-page .pending-approval-banner button {
+  background: #7c3aed;
+  color: #ffffff;
+  border: 1px solid #7c3aed;
+}
+
+.light-mode .automation-page .automation-plan-banner button:hover,
+.light-mode .automation-page .pending-approval-banner button:hover {
+  background: #6d28d9;
+  border-color: #6d28d9;
+}
+
+/* Secondary action paired with "Upgrade Plan" (e.g. "Complete Drafts"). */
+.light-mode .automation-page .automation-plan-banner button + button {
+  background: #ffffff;
+  color: #7c3aed;
+  border: 1px solid #c4b5fd;
+}
+
+.light-mode .automation-page .automation-plan-banner button + button:hover {
+  background: #f3e8ff;
+  border-color: #a78bfa;
+}
+
+.light-mode .automation-page .pending-approval-banner {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+/* ---------- Light theme: meta text & workflow stats ---------- */
+
+.light-mode .automation-page .setup-time,
+.light-mode .automation-page .template-meta,
+.light-mode .automation-page .workflow-card-stats {
+  color: #64748b;
+}
+
+/* ---------- Light theme: focus ring & 200ms transitions ---------- */
+
+.light-mode .automation-page button:focus-visible,
+.light-mode .automation-subpage button:focus-visible,
+.light-mode .automation-modal button:focus-visible,
+.light-mode .workflow-editor button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.light-mode .automation-page .template-card-pro,
+.light-mode .automation-page .automation-workflow-card,
+.light-mode .automation-page .kpi-card,
+.light-mode .automation-page .filter-tab,
+.light-mode .automation-page .view-toggle button {
+  transition:
+    transform 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    background 200ms ease;
+}
+
+/* ---------- Light theme: editor + modal secondary controls ---------- */
+
+.light-mode .workflow-editor .automation-secondary {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.light-mode .workflow-editor .automation-secondary:hover {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.light-mode .workflow-editor .editor-top-actions button.mode-toggle {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #c4b5fd;
+}
+
+.light-mode .workflow-editor .editor-top-actions button.publish {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #ffffff;
+  border-color: #7c3aed;
+}
+
+.light-mode .automation-modal .automation-secondary {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.light-mode .automation-modal .automation-secondary:hover {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #7c3aed;
 }
 
