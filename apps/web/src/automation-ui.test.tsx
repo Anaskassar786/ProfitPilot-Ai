@@ -3,16 +3,22 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { HowItWorksModal } from './automation-tutorial.js'
 import {
+  actionBarHeights,
   friendlyCron,
   friendlyNodeLabel,
   friendlyNodeSummary,
   friendlyStatus,
   friendlyTriggerSummary,
   isEmptyWorkflow,
+  monthSparkPath,
+  planBadgeClass,
   planBadgeLabel,
+  templateToneClass,
+  usageSegments,
 } from './automation-helpers.js'
-import type { WorkflowNode, WorkflowRecord, WorkflowTemplate } from './automation-model.js'
+import type { AutomationSummary, WorkflowNode, WorkflowRecord, WorkflowTemplate } from './automation-model.js'
 import { CreateAutomationModal } from './automation.js'
+import { AutomationKpis } from './AutomationKpis.js'
 import { TemplateGallery } from './TemplateGallery.js'
 import { WorkflowCard } from './WorkflowCard.js'
 
@@ -111,6 +117,40 @@ describe('Automation merchant-friendly copy helpers', () => {
   })
 })
 
+describe('Automation visualization helpers', () => {
+  it('maps real categories and plans to visual classes', () => {
+    expect(templateToneClass('Marketing')).toBe('sales-growth')
+    expect(templateToneClass('Customer')).toBe('customer-experience')
+    expect(templateToneClass('Inventory')).toBe('inventory-stock')
+    expect(templateToneClass('Operations')).toBe('operations')
+    expect(templateToneClass('Revenue')).toBe('revenue-retention')
+    expect(planBadgeClass('trial')).toBe('all-plans')
+    expect(planBadgeClass('start')).toBe('start')
+    expect(planBadgeClass('growth')).toBe('growth')
+    expect(planBadgeClass('commander')).toBe('commander')
+  })
+
+  it('builds usage segments from real limits without inventing a Commander cap', () => {
+    expect(usageSegments(1, 2)).toEqual({ filled: 1, empty: 1, unlimited: false, total: 2 })
+    expect(usageSegments(5, 5)).toEqual({ filled: 5, empty: 0, unlimited: false, total: 5 })
+    expect(usageSegments(3, null)).toEqual({ filled: 3, empty: 0, unlimited: true, total: 3 })
+  })
+
+  it('keeps zero action bars at zero instead of decorative fake heights', () => {
+    expect(actionBarHeights([0, 0, 0, 0])).toEqual([0, 0, 0, 0])
+    expect(actionBarHeights([10, 0, 5, 0])[1]).toBe(0)
+    expect(actionBarHeights([10, 0, 5, 0])[0]).toBe(100)
+  })
+
+  it('draws the run sparkline from last month vs this month only', () => {
+    const empty = monthSparkPath(0, 0)
+    expect(empty.line).toContain('M0,36.0')
+    expect(empty.line).toContain('L100,36.0')
+    const up = monthSparkPath(0, 10)
+    expect(up.line).not.toEqual(empty.line)
+  })
+})
+
 describe('Automation workflow card', () => {
   it('renders merchant language without leaking the workflow UUID', () => {
     const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
@@ -138,6 +178,14 @@ describe('Automation workflow card', () => {
     expect(html).toContain('View Report')
     expect(html).toContain('Pause')
   })
+
+  it('marks status and shows an educational empty hint when the workflow has never run', () => {
+    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
+    expect(html).toContain('status-active')
+    expect(html).toContain('workflow-status-badge')
+    expect(html).toContain('This automation has not run yet')
+    expect(html).not.toContain('Upgrade to')
+  })
 })
 
 describe('Automation template gallery', () => {
@@ -153,6 +201,8 @@ describe('Automation template gallery', () => {
     expect(html).toContain('Supports a stronger first-purchase relationship.')
     expect(html).toContain('Quick setup')
     expect(html).toContain('3 steps')
+    expect(html).toContain('customer-experience')
+    expect(html).toContain('template-plan-badge all-plans')
   })
 
   it('marks locked templates with an Upgrade Plan action (never a plan name)', () => {
@@ -206,6 +256,62 @@ describe('Create automation modal', () => {
     )
     expect(html).not.toContain('Upgrade to Growth')
     expect(html).not.toContain('Upgrade to Commander')
+  })
+})
+
+const emptySummary: AutomationSummary = {
+  workflows: { active: 0, draft: 0, paused: 0, archived: 0 },
+  runs: { today: 0, thisMonth: 0, previousMonth: 0, completed: 0, failed: 0, waiting: 0, successRate: null },
+  impact: { emailsSent: 0, customersTagged: 0, discountsCreated: 0, notificationsSent: 0 },
+  approvalsPending: 0,
+  recentActivity: [],
+}
+
+describe('Automation KPI visualizations', () => {
+  it('renders five unique charts from real empty data with educational helpers', () => {
+    const html = renderToStaticMarkup(
+      createElement(AutomationKpis, {
+        summary: emptySummary,
+        usage: { plan: 'trial', used: 2, limit: 2, remaining: 0, limitReached: true },
+        onApprovals: () => {},
+      }),
+    )
+    expect(html).toContain('Active automations')
+    expect(html).toContain('Runs this month')
+    expect(html).toContain('Success rate')
+    expect(html).toContain('Actions completed')
+    expect(html).toContain('Pending approvals')
+    expect(html).toContain('segmented-bar')
+    expect(html).toContain('stacked-mini-bars')
+    expect(html).toContain('approval-dots')
+    expect(html).toContain('Available after the first run')
+    expect(html).toContain('Measured after successful actions')
+    expect(html).toContain('All clear!')
+    expect(html).toContain('2 of 2 automations used')
+    expect(html).toContain('No change from last month')
+    expect(html).not.toContain('Upgrade to')
+  })
+
+  it('surfaces real impact counts and success rate when the backend has them', () => {
+    const html = renderToStaticMarkup(
+      createElement(AutomationKpis, {
+        summary: {
+          ...emptySummary,
+          workflows: { ...emptySummary.workflows, active: 1 },
+          runs: { ...emptySummary.runs, thisMonth: 4, previousMonth: 1, completed: 3, failed: 1, successRate: 75 },
+          impact: { emailsSent: 3, customersTagged: 1, discountsCreated: 0, notificationsSent: 2 },
+          approvalsPending: 2,
+        },
+        usage: { plan: 'start', used: 1, limit: 5, remaining: 4, limitReached: false },
+        onApprovals: () => {},
+      }),
+    )
+    expect(html).toContain('75%')
+    expect(html).toContain('3 emails')
+    expect(html).toContain('Needs review')
+    expect(html).toContain('+3 vs last month')
+    expect(html).toContain('1 of 5 automations used')
+    expect(html).not.toContain('Upgrade to Start')
   })
 })
 

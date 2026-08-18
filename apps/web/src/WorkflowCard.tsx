@@ -20,41 +20,49 @@ export function WorkflowCard({
   const total = workflow.successCount + workflow.failureCount
   const rate = total ? Math.round((workflow.successCount / total) * 100) : null
 
+  const neverRan = workflow.lastRunAt === null && workflow.successCount === 0 && workflow.failureCount === 0
+
   return (
-    <article className={`automation-workflow-card category-${workflow.category.toLowerCase()}`}>
+    <article className={`automation-workflow-card workflow-card category-${workflow.category.toLowerCase()} status-${workflow.status.toLowerCase()} ${workflow.status.toLowerCase()}`}>
       <button className="workflow-card-body" onClick={onOpen}>
-        <span className="automation-category-icon"><Icon size={18} /></span>
+        <span className="automation-category-icon workflow-icon-wrap"><Icon size={18} className="workflow-icon" /></span>
         <div className="workflow-card-heading">
-          <span className={`automation-status ${workflow.status.toLowerCase()}`}>{friendlyStatus(workflow.status)}</span>
-          <h3>{workflow.name}</h3>
+          <span className={`automation-status workflow-status-badge ${workflow.status.toLowerCase()}`}>{friendlyStatus(workflow.status)}</span>
+          <h3 className="workflow-name">{workflow.name}</h3>
           {workflow.description && <p>{workflow.description}</p>}
         </div>
         <div className="workflow-trigger">
-          <Zap size={15} />
+          <Zap size={15} className="workflow-trigger-icon" />
           <span>Starts when {friendlyStartsWhen(workflow.triggerSummary)}</span>
         </div>
-        <div className="workflow-card-stats">
-          <span><strong>{workflow.nodeCount}</strong> step{workflow.nodeCount === 1 ? '' : 's'}</span>
-          <span><strong>{workflow.successCount}</strong> successful run{workflow.successCount === 1 ? '' : 's'}</span>
+        <div className="workflow-card-stats workflow-stats">
+          <span className="workflow-stat"><strong className="workflow-stat-value">{workflow.nodeCount}</strong> step{workflow.nodeCount === 1 ? '' : 's'}</span>
+          <span className="workflow-stat"><strong className="workflow-stat-value">{workflow.successCount}</strong> successful run{workflow.successCount === 1 ? '' : 's'}</span>
           {workflow.failureCount > 0 && (
-            <span><strong>{workflow.failureCount}</strong> with issue{workflow.failureCount === 1 ? '' : 's'}</span>
+            <span className="workflow-stat"><strong className="workflow-stat-value">{workflow.failureCount}</strong> with issue{workflow.failureCount === 1 ? '' : 's'}</span>
           )}
-          {rate !== null && <span><strong>{rate}%</strong> success rate</span>}
-          <span>
-            <strong>{workflow.lastRunAt ? relativeTime(workflow.lastRunAt) : 'Never'}</strong> last run
+          {rate !== null && <span className="workflow-stat"><strong className="workflow-stat-value">{rate}%</strong> success rate</span>}
+          <span className="workflow-stat">
+            <strong className="workflow-stat-value">{workflow.lastRunAt ? relativeTime(workflow.lastRunAt) : 'Never'}</strong> last run
           </span>
         </div>
+        {neverRan && (
+          <div className="workflow-empty-hint">
+            <Zap size={14} className="workflow-empty-hint-icon" />
+            This automation has not run yet. Activate it to start tracking results.
+          </div>
+        )}
       </button>
-      <div className="workflow-card-actions">
-        <button onClick={onOpen}><Pencil size={15} /> Edit</button>
-        <button onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</button>
+      <div className="workflow-card-actions workflow-actions">
+        <button className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</button>
+        <button className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</button>
         {workflow.status === 'ACTIVE' && (
-          <button onClick={() => onCommand('pause')}><Pause size={15} /> Pause</button>
+          <button className="workflow-action-btn pause" onClick={() => onCommand('pause')}><Pause size={15} /> Pause</button>
         )}
         {workflow.status === 'PAUSED' && (
-          <button onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</button>
+          <button className="workflow-action-btn resume" onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</button>
         )}
-        <div className="workflow-more">
+        <div className="workflow-more workflow-more-menu">
           <button aria-label="More automation actions" onClick={() => setMenu((value) => !value)}>
             <MoreHorizontal size={17} />
           </button>

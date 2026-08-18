@@ -2967,3 +2967,1007 @@
     padding: 26px 22px;
   }
 }
+
+/* ==========================================================================
+   Theme polish — unique KPI viz, categorized templates, dark white-flash fix
+   ========================================================================== */
+
+.automation-page,
+.automation-subpage,
+.automation-modal {
+  color-scheme: dark;
+}
+
+.automation-page button,
+.automation-subpage button,
+.automation-modal button {
+  background-color: transparent;
+}
+
+.automation-page .automation-primary,
+.automation-modal .automation-primary,
+.automation-page .warning-upgrade-btn,
+.automation-page .automation-plan-banner button,
+.automation-page .pending-approval-banner button {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  background-color: #6d28d9;
+}
+
+.automation-page .automation-secondary,
+.automation-modal .automation-secondary {
+  background: #1a1d27;
+  color: #e5e7eb;
+  border-color: #2a2e38;
+}
+
+.automation-page .automation-secondary:hover,
+.automation-modal .automation-secondary:hover {
+  background: #22263a;
+  color: #c4b5fd;
+  border-color: #7c3aed;
+}
+
+.automation-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.automation-page .template-card-pro,
+.automation-page .automation-workflow-card,
+.automation-page .automation-kpis article,
+.automation-page .automation-kpis > button,
+.automation-page .automation-toolbar,
+.automation-page .activity-timeline,
+.automation-page .draft-row,
+.automation-page .gs-popular-item {
+  background-color: #1a1d27;
+}
+
+.automation-page .template-card-pro:hover {
+  background-color: #1e2130;
+}
+
+.automation-page .template-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.automation-page .template-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  pointer-events: none;
+}
+
+.automation-page .template-card.sales-growth::after {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.automation-page .template-card.customer-experience::after {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.automation-page .template-card.inventory-stock::after {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.automation-page .template-card.operations::after {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.automation-page .template-card.revenue-retention::after {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+
+.automation-page .template-card.sales-growth .template-icon {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.automation-page .template-card.customer-experience .template-icon {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.automation-page .template-card.inventory-stock .template-icon {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.automation-page .template-card.operations .template-icon {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.automation-page .template-card.revenue-retention .template-icon {
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.automation-page .template-plan-badge.start {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.35);
+}
+
+.automation-page .template-plan-badge.all-plans {
+  background: rgba(16, 185, 129, 0.14);
+  color: #6ee7b7;
+  border-color: rgba(110, 231, 183, 0.3);
+}
+
+.automation-page .template-plan-badge.growth {
+  background: rgba(139, 92, 246, 0.16);
+  color: #c4b5fd;
+  border-color: rgba(196, 181, 253, 0.35);
+}
+
+.automation-page .template-plan-badge.commander {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.automation-page .template-detail {
+  display: block;
+  margin-top: 12px;
+  padding: 8px 12px;
+  color: #94a3b8;
+  background: #0a0b0f;
+  border-left: 3px solid #7c3aed;
+  border-radius: 4px;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.automation-page .template-setup-btn,
+.automation-page .template-upgrade-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.automation-page .template-setup-btn {
+  color: #c4b5fd;
+  border: 1px solid rgba(196, 181, 253, 0.35);
+  background: transparent;
+}
+
+.automation-page .template-setup-btn:hover {
+  color: #fff;
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.automation-page .template-upgrade-btn {
+  color: #fff;
+  border: none;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+.automation-page .template-upgrade-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+}
+
+.automation-page .automation-workflow-card.status-active::after,
+.automation-page .automation-workflow-card.status-paused::after,
+.automation-page .automation-workflow-card.status-draft::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  pointer-events: none;
+  border-radius: 16px 16px 0 0;
+}
+
+.automation-page .automation-workflow-card.status-active::after {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.automation-page .automation-workflow-card.status-paused::after {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.automation-page .automation-workflow-card.status-draft::after {
+  background: linear-gradient(90deg, #64748b, #94a3b8);
+}
+
+.automation-page .workflow-empty-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px 12px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(252, 211, 77, 0.28);
+  border-radius: 6px;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.automation-page .workflow-action-btn.edit:hover,
+.automation-page .workflow-action-btn.view-report:hover {
+  background: #2e1e4a;
+  color: #c4b5fd;
+}
+
+.automation-page .workflow-action-btn.pause {
+  color: #fbbf24;
+}
+
+.automation-page .workflow-action-btn.resume {
+  color: #34d399;
+}
+
+.automation-page .workflow-menu {
+  background: #171a25;
+  color: #f5f5f5;
+}
+
+.automation-page .workflow-menu button:hover {
+  background: #2a2e38;
+  color: #f5f5f5;
+}
+
+.automation-page .automation-custom-select {
+  min-width: 150px;
+  height: 40px;
+  border: 1px solid #2a2e38;
+  border-radius: 10px;
+  background: #1a1d27;
+}
+
+.automation-page .automation-custom-select .custom-select-trigger {
+  min-height: 38px;
+  color: #cbd5e1;
+  background: transparent;
+  font-size: 13px;
+}
+
+.automation-page .automation-custom-select .custom-select-trigger:hover,
+.automation-page .automation-custom-select .custom-select-trigger[aria-expanded='true'] {
+  color: #f5f5f5;
+  background: #22263a;
+}
+
+.automation-page .automation-custom-select .custom-select-trigger > strong {
+  color: #f5f5f5;
+  font-size: 13px;
+}
+
+.automation-page .custom-select-menu,
+.automation-modal .custom-select-menu {
+  background: #1a1d27;
+  border-color: #2a2e38;
+  color: #e5e7eb;
+}
+
+.automation-page .custom-select-menu li,
+.automation-modal .custom-select-menu li {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.automation-page .custom-select-menu li:hover,
+.automation-page .custom-select-menu li.highlighted,
+.automation-modal .custom-select-menu li:hover,
+.automation-modal .custom-select-menu li.highlighted {
+  background: #2a2e38;
+  color: #f5f5f5;
+}
+
+.automation-modal .automation-custom-select {
+  width: 100%;
+  border: 1px solid #2a2e38;
+  border-radius: 10px;
+  background: rgba(7, 9, 15, 0.38);
+}
+
+.automation-modal .automation-custom-select .custom-select-trigger {
+  min-height: 42px;
+}
+
+.automation-page .automation-filter-tabs {
+  padding: 4px;
+  border-radius: 10px;
+  background: #14161f;
+}
+
+.automation-page .filter-tab {
+  background: transparent;
+  color: #94a3b8;
+}
+
+.automation-page .filter-tab:hover {
+  background: #1e2130;
+  color: #f5f5f5;
+}
+
+.automation-page .filter-tab.active {
+  background: #2a2e38;
+  color: #c4b5fd;
+}
+
+.automation-page .filter-tab .count-badge {
+  min-width: 20px;
+  height: auto;
+  padding: 2px 6px;
+  background: #2a2e38;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.automation-page .filter-tab.active .count-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+
+.automation-page .view-toggle button {
+  background: transparent;
+  color: #94a3b8;
+}
+
+.automation-page .view-toggle button.active {
+  background: #2a2e38;
+  color: #c4b5fd;
+}
+
+.automation-page .kpi-card {
+  min-height: 210px;
+}
+
+.automation-page .kpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.automation-page .kpi-icon-wrap {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.16);
+  color: #c4b5fd;
+}
+
+.automation-page .kpi-label {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.automation-page .kpi-visualization {
+  width: 100%;
+  min-height: 56px;
+  margin: 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.automation-page .segmented-bar {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  height: 8px;
+}
+
+.automation-page .segmented-bar.unlimited {
+  display: flex;
+}
+
+.automation-page .segment {
+  border-radius: 3px;
+  background: #2a2e38;
+}
+
+.automation-page .segment.filled {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+
+.automation-page .segment-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.automation-page .segment-label.active {
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.automation-page .stacked-mini-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 6px;
+  height: 52px;
+  width: 100%;
+}
+
+.automation-page .mini-bar-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.automation-page .mini-bar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: 2px 2px 0 0;
+}
+
+.automation-page .mini-bar-label {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.automation-page .approval-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.automation-page .approval-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2a2e38;
+}
+
+.automation-page .approval-dot.pending {
+  background: #f59e0b;
+  animation: pulse 2s infinite;
+}
+
+.automation-page .approval-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 8px;
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.automation-page .approval-status.waiting {
+  color: #fbbf24;
+}
+
+.automation-page .kpi-value-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.automation-page .kpi-value {
+  color: #f5f5f5;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.automation-page .kpi-total {
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.automation-page .kpi-helper {
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.automation-page .gauge-track {
+  color: #2a2e38;
+}
+
+.automation-page .limit-warning {
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------- Light theme premium overhaul ---------- */
+
+.light-mode .automation-page,
+.light-mode .automation-subpage,
+.light-mode .automation-modal {
+  color-scheme: light;
+}
+
+.light-mode .automation-page {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .page-eyebrow,
+.light-mode .automation-page .section-eyebrow,
+.light-mode .automation-page .automation-eyebrow {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.light-mode .automation-page .page-title,
+.light-mode .automation-page h1 {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .page-subtitle,
+.light-mode .automation-page .section-description {
+  color: #475569;
+}
+
+.light-mode .automation-page .section-title,
+.light-mode .automation-page h2 {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .how-it-works-btn,
+.light-mode .automation-page .browse-templates-btn,
+.light-mode .automation-page .automation-secondary {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.light-mode .automation-page .how-it-works-btn:hover,
+.light-mode .automation-page .browse-templates-btn:hover,
+.light-mode .automation-page .automation-secondary:hover {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.light-mode .automation-page .create-automation-btn,
+.light-mode .automation-page .automation-primary,
+.light-mode .automation-modal .automation-primary,
+.light-mode .automation-page .warning-upgrade-btn {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.25);
+}
+
+.light-mode .automation-page .limit-warning {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d;
+}
+
+.light-mode .automation-page .limit-warning-title,
+.light-mode .automation-page .limit-warning-description {
+  color: #92400e;
+}
+
+.light-mode .automation-page .limit-warning-count {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.light-mode .automation-page .automation-plan-banner.reached {
+  background: linear-gradient(135deg, #fef3c7, #fecaca);
+  border-color: #fca5a5;
+}
+
+.light-mode .automation-page .automation-plan-banner.drafts {
+  background: linear-gradient(135deg, #f3e8ff, #ede9fe);
+  border-color: #c4b5fd;
+}
+
+.light-mode .automation-page .browse-all-link {
+  color: #7c3aed;
+}
+
+.light-mode .automation-page .browse-all-link:hover {
+  color: #6d28d9;
+}
+
+.light-mode .automation-page .template-card-pro,
+.light-mode .automation-page .template-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.light-mode .automation-page .template-card-pro:hover,
+.light-mode .automation-page .template-card:hover {
+  background: #ffffff;
+  border-color: #7c3aed;
+  box-shadow: 0 8px 16px rgba(124, 58, 237, 0.15);
+}
+
+.light-mode .automation-page .template-name,
+.light-mode .automation-page .template-card-pro h3 {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .template-description,
+.light-mode .automation-page .template-card-pro p {
+  color: #475569;
+}
+
+.light-mode .automation-page .template-detail {
+  background: #f8fafc;
+  color: #64748b;
+  border-left-color: #7c3aed;
+}
+
+.light-mode .automation-page .template-category {
+  color: #7c3aed;
+}
+
+.light-mode .automation-page .template-card.sales-growth .template-category {
+  color: #047857;
+}
+
+.light-mode .automation-page .template-card.customer-experience .template-category {
+  color: #1d4ed8;
+}
+
+.light-mode .automation-page .template-card.inventory-stock .template-category {
+  color: #b45309;
+}
+
+.light-mode .automation-page .template-card.operations .template-category {
+  color: #b91c1c;
+}
+
+.light-mode .automation-page .template-plan-badge.start {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+
+.light-mode .automation-page .template-plan-badge.all-plans {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.light-mode .automation-page .template-plan-badge.growth {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #c4b5fd;
+}
+
+.light-mode .automation-page .template-plan-badge.commander {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.light-mode .automation-page .template-setup-btn {
+  background: #ffffff;
+  color: #7c3aed;
+  border: 1px solid #c4b5fd;
+}
+
+.light-mode .automation-page .template-setup-btn:hover {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.light-mode .automation-page .set-up-mini:hover {
+  color: #ffffff;
+}
+
+.light-mode .automation-page .automation-templates {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .automation-workflow-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .automation-page .automation-workflow-card:hover {
+  background: #ffffff;
+  border-color: #a78bfa;
+}
+
+.light-mode .automation-page .workflow-name {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .workflow-trigger {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.light-mode .automation-page .workflow-stat-value {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .workflow-empty-hint {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.light-mode .automation-page .workflow-action-btn.edit,
+.light-mode .automation-page .workflow-action-btn.view-report {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.light-mode .automation-page .workflow-action-btn.edit:hover {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.light-mode .automation-page .workflow-action-btn.view-report:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #3b82f6;
+}
+
+.light-mode .automation-page .workflow-action-btn.pause {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.light-mode .automation-page .workflow-action-btn.resume {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.light-mode .automation-page .workflow-more > button:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.light-mode .automation-page .workflow-menu {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .workflow-menu button {
+  color: #334155;
+}
+
+.light-mode .automation-page .workflow-menu button:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.light-mode .automation-page .automation-toolbar {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .automation-search {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .automation-search:focus-within {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.light-mode .automation-page .automation-search input {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .automation-filter-tabs {
+  background: #f1f5f9;
+}
+
+.light-mode .automation-page .filter-tab {
+  color: #475569;
+  background: transparent;
+}
+
+.light-mode .automation-page .filter-tab:hover {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.light-mode .automation-page .filter-tab.active {
+  background: #ffffff;
+  color: #7c3aed;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .automation-page .filter-tab .count-badge {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.light-mode .automation-page .filter-tab.active .count-badge {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.light-mode .automation-page .template-tabs button,
+.light-mode .automation-page .automation-status-tabs button {
+  background: #ffffff;
+  color: #475569;
+}
+
+.light-mode .automation-page .template-tabs button.active,
+.light-mode .automation-page .automation-status-tabs button.active {
+  background: #ffffff;
+  color: #7c3aed;
+}
+
+.light-mode .automation-page .automation-custom-select {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .automation-custom-select .custom-select-trigger,
+.light-mode .automation-page .automation-custom-select .custom-select-trigger > strong {
+  color: #475569;
+}
+
+.light-mode .automation-page .automation-custom-select .custom-select-trigger:hover,
+.light-mode .automation-page .automation-custom-select .custom-select-trigger[aria-expanded='true'] {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.light-mode .automation-page .custom-select-menu,
+.light-mode .automation-modal .custom-select-menu {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.light-mode .automation-page .custom-select-menu li,
+.light-mode .automation-modal .custom-select-menu li {
+  color: #334155;
+}
+
+.light-mode .automation-page .custom-select-menu li:hover,
+.light-mode .automation-page .custom-select-menu li.highlighted,
+.light-mode .automation-modal .custom-select-menu li:hover,
+.light-mode .automation-modal .custom-select-menu li.highlighted {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.light-mode .automation-modal .automation-custom-select {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .view-toggle {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .view-toggle button {
+  color: #64748b;
+  background: transparent;
+}
+
+.light-mode .automation-page .view-toggle button.active {
+  background: #ffffff;
+  color: #7c3aed;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .automation-page .kpi-card,
+.light-mode .automation-page .automation-kpis article,
+.light-mode .automation-page .automation-kpis > button {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .automation-page .kpi-value {
+  color: #0f172a;
+}
+
+.light-mode .automation-page .kpi-total,
+.light-mode .automation-page .kpi-helper,
+.light-mode .automation-page .kpi-label {
+  color: #64748b;
+}
+
+.light-mode .automation-page .kpi-icon-wrap {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.light-mode .automation-page .segment.empty,
+.light-mode .automation-page .approval-dot {
+  background: #e2e8f0;
+}
+
+.light-mode .automation-page .gauge-track {
+  color: #e2e8f0;
+}
+
+.light-mode .automation-page .auto-getting-started {
+  background:
+    radial-gradient(circle at 12% 20%, rgba(124, 58, 237, 0.1), transparent 42%),
+    #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .gs-popular {
+  background: #f8fafc;
+}
+
+.light-mode .automation-page .gs-popular-item {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.light-mode .automation-page .gs-popular-name {
+  color: #0f172a;
+}
+
+.light-mode .automation-modal {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.light-mode .automation-modal .creation-mode button {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.light-mode .automation-modal .creation-mode button.active {
+  background: #f3e8ff;
+  border-color: #7c3aed;
+}
+
+.light-mode .automation-page .draft-row {
+  background: #ffffff;
+}
+
+.light-mode .automation-page .auto-drafts {
+  background: #f8fafc;
+}
+
