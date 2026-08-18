@@ -2705,6 +2705,81 @@
   background: rgba(124, 92, 240, 0.07);
 }
 
+/* Light theme contrast hardening (WCAG AA) */
+.light-mode .template-card-pro {
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.light-mode .template-card-pro:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.light-mode .template-card-pro h3 { color: #111827; }
+.light-mode .template-card-pro p,
+.light-mode .template-impact-copy { color: #4b5563; }
+.light-mode .template-category { color: #6d28d9; }
+.light-mode .plan-badge {
+  color: #374151;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+.light-mode .automation-kpis article,
+.light-mode .automation-kpis > button {
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.light-mode .automation-status,
+.light-mode .run-status {
+  border: 1px solid transparent;
+}
+.light-mode .automation-status.active,
+.light-mode .run-status.completed {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+.light-mode .automation-status.paused,
+.light-mode .run-status.waiting,
+.light-mode .run-status.approval_required {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+.light-mode .automation-status.draft,
+.light-mode .run-status.queued {
+  color: #374151;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+.light-mode .automation-status.archived,
+.light-mode .run-status.cancelled {
+  color: #4b5563;
+  background: #f8fafc;
+  border-color: #e5e7eb;
+}
+.light-mode .run-status.failed {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+.light-mode .draft-row { border-color: #e2e8f0; }
+.light-mode .template-tabs button,
+.light-mode .automation-status-tabs button {
+  color: #4b5563;
+  border-color: #e2e8f0;
+  background: #ffffff;
+}
+.light-mode .template-tabs button.active,
+.light-mode .automation-status-tabs button.active {
+  color: #6d28d9;
+  border-color: #c4b5fd;
+  background: #ede9fe;
+}
+.light-mode .automation-status-tabs span {
+  background: #eef2f7;
+  color: #374151;
+}
+
 /* ==========================================================================
    Responsive
    ========================================================================== */
