@@ -1,132 +1,102 @@
-# PatternAI (formerly Insights Hub) — crash fix, complete rebrand, and professional redesign
+# Merchant-Friendly Automation Page Redesign
 
-This PR is scoped **exclusively** to the discovery module. AI Command Center, Recommendations, Automation, AI Command / Copilot, Store Coach, and GrowthIQ / AI Executive are untouched.
+## Summary
 
----
+The Automation module was developer-tooling dressed as a merchant product: "Untitled workflow" cards, node graphs, and technical jargon (`Trigger`, `Condition`, `If / Else`, `Wait / Delay`). This PR transforms it into a beginner-friendly, template-driven, guided experience — think Shopify Flow meets Klaviyo — that any non-technical Shopify merchant can use.
 
-## 1. The crash is fixed (root cause, not a band-aid)
+**Scope is strictly the Automation module.** No changes to AI Command Center, Recommendations, Store Coach, AI Executive, Insights Hub, campaigns, billing plans, or any other module. Backend workflow logic is untouched; this is a UX/UI + copy redesign on top of the existing APIs.
 
-The page answered **"The laboratory hit a snag — Internal server error"**. Two independent causes:
+## What changed
 
-### Cause A — uuid columns vs. deterministic engine ids
+### 1. Main Automation page redesigned
+- Header: **🤖 Automations** · "Save time and grow your business with automated workflows" · `[+ Create Automation]` `[Browse Templates]` `[How it works]`
+- **Getting Started hero** for new merchants (0 automations, or only empty drafts): welcome copy, `[Browse Templates]`, `[How it works]`, "Or build from scratch", and the 3 most popular real templates with their real impact copy.
+- **Featured Templates** are now a prominent gallery on the hub (8 real backend templates), never hidden behind a collapsed `<details>`.
+- **Your Automations** section shows only real automations with real numbers; search/status/category/sort/view toolbar retained.
+- **KPI metrics render only when there are active automations or real runs** — no useless zero-tiles for new merchants. Metrics are 100% real backend values (active automations, runs this month + trend, success rate, actions completed, pending approvals).
+- **Recent Activity renders only when real run history exists.**
+- Empty states are educational and action-oriented (no "no data" dead ends).
 
-`migrations/0024_insights_hub.sql` declared every primary key as `uuid`. The deterministic engine in `packages/ai/src/insights-hub.ts` mints **content-addressed** ids so the same finding keeps the same identity across sweeps:
+### 2. "Untitled workflow" empty cards eliminated
+- Empty/never-used automations (0 steps, or only a starting point with no actions, never run) are auto-detected and moved into a collapsed **"Drafts needing attention"** section at the bottom, each with `[Continue Setup]` and `[Remove]`.
+- The main grid only shows automations that do real work.
 
-```
-deterministicId('disc', storeId, type, category, title)  →  disc_1f4c9a2b7d
-```
+### 3. Setup modal forces naming
+`[+ Create Automation]` now opens a **Create New Automation** modal that forces a name ("What do you want to automate?"), a category, and a starting point — **From Template (Recommended)** vs **From Scratch (Advanced)** — with `[Cancel]` / `[Continue →]`. Plan usage ("2 of 5 automations used") is shown.
 
-Every `INSERT` therefore failed with `invalid input syntax for type uuid: "disc_…"`. That killed `/insights/discoveries/generate`, the auto-discovery sweep, and — because auto-discovery runs in-band on first paint — `/insights/overview` itself. The module could never finish loading on a real store.
+### 4. Editor: Simple mode by default, Advanced toggle
+- **Simple (guided) mode is the default**: a linear recipe — *When this happens → Check something (optional) → Wait for time (optional) → Then do this* — with step cards, `[+ Add Step]`, per-step `[Change]` / `[Configure]` / remove, `[Save Draft]`, `[Test Run]`, `[Save & Activate]`, and friendly validation messages.
+- **Advanced mode** keeps the full ReactFlow canvas for power users via the "Switch to Advanced" toggle.
+- Right panel shows a **Getting Started** guide when nothing is selected, and clear step settings with friendly labels when a step is selected.
 
-**Fix — `migrations/0025_patternai_id_types.sql`:** widens `id` to `text` on all ten entity tables plus `insights_timeline_events.entity_id` and `insights_knowledge_base.linked_insights` (`uuid[] → text[]`). Existing rows are preserved (`USING id::text`), defaults become `gen_random_uuid()::text`, and the blocks are idempotent (they inspect `information_schema` first). The migration also adds the unique indexes the pattern/trend upserts already assumed, plus a partial index for the `NEW` discovery feed.
+### 5. Merchant-friendly terminology everywhere
+| Before | After |
+|---|---|
+| Node | Step |
+| Trigger | When this happens / starting point |
+| Condition / If / Else | Check something |
+| Action | Do something |
+| Workflow | Automation |
+| Manual Trigger | Run on demand |
+| Scheduled | On a schedule |
+| Order Created | New order received |
+| Customer Created | New customer signed up |
+| Inventory Changed | Stock level changed |
+| Wait / Delay | Wait for time |
+| Send Email / Tag Customer / Create Discount | Send email / Add customer tag / Create discount code |
+| Internal Notification / Update Inventory | Notify you / Update stock levels |
 
-### Cause B — all-or-nothing rendering
+### 6. Beautiful template gallery
+- Real backend templates grouped into friendly tabs: Sales & Growth, Customer Experience, Operations, Inventory & Stock, Revenue & Retention, **AI-Powered (Commander only)**.
+- Cards show icon, name, description, **real impact copy**, complexity/setup, **plan-requirement badge**, and `[Set Up →]` / `[Upgrade Plan]`.
+- Preview modal before install: description, real impact, "🎯 When this happens → ❓ Check something → ⚡ Then do this", plan requirement, and one-click **Set Up**.
 
-`InsightsHubService.overview()` loaded fourteen panels through one `Promise.all`. A single failing query removed the whole page.
+### 7. Warning banner logic fixed
+- Empty drafts + limit reached → **"Complete your drafts or upgrade for more space"** with `[Complete Drafts]` (scrolls to & opens the drafts section) and `[Upgrade Plan]`.
+- Real automations + limit reached → **"You've reached your limit"** with `[Upgrade Plan]`.
+- ≥80% usage → "You're almost at your limit" with `[Upgrade Plan]`.
 
-**Fix:** each panel now resolves independently with an honest fallback, and the response carries `degraded: string[]` naming anything that could not load. The UI shows one calm banner ("PatternAI rendered this page without personas, trends…") instead of a crash screen. In addition:
+### 8. Workflow cards show real value
+Cards now show status pill, description, "Starts when …" (friendly), step count, **real successful-run / failure / success-rate counts**, last-run time, and actions `[Edit]` `[View Report]` `[Pause/Resume]` `[⋮ Run Now · Duplicate · Run history · Archive]`.
 
-- `PostgresInsightsHubRepository` classifies Postgres *schema-not-ready* codes (`42P01`, `42703`, `42883`, `3F000`), degrades those **reads** to empty results and logs a warning — a deployment that has not run migrations yet renders empty states, not 500s. Genuine faults (e.g. `08006`) still surface.
-- `discoveryFeed()` survives a dead data plane and falls back to an educational empty state.
-- Auto-discovery on first paint is best-effort and can no longer take the page down.
-- New diagnostics endpoint: **`GET /patternai/health?storeId=…`** probes the dataset + all twelve storage sections and returns `{ ok, plan, narration, autoDiscovery, sections[] }`.
+### 9. Educational content
+"**How automations work**" modal (hub + editor): the 4-step recipe in plain English — choose a starting point, add checks, choose what happens, test & activate — with `[Start Building]` and `[Browse Templates]` CTAs.
 
-### Cause C (found while testing) — Trend Watcher always empty
+### 10. Simplified step library + better right panel
+- Library groups: 🎯 When this happens · ❓ Check something · ⚡ Do something · ⏳ Wait · 🤖 AI-Powered (Commander only).
+- AI steps are locked with "Upgrade Plan" guidance for non-Commander plans.
+- Editor right panel: numbered getting-started guide with `[View Tutorial]` / `[Browse Templates]` when nothing is selected.
 
-`/insights/trends/business` passed the *view* name `'business'` into the repository, which filtered `trend_type = 'business'` — a value that never exists (the enum is upper-case). The overview counted 5 trends while the Trend Watcher rendered "0 signals under watch". Views (`business`, `market`) are now applied after loading, and only real `TrendType` values reach storage.
+## Rules compliance
+- ✅ **Zero fake data** — every number rendered comes from real API responses (`/automation/summary`, `/automation/usage`, `/automation/workflows`, `/automation/templates`, `/automation/approvals`, run history). No hardcoded metrics, no invented impact numbers.
+- ✅ **Plan gating preserved** — Trial 2 / Start 5 / Growth 20 / Commander unlimited + AI nodes enforced by the backend; UI only reflects `usage`/`limitReached` and template `minimumPlan`/`locked` from the API.
+- ✅ **Upgrade wording** — always "Upgrade Plan" (never "Upgrade to Growth/Commander").
+- ✅ **Both themes** — full dark + light theme styling with the specified palettes.
+- ✅ **12px+ typography** everywhere.
+- ✅ Backend automation logic, endpoints, and all existing capabilities untouched; advanced mode preserves full node editing.
 
-**Executable proof:** `apps/web/src/patternai-mount.test.tsx` mounts the real app on the PatternAI deep link against a backend that **500s on every module endpoint** and asserts the shell, the navigation, and a retryable message still render, with zero React console errors.
+## Testing
+- `pnpm vitest run` — **1877 tests pass** (172 files), including 12 new/updated tests:
+  - `automation-ui.test.tsx` rewritten: merchant-copy helpers (`isEmptyWorkflow`, `friendlyTriggerSummary`, `friendlyNodeLabel/Summary`, `friendlyCron`, `planBadgeLabel`), WorkflowCard (friendly trigger, real usage numbers, no UUID leak, no SMS), TemplateGallery (real impact copy, locked → "Upgrade Plan", never plan names), Create Automation modal (forces name/category/starting point), How-it-works modal.
+- `pnpm --filter @profitpilot/web typecheck` — clean.
+- `pnpm --filter @profitpilot/web build` — production build succeeds.
+- API-level tests (`automation-routes.test.ts`) unaffected and passing.
 
----
+## Visual verification
+The live preview (Arena) shows the redesigned hub against the **real API**: `scripts/pr58-automation-preview.mjs` boots the real Express app with in-memory repositories and seeds it exclusively through the real HTTP endpoints (template installs, activation, runs), so every number on screen is genuine backend output. Try:
+- `/?storeId=demo-store` → Automation: hub with 2 active automations, real runs, KPIs, "limit reached" banner, featured templates (with locked/Upgrade Plan states for the trial plan).
+- `/?storeId=demo-new` → empty-state Getting Started hero + featured templates.
+- Open any automation → Simple (guided) editor; toggle "Switch to Advanced" for the canvas.
 
-## 2. Complete rebrand to PatternAI
-
-| | Before | After |
-| --- | --- | --- |
-| Name | Insights Hub | **PatternAI** |
-| Tagline | "Where data becomes wisdom" | **"Discover the patterns that drive your business"** |
-| Icon | 🧪 `FlaskConical` | **Neural-network constellation** (custom SVG) |
-| Web route | `/ai-growth-command/insights` | `/ai-growth-command/patternai` (old path still parses and is rewritten on first paint) |
-| API prefix | `/insights/*` | `/patternai/*` **and** `/insights/*` (both served) |
-| Docs | `docs/INSIGHTS_HUB.md` | `docs/PATTERN_AI.md` |
-| Web sources | `insights-hub*.tsx/ts/css` | `patternai*.tsx/ts/css` (+ `patternai-logo.tsx`) |
-
-**Deliberately unchanged for compatibility:** the twelve `insights_*` tables, the `INSIGHTS_HUB_*` environment block, the API service/route filenames, and the `/public-api/insights/*` contract. Renaming any of those would break running installations and issued API keys; the rebrand is complete on every surface a merchant can see.
-
-Voice moved from "curious scientist / laboratory" to discovery-oriented and educational — no lab, flask, microscope, telescope, or eye metaphors remain anywhere in the module (asserted by tests).
-
----
-
-## 3. New logo — neural network constellation
-
-`apps/web/src/patternai-logo.tsx`
-
-- Five nodes wired by seven edges: the literal shape of a pattern being found.
-- Purple → cyan gradient (`#A78BFA → #8B5CF6 → #06B6D4`), cyan accent nodes, soft halos.
-- Pure SVG, per-instance gradient ids (safe to render many times), `plain` and `badge` variants, theme-aware CSS variables so it reads on `#0B0D14` and `#FAFBFC` alike.
-- Legible at 16/24/32/48px — the same component works as a favicon and as the sidebar glyph (`PatternAiIcon` matches the Lucide call signature).
-- Explicitly avoided: eye, lab equipment, magnifier, lightbulb, chart.
-
----
-
-## 4. Ultra-professional redesign, both themes
-
-`apps/web/src/patternai.css` is a full rewrite (≈900 lines, `pa-` prefix) built on the specified palettes:
-
-| Token | Dark | Light |
-| --- | --- | --- |
-| Canvas | `#0B0D14` | `#FAFBFC` |
-| Card | `#14171F` | `#FFFFFF` + `0 1px 3px rgba(15,23,42,.05)` |
-| Elevated | `#1D202C` | `#F1F5F9` |
-| Border | `#2A2E3D` | `#E2E8F0` |
-| Text / secondary | `#F8FAFC` / `#94A3B8` | `#0F172A` / `#475569` |
-| Accent purple / cyan | `#8B5CF6` / `#06B6D4` | `#7C3AED` / `#0891B2` |
-
-- **Type scale:** 12px labels → 32px page title. Nothing in the module is below 12px (the shared shell uses 8–10px in older sections; PatternAI overrides its own buttons, inputs and kickers).
-- **Layout:** hero (mark + wordmark + tagline + actions + six stat tiles) → optional plan panel → grouped **navigation rail** (Discover / Understand / Remember & look ahead / Workspace) → section header with purpose line → content.
-- **Cards:** 12px radius, 20–24px padding, 1px borders, soft shadow, gentle lift + border highlight on hover, per-type accent rail.
-- Charts stay bubble / radar / heatmap / area-band / scatter / timeline / word cloud / network / treemap / sankey-lite — **no line or donut charts** — and every fill now flows through `--pa-*` tokens so both themes are correct.
-- Responsive down to 620px; `prefers-reduced-motion` respected; focus rings on every control.
-
----
-
-## 5. Discovery-first content model
-
-- **Discovery cards** lead with a plain-English headline per type ("New pattern detected", "Anomaly detected", "Opportunity spotted"…), then description, narrator note, three evidence chips pulled from the engine's own evidence bundle, confidence, category, monetary impact, and the actions Explore / Save / Acted on it / Dismiss. Seven type tones (pattern indigo, anomaly amber, opportunity green, correlation purple, trend cyan, segment pink, behaviour indigo).
-- **Educational welcome state** replaces the blank box: six capability cards plus a readiness checklist driven entirely by the API's thresholds (`15 / 50 customers for persona modelling`, `12 / 30 days of history`…).
-- **"Keep exploring"** strip cross-links the other discovery surfaces from the feed.
-- **Plan panel** lists what is available now vs. what a paid plan unlocks, with the generic **`Upgrade Plan`** CTA.
-
-Scope stays unique: discovery, learning, understanding. No daily coaching (Store Coach), no strategy reports (GrowthIQ), no action queue (Recommendations), no agent management (AI Command Center), no chat, no automation.
-
----
-
-## 6. Rules honoured
-
-- **Zero fake data** — the UI still renders only server-computed values; the preview harness used during development lives outside the repo. Thin data produces educational empty states with real `have / need` counts.
-- **Plan gating** — unchanged matrix; trial explores clearly-labelled samples; locked capabilities 402 with `reason: UPGRADE_REQUIRED`.
-- **Upgrade wording** — every CTA is `Upgrade Plan` / `Upgrade Subscription`; tests assert no `Upgrade to <tier>` string exists.
-- **Both themes perfect**, 12px+ type, premium enterprise aesthetic.
-
----
-
-## 7. Tests
-
-`1902 passed / 174 files`, full workspace build and typecheck clean.
-
-New coverage:
-
-- `apps/api/src/patternai-resilience.test.ts` (12) — degraded overview, feed survival, diagnostics endpoint, schema-error classification, engine-id writes, both HTTP prefixes, trend-view regression.
-- `apps/web/src/patternai-mount.test.tsx` (6) — real app mount on the PatternAI route, discovery feed rendering, grouped nav, **total backend failure**, legacy path normalisation, no Insights Hub branding.
-- `apps/web/src/patternai-ui.test.tsx` (29) — logo geometry (5 nodes / 7 edges), error panel, welcome state, plan panel, workspace smoke, no lab/eye iconography.
-- `apps/web/src/patternai-model.test.ts` (36) — rebranded routing incl. legacy links, tab labels and purposes, hero stats, plan summary, readiness checklist, degraded notice.
-- `packages/db/src/db.test.ts` — migration `0025` registered and asserted column-by-column.
-
----
-
-## 8. Deploy notes
-
-1. `RUN_MIGRATIONS=true` (or run out-of-band) so **0025** applies — this is the crash fix.
-2. Verify with `GET /patternai/health?storeId=<store>`; every section should report `ready`.
-3. No environment changes required. `INSIGHTS_HUB_*` variables keep their names.
-4. Old links (`/ai-growth-command/insights…`, `/insights/*`, existing `ihk_` API keys) continue to work.
+## Files changed
+- `apps/web/src/automation.tsx` — hub redesign (hero, featured templates, drafts, KPIs, activity, banner, create modal, routing)
+- `apps/web/src/automation.css` — full rewrite, both themes, new components
+- `apps/web/src/WorkflowEditor.tsx` — Simple/Advanced editor, friendly library + panels
+- `apps/web/src/WorkflowCard.tsx` — real-value cards
+- `apps/web/src/TemplateGallery.tsx` — merchant gallery + preview modal
+- `apps/web/src/automation-helpers.ts` — new: merchant-copy helpers (pure, unit-tested)
+- `apps/web/src/automation-tutorial.tsx` — new: How-it-works modal
+- `apps/web/src/RunHistory.tsx`, `apps/web/src/ApprovalInbox.tsx` — copy updated to "Automations"
+- `apps/web/src/App.tsx` — Automation module description copy
+- `apps/web/src/automation-ui.test.tsx` — rewritten/expanded tests
+- `scripts/pr58-automation-preview.mjs` — local preview harness (dev-only, not shipped)

@@ -11,6 +11,18 @@ export type StoreHealth = Readonly<{
   historyDays: number | null
 }>
 
+/** Minimum closed-period orders before a health score is meaningful. */
+export const MIN_ORDERS_FOR_HEALTH = 10
+/** Minimum days of order history before momentum windows are meaningful. */
+export const MIN_HISTORY_DAYS_FOR_HEALTH = 7
+
+/**
+ * Deterministic store health. Returns `score: null` whenever there is not
+ * enough closed-period evidence to compute an honest number — a store with
+ * thin, stale, or absent history must never render a panic-inducing
+ * "0/100 Critical". The frontend turns these cases into educational empty
+ * states, never a fake score.
+ */
 export function calculateStoreHealth(snapshot: StoreSnapshot): StoreHealth {
   const components: readonly HealthComponent[] = [
     momentum('revenue_momentum', snapshot.last30dRevenue, snapshot.previous30dRevenue, .35),
@@ -21,7 +33,13 @@ export function calculateStoreHealth(snapshot: StoreSnapshot): StoreHealth {
   const orderCount = snapshot.last30dOrders + snapshot.previous30dOrders
   const historyDays = orderHistoryDays(snapshot)
   const available = components.filter((component) => component.score !== null)
-  if (available.length === 0) return { score: null, method: 'deterministic-v1', components, orderCount, historyDays }
+  // Data-sufficiency gate: never score a store from a handful of orders or a
+  // single-day window. `score: null` is the honest answer until evidence accrues.
+  const tooFewOrders = orderCount < MIN_ORDERS_FOR_HEALTH
+  const tooThinHistory = historyDays !== null && historyDays < MIN_HISTORY_DAYS_FOR_HEALTH
+  if (available.length === 0 || tooFewOrders || tooThinHistory) {
+    return { score: null, method: 'deterministic-v1', components, orderCount, historyDays }
+  }
   const weighted = available.reduce((sum, component) => sum + (component.score ?? 0) * component.weight, 0)
   const weights = available.reduce((sum, component) => sum + component.weight, 0)
   return { score: Math.round(weighted / weights), method: 'deterministic-v1', components, orderCount, historyDays }

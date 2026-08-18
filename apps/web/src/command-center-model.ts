@@ -103,6 +103,57 @@ export function insightsToday(activity: readonly AgentActivityItem[], now = new 
   return activity.filter((item) => item.createdAt.slice(0, 10) === today).length
 }
 
+/* ── KPI trend helpers (real data from /recommendations/summary) ───────── */
+
+/** One day from the recommendations summary `generatedTrend` series. */
+export type DailyTrendPoint = Readonly<{ day: string; generated: number; approved: number }>
+export type SeriesPoint = Readonly<{ day: string; value: number }>
+
+/** `YYYY-MM-DD` (UTC) for `daysAgo` days before `now`, oldest first. */
+export function lastDayKeys(days: number, now = new Date()): readonly string[] {
+  const keys: string[] = []
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const day = new Date(now)
+    day.setUTCDate(day.getUTCDate() - offset)
+    keys.push(day.toISOString().slice(0, 10))
+  }
+  return keys
+}
+
+/** Zero-filled daily series for the last `days` days, oldest → newest. */
+export function dailySeries(trend: readonly DailyTrendPoint[], metric: 'generated' | 'approved', days: number, now = new Date()): readonly SeriesPoint[] {
+  const byDay = new Map(trend.map((point) => [point.day, point[metric]]))
+  return lastDayKeys(days, now).map((day) => ({ day, value: byDay.get(day) ?? 0 }))
+}
+
+export type PeriodTotals = Readonly<{ current: number; previous: number; changePercent: number | null }>
+
+/** Current vs previous week totals from a 14-day series (oldest → newest). */
+export function periodTotals(series: readonly SeriesPoint[]): PeriodTotals {
+  const midpoint = Math.max(0, series.length - 7)
+  const previous = series.slice(0, midpoint).reduce((sum, point) => sum + point.value, 0)
+  const current = series.slice(midpoint).reduce((sum, point) => sum + point.value, 0)
+  const changePercent = previous === 0 ? null : Math.round(((current - previous) / previous) * 100)
+  return { current, previous, changePercent }
+}
+
+/** Signed, humanized trend direction for a percentage change (null when no baseline). */
+export function trendDirection(changePercent: number | null): 'up' | 'down' | 'flat' | 'new' {
+  if (changePercent === null) return 'new'
+  if (changePercent > 0) return 'up'
+  if (changePercent < 0) return 'down'
+  return 'flat'
+}
+
+/* ── Hidden agents (kept in the backend for future use, hidden from UI) ── */
+
+export const HIDDEN_AGENT_IDS: ReadonlySet<string> = new Set(['PRICING_AGENT', 'CAMPAIGN_AGENT'])
+
+/** The Command Center only displays a curated subset of the full agent roster. */
+export function visibleAgents(agents: readonly AgentOverviewEntry[]): readonly AgentOverviewEntry[] {
+  return agents.filter((agent) => !HIDDEN_AGENT_IDS.has(agent.id))
+}
+
 export function relativeTime(iso: string, now = Date.now()): string {
   const at = Date.parse(iso)
   if (!Number.isFinite(at)) return '—'
@@ -153,21 +204,23 @@ export const MIN_ORDERS_FOR_HEALTH = 10
 export const MIN_HISTORY_DAYS_FOR_HEALTH = 7
 
 /**
- * Distinguishes a real (possibly zero) score from a not-enough-data state so
- * the hero never shows a bare "0/100" for a store with no evidence.
+ * Distinguishes a real score from a not-enough-data state so the hero never
+ * shows a bare, panic-inducing "0/100 Critical" for a store with no evidence.
+ * A low-but-real score is labeled calmly ("Needs attention") — the word
+ * "Critical" never reaches merchants.
  */
 export function storeHealthDisplay(health: StoreHealthResult | null): StoreHealthDisplay {
-  if (!health) return { kind: 'empty', message: 'Not enough data' }
+  if (!health) return { kind: 'empty', message: 'Not enough data yet' }
   if (health.score !== null) {
-    const tone: HealthTone = health.score === 0 ? 'critical' : health.score >= 75 ? 'healthy' : health.score >= 50 ? 'warning' : 'critical'
-    const label = tone === 'healthy' ? 'Healthy' : tone === 'warning' ? 'Needs attention' : 'Critical'
+    const tone: HealthTone = health.score >= 75 ? 'healthy' : health.score >= 40 ? 'warning' : 'critical'
+    const label = health.score >= 75 ? 'Healthy' : 'Needs attention'
     return { kind: 'score', score: health.score, tone, label }
   }
   const orderCount = health.orderCount
-  if (orderCount === undefined) return { kind: 'empty', message: 'Not enough data' }
-  if (orderCount < MIN_ORDERS_FOR_HEALTH) return { kind: 'empty', message: `Not enough data — need ${MIN_ORDERS_FOR_HEALTH}+ orders` }
-  if (health.historyDays !== undefined && health.historyDays !== null && health.historyDays < MIN_HISTORY_DAYS_FOR_HEALTH) return { kind: 'empty', message: 'Calculating… check back tomorrow' }
-  return { kind: 'empty', message: 'Not enough data' }
+  if (orderCount === undefined) return { kind: 'empty', message: 'Not enough data yet' }
+  if (orderCount < MIN_ORDERS_FOR_HEALTH) return { kind: 'empty', message: `Not enough data yet — need ${MIN_ORDERS_FOR_HEALTH}+ orders to calculate health score` }
+  if (health.historyDays !== undefined && health.historyDays !== null && health.historyDays < MIN_HISTORY_DAYS_FOR_HEALTH) return { kind: 'empty', message: 'Store health calculating… check back in 24 hours' }
+  return { kind: 'empty', message: 'Not enough data yet' }
 }
 
 /** Parses one SSE frame block into a RunAllEvent, tolerating unknown events. */
@@ -281,26 +334,31 @@ export function agentGuide(id: string): AgentGuide {
   return AGENT_GUIDES[id] ?? FALLBACK_GUIDE
 }
 
-/* ── Upcoming AI Growth Command modules (placeholders until PRs #48–#51 land) ── */
+/* ── AI Growth Command modules (all shipped — links open the real pages) ── */
 
-export type UpcomingModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'INSIGHTS_HUB' | 'AI_COMMAND'
-export type UpcomingModule = Readonly<{
-  id: UpcomingModuleId
+export type GrowthModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'PATTERN_AI' | 'AI_COMMAND'
+/** Sidebar section id each module's "Open" action navigates to. */
+export type GrowthModulePath = 'store-coach' | 'ai-executive' | 'patternai' | 'ai-command'
+export type GrowthModule = Readonly<{
+  id: GrowthModuleId
   label: string
   description: string
   sampleInsight: string
+  /** Sidebar section id this module links to. */
+  path: GrowthModulePath
   /** Feature level for each plan tier, from the plan-gating matrix. */
   planTiers: Readonly<Record<PlanTier, string>>
-  /** What merchants get once the module ships. */
+  /** What the module does for the merchant. */
   features: readonly string[]
 }>
 
-export const UPCOMING_MODULES: readonly UpcomingModule[] = [
+export const GROWTH_MODULES: readonly GrowthModule[] = [
   {
     id: 'STORE_COACH',
     label: 'Store Coach',
     description: 'Your daily business advisor providing tactical coaching.',
     sampleInsight: 'Your inventory cover slipped this week — here are three moves to recover it.',
+    path: 'store-coach',
     planTiers: { trial: 'Basic', start: 'Full', growth: 'Advanced', commander: '+ Voice + PDF' },
     features: ['Daily tactical coaching from your real store numbers', 'Plain-language action plans', 'Voice and PDF briefings on Commander'],
   },
@@ -309,14 +367,16 @@ export const UPCOMING_MODULES: readonly UpcomingModule[] = [
     label: 'AI Executive',
     description: 'Strategic boardroom intelligence for big decisions.',
     sampleInsight: 'Quarterly revenue is tracking 9% above plan — a board-ready summary is ready.',
+    path: 'ai-executive',
     planTiers: { trial: 'Sample', start: 'Basic', growth: 'Full', commander: '+ Investor PDFs' },
     features: ['Boardroom-level strategic summaries', 'Investor-ready PDFs on Commander', 'Big-decision context from closed-period data'],
   },
   {
-    id: 'INSIGHTS_HUB',
-    label: 'Insights Hub',
+    id: 'PATTERN_AI',
+    label: 'PatternAI',
     description: 'Discovers hidden patterns and delivers deep insights.',
     sampleInsight: 'We found a hidden pattern: weekend bundles outperform weekday discounts.',
+    path: 'patternai',
     planTiers: { trial: 'Limited', start: 'Basic', growth: 'Full', commander: '+ API + Real-time' },
     features: ['Deep pattern discovery across your data', 'API and real-time streams on Commander', 'Hidden correlations surfaced automatically'],
   },
@@ -325,12 +385,13 @@ export const UPCOMING_MODULES: readonly UpcomingModule[] = [
     label: 'AI Command',
     description: 'Universal command center — control your store with text.',
     sampleInsight: 'Ask “Which products should I reorder this week?” — get an evidence-backed answer.',
+    path: 'ai-command',
     planTiers: { trial: 'Info only', start: 'Info only', growth: 'Info only', commander: '+ Full Actions' },
     features: ['Universal text command for your store', 'Evidence-backed answers, never invented', 'Full store actions on Commander'],
   },
 ]
 
-export type UpcomingAccess = Readonly<{
+export type GrowthAccess = Readonly<{
   tierLabel: string
   badge: 'available' | 'requires'
   badgeLabel: string
@@ -339,8 +400,8 @@ export type UpcomingAccess = Readonly<{
   upgradePlan: PlanTier | null
 }>
 
-/** Plan-gating decision for an upcoming module on the merchant's current plan. */
-export function upcomingModuleAccess(module: UpcomingModule, plan: PlanTier): UpcomingAccess {
+/** Plan-gating decision for a shipped module on the merchant's current plan. */
+export function growthModuleAccess(module: GrowthModule, plan: PlanTier): GrowthAccess {
   if (module.id === 'AI_EXECUTIVE') {
     const gated = plan === 'trial' || plan === 'start'
     return {

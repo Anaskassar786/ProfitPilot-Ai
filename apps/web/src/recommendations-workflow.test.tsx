@@ -104,14 +104,14 @@ describe('Recommendations workspace — runtime flow', () => {
     installFetchMock({ summary: emptySummary(), items: [], analyze: {} })
     await mountWorkspace()
     const text = container.textContent ?? ''
-    expect(text).toContain('Ready to analyze your store')
-    expect(text).toContain('Run First Analysis')
+    expect(text).toContain("Let's find your growth opportunities!")
+    expect(text).toContain('Discover Opportunities')
     expect(text).toContain('Revenue opportunity pending')
     expect(text).toContain('No pending recommendations yet')
     expect(text).toContain('Need decisions to calculate')
     expect(container.querySelectorAll('.recs-tip [role="tooltip"]').length).toBe(5)
-    expect(text).toContain('What to expect after an analysis')
-    expect(text).toContain('Uses: Products')
+    expect(text).toContain('What happens after you click')
+    expect(text).toContain('Analyzes: Products')
     expect(text).toContain('Sample')
     // Tabs carry explanatory tips; search/sort placeholders were clarified
     const tabs = [...container.querySelectorAll('.recs-tab')]
@@ -122,7 +122,7 @@ describe('Recommendations workspace — runtime flow', () => {
     // Sidebar education: all seven agents listed with zero pending
     const roster = [...container.querySelectorAll('.recs-agent-row')]
     expect(roster).toHaveLength(7)
-    expect(text).toContain('No recommendations yet — your team reports here after the first analysis.')
+    expect(text).toContain('No recommendations yet — your team reports here after the first look.')
     expect(text).toContain('See sample activity')
   })
 
@@ -139,23 +139,23 @@ describe('Recommendations workspace — runtime flow', () => {
     }
     installFetchMock({ summary: emptySummary(), items: [], analyze, analyzeDelayMs: 120 })
     await mountWorkspace()
-    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Run First Analysis'))
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Discover Opportunities'))
     expect(runButton).toBeDefined()
     await click(runButton!)
     // The staged progress modal (not a toast) is the in-flight surface.
     expect(container.querySelector('.recs-analysis-modal')).not.toBeNull()
     expect(container.querySelector('.recs-analysis-progress[role="progressbar"]')).not.toBeNull()
-    expect(container.textContent).toContain('Scanning products')
-    expect(container.textContent).toContain('Applying deterministic rules')
+    expect(container.textContent).toContain('Scanning your products')
+    expect(container.textContent).toContain('Finding patterns')
     await settle(260)
     const text = container.textContent ?? ''
     expect(container.querySelector('.recs-analysis-modal')).toBeNull()
     expect(container.querySelector('.recs-report')).not.toBeNull()
-    expect(text).toContain('Store Health Check Complete')
+    expect(text).toContain('Your store looks healthy')
     expect(text).toContain('No urgent issues detected')
     expect(text).toContain('8/8')
     expect(text).toContain('Excellent · 84/100')
-    expect(text).toContain('No stockout risks')
+    expect(text).toContain('No stockout alerts')
     expect(text).toContain('Last analysis')
     expect(text).toContain('View analytics')
     // A 0-result run informs through the panel — no misleading success toast.
@@ -183,7 +183,7 @@ describe('Recommendations workspace — runtime flow', () => {
     await mountWorkspace()
     const text = container.textContent ?? ''
     expect(text).toContain('Monthly limit reached')
-    expect(text).toContain('Upgrade plan')
+    expect(text).toContain('Upgrade Plan')
     // CTA wording contract: never "Upgrade to <plan>"
     expect(text).not.toMatch(/Upgrade to (Trial|Start|Growth|Commander)/)
     const buttons = [...container.querySelectorAll('button')]

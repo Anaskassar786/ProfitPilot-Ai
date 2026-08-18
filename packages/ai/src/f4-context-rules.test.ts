@@ -66,6 +66,21 @@ describe('deterministic store health', () => {
     const health = calculateStoreHealth({ ...buildStoreContext(raw), previous30dRevenue: 0, previous30dOrders: 0 })
     expect(health.components.find((component) => component.key === 'revenue_momentum')?.score).toBe(100)
   })
+  it('returns null until there is enough closed-period history to score', () => {
+    // Nine orders across two windows is not enough for a meaningful score.
+    const thin = calculateStoreHealth({ ...buildStoreContext(raw), last30dOrders: 5, previous30dOrders: 4 })
+    expect(thin.score).toBeNull()
+    expect(thin.orderCount).toBe(9)
+    // Enough orders but all from a single day → still learning, never a "0/100".
+    const singleDay = calculateStoreHealth({
+      ...buildStoreContext(raw),
+      dataFreshAt: '2024-06-12',
+      orders: [{ orderKey: 'o1', total: 10, day: '2024-06-12', productIds: ['stock'], customerKey: null }],
+    })
+    expect(singleDay.orderCount).toBe(30)
+    expect(singleDay.historyDays).toBe(0)
+    expect(singleDay.score).toBeNull()
+  })
 })
 
 describe('eight deterministic opportunity rules', () => {

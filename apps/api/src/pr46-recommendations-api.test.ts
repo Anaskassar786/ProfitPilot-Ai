@@ -12,7 +12,7 @@ const snapshot: StoreSnapshot = {
   storeId: storeId('s'), currency: 'EUR', timezone: 'UTC', asOf: '2026-08-01T00:00:00.000Z', dataFreshAt: '2026-08-01T00:00:00.000Z',
   products: [{ productId: 'p', title: 'Hoodie', inventoryUnits: 1, averageDailyUnits: 1, unitPrice: 50, unitCost: 10, unitsSold120d: 10, daysSinceLastSale: 1 }],
   customers: [{ customerKey: 'c1', lifetimeValue: 400, orderCount: 3, daysSinceLastOrder: 90, firstOrderDay: '2026-01-01' }],
-  checkouts: [], orders: [], productPairs: [], last30dRevenue: 100, previous30dRevenue: 80, last30dOrders: 5, previous30dOrders: 4,
+  checkouts: [], orders: [], productPairs: [], last30dRevenue: 100, previous30dRevenue: 80, last30dOrders: 12, previous30dOrders: 10,
 }
 
 function recommendation(overrides: Partial<Recommendation> = {}): Recommendation {
