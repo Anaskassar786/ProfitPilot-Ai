@@ -19,13 +19,14 @@ const DECISION_TYPES: readonly DecisionType[] = ['PRICING', 'PRODUCT', 'MARKETIN
 
 type DecisionAnalytics = Readonly<{ total: number; reviewed: number; averageAccuracy: number | null; qualityDistribution: Readonly<Record<string, number>>; bestDecisions: readonly ExecutiveDecision[]; improvementAreas: readonly string[] }>
 
-export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrade }: ExecutivePageProps) {
+export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrade, autoCompose = false }: ExecutivePageProps & { autoCompose?: boolean }) {
   const storeId = context.storeId
   const [decisions, setDecisions] = useState<readonly ExecutiveDecision[]>([])
   const [analytics, setAnalytics] = useState<DecisionAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [formOpen, setFormOpen] = useState(false)
+  const [formOpen, setFormOpen] = useState(autoCompose)
+  useEffect(() => { if (autoCompose) setFormOpen(true) }, [autoCompose])
   const [decisionType, setDecisionType] = useState<DecisionType>('STRATEGIC')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

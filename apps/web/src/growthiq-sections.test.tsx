@@ -41,6 +41,8 @@ describe('GrowthIqTrajectorySection', () => {
     expect(html).toContain('projection confidence · 24 real days')
     expect(html).toContain('Explore trajectory details')
     expect(html).toMatch(/trajectory/)
+    expect(html).toContain('gq-trajectory-hit')
+    expect(html).toContain('data-testid="gq-trajectory-hit"')
   })
 
   it('degrades to honest education with a single synced day', () => {

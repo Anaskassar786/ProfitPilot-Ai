@@ -345,9 +345,9 @@ export function GrowthIqInsightsSidebar({ metrics, currency, tipIndex = 0, onNav
 
 export function GrowthIqActionsPanel({ onNavigate }: { onNavigate: (route: string) => void }) {
   const actions: readonly Readonly<{ key: string; title: string; description: string; icon: typeof Flag; route: string }>[] = [
-    { key: 'decision', title: 'Log a decision', description: 'Track a strategic move and grade its outcome later.', icon: ListChecks, route: '/decisions' },
+    { key: 'decision', title: 'Log a decision', description: 'Track a strategic move and grade its outcome later.', icon: ListChecks, route: '/decisions/new' },
     { key: 'report', title: 'View a report', description: 'Open your board-ready strategic reporting.', icon: FileBarChart, route: '/reports' },
-    { key: 'goal', title: 'Set a goal', description: 'Turn a quarterly objective into a milestone plan.', icon: Flag, route: '/roadmaps' },
+    { key: 'goal', title: 'Set a goal', description: 'Turn a quarterly objective into a milestone plan.', icon: Flag, route: '/roadmaps/new' },
     { key: 'insight', title: 'Find an insight', description: 'Surface strategic opportunities in your data.', icon: Lightbulb, route: '/opportunities' },
   ]
   return (
