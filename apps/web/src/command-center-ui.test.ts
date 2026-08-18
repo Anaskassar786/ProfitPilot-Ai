@@ -292,9 +292,10 @@ describe('PR49 shipped AI Growth Command modules', () => {
     const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'start', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('GrowthIQ')
     expect(html).not.toContain('AI Executive')
-    // Start plan: gated by the growth tier — CTA stays "Upgrade Plan".
+    // Start plan: gated by the growth tier — badge names the required tier,
+    // the CTA opens the module (which carries the "Upgrade Plan" gate).
     expect(html).toContain('Requires Growth')
-    expect(html).toContain('Upgrade Plan')
+    expect(html).toContain('Open GrowthIQ')
     expect(html).not.toContain('Upgrade to Growth')
   })
   it('renders the module info drawer with a plan matrix and an Open CTA', () => {
