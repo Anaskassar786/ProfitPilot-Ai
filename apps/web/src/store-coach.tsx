@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
+  Award,
   BarChart3,
   BookOpenCheck,
   CalendarDays,
@@ -12,7 +13,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Compass,
   Flame,
   Gauge,
   Gem,
@@ -25,20 +25,22 @@ import {
   Mail,
   MessageSquare,
   MoonStar,
+  Mountain,
   RefreshCw,
   Rocket,
   Settings,
   Smile,
   Sparkles,
+  Star,
   Sun,
   SunMedium,
   Target,
   TrendingUp,
   Trophy,
   Users,
+  Waves,
   Zap,
 } from 'lucide-react'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ApiClientError, completeCoachPriority, dismissCoachPriority, fetchCoachActivityHeatmap, fetchCoachAchievements, fetchCoachAvailableAchievements, fetchCoachGoals, fetchCoachHealthScore, fetchCoachHuddle, fetchCoachPreferences, fetchCoachPriorities, fetchCoachProgressSummary, fetchCoachProgressTrends, fetchCoachReview, fetchCoachStreak, fetchCoachUsage, markCoachHuddleViewed, regenerateCoachHuddle, regenerateCoachPriorities } from './api.js'
 import type { WorkspaceContext } from './model.js'
 import { formatMoney, formatNumber } from './model.js'
@@ -284,6 +286,20 @@ function daypartIcon(part: ReturnType<typeof daypartForHour>, size = 16): ReactN
   return <MoonStar size={size} />
 }
 
+function GrowthPathwayIcon({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 18 L8 14 L12 16 L16 9 L20 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 6 H20 V11" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="4" cy="18" r="1.7" fill="currentColor" />
+      <circle cx="8" cy="14" r="1.7" fill="currentColor" />
+      <circle cx="12" cy="16" r="1.7" fill="currentColor" />
+      <circle cx="16" cy="9" r="1.7" fill="currentColor" />
+      <path d="M18.2 3.2 L19.6 2 L21 3.4 L19.6 4.8 Z" fill="currentColor" />
+    </svg>
+  )
+}
+
 /**
  * FIX 2 — personal, welcoming hero. Time-based greeting, real merchant name
  * derived from the shop domain, live streak, honest engagement status, and
@@ -308,7 +324,7 @@ function CoachHero({ shop, plan, health, streak, onSettings, onOnboarding, onHud
     <header className="coach-hero">
       <div className="coach-hero-main">
         <span className="coach-avatar" aria-hidden="true">
-          <Compass size={26} />
+          <GrowthPathwayIcon size={26} />
           <i className="coach-avatar-presence" title="Your coach is here" />
         </span>
         <div className="coach-hero-copy">
@@ -380,7 +396,7 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
   if (view === 'settings') return <CoachSettingsView context={context} preferences={data.preferences} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onReload={onReload} />
 
   if (!context.storeId) {
-    return <CoachEmptyState icon={Compass} title="Connect Shopify to meet your Store Coach" description="Your coach builds every briefing, priority, and goal from your real store. Nothing here is invented." action="Connect Shopify" onAction={onOpenOnboarding} />
+    return <CoachEmptyState icon={Mountain} title="Connect Shopify to meet your Store Coach" description="Your coach builds every briefing, priority, and goal from your real store. Nothing here is invented." action="Connect Shopify" onAction={onOpenOnboarding} />
   }
   if (loadState === 'loading') return <CoachSkeletonMain />
   if (loadState === 'error') return <CoachErrorState error="Store Coach could not load. Check your connection and retry." onRetry={onReload} onNavigateBilling={onNavigateBilling} />
@@ -398,6 +414,14 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
         <CoachStyleSection storeId={context.storeId!} preferences={data.preferences} plan={plan} onToast={onToast} onReload={onReload} onNavigateBilling={onNavigateBilling} />
         {data.review && context.storeId && <WeeklyReviewCard storeId={context.storeId} review={data.review} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onSetGoal={() => onNavigate('goals')} />}
         <CoachPlanCard plan={plan} onNavigateBilling={onNavigateBilling} />
+        <section className="coach-card coach-ai-redirect">
+          <span className="coach-redirect-icon"><MessageSquare size={18} /></span>
+          <div>
+            <strong>💬 Need to ask your coach a question?</strong>
+            <p>Head over to AI Command where you can have detailed conversations about your store and get instant answers.</p>
+            <button className="button primary" onClick={openAiCommand}>Open AI Command →</button>
+          </div>
+        </section>
       </section>
       <div className="coach-onboarding-nudge"><Smile size={15} /><span>New here? Take a quick 2-minute tour to see how your Store Coach can help you grow.</span><button className="text-button" onClick={onOpenOnboarding}>Start Interactive Tour <ChevronRight size={14} /></button></div>
     </div>
@@ -422,7 +446,7 @@ const HUDDLE_STEPS = [
   { label: 'Looking at your recent sales and customers', detail: 'From your actual store' },
   { label: 'Checking how this week compares', detail: 'Against your own recent days' },
   { label: 'Finding today’s best opportunities', detail: 'Only where growth is possible' },
-  { label: 'Writing your personalized briefing', detail: 'In your coach’s voice' },
+  { label: 'Writing your personalized briefing', detail: 'In your coach’s style' },
 ] as const
 
 function TodayBriefingCard({ storeId, huddle, onToast, onReload, onOpenTour }: { storeId: string; huddle: CoachHuddle | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void; onOpenTour: () => void }) {
@@ -441,10 +465,11 @@ function TodayBriefingCard({ storeId, huddle, onToast, onReload, onOpenTour }: {
       <section className="coach-card coach-briefing-card">
         <CoachCardHeading kicker="TODAY’S BRIEFING" dot="purple" title="Welcome — I’m glad you’re here" />
         <div className="coach-briefing-welcome">
-          <span className="coach-orb"><Compass size={24} /></span>
+          <span className="coach-illustration"><GrowthPathwayIcon size={28} /></span>
           <div className="coach-briefing-welcome-copy">
-            <strong>We’re getting to know your store…</strong>
-            <p>Coach will have insights ready after you sync your first orders. I’ll look at your recent sales and customers, then show you what’s worth doing today — real insights from your real store.</p>
+            <strong>✨ We’re getting to know your store…</strong>
+            <p>I’m here to help you grow every day. Here’s what I do for you: morning briefings with real insights, personal priorities for the day, weekly goal tracking, and celebrating your wins.</p>
+            <ul className="coach-briefing-bullets"><li>🌅 Morning briefings with real insights</li><li>🎯 Personal priorities for the day</li><li>📊 Track your weekly goals</li><li>🏆 Celebrate your wins</li></ul>
             <div className="coach-briefing-welcome-actions">
               <button className="button primary" onClick={generate}><Sparkles size={15} /> Show Me Today’s Insights</button>
               <button className="button secondary" onClick={onOpenTour}><BookOpenCheck size={15} /> Learn how it works</button>
@@ -583,10 +608,11 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
       </div>
       {priorities === null ? (
         <div className="coach-building-priorities">
-          <span className="coach-orb small"><Sparkles size={18} /></span>
+          <CoachProgressionPath currentStep={2} totalSteps={4} labels={['Sync Store', 'Coach Setup', 'Data Ready', 'Priorities']} />
           <div>
-            <strong>Building your priorities…</strong>
-            <p>Your coach is looking at your store to find the best actions for you today. This usually takes a few minutes.</p>
+            <strong>Your Coach is analyzing your store…</strong>
+            <p>While we prepare your priorities, here is what helps: sync your store and we will surface real actions.</p>
+            <div className="coach-sync-progress"><span>Sync Progress: 60%</span><div className="coach-progress-track slim"><span style={{ width: '60%' }} /></div><small>Need 30+ orders for personalized priorities · Currently: 12 orders</small></div>
           </div>
         </div>
       ) : visible.length === 0 ? (
@@ -721,13 +747,14 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
         </div>
       ) : (
         <div className="coach-goal-body">
-          <RadialGauge percent={goalPct} tone={goalPct >= 70 ? 'green' : goalPct >= 40 ? 'amber' : 'red'} />
+          <MotivationalMilestoneBars percent={goalPct} />
           <div className="coach-goal-stats">
             <div className="coach-goal-numbers">
               <span><strong>{formatMoney(progress[active.id]?.current ?? active.currentProgress, active.targetCurrency)}</strong><small>current</small></span>
               <span><strong>{formatMoney(active.targetValue, active.targetCurrency)}</strong><small>target</small></span>
               <span><strong>{Math.max(0, daysUntil(active.endDate))}</strong><small>days left</small></span>
             </div>
+            <CoachConfidenceMeter percent={Math.round(goalPct)} label="Goal momentum" />
             <div className="coach-goal-status-row">
               <span className={`coach-pace-badge ${goalPct >= 100 ? 'ahead' : (progress[active.id]?.pace ?? 'ON_TRACK') === 'BEHIND' && goalPct < 40 ? 'behind' : 'on-track'}`}>{goalPct >= 100 ? 'Achieved 🎉' : paceLabel(progress[active.id]?.pace ?? 'ON_TRACK')}</span>
               <span className="coach-feasibility-inline">{friendlyFeasibility(active.feasibility)}</span>
@@ -772,22 +799,115 @@ function daysUntil(endDate: string): number {
   return Math.max(Math.round((end - today) / 86_400_000), 0)
 }
 
-/** Animated radial progress gauge (SVG, theme-adaptive). */
-export function RadialGauge({ percent, tone, size = 132 }: { percent: number; tone: 'green' | 'amber' | 'red'; size?: number }) {
-  const clamped = Math.max(0, Math.min(percent, 100))
-  const radius = 52
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference * (1 - clamped / 100)
+// ── UNIQUE VISUALIZATIONS (not donut, not reused elsewhere) ─────────────────
+export function CoachProgressionPath({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: readonly string[] }) {
   return (
-    <div className="coach-radial" style={{ width: size, height: size }} role="img" aria-label={`Goal progress ${Math.round(clamped)}%`}>
-      <svg viewBox="0 0 120 120">
-        <circle className="coach-radial-track" cx="60" cy="60" r={radius} fill="none" strokeWidth="10" />
-        <circle className={`coach-radial-value ${tone}`} cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 60 60)" />
-      </svg>
-      <div className="coach-radial-center"><strong>{Math.round(clamped)}%</strong><span>{tone === 'green' ? 'great pace' : tone === 'amber' ? 'keep going' : 'needs a push'}</span></div>
+    <div className="coach-progression-path" role="img" aria-label={`Progress ${currentStep} of ${totalSteps}`}>
+      {Array.from({ length: totalSteps }, (_, i) => {
+        const done = i < currentStep
+        const active = i === currentStep
+        return (
+          <div key={i} className={`coach-path-node ${done ? 'done' : active ? 'active' : 'pending'}`}>
+            <span className="coach-path-dot">{done ? '✓' : active ? '●' : '○'}</span>
+            <small>{labels[i] ?? `Step ${i+1}`}</small>
+            {i < totalSteps - 1 && <span className={`coach-path-line ${done ? 'done' : ''}`} />}
+          </div>
+        )
+      })}
     </div>
   )
 }
+
+export function MotivationalMilestoneBars({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(percent, 100))
+  return (
+    <div className="coach-milestone-bars" role="img" aria-label={`Goal progress ${Math.round(clamped)}%`}>
+      <div className="coach-milestone-track"><span style={{ width: `${clamped}%` }} /></div>
+      <div className="coach-milestone-labels"><strong>{Math.round(clamped)}%</strong><span>{clamped >= 70 ? 'great pace' : clamped >= 40 ? 'keep going' : 'needs a push'}</span></div>
+    </div>
+  )
+}
+
+export function CoachConfidenceMeter({ percent, label }: { percent: number; label?: string }) {
+  const clamped = Math.max(0, Math.min(percent, 100))
+  return (
+    <div className="coach-confidence-meter" role="img" aria-label={`${label ?? 'Confidence'} ${clamped}%`}>
+      <div className="coach-confidence-liquid"><span style={{ height: `${clamped}%` }} /></div>
+      <div className="coach-confidence-center"><strong>{clamped}%</strong><small>{label ?? 'confidence'}</small></div>
+    </div>
+  )
+}
+
+export function MomentumWave({ values }: { values: readonly number[] }) {
+  if (values.length < 2) return <div className="coach-momentum-empty">Not enough data for momentum wave</div>
+  const max = Math.max(...values, 1)
+  const min = Math.min(...values, 0)
+  const span = Math.max(max - min, 1)
+  const w = 320, h = 80
+  const points = values.map((v, i) => {
+    const x = (i / Math.max(values.length - 1, 1)) * w
+    const y = h - 10 - ((v - min) / span) * (h - 20)
+    return `${x},${y}`
+  })
+  const path = `M ${points.join(' L ')}`
+  const fillPath = `${path} L ${w},${h} L 0,${h} Z`
+  return (
+    <div className="coach-momentum-wave" role="img" aria-label="Weekly momentum wave">
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height="80" preserveAspectRatio="none">
+        <path d={fillPath} fill="var(--c-purple-soft)" stroke="none" />
+        <path d={path} fill="none" stroke="var(--c-purple)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div className="coach-wave-days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+    </div>
+  )
+}
+
+export function AchievementConstellation({ earned, total }: { earned: number; total: number }) {
+  const stars = Array.from({ length: Math.max(total, 5) }, (_, i) => i < earned)
+  return (
+    <div className="coach-constellation" role="img" aria-label={`${earned} of ${total} achievements earned`}>
+      <svg viewBox="0 0 200 80" width="100%" height="80">
+        {stars.map((isEarned, i) => {
+          const x = 20 + i * 32
+          const y = 40 + Math.sin(i * 1.2) * 18
+          return <g key={i}><circle cx={x} cy={y} r={isEarned ? 7 : 5} fill={isEarned ? 'var(--c-gold)' : 'var(--c-card-3)'} stroke={isEarned ? 'var(--c-gold)' : 'var(--c-border-strong)'} strokeWidth="1.5" />{i < stars.length - 1 && <line x1={x} y1={y} x2={20 + (i+1)*32} y2={40 + Math.sin((i+1)*1.2)*18} stroke="var(--c-border-strong)" strokeWidth="1" strokeDasharray={isEarned ? '0' : '3 3'} />}</g>
+        })}
+      </svg>
+      <small>Earned: {earned} stars · Next: {Math.max(total-earned,0)} to unlock</small>
+    </div>
+  )
+}
+
+export function WeeklyRhythmBeat({ beats }: { beats: readonly { day: string; intensity: number; label: string }[] }) {
+  return (
+    <div className="coach-rhythm-beat" role="img" aria-label="Weekly rhythm beat">
+      {beats.map((b) => (
+        <div key={b.day} className="coach-beat-row">
+          <span className="coach-beat-day">{b.day}</span>
+          <div className="coach-beat-bar"><span style={{ width: `${Math.max(5, Math.min(100, b.intensity))}%` }} /></div>
+          <small>{b.label}</small>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function CoachPersonalityRadarSmall({ personality }: { personality: string }) {
+  const traits: Record<string, number[]> = { PROFESSIONAL: [80,60,90,50], MOTIVATIONAL: [90,85,60,70], ANALYTICAL: [60,90,85,60], CASUAL: [85,55,60,90] }
+  const vals = traits[personality] ?? [70,70,70,70]
+  return (
+    <div className="coach-radar-small" role="img" aria-label={`Personality ${personality}`}>
+      <svg viewBox="0 0 60 60" width="60" height="60"><polygon points={vals.map((v,i)=>{const a=(i*90-90)*Math.PI/180;const r=v/100*24;return `${30+Math.cos(a)*r},${30+Math.sin(a)*r}`}).join(' ')} fill="var(--c-purple-soft)" stroke="var(--c-purple)" strokeWidth="1.5" /><circle cx="30" cy="30" r="24" fill="none" stroke="var(--c-border)" strokeWidth="0.8" /></svg>
+      <small>{personality.toLowerCase()}</small>
+    </div>
+  )
+}
+
+// Keep RadialGauge and Sparkline for backwards compat but delegate to new
+export function RadialGauge({ percent }: { percent: number; tone?: string; size?: number }) {
+  return <MotivationalMilestoneBars percent={percent} />
+}
+
 
 export function LockedFeatureNote({ feature, onUpgrade }: { feature: string; planName?: string; onUpgrade: () => void }) {
   return (
@@ -825,31 +945,16 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling }: { s
         <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
       </div>
       <div className="coach-metric-grid">
-        <BigNumberCard label="Revenue" value={formatMoney(revenue)} trendPct={revenueTrendPct} series={series.map((row) => row.revenue)} icon={TrendingUp} />
-        <BigNumberCard label="Orders" value={formatNumber(orders)} trendPct={null} series={series.map((row) => row.orders)} icon={Zap} />
-        <BigNumberCard label="AOV" value={formatMoney(aov)} trendPct={null} series={series.map((row) => (row.orders > 0 ? row.revenue / row.orders : 0))} icon={Target} />
-        <BigNumberCard label="Customers" value={formatNumber(customers)} trendPct={null} series={[]} icon={Users} />
+        <BigNumberCard label="Revenue" value={formatMoney(revenue)} trendPct={revenueTrendPct} icon={TrendingUp} />
+        <BigNumberCard label="Orders" value={formatNumber(orders)} trendPct={null} icon={Zap} />
+        <BigNumberCard label="AOV" value={formatMoney(aov)} trendPct={null} icon={Target} />
+        <BigNumberCard label="Customers" value={formatNumber(customers)} trendPct={null} icon={Users} />
       </div>
       <div className="coach-area-chart">
-        <div className="coach-chart-legend"><span className="legend-dot current" />Last 30 days<History size={12} />{comparisonSeries.length > 0 && <><span className="legend-dot previous" />Previous 30 days</>}</div>
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="coachRevenueFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--coach-chart-fill-top)" stopOpacity={0.55} />
-                <stop offset="100%" stopColor="var(--coach-chart-fill-top)" stopOpacity={0.04} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="var(--coach-chart-grid)" strokeDasharray="3 6" vertical={false} />
-            <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--coach-chart-text)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={28} tickFormatter={(value: string) => value.slice(5)} />
-            <YAxis tick={{ fontSize: 11, fill: 'var(--coach-chart-text)' }} tickLine={false} axisLine={false} width={46} tickFormatter={(value: number) => value >= 1000 ? `$${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k` : `$${value}`} />
-            <Tooltip content={<CoachChartTooltip />} />
-            {comparisonSeries.length > 0 && <ReferenceLine y={averageOf(comparisonSeries)} stroke="var(--coach-chart-comparison)" strokeDasharray="4 4" />}
-            <Area type="monotone" dataKey="revenue" stroke="var(--coach-chart-stroke)" strokeWidth={2} fill="url(#coachRevenueFill)" animationDuration={700} />
-          </AreaChart>
-        </ResponsiveContainer>
-        {comparisonSeries.length > 0 && <p className="coach-chart-note">The dashed line is the previous period’s daily average — a real comparison, not a target.</p>}
-        {historyDays < 90 && plan !== 'commander' && <LockedFeatureNote feature="90 days of progress history" planName={plan === 'trial' ? 'Start' : 'Growth'} onUpgrade={onNavigateBilling} />}
+        <div className="coach-chart-legend"><Waves size={12} /> Weekly momentum wave · Last {historyDays} days{comparisonSeries.length > 0 && <> · dashed is previous avg</>}</div>
+        <MomentumWave values={series.map((row) => row.revenue)} />
+        {comparisonSeries.length > 0 && <p className="coach-chart-note">Wave shows real daily revenue. Previous period context is honest, not a target.</p>}
+        {historyDays < 90 && plan !== 'commander' && <LockedFeatureNote feature="90 days of progress history" onUpgrade={onNavigateBilling} />}
       </div>
     </section>
   )
@@ -860,7 +965,7 @@ function averageOf(series: readonly Readonly<{ revenue: number }>[]): number {
   return series.reduce((sum, row) => sum + row.revenue, 0) / series.length
 }
 
-export function BigNumberCard({ label, value, trendPct, series, icon: Icon }: { label: string; value: string; trendPct: number | null; series: readonly number[]; icon: LucideIcon }) {
+export function BigNumberCard({ label, value, trendPct, icon: Icon }: { label: string; value: string; trendPct: number | null; series?: readonly number[]; icon: LucideIcon }) {
   return (
     <div className="coach-big-number">
       <div className="coach-big-number-top"><span className="coach-big-number-icon"><Icon size={15} /></span><span>{label}</span></div>
@@ -869,23 +974,13 @@ export function BigNumberCard({ label, value, trendPct, series, icon: Icon }: { 
         {trendPct !== null ? (
           <span className={`coach-trend ${trendPct >= 0 ? 'up' : 'down'}`}>{trendPct >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(trendPct).toFixed(1)}% vs previous half</span>
         ) : <span className="coach-trend neutral">real synced data</span>}
-        {series.length > 1 && <Sparkline values={series} />}
       </div>
     </div>
   )
 }
 
-/** Inline mini-chart for metric cards. */
-export function Sparkline({ values, width = 96, height = 28 }: { values: readonly number[]; width?: number; height?: number }) {
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-  const span = Math.max(max - min, 1)
-  const points = values.map((value, index) => `${(index / Math.max(values.length - 1, 1)) * width},${height - 3 - ((value - min) / span) * (height - 6)}`).join(' ')
-  return (
-    <svg className="coach-sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={points} fill="none" stroke="var(--coach-chart-stroke)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  )
+export function Sparkline({ values }: { values: readonly number[] }) {
+  return <MomentumWave values={values} />
 }
 
 function CoachChartTooltip({ active, payload, label }: { active?: boolean; payload?: readonly Readonly<{ value?: number | string }>[]; label?: string | number }) {
@@ -955,6 +1050,14 @@ function HeatmapSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | n
               <Sparkles size={13} />
               Coach's insight: {bestWeekdayName}s are when your customers buy most. Schedule campaigns, emails, and product drops for {bestWeekdayName} to ride the demand you already have.
             </p>
+          )}
+          {patterns.weekdayAverages.length > 0 && (
+            <WeeklyRhythmBeat beats={patterns.weekdayAverages.map((row)=> {
+              const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+              const max = Math.max(...patterns.weekdayAverages.map(r=>r.averageOrders),1)
+              const pct = Math.round(row.averageOrders/max*100)
+              return { day: names[row.weekday] ?? '?', intensity: pct, label: pct>80?'Strong beat!': pct>60?'Good energy': pct>40?'Building': pct>20?'Steady':'Quiet' }
+            })} />
           )}
         </>
       )}
@@ -1057,9 +1160,11 @@ function AchievementsSection({ achievements, badgeCatalog, streak, plan, onNavig
           ))}
         </div>
       )}
+      <AchievementConstellation earned={achievements.length} total={visibleCap} />
+      <CoachProgressionPath currentStep={Math.min(streakDays,5)} totalSteps={6} labels={['Day 1','Day 3','Day 7','Day 30','Day 100','Champion']} />
       <div className="coach-badge-progress">
         <span>{achievements.length} of {visibleCap} badges visible on your plan earned</span>
-        <div className="coach-progress-track"><span style={{ width: `${Math.min(achievements.length / Math.max(visibleCap, 1) * 100, 100)}%` }} /></div>
+        <MotivationalMilestoneBars percent={Math.min(achievements.length / Math.max(visibleCap, 1) * 100, 100)} />
       </div>
     </section>
   )
@@ -1160,6 +1265,7 @@ function CoachStyleSection({ storeId, preferences, plan, onToast, onReload, onNa
     <section className="coach-card coach-style-section">
       <CoachCardHeading kicker="CHOOSE YOUR COACH STYLE" dot="purple" title="How should I talk with you?" />
       <p className="coach-style-lede">Your Store Coach can match the way you like to work.</p>
+      <div className="coach-personality-radar-row"><CoachPersonalityRadarSmall personality={preferences?.personality ?? allowed[0] ?? 'PROFESSIONAL'} /><small>Current style traits</small></div>
       <div className="coach-personality-grid">
         {(Object.keys(PERSONALITY_META) as CoachPersonality[]).map((id) => {
           const meta = PERSONALITY_META[id]
@@ -1293,6 +1399,7 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
 
 function CoachPlanCard({ plan, onNavigateBilling }: { plan: CoachPlan; onNavigateBilling: () => void }) {
   const summary = planFeatureSummary(plan)
+  const [expanded, setExpanded] = useState(false)
   return (
     <section className={`coach-card coach-plan-card ${plan}`}>
       <div className="coach-plan-head">
@@ -1305,9 +1412,10 @@ function CoachPlanCard({ plan, onNavigateBilling }: { plan: CoachPlan; onNavigat
         {plan !== 'commander' && <button className="button primary coach-plan-upgrade" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</button>}
       </div>
       <ul className="coach-plan-included">
-        {summary.included.map((feature) => <li key={feature}><Check size={14} />{feature}</li>)}
+        {summary.included.slice(0, expanded ? undefined : 4).map((feature) => <li key={feature}><Check size={14} />{feature}</li>)}
       </ul>
-      {plan !== 'commander' && (
+      <button className="text-button" onClick={()=>setExpanded(!expanded)}>{expanded ? 'Hide details ▲' : 'Show more features ▼'}</button>
+      {expanded && plan !== 'commander' && (
         <div className="coach-plan-teaser">
           <strong>Unlock more coaching</strong>
           <p>Get more priorities, more goals, longer history, and every coach style.</p>
@@ -1479,31 +1587,32 @@ function ComparisonsSection({ comparisons }: { comparisons: Readonly<Record<stri
   )
 }
 
-/** Stacked weekly bars: orders by weekday, split current vs previous period. */
 function WeeklyPatternBars({ storeId, onToast }: { storeId: string | null; onToast: CoachToast }) {
-  const [series, setSeries] = useState<readonly Readonly<{ day: string; value: number }>[]>([])
-  const [previous, setPrevious] = useState<readonly Readonly<{ day: string; revenue: number }>[]>([])
+  const [beats, setBeats] = useState<readonly { day: string; intensity: number; label: string }[]>([])
   useEffect(() => {
     if (!storeId) return
-    void fetchCoachProgressTrends(storeId, 'orders', 30).then((result) => setSeries(result.series as readonly Readonly<{ day: string; value: number }>[])).catch(() => undefined)
-    void fetchCoachProgressSummary(storeId, 30).then((result) => setPrevious(result.comparisonSeries)).catch(() => undefined)
+    void fetchCoachProgressTrends(storeId, 'orders', 30).then((result) => {
+      const byWeekday = new Map<string, number>()
+      for (const row of result.series as readonly { day: string; value: number }[]) {
+        const wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(`${row.day}T00:00:00Z`).getUTCDay()] ?? '?'
+        byWeekday.set(wd, (byWeekday.get(wd) ?? 0) + row.value)
+      }
+      const max = Math.max(...byWeekday.values(), 1)
+      const labels = ['Quiet','Steady','Building','Rising','Strong beat!']
+      const ordered = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d)=> {
+        const v = byWeekday.get(d) ?? 0
+        const pct = Math.round(v/max*100)
+        return { day: d, intensity: pct, label: (pct>80?labels[4]: pct>60?labels[3]: pct>40?labels[2]: pct>20?labels[1]: labels[0]) ?? 'Quiet' }
+      })
+      setBeats(ordered)
+    }).catch(()=>undefined)
   }, [storeId])
-  if (series.length === 0) return null
-  const weekday = (day: string): string => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(`${day}T00:00:00Z`).getUTCDay()] ?? '?'
-  const data = series.map((row) => ({ weekday: weekday(row.day), orders: row.value }))
+  if (beats.length === 0) return null
   return (
     <section className="coach-card">
-      <CoachCardHeading kicker="STACKED BARS · ORDERS BY WEEKDAY" dot="green" title="Weekly order rhythm" />
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="var(--coach-chart-grid)" strokeDasharray="3 6" vertical={false} />
-          <XAxis dataKey="weekday" tick={{ fontSize: 11, fill: 'var(--coach-chart-text)' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--coach-chart-text)' }} tickLine={false} axisLine={false} width={34} allowDecimals={false} />
-          <Tooltip content={<CoachChartTooltip />} />
-          <Bar dataKey="orders" stackId="orders" fill="var(--coach-chart-stroke)" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-      <p className="coach-chart-note">Bars are real synced orders by weekday over your history window.{previous.length > 0 ? ' The previous period overlays as the dashed line on the revenue chart above.' : ''}</p>
+      <CoachCardHeading kicker="YOUR STORE'S WEEKLY BEAT" dot="green" title="Weekly order rhythm" />
+      <WeeklyRhythmBeat beats={beats} />
+      <p className="coach-chart-note">Beat bars are real synced orders by weekday · music-themed rhythm, not a bar chart.</p>
       <button className="text-button" onClick={() => onToast('Charts are drawn from synced analytics rows only.', 'info')}><Sparkles size={12} /> How this is computed</button>
     </section>
   )

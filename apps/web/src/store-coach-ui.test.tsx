@@ -232,13 +232,13 @@ describe('Plan feature summary (FIX 12)', () => {
 })
 
 describe('Store Coach components', () => {
-  it('renders the radial gauge with accessible percent label', () => {
+  it('renders the milestone bars with accessible percent label', () => {
     const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 64, tone: 'green' }))
     expect(html).toContain('Goal progress 64%')
-    expect(html).toContain('coach-radial-value green')
+    expect(html).toContain('coach-milestone-bars')
     expect(html).toContain('64%')
   })
-  it('clamps the radial gauge at 100', () => {
+  it('clamps the milestone bars at 100', () => {
     const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 140, tone: 'amber' }))
     expect(html).toContain('100%')
   })
@@ -268,17 +268,17 @@ describe('Store Coach components', () => {
     expect(html).toContain('Looking at your recent sales and customers')
     expect(html).toContain('Writing your personalized briefing')
   })
-  it('renders big number cards with trend arrows and sparkline', () => {
+  it('renders big number cards with trend arrows', () => {
     const html = renderToStaticMarkup(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: 12.4, series: [100, 120, 110, 140, 160], icon: TrendingUp }))
     expect(html).toContain('12.4%')
-    expect(html).toContain('coach-sparkline')
+    expect(html).toContain('coach-big-number')
     const down = renderToStaticMarkup(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: -5.1, series: [], icon: TrendingUp }))
     expect(down).toContain('coach-trend down')
   })
-  it('renders sparklines for inline metric cards', () => {
+  it('renders momentum wave for inline metric cards', () => {
     const html = renderToStaticMarkup(createElement(Sparkline, { values: [10, 20, 15, 30, 25] }))
-    expect(html).toContain('<polyline')
-    expect(html).toContain('aria-hidden="true"')
+    expect(html).toContain('coach-momentum-wave')
+    expect(html).toContain('Weekly momentum wave')
   })
   it('renders educational empty states with actions', () => {
     const html = renderToStaticMarkup(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first weekly goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))
