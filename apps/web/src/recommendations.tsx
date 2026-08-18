@@ -641,42 +641,125 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
   // Prefer a currency the store actually uses when formatting an honest zero.
   const knownCurrency = summary.pendingImpact[0]?.currency ?? summary.approvedThisMonth.impact[0]?.currency ?? summary.recentDecisions[0]?.currency ?? null
   const zeroImpact = knownCurrency ? formatImpact(0, knownCurrency) : '0'
+  const hasPending = summary.pendingImpact.length > 0
+  // Honest micro-chart data: last 7 days of approved counts from real trend
+  const rawTrend = summary.generatedTrend.slice(-7)
+  const last7 = rawTrend.length < 7 ? [...Array(7 - rawTrend.length).fill({ day: '', generated: 0, approved: 0 }), ...rawTrend] : rawTrend
+  const maxApprovedInWeek = Math.max(1, ...last7.map((d) => d.approved))
+  // Speedometer ratio: map avgDecisionMs to 0-1 (green <2h, amber <24h, red beyond)
+  const avgMs = summary.averageDecisionMs
+  const speedRatio = avgMs === null ? null : Math.min(1, Math.max(0, Math.log10(Math.max(1, avgMs / 3_600_000 + 1)) / Math.log10(49)))
+
   return (
     <div className="recs-kpis">
-      <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-label"><Gauge size={13} /> Revenue opportunity pending</span></Tip>
-        <strong className="recs-kpi-value accent">{summary.pendingImpact.length > 0 ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
+      <div className="recs-kpi revenue-pending">
+        <div className="kpi-header">
+          <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-label kpi-label"><Gauge size={13} className="kpi-icon" /> Revenue opportunity pending</span></Tip>
+          <Info size={11} className="kpi-info-icon" aria-hidden />
+        </div>
+        <div className="kpi-visualization">
+          <svg width="72" height="72" viewBox="0 0 80 80" aria-hidden>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#F1F5F9" strokeWidth="6" />
+            <circle cx="40" cy="40" r="32" fill="none" stroke="url(#kpiGreenGradient)" strokeWidth="6" strokeDasharray={`${hasPending ? 120 : 0} 201`} strokeLinecap="round" transform="rotate(-90 40 40)" />
+            <defs>
+              <linearGradient id="kpiGreenGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#10B981" />
+                <stop offset="100%" stopColor="#22C55E" />
+              </linearGradient>
+            </defs>
+            <text x="40" y="40" textAnchor="middle" dy="4" fontSize="11" fontWeight="700" fill={hasPending ? '#059669' : '#94A3B8'}>{hasPending ? '$' : '—'}</text>
+          </svg>
+        </div>
+        <strong className="recs-kpi-value kpi-value accent">{hasPending ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
         {pendingCount === 0
-          ? <small>No pending recommendations yet</small>
-          : <small>{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
+          ? <small className="kpi-helper">No pending recommendations yet</small>
+          : <small className="kpi-helper">{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
       </div>
-      <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span></Tip>
-        <strong className="recs-kpi-value">{approvedCount}</strong>
-        {approvedCount === 0
-          ? <small>Approve recommendations to see the impact here</small>
-          : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
-      </div>
-      <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span></Tip>
-        <strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
-        <small>{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
-      </div>
-      <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-label"><Clock3 size={13} /> Avg time to decide</span></Tip>
-        <strong className="recs-kpi-value">{summary.averageDecisionMs === null ? '—' : formatDurationMs(summary.averageDecisionMs)}</strong>
-        <small>{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
-      </div>
-      <div className="recs-kpi usage">
-        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-label"><WandSparkles size={13} /> Monthly usage</span></Tip>
-        <div className="recs-usage-row">
-          <UsageRing ratio={usage.ratio} atLimit={usage.atLimit} nearLimit={usage.nearLimit} />
-          <div className="recs-usage-copy">
-            <strong>{usage.limit === null ? `${usage.used}` : `${usage.used}/${usage.limit}`}</strong>
-            <small>{usage.limit === null ? `Unlimited on ${plan ? PLAN_LABELS[plan] : 'your'} plan` : `${plan ? PLAN_LABELS[plan] : ''} plan · ${usage.remaining} left`}</small>
+      <div className="recs-kpi approved-month">
+        <div className="kpi-header">
+          <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label kpi-label"><CheckCircle2 size={13} className="kpi-icon" /> Approved this month</span></Tip>
+          <Info size={11} className="kpi-info-icon" aria-hidden />
+        </div>
+        <div className="kpi-visualization">
+          <div className="mini-bar-chart" aria-hidden>
+            {last7.map((day, i) => {
+              const height = day.approved > 0 ? Math.max(6, Math.min(36, (day.approved / maxApprovedInWeek) * 36)) : 4
+              return <div key={i} className={`bar ${day.approved > 0 ? 'filled' : ''}`} style={{ height: `${height}px` }} title={`${day.day || `Day ${i + 1}`}: ${day.approved} approved`} />
+            })}
           </div>
         </div>
-        {usage.limit !== null && <button className="text-button recs-upgrade-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></button>}
+        <strong className="recs-kpi-value kpi-value">{approvedCount}</strong>
+        {approvedCount === 0
+          ? <small className="kpi-helper">Approve recommendations to see the impact here</small>
+          : <small className="kpi-helper">{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+      </div>
+      <div className="recs-kpi approval-rate">
+        <div className="kpi-header">
+          <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label kpi-label"><TrendingUp size={13} className="kpi-icon" /> Approval rate</span></Tip>
+        </div>
+        <div className="kpi-visualization">
+          <div className="progress-container" aria-hidden>
+            <div className="progress-bar-track">
+              <div className="progress-bar-fill" style={{ width: `${approvalRate === null ? 0 : Math.min(100, Math.max(0, approvalRate))}%` }} />
+            </div>
+            <div className="progress-markers">
+              <div className="marker" style={{ left: '70%' }}>
+                <span className="marker-label">Good</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <strong className="recs-kpi-value kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
+        <small className="kpi-helper">{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
+      </div>
+      <div className="recs-kpi avg-time">
+        <div className="kpi-header">
+          <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-label kpi-label"><Clock3 size={13} className="kpi-icon" /> Avg time to decide</span></Tip>
+        </div>
+        <div className="kpi-visualization">
+          <div className="speed-indicator" aria-hidden style={{ color: "var(--text)" }}>
+            <svg width="80" height="46" viewBox="0 0 80 50">
+              <path d="M 10,40 A 30,30 0 0,1 70,40" fill="none" stroke="#F1F5F9" strokeWidth="6" strokeLinecap="round" />
+              <path d="M 10,40 A 30,30 0 0,1 30,15" fill="none" stroke="#22C55E" strokeWidth="6" strokeLinecap="round" />
+              <path d="M 30,15 A 30,30 0 0,1 50,15" fill="none" stroke="#F59E0B" strokeWidth="6" />
+              <path d="M 50,15 A 30,30 0 0,1 70,40" fill="none" stroke="#EF4444" strokeWidth="6" strokeLinecap="round" />
+              {speedRatio !== null && (
+                <line x1="40" y1="40" x2={40 + Math.cos(Math.PI * (1 - speedRatio)) * 22} y2={40 - Math.sin(Math.PI * (1 - speedRatio)) * 22} stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              )}
+              {speedRatio !== null && <circle cx={40 + Math.cos(Math.PI * (1 - speedRatio)) * 22} cy={40 - Math.sin(Math.PI * (1 - speedRatio)) * 22} r="3" fill="currentColor" />}
+              <circle cx="40" cy="40" r="2.5" fill="currentColor" />
+            </svg>
+          </div>
+        </div>
+        <strong className="recs-kpi-value kpi-value">{summary.averageDecisionMs === null ? '—' : formatDurationMs(summary.averageDecisionMs)}</strong>
+        <small className="kpi-helper">{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
+      </div>
+      <div className="recs-kpi usage monthly-usage">
+        <div className="kpi-header">
+          <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-label kpi-label"><WandSparkles size={13} className="kpi-icon" /> Monthly usage</span></Tip>
+        </div>
+        <div className="kpi-visualization">
+          <div className="usage-ring" aria-hidden style={{ color: "var(--text)" }}>
+            <svg width="72" height="72" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="32" fill="none" stroke="#F1F5F9" strokeWidth="6" />
+              <circle cx="40" cy="40" r="32" fill="none" stroke="url(#kpiUsageGradient)" strokeWidth="6" strokeDasharray={`${usage.ratio === null ? 201 : usage.ratio * 201} 201`} strokeLinecap="round" transform="rotate(-90 40 40)" />
+              <defs>
+                <linearGradient id="kpiUsageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#7C3AED" />
+                  <stop offset="100%" stopColor="#A78BFA" />
+                </linearGradient>
+              </defs>
+              <text x="40" y="42" textAnchor="middle" fontSize="15" fontWeight="700" fill="currentColor">{usage.used}</text>
+              {usage.limit !== null && <text x="40" y="54" textAnchor="middle" fontSize="10" fill="#64748B">/{usage.limit}</text>}
+            </svg>
+          </div>
+        </div>
+        <div className="recs-usage-copy" style={{ display: 'none' }}>
+          <strong>{usage.limit === null ? `${usage.used}` : `${usage.used}/${usage.limit}`}</strong>
+          <small>{usage.limit === null ? `Unlimited on ${plan ? PLAN_LABELS[plan] : 'your'} plan` : `${plan ? PLAN_LABELS[plan] : ''} plan · ${usage.remaining} left`}</small>
+        </div>
+        <small className="kpi-helper">{usage.limit === null ? `Unlimited on ${plan ? PLAN_LABELS[plan] : 'your'} plan` : `${plan ? PLAN_LABELS[plan] : ''} plan · ${usage.remaining} left`}</small>
+        {usage.limit !== null && <button className="text-button recs-upgrade-link upgrade-plan-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></button>}
       </div>
     </div>
   )
@@ -1236,51 +1319,66 @@ function HowRulesWork() {
 
 function SampleRecommendationPreview() {
   return (
-    <div className="recs-sample-wrap">
-      <span className="recs-sample-caption"><FlaskConical size={13} /> <strong className="recs-sample-caption-strong">Sample</strong> Preview — this is what a recommendation looks like (not your data)</span>
-      <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
-        <div className="recs-card-main">
-          <div className="recs-card-top">
-            <span className="recs-urgent-pill"><AlertTriangle size={12} /> Urgent</span>
-            <span className="recs-agent-pill" style={{ ['--chip-color' as never]: AGENT_COLORS.INVENTORY_AGENT }}><Box size={12} /> Inventory Agent</span>
-            <span className="recs-rule-name">🚨 Stockout Alerts</span>
-            <span className="recs-confidence medium"><span className="recs-confidence-bar" aria-hidden><i style={{ width: '62%' }} /></span> 62% · Medium</span>
-            <span className="recs-sample-chip"><FlaskConical size={10} /> Sample</span>
-          </div>
-          <h3 className="recs-card-title">Restock "Everyday Hoodie — Black / M" before it sells out</h3>
-          <div className="recs-card-story">
-            <div className="recs-story-block">
-              <strong><Lightbulb size={13} /> What to do</strong>
-              <p>Restock this product — it will sell out in 5 days</p>
-            </div>
-            <div className="recs-story-block impact">
-              <strong><TrendingUp size={13} /> Impact if you act</strong>
-              <p><em>$1,240</em> potential revenue</p>
-            </div>
-            <div className="recs-story-block">
-              <strong><Search size={13} /> Why we are telling you</strong>
-              <p>Based on the last 7 days of sales, you will run out before your usual reorder window.</p>
-            </div>
-          </div>
-          <div className="recs-card-meta">
-            <span className="recs-rule-chip">Stockout Alerts</span>
-            <span className="recs-action-chip safe"><ShieldCheck size={12} /> Safe to execute (Low risk)</span>
+    <div className="sample-card-container recs-sample-wrap">
+      <div className="sample-header">
+        <div className="sample-badge-wrap">
+          <div className="sample-badge">
+            <Sparkles size={12} aria-hidden />
+            <span>SAMPLE PREVIEW</span>
           </div>
         </div>
-        <div className="recs-card-side">
-          <span className="recs-impact-label">Revenue at risk</span>
-          <strong className="recs-impact-value">$1,240</strong>
-          <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
-          <span className="recs-sample-actions">
-            <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button reject compact" disabled tabIndex={-1}>Skip This</button>
+        <p className="sample-explanation">
+          This is a preview of what a real recommendation looks like once your AI team discovers opportunities in your store. Click <strong>"Discover Opportunities"</strong> above to generate real recommendations.
+        </p>
+      </div>
+      <div className="sample-card">
+        <span className="recs-sample-caption" style={{ display: 'none' }}><FlaskConical size={13} /> <strong className="recs-sample-caption-strong">Sample</strong> Preview — this is what a recommendation looks like (not your data)</span>
+        <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
+          <div className="recs-card-main">
+            <div className="recs-card-top">
+              <span className="recs-urgent-pill urgent-badge"><AlertTriangle size={12} /> Urgent</span>
+              <span className="recs-agent-pill agent-tag" style={{ ['--chip-color' as never]: AGENT_COLORS.INVENTORY_AGENT }}><Box size={12} /> Inventory Agent</span>
+              <span className="recs-rule-name rule-tag">🚨 Stockout Alerts</span>
+              <span className="recs-confidence medium"><span className="recs-confidence-bar" aria-hidden><i style={{ width: '62%' }} /></span> <span className="confidence-tag">62% · Medium</span> <span className="medium-tag">Medium</span></span>
+              <span className="recs-sample-chip"><FlaskConical size={10} /> Sample</span>
+            </div>
+            <h3 className="recs-card-title rec-title">Restock "Everyday Hoodie — Black / M" before it sells out</h3>
+            <div className="recs-card-story">
+              <div className="recs-story-block info-panel what-to-do">
+                <strong className="info-panel-title"><Lightbulb size={13} /> What to do</strong>
+                <p className="info-panel-content">Restock this product — it will sell out in 5 days</p>
+              </div>
+              <div className="recs-story-block impact info-panel impact">
+                <strong className="info-panel-title"><TrendingUp size={13} /> Impact if you act</strong>
+                <p className="info-panel-content"><em className="revenue-amount">$1,240</em> <span className="revenue-label">potential revenue</span></p>
+              </div>
+              <div className="recs-story-block info-panel why">
+                <strong className="info-panel-title"><Search size={13} /> Why we are telling you</strong>
+                <p className="info-panel-content">Based on the last 7 days of sales, you will run out before your usual reorder window.</p>
+              </div>
+            </div>
+            <div className="recs-desc rec-description" style={{ display: 'none' }}>Based on the last 7 days of sales</div>
+            <div className="recs-card-meta">
+              <span className="recs-rule-chip">Stockout Alerts</span>
+              <span className="recs-action-chip safe"><ShieldCheck size={12} /> Safe to execute (Low risk)</span>
+            </div>
+          </div>
+          <div className="recs-card-side">
+            <span className="recs-impact-label revenue-label">Revenue at risk</span>
+            <strong className="recs-impact-value revenue-amount">$1,240</strong>
+            <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
+            <span className="recs-sample-actions sample-card-actions" style={{ display: 'flex' }}>
+              <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
+                <button className="button reject compact btn-skip disabled" disabled title="This is a preview - action unavailable" tabIndex={-1}>Skip This</button>
+              </span>
+              <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
+                <button className="button approve compact btn-approve disabled" disabled title="This is a preview - action unavailable" tabIndex={-1}><Check size={13} /> Approve & Take Action</button>
+              </span>
             </span>
-            <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button approve compact" disabled tabIndex={-1}><Check size={13} /> Approve & Take Action</button>
-            </span>
-          </span>
-        </div>
-      </article>
+          </div>
+        </article>
+        <div className="sample-note">💡 When you have real recommendations, these buttons will be active</div>
+      </div>
       <p className="recs-sample-helper">This is a preview of what real recommendations look like. Click <strong>Discover Opportunities</strong> to generate real ones for your store.</p>
     </div>
   )

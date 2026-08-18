@@ -866,3 +866,1035 @@
 @media (prefers-reduced-motion: reduce) {
   .recs-discover { animation: none !important; }
 }
+
+/* =========================================================================
+   PREMIUM LIGHT THEME POLISH — Recommendations page (Pristine Light Theme)
+   Preserves dark theme untouched. All rules scoped to .app-shell.light-mode
+   or .light-theme. Matches spec: vibrant purple #7C3AED, slate #0F172A, etc.
+   WCAG AA contrast, visible borders, shadows, no washed colors.
+   ========================================================================= */
+
+/* Global page container - premium slate on soft background */
+.app-shell.light-mode .recs-workspace,
+.light-theme .recs-workspace,
+.light-theme .recommendations-page {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+.app-shell.light-mode .recs-workspace {
+  background: transparent !important; /* keep outer page-content bg, but text remains slate */
+}
+
+/* Page header premium typography */
+.app-shell.light-mode .page-header .page-title,
+.light-theme .page-header .page-title,
+.app-shell.light-mode .recs-section-head h3,
+.light-theme .recs-section-head h3 {
+  color: #0F172A !important;
+}
+.app-shell.light-mode .page-header .page-subtitle,
+.light-theme .page-header .page-subtitle,
+.app-shell.light-mode .recs-section-head p,
+.light-theme .recs-section-head p {
+  color: #475569 !important;
+}
+
+/* Welcome banner - premium gradient with purple accent (Great Venerable) */
+.app-shell.light-mode .recs-topline,
+.light-theme .recs-topline,
+.light-theme .welcome-banner {
+  background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%) !important;
+  border: 1px solid #C4B5FD !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(124,58,237,0.10), 0 4px 12px rgba(124,58,237,0.08) !important;
+  position: relative;
+  overflow: hidden;
+}
+.app-shell.light-mode .recs-topline::before,
+.light-theme .welcome-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(139,92,246,0.14) 0%, transparent 68%);
+  pointer-events: none;
+}
+.app-shell.light-mode .recs-kicker,
+.light-theme .welcome-banner .banner-eyebrow {
+  color: #7C3AED !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+}
+.app-shell.light-mode .recs-welcome,
+.light-theme .welcome-banner .banner-greeting {
+  color: #0F172A !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .recs-topline-copy p,
+.light-theme .welcome-banner .banner-description {
+  color: #475569 !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+.app-shell.light-mode .recs-topline .button.secondary,
+.light-theme .welcome-banner .how-it-works-btn {
+  background: #FFFFFF !important;
+  color: #475569 !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 8px !important;
+}
+.app-shell.light-mode .recs-topline .button.secondary:hover,
+.light-theme .welcome-banner .how-it-works-btn:hover {
+  border-color: #7C3AED !important;
+  color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-discover,
+.light-theme .welcome-banner .discover-btn,
+.light-theme .empty-state .discover-btn {
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 4px rgba(124,58,237,0.25) !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .recs-discover:hover,
+.light-theme .discover-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124,58,237,0.35) !important;
+}
+
+/* Section headers - Overview, Your Action Items, Insights */
+.app-shell.light-mode .recs-section-head h3,
+.light-theme .section-header {
+  color: #0F172A !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .recs-section-head p,
+.light-theme .section-description {
+  color: #475569 !important;
+  font-size: 14px !important;
+}
+
+/* ─── KPI CARDS — PREMIUM LIGHT THEME WITH UNIQUE VISUALIZATIONS ─── */
+.app-shell.light-mode .recs-kpi,
+.light-theme .kpi-card {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+  transition: all 200ms ease !important;
+  position: relative;
+  overflow: hidden;
+}
+.app-shell.light-mode .recs-kpi:hover,
+.light-theme .kpi-card:hover {
+  border-color: #CBD5E1 !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05) !important;
+  transform: translateY(-1px);
+}
+.app-shell.light-mode .recs-kpi .kpi-header,
+.light-theme .kpi-card .kpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.app-shell.light-mode .kpi-icon,
+.light-theme .kpi-card .kpi-icon {
+  color: #7C3AED !important;
+  width: 16px;
+  height: 16px;
+}
+.app-shell.light-mode .recs-kpi-label,
+.light-theme .kpi-card .kpi-label {
+  color: #64748B !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.app-shell.light-mode .kpi-info-icon,
+.light-theme .kpi-card .kpi-info-icon {
+  color: #94A3B8 !important;
+  cursor: help;
+  transition: color 150ms ease;
+  margin-left: auto;
+}
+.app-shell.light-mode .kpi-info-icon:hover,
+.light-theme .kpi-card .kpi-info-icon:hover {
+  color: #64748B !important;
+}
+.app-shell.light-mode .recs-kpi-value,
+.light-theme .kpi-card .kpi-value {
+  color: #0F172A !important;
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  margin-bottom: 6px !important;
+}
+.app-shell.light-mode .recs-kpi-value.accent,
+.light-theme .kpi-card .kpi-value.accent {
+  color: #059669 !important;
+}
+.app-shell.light-mode .recs-kpi small,
+.light-theme .kpi-card .kpi-helper {
+  color: #64748B !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+.app-shell.light-mode .recs-kpi .kpi-visualization,
+.light-theme .kpi-card .kpi-visualization {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 8px;
+  height: 64px;
+}
+
+/* KPI 2 mini bar chart */
+.app-shell.light-mode .mini-bar-chart,
+.light-theme .kpi-card .mini-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  width: 100%;
+  max-width: 120px;
+}
+.app-shell.light-mode .mini-bar-chart .bar,
+.light-theme .kpi-card .mini-bar-chart .bar {
+  flex: 1;
+  background: #E2E8F0 !important;
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  transition: all 200ms ease;
+}
+.app-shell.light-mode .mini-bar-chart .bar.filled,
+.light-theme .kpi-card .mini-bar-chart .bar.filled {
+  background: linear-gradient(180deg, #22C55E, #10B981) !important;
+}
+.app-shell.light-mode .mini-bar-chart .bar:hover,
+.light-theme .kpi-card .mini-bar-chart .bar:hover {
+  background: #7C3AED !important;
+}
+
+/* KPI 3 progress bar */
+.app-shell.light-mode .progress-container,
+.light-theme .kpi-card .progress-container {
+  width: 100%;
+  padding: 10px 0 18px;
+}
+.app-shell.light-mode .progress-bar-track,
+.light-theme .kpi-card .progress-bar-track {
+  height: 8px !important;
+  background: #F1F5F9 !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+  position: relative;
+}
+.app-shell.light-mode .progress-bar-fill,
+.light-theme .kpi-card .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7C3AED, #A78BFA) !important;
+  border-radius: 4px;
+  transition: width 500ms ease;
+}
+.app-shell.light-mode .progress-markers,
+.light-theme .kpi-card .progress-markers {
+  position: relative;
+  height: 0;
+}
+.app-shell.light-mode .marker,
+.light-theme .kpi-card .marker {
+  position: absolute;
+  width: 2px;
+  height: 12px;
+  background: #F59E0B !important;
+  border-radius: 1px;
+  top: -10px;
+}
+.app-shell.light-mode .marker-label,
+.light-theme .kpi-card .marker-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px !important;
+  color: #F59E0B !important;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* KPI 4 speed indicator */
+.app-shell.light-mode .speed-indicator,
+.light-theme .kpi-card .speed-indicator {
+  display: flex;
+  justify-content: center;
+}
+
+/* KPI 5 usage ring */
+.app-shell.light-mode .usage-ring,
+.light-theme .kpi-card .usage-ring {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+}
+.app-shell.light-mode .recs-upgrade-link,
+.light-theme .kpi-card .upgrade-plan-link {
+  color: #7C3AED !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 0;
+  background: none !important;
+  border: none !important;
+  cursor: pointer;
+  transition: color 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.app-shell.light-mode .recs-upgrade-link:hover,
+.light-theme .kpi-card .upgrade-plan-link:hover {
+  color: #6D28D9 !important;
+}
+
+/* ─── FILTER TABS & SEARCH BAR — PREMIUM LIGHT ─── */
+.app-shell.light-mode .recs-tabs,
+.light-theme .filter-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #F1F5F9 !important;
+  border-radius: 10px;
+}
+.app-shell.light-mode .recs-tab,
+.light-theme .filter-tab {
+  color: #475569 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 8px 14px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  transition: all 200ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.app-shell.light-mode .recs-tab:hover,
+.light-theme .filter-tab:hover {
+  color: #0F172A !important;
+  background: #FFFFFF !important;
+}
+.app-shell.light-mode .recs-tab.active,
+.light-theme .filter-tab.active {
+  color: #7C3AED !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  border: 1px solid #E2E8F0 !important;
+}
+.app-shell.light-mode .recs-tab-count,
+.light-theme .filter-tab .count-badge {
+  background: #E2E8F0 !important;
+  color: #64748B !important;
+  padding: 2px 6px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .recs-tab.active .recs-tab-count,
+.light-theme .filter-tab.active .count-badge {
+  background: #F3E8FF !important;
+  color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-search,
+.light-theme .search-bar {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 200ms ease;
+}
+.app-shell.light-mode .recs-search:focus-within,
+.light-theme .search-bar:focus-within {
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.10) !important;
+}
+.app-shell.light-mode .recs-search svg,
+.light-theme .search-bar .search-icon {
+  color: #94A3B8 !important;
+}
+.app-shell.light-mode .recs-search input,
+.light-theme .search-bar input {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  color: #0F172A !important;
+  font-size: 13px !important;
+}
+.app-shell.light-mode .recs-search input::placeholder,
+.light-theme .search-bar input::placeholder {
+  color: #94A3B8 !important;
+}
+.app-shell.light-mode .recs-select,
+.light-theme .sort-dropdown {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  color: #475569 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+.app-shell.light-mode .recs-select:hover,
+.light-theme .sort-dropdown:hover {
+  border-color: #CBD5E1 !important;
+}
+.app-shell.light-mode .recs-chip,
+.light-theme .agent-chip {
+  background: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #475569 !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+.app-shell.light-mode .recs-chip:hover,
+.light-theme .agent-chip:hover {
+  border-color: #7C3AED !important;
+  color: #7C3AED !important;
+  background: #F3E8FF !important;
+}
+.app-shell.light-mode .recs-chip.active,
+.light-theme .agent-chip.active {
+  background: #7C3AED !important;
+  color: #FFFFFF !important;
+  border-color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-chip.locked small,
+.light-theme .agent-chip .plan-tag {
+  background: rgba(124,58,237,0.12) !important;
+  color: #7C3AED !important;
+}
+
+/* ─── EMPTY STATE — Let's find your growth opportunities ─── */
+.app-shell.light-mode .recs-empty-card,
+.light-theme .empty-state {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 16px !important;
+  padding: 44px 24px !important;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+.app-shell.light-mode .recs-empty-icon,
+.light-theme .empty-state .empty-icon-wrap {
+  width: 64px !important;
+  height: 64px !important;
+  background: linear-gradient(135deg, #F3E8FF, #DDD6FE) !important;
+  border-radius: 16px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(124,58,237,0.15) !important;
+  color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-empty-card h3,
+.light-theme .empty-state .empty-title {
+  color: #0F172A !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .recs-empty-card p,
+.light-theme .empty-state .empty-description {
+  color: #475569 !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.app-shell.light-mode .recs-first-run,
+.light-theme .recs-first-run {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+.app-shell.light-mode .recs-first-hero h2,
+.light-theme .empty-state .empty-title {
+  color: #0F172A !important;
+}
+.app-shell.light-mode .recs-first-hero p {
+  color: #475569 !important;
+}
+
+/* ─── INFO BOX — What your AI team can find ─── */
+.app-shell.light-mode .recs-finds,
+.light-theme .info-box {
+  background: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  box-shadow: none !important;
+}
+.app-shell.light-mode .recs-finds-title,
+.light-theme .info-box .info-title {
+  color: #7C3AED !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.app-shell.light-mode .recs-finds-list,
+.light-theme .info-box .info-list {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  list-style: none !important;
+  padding: 0 !important;
+}
+.app-shell.light-mode .recs-finds-list li,
+.light-theme .info-box .info-item {
+  color: #475569 !important;
+  font-size: 13px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.app-shell.light-mode .recs-finds-list li::before,
+.light-theme .info-box .info-item::before {
+  content: '•';
+  color: #7C3AED;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ─── AFTER CLICK SECTION — What happens after you click ─── */
+.app-shell.light-mode .recs-expect,
+.light-theme .after-click-section {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+}
+.app-shell.light-mode .recs-expect-title,
+.light-theme .after-click-title {
+  color: #7C3AED !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.app-shell.light-mode .recs-expect-grid,
+.light-theme .after-click-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 16px !important;
+}
+.app-shell.light-mode .recs-expect-grid span,
+.light-theme .after-click-item {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  padding: 16px !important;
+  transition: all 200ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.app-shell.light-mode .recs-expect-grid span:hover,
+.light-theme .after-click-item:hover {
+  border-color: #A78BFA !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139,92,246,0.10) !important;
+}
+.app-shell.light-mode .recs-expect-grid strong,
+.light-theme .after-click-item .item-title {
+  color: #0F172A !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .recs-expect-grid span,
+.light-theme .after-click-item .item-description {
+  color: #475569 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+/* ─── RULE CARDS — Stockout Alerts, Dead Stock, etc. ─── */
+.app-shell.light-mode .recs-rule-card,
+.light-theme .rule-card {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  padding: 18px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+  transition: all 200ms ease !important;
+}
+.app-shell.light-mode .recs-rule-card:hover,
+.light-theme .rule-card:hover {
+  border-color: #7C3AED !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 16px rgba(124,58,237,0.15) !important;
+}
+.app-shell.light-mode .recs-rule-card-icon,
+.light-theme .rule-card .rule-icon-wrap {
+  width: 36px !important;
+  height: 36px !important;
+  background: #F3E8FF !important;
+  border-radius: 8px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-rule-card strong,
+.light-theme .rule-card .rule-title {
+  color: #0F172A !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .recs-rule-card-tagline,
+.light-theme .rule-card .rule-tagline {
+  color: #7C3AED !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-style: italic !important;
+}
+.app-shell.light-mode .recs-rule-card p,
+.light-theme .rule-card .rule-description {
+  color: #475569 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+.app-shell.light-mode .recs-rule-card-uses,
+.light-theme .rule-card .rule-uses {
+  color: #64748B !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 4px 8px !important;
+  background: #F8FAFC !important;
+  border-radius: 6px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #E2E8F0 !important;
+}
+
+/* ─── SAMPLE CARD — CRITICAL FIX PREMIUM ─── */
+.app-shell.light-mode .sample-card-container,
+.light-theme .sample-card-container {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
+  border: 2px dashed #F59E0B !important;
+  border-radius: 16px !important;
+  padding: 20px !important;
+  margin: 24px 0 !important;
+  position: relative;
+}
+.app-shell.light-mode .sample-header,
+.light-theme .sample-header {
+  margin-bottom: 18px !important;
+  text-align: center !important;
+}
+.app-shell.light-mode .sample-badge-wrap,
+.light-theme .sample-badge-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.app-shell.light-mode .sample-badge,
+.light-theme .sample-badge {
+  background: #F59E0B !important;
+  color: #FFFFFF !important;
+  padding: 6px 16px !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(245,158,11,0.30) !important;
+}
+.app-shell.light-mode .sample-explanation,
+.light-theme .sample-explanation {
+  color: #92400E !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  max-width: 600px;
+  margin: 0 auto !important;
+}
+.app-shell.light-mode .sample-explanation strong,
+.light-theme .sample-explanation strong {
+  color: #7C3AED !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .sample-card,
+.light-theme .sample-card {
+  background: #FFFFFF !important;
+  border: 1px solid #FCD34D !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  opacity: 0.92 !important;
+  position: relative;
+}
+.app-shell.light-mode .sample-card::before,
+.light-theme .sample-card::before {
+  content: 'PREVIEW ONLY' !important;
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  border: 1px solid #FCD34D !important;
+  z-index: 2;
+}
+.app-shell.light-mode .sample-card .urgent-badge,
+.light-theme .sample-card .urgent-badge {
+  background: #FEE2E2 !important;
+  color: #991B1B !important;
+  border: 1px solid #FCA5A5 !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.app-shell.light-mode .sample-card .agent-tag,
+.light-theme .sample-card .agent-tag {
+  background: #F3E8FF !important;
+  color: #7C3AED !important;
+  border: 1px solid #C4B5FD !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .sample-card .rule-tag,
+.light-theme .sample-card .rule-tag {
+  background: #F1F5F9 !important;
+  color: #475569 !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .sample-card .confidence-tag,
+.light-theme .sample-card .confidence-tag {
+  color: #64748B !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .sample-card .medium-tag,
+.light-theme .sample-card .medium-tag {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+}
+.app-shell.light-mode .sample-card .revenue-label,
+.light-theme .sample-card .revenue-label {
+  color: #64748B !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.app-shell.light-mode .sample-card .revenue-amount,
+.light-theme .sample-card .revenue-amount {
+  color: #10B981 !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+.app-shell.light-mode .sample-card .rec-title,
+.light-theme .sample-card .rec-title {
+  color: #0F172A !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  margin: 12px 0 !important;
+}
+.app-shell.light-mode .sample-card .rec-description,
+.light-theme .sample-card .rec-description {
+  color: #475569 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  margin-bottom: 16px !important;
+}
+.app-shell.light-mode .sample-card .info-panel,
+.light-theme .sample-card .info-panel {
+  padding: 12px !important;
+  border-radius: 8px !important;
+  margin-bottom: 10px !important;
+}
+.app-shell.light-mode .sample-card .info-panel.what-to-do,
+.light-theme .sample-card .info-panel.what-to-do {
+  background: #EFF6FF !important;
+  border: 1px solid #BFDBFE !important;
+}
+.app-shell.light-mode .sample-card .info-panel.impact,
+.light-theme .sample-card .info-panel.impact {
+  background: #F0FDF4 !important;
+  border: 1px solid #BBF7D0 !important;
+}
+.app-shell.light-mode .sample-card .info-panel.why,
+.light-theme .sample-card .info-panel.why {
+  background: #FEF3C7 !important;
+  border: 1px solid #FCD34D !important;
+}
+.app-shell.light-mode .sample-card .info-panel-title,
+.light-theme .sample-card .info-panel-title {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.app-shell.light-mode .sample-card .info-panel.what-to-do .info-panel-title { color: #1E40AF !important; }
+.app-shell.light-mode .sample-card .info-panel.impact .info-panel-title { color: #166534 !important; }
+.app-shell.light-mode .sample-card .info-panel.why .info-panel-title { color: #92400E !important; }
+.app-shell.light-mode .sample-card .info-panel-content,
+.light-theme .sample-card .info-panel-content {
+  color: #475569 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+.app-shell.light-mode .sample-card-actions,
+.light-theme .sample-card-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 16px !important;
+}
+.app-shell.light-mode .sample-card .btn-skip,
+.app-shell.light-mode .sample-card .btn-approve,
+.light-theme .sample-card .btn-skip,
+.light-theme .sample-card .btn-approve {
+  padding: 10px 16px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  position: relative;
+  transition: all 200ms ease;
+  flex: 1;
+}
+.app-shell.light-mode .sample-card .btn-skip,
+.light-theme .sample-card .btn-skip {
+  background: #FFFFFF !important;
+  color: #64748B !important;
+  border: 1px solid #E2E8F0 !important;
+}
+.app-shell.light-mode .sample-card .btn-approve,
+.light-theme .sample-card .btn-approve {
+  background: #94A3B8 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.app-shell.light-mode .sample-note,
+.light-theme .sample-note {
+  color: #92400E !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  margin-top: 12px !important;
+  padding: 8px !important;
+  background: #FEF3C7 !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  border: 1px solid #FDE68A !important;
+}
+
+/* Already handled dark fallback: keep sample card distinct */
+.recs-sample-wrap .sample-card-container { background: transparent; border: none; }
+
+/* ─── RIGHT SIDEBAR — Insights premium light ─── */
+.app-shell.light-mode .recs-sidebar,
+.light-theme .insights-sidebar {
+  gap: 12px !important;
+}
+.app-shell.light-mode .recs-side-card,
+.light-theme .insights-sidebar,
+.light-theme .sidebar-section {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+  padding: 18px !important;
+}
+.app-shell.light-mode .recs-side-card {
+  background: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+.app-shell.light-mode .recs-side-title,
+.light-theme .insights-sidebar .sidebar-title {
+  color: #0F172A !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-shell.light-mode .recs-side-title svg,
+.light-theme .insights-sidebar .sidebar-title-icon {
+  color: #EC4899 !important;
+}
+.app-shell.light-mode .recs-side-lead,
+.light-theme .insights-sidebar .sidebar-subtitle,
+.light-theme .sidebar-section-description {
+  color: #64748B !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  margin-bottom: 14px !important;
+}
+.app-shell.light-mode .recs-agent-row,
+.light-theme .sidebar-agent-item {
+  background: #F8FAFC !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  border: 1px solid transparent !important;
+}
+.app-shell.light-mode .recs-agent-row:hover,
+.light-theme .sidebar-agent-item:hover {
+  background: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+.app-shell.light-mode .recs-agent-row-copy strong,
+.light-theme .sidebar-agent-name {
+  color: #0F172A !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+.app-shell.light-mode .recs-agent-row-copy small,
+.light-theme .sidebar-agent-item small {
+  color: #64748B !important;
+}
+.app-shell.light-mode .recs-side-empty,
+.light-theme .sidebar-empty-msg {
+  color: #64748B !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  padding: 12px !important;
+  background: #F8FAFC !important;
+  border-radius: 6px !important;
+  text-align: center !important;
+  border: 1px solid #F1F5F9 !important;
+}
+.app-shell.light-mode .recs-trend-plot,
+.light-theme .sidebar-timeline-empty {
+  background: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+}
+.app-shell.light-mode .recs-rule-row,
+.light-theme .sidebar-category-item {
+  background: #F8FAFC !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+}
+.app-shell.light-mode .recs-rule-row:hover,
+.light-theme .sidebar-category-item:hover {
+  background: #F3E8FF !important;
+  border-color: #DDD6FE !important;
+}
+.app-shell.light-mode .recs-rule-row span,
+.light-theme .sidebar-category-name {
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+.app-shell.light-mode .recs-rule-row strong,
+.light-theme .sidebar-category-count {
+  color: #7C3AED !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+/* ─── HOW RULES WORK — Expandable premium light ─── */
+.app-shell.light-mode .recs-how-strip,
+.light-theme .how-rules-work {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+.app-shell.light-mode .recs-how-strip summary,
+.light-theme .how-rules-work-header {
+  padding: 14px 20px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 150ms ease;
+  color: #0F172A !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+.app-shell.light-mode .recs-how-strip summary:hover,
+.light-theme .how-rules-work-header:hover {
+  background: #F8FAFC !important;
+}
+.app-shell.light-mode .recs-how-strip summary svg:first-child,
+.light-theme .how-rules-work-icon {
+  color: #7C3AED !important;
+}
+.app-shell.light-mode .recs-how-strip-body,
+.light-theme .how-rules-work .recs-how-strip-body {
+  padding: 12px 20px 20px !important;
+  background: #FFFFFF !important;
+}
+.app-shell.light-mode .recs-how-strip-body p {
+  color: #475569 !important;
+}
+
+/* Light theme card polish ensures WCAG AA */
+.app-shell.light-mode .recs-card,
+.light-theme .rule-card,
+.light-theme .kpi-card,
+.light-theme .info-box {
+  color: #0F172A;
+}
+.app-shell.light-mode .recs-card-title,
+.light-theme .rule-card .rule-title,
+.light-theme .kpi-card .kpi-value {
+  color: #0F172A !important;
+}
+.app-shell.light-mode .recs-card-meta,
+.app-shell.light-mode .recs-confidence,
+.app-shell.light-mode .recs-card-time,
+.light-theme .rule-card .rule-uses {
+  color: #64748B !important;
+}
+
+/* Ensure dark theme preserved — explicitly no changes outside light-mode */
+
