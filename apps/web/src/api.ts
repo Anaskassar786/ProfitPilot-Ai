@@ -395,6 +395,32 @@ export function createCampaignTemplate(template: Readonly<Record<string, unknown
 export function previewTargetedCampaign(storeId: string, customerId: string, templateId: string, idempotencyKey: string, fetcher: Fetcher = fetch): Promise<TargetedCampaignPreview> { return requestJson<TargetedCampaignPreview>('/campaigns/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, customerId, templateId, idempotencyKey }) }, fetcher) }
 export function sendTargetedCampaign(storeId: string, customerId: string, templateId: string, idempotencyKey: string, fetcher: Fetcher = fetch): Promise<TargetedCampaignResult> { return requestJson<TargetedCampaignResult>('/campaigns/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, customerId, templateId, idempotencyKey, reviewed: true }) }, fetcher) }
 export function exportRows(format: 'CSV' | 'XLSX' | 'PDF', rows: readonly Readonly<Record<string, string | number | boolean | null>>[], fetcher: Fetcher = fetch, extras: Readonly<{ storeId?: string; dataset?: 'orders' | 'catalog' | 'audit' | 'revenue' }> = {}): Promise<Readonly<{ filename: string; contentType: string; bodyBase64: string; rows: number; ceiling?: number; ceilingNote?: string }>> { return requestJson(`/exports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format, rows, ...extras }) }, fetcher) }
+/* ── Data Exports ─────────────────────────────────────────────────────────
+   The Exports page reads one overview (plan, monthly usage, card details,
+   history) and posts to a per-dataset endpoint that enforces plan gating
+   server-side. Legacy `exportRows` above is unchanged for other callers. */
+
+export function fetchExportsOverview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./exports-model.js').ExportsOverview> {
+  return requestJson<import('./exports-model.js').ExportsOverview>(`/exports/overview?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchExportHistory(storeId: string, limit = 10, fetcher: Fetcher = fetch): Promise<readonly import('./exports-model.js').ExportHistoryEntry[]> {
+  return requestJson<readonly import('./exports-model.js').ExportHistoryEntry[]>(`/exports/history?storeId=${encodeURIComponent(storeId)}&limit=${encodeURIComponent(String(limit))}`, {}, fetcher)
+}
+
+export function generateExport(
+  storeId: string,
+  dataset: import('@profitpilot/types').ExportDataset,
+  range: Readonly<{ from?: string | null; to?: string | null }> = {},
+  fetcher: Fetcher = fetch,
+): Promise<import('./exports-model.js').GeneratedExportResult> {
+  return requestJson<import('./exports-model.js').GeneratedExportResult>(`/exports/${encodeURIComponent(dataset)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ storeId, from: range.from ?? null, to: range.to ?? null }),
+  }, fetcher)
+}
+
 export function fetchTickets(storeId: string, fetcher: Fetcher = fetch): Promise<readonly TicketRecord[]> { return requestJson<readonly TicketRecord[]>(`/support/tickets?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function createTicket(shopId: string, subject: string, plan: 'start' | 'growth' | 'commander', fetcher: Fetcher = fetch, extras: Readonly<{ description?: string; priority?: string }> = {}): Promise<TicketRecord> { return requestJson<TicketRecord>('/support/tickets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId, subject, plan, ...extras }) }, fetcher) }
 export function analyzeRecommendations(storeId: string, fetcher: Fetcher = fetch): Promise<import('./recommendations-model.js').AnalyzeApiResult> { return requestJson(`/recommendations/analyze`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher) }

@@ -11,8 +11,12 @@ import { OpenRouterClient } from '@profitpilot/ai'
 import { PostgresCustomerRepository } from './customers.js'
 import { PostgresCampaignSendStore, TargetedCampaignService } from './targeted-campaigns.js'
 import { withTenantContext } from '@profitpilot/db'
+import { DataPlaneExportSource } from './exports-data.js'
+import { ExportsService } from './exports-service.js'
+import { PostgresExportHistoryRepository } from './exports-repository.js'
+import type { ExportsRouteDependencies } from './exports-routes.js'
 
-export type F6Bootstrap = Readonly<F5Bootstrap & { automation: AutomationRouteDependencies & Readonly<{ triggers: AutomationTriggerService }> }>
+export type F6Bootstrap = Readonly<F5Bootstrap & { automation: AutomationRouteDependencies & Readonly<{ triggers: AutomationTriggerService }>; exports: ExportsRouteDependencies }>
 export function createF6Bootstrap(env: Readonly<Record<string, string | undefined>>): F6Bootstrap | null {
   const f5 = createF5Bootstrap(env)
   if (!f5) return null
@@ -56,6 +60,16 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
       if (result.rows[0]?.allowed !== true) throw new AppError('FORBIDDEN', 'You do not have permission to manage automations', 403, { permission })
     }),
     exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset),
+  },
+  // Data Exports: plan-gated merchant downloads with durable history so the
+  // page can show real usage, real row estimates, and real last-exported
+  // timestamps instead of guesses.
+  exports: {
+    service: new ExportsService({
+      history: new PostgresExportHistoryRepository(f5.database),
+      data: new DataPlaneExportSource({ analytics: f5.dataPlane.analytics, database: f5.database }),
+      plan: async (tenant) => (await f5.billing.repository.get(tenant))?.plan ?? 'trial',
+    }),
   } }
 }
 

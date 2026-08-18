@@ -96,7 +96,12 @@ export const PATTERN_AI_MIGRATIONS: readonly Migration[] = [
   { id: '0025', filename: '0025_patternai_id_types.sql', sql: 'PatternAI id columns widened to text, pattern/trend upsert uniqueness, and discovery feed index' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS]
+// Data Exports: durable export history + monthly plan metering.
+export const DATA_EXPORT_MIGRATIONS: readonly Migration[] = [
+  { id: '0026', filename: '0026_data_exports.sql', sql: 'Export history for plan metering, last-exported timestamps, and the merchant-facing export history list' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

@@ -85,7 +85,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
@@ -120,6 +120,7 @@ import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
 import { PatternAiWorkspace } from './patternai.js'
+import { ExportsWorkspace } from './exports.js'
 import { PatternAiIcon } from './patternai-logo.js'
 import { GrowthIqNavIcon } from './growthiq-logo.js'
 import { AiCommandIcon } from './ai-command-logo.js'
@@ -184,7 +185,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
   reports: { title: 'Reports', description: 'Closed-period PDF reports built from your real store data.', icon: FileBarChart },
-  exports: { title: 'Exports', description: 'Export real synced records when the data plane has something to deliver.', icon: Download },
+  exports: { title: 'Data Exports', description: 'Download your real store data anytime — orders, products, activity, and revenue.', icon: Download },
   support: { title: 'Support tickets', description: 'A direct, auditable line to the ProfitPilot team.', icon: LifeBuoy },
   billing: { title: 'Billing', description: 'Your trial, plan, usage, and verified AI return on this store.', icon: WalletCards },
   settings: { title: 'Settings', description: 'Store context, preferences, and security controls.', icon: Settings },
@@ -617,7 +618,7 @@ function PageRouter({
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
   if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} />
   if (active === 'support') return <SupportPage context={context} onToast={onToast} />
-  if (active === 'exports') return <ExportsPage context={context} />
+  if (active === 'exports') return <ExportsPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   return <EmptyDataPage page={active} context={context} onSync={onSync} />
 }
 
@@ -768,35 +769,13 @@ function CopilotPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability:
 
 function ReportsPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { return <PageLayout eyebrow="Reporting shell" title="Reports" description="Report vault and scheduling will only render closed-period PDFs from F8." actions={<button className="button primary" onClick={() => onPhaseGate('F8', 'PDF report generation')}><Plus size={15} /> Generate report</button>}><div className="report-banner"><span className="report-banner-icon"><FileBarChart size={22} /></span><div><div className="section-kicker">DETERMINISTIC PDF VAULT</div><h2>Reporting is not enabled yet.</h2><p>F8 will add closed periods, R2 storage, and idempotent delivery.</p></div><span className="phase-tag">AI</span></div><EmptyState icon={FileText} title="No reports generated" description="There are no placeholder PDFs in this vault. Generate reports after the F8 reporting package is implemented." action="View F8 boundary" onAction={() => onPhaseGate('F8', 'PDF report generation')} /></PageLayout> }
 
-function ExportsPage({ context }: { context: WorkspaceContext }) {
-  const [message, setMessage] = useState<string | null>(null)
-  const runExport = async (format: 'CSV' | 'XLSX' | 'PDF', dataset: 'orders' | 'catalog' | 'audit' | 'revenue') => {
-    if (!context.storeId) { setMessage('Connect a store before exporting.'); return }
-    try {
-      const result = await exportRows(format, [], fetch, { storeId: context.storeId, dataset })
-      setMessage(`${result.filename} is ready (${result.rows} rows). The 50,000-row ceiling is a file-safety limit, not a plan quota.`)
-      if (result.bodyBase64) {
-        const binary = atob(result.bodyBase64)
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
-        const url = URL.createObjectURL(new Blob([bytes], { type: result.contentType }))
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = result.filename
-        anchor.click()
-        URL.revokeObjectURL(url)
-      }
-    } catch (error: unknown) { setMessage(errorMessage(error)) }
-  }
-  const exportTypes: ReadonlyArray<{ title: string; icon: LucideIcon; format: 'CSV' | 'XLSX' | 'PDF'; dataset: 'orders' | 'catalog' | 'audit' | 'revenue'; detail: string }> = [
-    { title: 'Daily aggregate export', icon: ShoppingBag, format: 'CSV', dataset: 'orders', detail: 'Closed daily order counts from Shopify sync.' },
-    { title: 'Catalog XLSX', icon: Package, format: 'XLSX', dataset: 'catalog', detail: 'Synced product titles and ids.' },
-    { title: 'Audit log CSV', icon: ShieldCheck, format: 'CSV', dataset: 'audit', detail: 'Tenant-scoped operational events.' },
-    { title: 'Revenue PDF', icon: FileBarChart, format: 'PDF', dataset: 'revenue', detail: 'Closed-period revenue rows.' },
-  ]
-  return <PageLayout eyebrow="Data portability" title="Exports" description="Download real synced rows. Each file stops at 50,000 rows so a huge store cannot stall the browser — this is a technical safety limit, not a plan quota.">
-    <div className="export-intro"><div><div className="section-kicker"><span className="kicker-dot blue" /> Store-scoped writers</div><h2>{context.storeId ? 'Choose a real dataset to export.' : 'Connect a store before exporting.'}</h2><p>Generate downloads the file immediately. Empty files mean that dataset has not been synced yet.</p></div><span className="export-limit"><strong>50,000</strong><small>row safety ceiling</small></span></div>
-    {message && <div className="sync-banner"><CheckCircle2 size={15} /><span>{message}</span></div>}
-    <div className="export-grid">{exportTypes.map(({ title, icon: Icon, format, dataset, detail }) => <div className="card export-card" key={title}><span className="export-icon blue"><Icon size={20} /></span><h3>{title}</h3><p>{detail}</p><div className="export-card-bottom"><span>{format}</span><button className="button secondary" onClick={() => void runExport(format, dataset)}>Generate</button></div></div>)}</div>
+function ExportsPage({ context, onToast, onNavigateBilling }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigateBilling: () => void }) {
+  return <PageLayout
+    eyebrow={<><Download size={13} /> Data exports</>}
+    title="Data Exports"
+    description="Download your real store data anytime. Your data belongs to you — export orders, products, revenue, and activity logs in CSV, XLSX, or PDF format."
+  >
+    <ExportsWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
   </PageLayout>
 }
 
