@@ -46,7 +46,7 @@ const main = async (): Promise<void> => {
   }
 
   const bootstrap = createStoreCoachBootstrap(process.env, logger)
-  // Production deploys must apply pending SQL (0022 AI Executive, 0023 Store
+  // Production deploys must apply pending SQL (0022 GrowthIQ, 0023 Store
   // Coach, …) or the new pages 500 with "relation does not exist". Operators
   // can still opt out with RUN_MIGRATIONS=false.
   if (bootstrap && shouldRunMigrations(process.env)) {
@@ -85,7 +85,7 @@ const main = async (): Promise<void> => {
     ? createApi({ logger, readinessChecks: readinessChecksFromEnv(process.env), webDistPath })
     : createApi({ logger, monitor: bootstrap.f9.monitor, productAnalytics: bootstrap.f9.analytics, readinessChecks: bootstrap.f9.readinessChecks, security: bootstrap.security, legal: bootstrap.legal, shopify: shopify!, session: { directory: bootstrap.storeDirectory, logger }, embeddedEntry: { directory: bootstrap.storeDirectory, sessionToken: bootstrap.sessionToken, tokenExchange: bootstrap.tokenExchange }, dataPlane: bootstrap.dataPlane, analytics: bootstrap.analyticsInsights, orders: bootstrap.orders, customers: bootstrap.customers, inventory: bootstrap.inventory, ai: bootstrap.ai, billing: bootstrap.billing, admin: { ...bootstrap.admin, accessReview: bootstrap.accessReview }, automation: bootstrap.automation, jarvis: bootstrap.f8.jarvis, copilot: bootstrap.f8.copilot, forecasting: bootstrap.f8.forecasting, reports: bootstrap.f8.reports, aiCommand: bootstrap.aiCommand, storeCoach: { service: bootstrap.storeCoach.service }, ...(executive?.enabled ? { executive: executive.routes } : {}), ...(insightsHub ? { insightsHub } : {}), f9: { controls: bootstrap.f9.controls, ops: bootstrap.f9.ops, stepUp: bootstrap.admin.stepUp }, webDistPath })
   if (webIndexExists) logger.info('Web app serving enabled', { webDistPath, exists: webDistExists, indexExists: webIndexExists })
-  if (executive?.enabled) logger.info('AI Executive module enabled', { models: executive.routes.costSummary ? 'configured' : 'default' })
+  if (executive?.enabled) logger.info('GrowthIQ module enabled', { models: executive.routes.costSummary ? 'configured' : 'default' })
   const server = app.listen(port, '0.0.0.0', () => logger.info('ProfitPilot API listening', { port, shopifyRoutes: bootstrap !== null, webApp: webIndexExists, startedInMs: Date.now() - startedAt }))
   const automationTick = bootstrap ? setInterval(() => {
     void Promise.all([bootstrap.automation.triggers.tickSchedules(), bootstrap.automation.triggers.resumeWaits(), bootstrap.automation.triggers.purgeExpiredData()]).catch((error: unknown) => logger.error('Automation scheduler tick failed', { error: error instanceof Error ? error.message : String(error) }))
@@ -100,8 +100,8 @@ const main = async (): Promise<void> => {
   // due; generation + Brevo delivery reuse the same service as the API.
   const executiveTick = executive?.enabled ? setInterval(() => {
     void executive.tick().then((result) => {
-      if (result.generated > 0 || result.failed > 0) logger.info('AI Executive monthly tick', { ...result })
-    }).catch((error: unknown) => logger.error('AI Executive monthly tick failed', { error: error instanceof Error ? error.message : String(error) }))
+      if (result.generated > 0 || result.failed > 0) logger.info('GrowthIQ monthly tick', { ...result })
+    }).catch((error: unknown) => logger.error('GrowthIQ monthly tick failed', { error: error instanceof Error ? error.message : String(error) }))
   }, 3_600_000) : null
   const shutdown = (): void => {
     if (automationTick) clearInterval(automationTick)

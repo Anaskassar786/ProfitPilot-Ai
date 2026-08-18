@@ -82,18 +82,18 @@ describe('Store Coach app mount (PR #48)', () => {
   it('renders the AI Growth Command deep link without crashing', async () => {
     await expect(mountApp()).resolves.toBeUndefined()
   })
-  it('shows Store Coach, AI Executive, and PatternAI as separate sidebar entries', async () => {
+  it('shows Store Coach, GrowthIQ, and PatternAI as separate sidebar entries', async () => {
     await mountApp()
     const nav = document.querySelector('.side-nav')
     expect(nav?.textContent ?? '').toContain('Store Coach')
-    expect(nav?.textContent ?? '').toContain('AI Executive')
+    expect(nav?.textContent ?? '').toContain('GrowthIQ')
     expect(nav?.textContent ?? '').toContain('PatternAI')
     const labels = [...(nav?.querySelectorAll('.nav-item') ?? [])].map((item) => item.textContent ?? '')
     expect(labels.some((text) => text.includes('Store Coach'))).toBe(true)
-    expect(labels.some((text) => text.includes('AI Executive'))).toBe(true)
+    expect(labels.some((text) => text.includes('GrowthIQ'))).toBe(true)
     expect(labels.some((text) => text.includes('PatternAI'))).toBe(true)
   })
-  it('does not nest Store Coach and AI Executive as tabs inside one page', async () => {
+  it('does not nest Store Coach and GrowthIQ as tabs inside one page', async () => {
     await mountApp()
     expect(document.querySelectorAll('.coach-tab')).toHaveLength(0)
     expect(document.querySelectorAll('.growth-tabs')).toHaveLength(0)
@@ -132,9 +132,9 @@ describe('Store Coach app mount (PR #48)', () => {
     await mountApp()
     expect(document.body.textContent ?? '').not.toMatch(/Upgrade to (Start|Growth|Commander)/i)
   })
-  it('opens AI Executive from its own sidebar entry', async () => {
+  it('opens GrowthIQ from its own sidebar entry', async () => {
     await mountApp()
-    const executiveNav = [...document.querySelectorAll('.nav-item')].find((item) => item.textContent?.includes('AI Executive'))
+    const executiveNav = [...document.querySelectorAll('.nav-item')].find((item) => item.textContent?.includes('GrowthIQ'))
     expect(executiveNav).toBeTruthy()
     await act(async () => { executiveNav?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(document.querySelector('.exec-page') ?? document.querySelector('.coach-workspace')).toBeTruthy()

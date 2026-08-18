@@ -62,7 +62,7 @@ export function buildExecutiveReportEmail(input: ExecutiveEmailInput): string {
       </td></tr>
       <tr><td style="padding:18px 28px;border-top:1px solid #E6EAF2;color:#6B7280;font-family:Arial,sans-serif;font-size:11px;line-height:16px;">
         This report was generated from your synced Shopify data and public industry benchmarks. Every number shown is computed, never estimated.
-        <br><a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6B7280;">Unsubscribe from monthly reports</a> · Manage frequency in AI Executive settings.
+        <br><a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6B7280;">Unsubscribe from monthly reports</a> · Manage frequency in GrowthIQ settings.
       </td></tr>
     </table>
   </div>

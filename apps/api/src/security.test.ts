@@ -6,7 +6,7 @@ import { Logger, createMemorySink } from '@profitpilot/logger'
 import { JwtService, AuthService } from './auth.js'
 import { createApi } from './app.js'
 import { createCsrfToken, csrfCookieOptions, parseCookies, serializeCookie, sessionCookieOptions, verifyCsrfToken } from './cookies.js'
-import { EndpointRateLimiter, assertSafeTenantValue, securityOptionsFromEnv } from './security.js'
+import { EndpointRateLimiter, assertSafeTenantValue, corsMiddleware, securityOptionsFromEnv } from './security.js'
 import { verifyWebhookHmac } from '@profitpilot/shopify'
 import { storeId, userId } from '@profitpilot/types'
 import type { AnalyticsSnapshot } from '@profitpilot/db'
@@ -162,5 +162,47 @@ describe('F7 API security suite', () => {
       const hijacked = await fetch(`${base}/analytics?storeId=store-1`, { headers: { authorization: `Bearer ${pair.accessToken}` } })
       expect(hijacked.status).toBe(401)
     })
+  })
+})
+
+describe('CORS origin handling', () => {
+  function corsApp() {
+    const app = createApi({ logger: new Logger(), readinessChecks: [], security: securityOptionsFromEnv({ NODE_ENV: 'development' }) })
+    return app
+  }
+
+  it('allows a same-origin Origin header even when the origin is not in the allowlist', async () => {
+    // Regression: headless browser shells send `Origin` on same-origin
+    // subresource loads. Rejecting those with 403 made the SPA's CSS/JS
+    // requests fail and the entire GrowthIQ (and every other) page blank.
+    await withServer(corsApp(), async (base) => {
+      const host = new URL(base).host
+      // Same-origin: Origin equals scheme://host of the request itself.
+      const sameOrigin = await fetch(`${base}/live`, { headers: { origin: base, host } })
+      expect(sameOrigin.status).toBe(200)
+      // A genuinely foreign origin is still rejected.
+      const foreign = await fetch(`${base}/live`, { headers: { origin: 'https://evil.example', host } })
+      expect(foreign.status).toBe(403)
+    })
+  })
+
+  it('keeps the explicit allowlist working for cross-origin reads', async () => {
+    const app = createApi({
+      logger: new Logger(),
+      readinessChecks: [],
+      security: securityOptionsFromEnv({ NODE_ENV: 'development', CORS_ALLOWED_ORIGINS: 'https://partner.example' }),
+    })
+    await withServer(app, async (base) => {
+      const host = new URL(base).host
+      const allowed = await fetch(`${base}/live`, { headers: { origin: 'https://partner.example', host } })
+      expect(allowed.status).toBe(200)
+      expect(allowed.headers.get('access-control-allow-origin')).toBe('https://partner.example')
+      const denied = await fetch(`${base}/live`, { headers: { origin: 'https://intruder.example', host } })
+      expect(denied.status).toBe(403)
+    })
+  })
+
+  it('exports corsMiddleware as a standalone unit', () => {
+    expect(typeof corsMiddleware).toBe('function')
   })
 })

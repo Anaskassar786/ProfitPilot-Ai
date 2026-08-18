@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive preferences page.
+ * GrowthIQ (formerly "AI Executive") — preferences page.
  *
  * Monthly report scheduling, email delivery, risk alert severity, benchmark
  * category, and language. Growth+ gates on email toggles are shown

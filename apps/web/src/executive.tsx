@@ -1,11 +1,16 @@
 /**
- * PR #49 — AI Executive: "Your Boardroom in a Box".
+ * GrowthIQ (formerly "AI Executive") — "Intelligent growth for ambitious
+ * merchants".
  *
- * AI Executive is its own sidebar page (same pattern as Insights Hub).
+ * GrowthIQ is its own sidebar page (same pattern as Insights Hub).
  * Deep-linkable sub-pages use hash routes:
  *
- *   /ai-growth-command/executive#/ai-growth-command/executive[/reports|/reports/:id|/benchmarks|
+ *   /ai-growth-command/growthiq#/ai-growth-command/growthiq[/reports|/reports/:id|/benchmarks|
  *     /scenarios|/health|/opportunities|/decisions|/risks|/roadmaps|/settings]
+ *
+ * The legacy `#/ai-growth-command/executive` prefix keeps working (shared
+ * links, bookmarks, emailed report links) and is normalized to the new
+ * route on navigation.
  *
  * The dashboard is plan-aware: every locked section renders an aspirational
  * overlay whose CTA is always "Upgrade Plan" — never a plan name.
@@ -13,13 +18,25 @@
 import './executive.css'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowUpRight, CalendarDays, Compass, FileBarChart, Gauge, Landmark, Lightbulb, LineChart, ListChecks, Map, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, Compass, Download, Eye, FileBarChart, Gauge, Lightbulb, ListChecks, Map, Settings, ShieldCheck } from 'lucide-react'
+import type { PlanTier } from '@profitpilot/types'
 import type { WorkspaceContext } from './model.js'
-import type { ExecutiveDashboard, ExecutiveGate, ExecutiveUsage } from './executive-model.js'
-import { EXECUTIVE_FEATURE_NAMES, executiveDateLabel, executiveMonthLabel, formatExecutiveMoney } from './executive-model.js'
+import type { ExecutiveDashboard, ExecutiveGate } from './executive-model.js'
+import { executiveDateLabel, executiveMonthLabel, formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import { fetchExecutiveDashboard } from './executive-api.js'
-import { ExecutiveAreaChart, ExecutiveHorizontalBars, ExecutiveRadialGauge, ExecutiveSparkline, ExecutiveTrendArrow } from './executive-charts.js'
-import { ExecutiveEmptyState, ExecutiveErrorState, ExecutiveSkeleton, ExecutiveStatusPill, ExecutiveUsageBar } from './executive-ui.js'
+import { executivePdfDownloadUrl } from './executive-api.js'
+import { ExecutiveAreaChart, ExecutiveHorizontalBars, ExecutiveRadialGauge, ExecutiveSparkline } from './executive-charts.js'
+import {
+  ExecutiveEmptyState,
+  ExecutiveErrorState,
+  ExecutiveSkeleton,
+  ExecutiveStatusPill,
+  ExecutiveUsageBar,
+  GrowthIqBaselineState,
+  GrowthIqPlanPanel,
+  GrowthIqWelcomeState,
+} from './executive-ui.js'
+import { GrowthIqMark, GrowthIqWordmark } from './growthiq-logo.js'
 import { ExecutiveReportsPage } from './executive-reports.js'
 import { ExecutiveBenchmarksPage } from './executive-benchmarks.js'
 import { ExecutiveScenariosPage } from './executive-scenarios.js'
@@ -32,29 +49,57 @@ import { ExecutiveSettingsPage } from './executive-settings.js'
 import { errorMessageFrom } from './executive-shared.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 
-const EXECUTIVE_ROUTE_PREFIX = '#/ai-growth-command/executive'
+const GROWTHIQ_ROUTE_PREFIX = '#/ai-growth-command/growthiq'
+/** Legacy prefix from the "AI Executive" era — still deep-linkable. */
+const LEGACY_EXECUTIVE_ROUTE_PREFIX = '#/ai-growth-command/executive'
 
-export type ExecutiveWorkspaceProps = Readonly<{
+/** Strategic-analysis baseline minimums (honest thresholds, not quotas). */
+const BASELINE_MIN_ORDERS = 30
+const BASELINE_MIN_DAYS = 60
+
+export type GrowthIqWorkspaceProps = Readonly<{
   context: WorkspaceContext
   onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
   onNavigateBilling: () => void
+  onSync?: (module: string) => void
 }>
 
-export function AiExecutivePage({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
-  return <ExecutiveWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
+/** New canonical name. */
+export function GrowthIqPage(props: GrowthIqWorkspaceProps) {
+  return <GrowthIqWorkspace {...props} />
 }
 
-/** @deprecated AI Executive is its own sidebar page. */
-export const AiGrowthCommandPage = AiExecutivePage
+/** @deprecated Use GrowthIqPage — kept so the workspace import keeps working. */
+export const AiExecutivePage = GrowthIqPage
+/** @deprecated AI Executive is its own sidebar page, now GrowthIQ. */
+export const AiGrowthCommandPage = GrowthIqPage
 
-function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
-  const [route, setRoute] = useState<string>(() => parseExecutiveRoute(window.location.hash))
+/**
+ * Resolves the current hash to a GrowthIQ SUB-route ('/', '/reports',
+ * '/reports/:id', …). The legacy "AI Executive" prefix is normalized to the
+ * new route so shared links, bookmarks, and emailed report links keep
+ * working. (The pre-rebrand parser indexed the wrong segment, which made
+ * sub-pages unreachable from deep links — the sub-route is now derived
+ * directly from the prefix.)
+ */
+function parseGrowthIqRoute(hash: string): string {
+  if (hash.startsWith(LEGACY_EXECUTIVE_ROUTE_PREFIX)) return hash.slice(LEGACY_EXECUTIVE_ROUTE_PREFIX.length) || '/'
+  if (hash.startsWith(GROWTHIQ_ROUTE_PREFIX)) return hash.slice(GROWTHIQ_ROUTE_PREFIX.length) || '/'
+  return '/'
+}
+
+function isGrowthIqHash(hash: string): boolean {
+  return hash.startsWith(GROWTHIQ_ROUTE_PREFIX) || hash.startsWith(LEGACY_EXECUTIVE_ROUTE_PREFIX)
+}
+
+function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: GrowthIqWorkspaceProps) {
+  const [route, setRoute] = useState<string>(() => parseGrowthIqRoute(window.location.hash))
   const [dashboard, setDashboard] = useState<ExecutiveDashboard | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
 
   const loadDashboard = useCallback(async () => {
-    if (!context.storeId) { setLoadState('error'); setError('Connect a Shopify store to open the boardroom.'); return }
+    if (!context.storeId) { setLoadState('error'); setError('Connect a Shopify store to open your strategy room.'); return }
     setError(null)
     try {
       const next = await fetchExecutiveDashboard(context.storeId)
@@ -68,10 +113,10 @@ function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWo
 
   useEffect(() => { void loadDashboard() }, [loadDashboard])
 
-  // Deep-link support: the executive hash owns sub-route state, so shared
+  // Deep-link support: the GrowthIQ hash owns sub-route state, so shared
   // links and refreshes land on the right page; back/forward follows it.
   useEffect(() => {
-    const onHash = () => setRoute(parseExecutiveRoute(window.location.hash))
+    const onHash = () => setRoute(parseGrowthIqRoute(window.location.hash))
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onHash)
     return () => {
@@ -80,9 +125,11 @@ function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWo
     }
   }, [])
 
-  const navigate = useCallback((nextRoute: string) => {
-    try { window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${nextRoute}`) } catch { /* restricted history */ }
-    setRoute(nextRoute)
+  // `route` is the SUB-route (e.g. '/reports' or '/reports/:id'); the full
+  // hash is always prefix + sub-route so deep links and refreshes stay stable.
+  const navigate = useCallback((subRoute: string) => {
+    try { window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${GROWTHIQ_ROUTE_PREFIX}${subRoute}`) } catch { /* restricted history */ }
+    setRoute(subRoute)
   }, [])
 
   const plan = dashboard?.plan ?? 'trial'
@@ -90,22 +137,23 @@ function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWo
   const onUpgrade = useCallback(() => onNavigateBilling(), [onNavigateBilling])
 
   const routeParts = route.split('/').filter(Boolean)
-  const page = routeParts[1] ?? 'dashboard'
-  const detailId = routeParts[2] ?? null
+  const page = routeParts[0] ?? 'dashboard'
+  const detailId = routeParts[1] ?? null
 
   const pageProps = { context, plan, gates, onToast, onUpgrade }
 
   let content: ReactNode
   if (loadState === 'loading') {
-    content = <ExecutiveDashboardSkeleton />
+    content = <GrowthIqDashboardSkeleton />
   } else if (loadState === 'error') {
     content = (
       <div className="exec-page">
-        <ExecutiveErrorState message={error ?? 'Could not load the executive dashboard.'} onRetry={() => void loadDashboard()} />
+        <GrowthIqHeader plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
+        <ExecutiveErrorState message={error ?? 'Could not load your growth dashboard.'} onRetry={() => void loadDashboard()} />
       </div>
     )
   } else if (!dashboard) {
-    content = <ExecutiveEmptyState icon={Landmark} title="No dashboard data" description="Connect a Shopify store to open your boardroom." />
+    content = <GrowthIqWelcomeState />
   } else if (page === 'reports') {
     content = <ExecutiveReportsPage {...pageProps} initialReportId={detailId} />
   } else if (page === 'benchmarks') {
@@ -125,23 +173,78 @@ function ExecutiveWorkspace({ context, onToast, onNavigateBilling }: ExecutiveWo
   } else if (page === 'settings') {
     content = <ExecutiveSettingsPage {...pageProps} />
   } else {
-    content = <ExecutiveDashboardView dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
+    const daysSynced = dashboard.revenueSeries.length
+    const ordersSynced = dashboard.ordersSeries.reduce((sum, point) => sum + point.value, 0)
+    const noHistoryAtAll = daysSynced === 0 && ordersSynced === 0
+    const insufficient = ordersSynced < BASELINE_MIN_ORDERS || daysSynced < BASELINE_MIN_DAYS
+    content = noHistoryAtAll ? (
+      <div className="exec-page">
+        <GrowthIqHeader plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
+        <GrowthIqWelcomeState
+          onExploreReports={() => navigate('/reports')}
+          onSync={onSync ? () => onSync('orders') : undefined}
+        />
+        <section className="exec-section card span-12">
+          <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
+        </section>
+      </div>
+    ) : insufficient ? (
+      <div className="exec-page">
+        <GrowthIqHeader plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
+        <GrowthIqBaselineState
+          readiness={{ hasStoreInfo: true, ordersSynced, daysSynced, minOrders: BASELINE_MIN_ORDERS, minDays: BASELINE_MIN_DAYS }}
+          onLogDecision={() => navigate('/decisions')}
+          onViewSample={() => navigate('/reports')}
+          onSync={onSync ? () => onSync('orders') : undefined}
+        />
+        <section className="exec-section card span-12">
+          <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
+        </section>
+      </div>
+    ) : (
+      <GrowthIqDashboardView dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
+    )
   }
 
   return content
 }
 
-function parseExecutiveRoute(hash: string): string {
-  if (hash.startsWith(EXECUTIVE_ROUTE_PREFIX)) return hash.slice(1)
-  return `${EXECUTIVE_ROUTE_PREFIX.slice(1)}`
+// ────────────────────────────────────────────────────────────────────────────
+// Module header
+// ────────────────────────────────────────────────────────────────────────────
+
+function GrowthIqHeader({ plan, onNavigate, onUpgrade }: { plan: PlanTier; onNavigate: (route: string) => void; onUpgrade: () => void }) {
+  // Sub-routes are relative to the GrowthIQ prefix (navigate() prepends it).
+  const base = ''
+  return (
+    <div className="gq-header">
+      <div className="gq-header-left">
+        <span className="gq-logo-tile"><GrowthIqMark size={40} /></span>
+        <div className="gq-header-copy">
+          <div className="gq-header-title">
+            <h2>GrowthIQ</h2>
+            <span className="exec-pill gold"><i />AI Growth Command</span>
+          </div>
+          <p className="gq-tagline">Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports computed from your real store data.</p>
+        </div>
+      </div>
+      <div className="exec-page-actions">
+        <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/settings`)}><Settings size={14} /> Settings</button>
+        <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports`)}><FileBarChart size={14} /> Generate Report</button>
+        <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
+      </div>
+    </div>
+  )
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// CEO Dashboard (9 sections)
+// GrowthIQ dashboard (9 sections + plan panel)
 // ────────────────────────────────────────────────────────────────────────────
 
-function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
+function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
   const { plan, gates, usage } = dashboard
+  // Sub-routes are relative to the GrowthIQ prefix (navigate() prepends it).
+  const base = ''
   const gateFor = (feature: string): ExecutiveGate | undefined => gates[feature]
   const summary = dashboard.latestReport?.executiveSummary
   const health = dashboard.health
@@ -152,55 +255,56 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
   const ordersValues = dashboard.ordersSeries.map((point) => point.value)
   const revenueTotal = dashboard.revenueSeries.reduce((sum, point) => sum + point.value, 0)
   const ordersTotal = dashboard.ordersSeries.reduce((sum, point) => sum + point.value, 0)
+  const revenue30 = revenueValues.slice(-30).reduce((sum, value) => sum + value, 0)
+  const revenuePrior30 = revenueValues.slice(-60, -30).reduce((sum, value) => sum + value, 0)
+  const revenueGrowth = revenuePrior30 > 0 ? (revenue30 / revenuePrior30 - 1) * 100 : null
+  const orders30 = ordersValues.slice(-30).reduce((sum, value) => sum + value, 0)
+  const ordersPrior30 = ordersValues.slice(-60, -30).reduce((sum, value) => sum + value, 0)
+  const ordersGrowth = ordersPrior30 > 0 ? (orders30 / ordersPrior30 - 1) * 100 : null
+  const aov = orders30 > 0 ? revenue30 / orders30 : null
 
   return (
     <div className="exec-page">
-      <div className="exec-page-header">
-        <div>
-          <div className="exec-kicker">AI Growth Command · Strategic intelligence</div>
-          <h2>AI Executive</h2>
-          <p>Your boardroom in a box — strategic decisions, benchmarks, scenarios, risks, and roadmaps computed from your real store data.</p>
-        </div>
-        <div className="exec-page-actions">
-          <button type="button" className="button secondary" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/settings`)}>Settings</button>
-          {gateFor('reports')?.allowed && <button type="button" className="button primary" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/reports`)}><FileBarChart size={14} /> Generate Report</button>}
-          <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
-        </div>
-      </div>
+      <GrowthIqHeader plan={plan} onNavigate={onNavigate} onUpgrade={onUpgrade} />
 
       <div className="exec-dashboard">
-        {/* 1 — Executive summary card */}
+        {/* 1 — Executive summary */}
         <section className="exec-summary-hero span-12">
           <div>
-            <div className="exec-kicker" style={{ color: '#C9A227' }}>Executive summary {dashboard.latestReport ? `· ${executiveMonthLabel(dashboard.latestReport.periodStart)}` : ''}</div>
-            <h2>{summary ?? (plan === 'trial' ? 'Sample preview — your summary appears after you choose a plan.' : 'No board report yet — generate one to open the boardroom view.')}</h2>
+            <div className="exec-kicker" style={{ color: '#A78BFA' }}>Executive summary{dashboard.latestReport ? ` · ${executiveMonthLabel(dashboard.latestReport.periodStart)}` : ''}</div>
+            <h2>{summary ?? (plan === 'trial' ? 'Your summary appears with your first board report.' : 'No board report yet — generate one to open your strategy room.')}</h2>
             <p>{summary
-              ? `${summary.slice(0, 320)}${summary.length > 320 ? '…' : ''}`
-              : 'The monthly board report synthesizes revenue trajectory, market position, key insights, recommended decisions, and a financial forecast — every number computed from your synced data.'}</p>
+              ? `${summary.slice(0, 340)}${summary.length > 340 ? '…' : ''}`
+              : 'The monthly board report synthesizes revenue trajectory, market position, key insights, recommended decisions, and a financial forecast — every number computed from your synced data, never invented.'}</p>
             <div className="exec-summary-meta">
               <span><CalendarDays size={12} /> Next report {dashboard.nextReportDue ? executiveDateLabel(dashboard.nextReportDue) : '—'}</span>
-              <span><Landmark size={12} /> {plan === 'commander' ? 'Commander' : plan === 'growth' ? 'Growth' : plan === 'start' ? 'Start' : 'Trial'} plan</span>
-              {dashboard.latestReport && <span><ShieldCheck size={12} /> {dashboard.latestReport.content.aiNarrativeAvailable ? 'AI narrative grounded in store facts' : 'Deterministic analysis'}</span>}
+              <span><ShieldCheck size={12} />{plan === 'commander' ? 'Commander' : plan === 'growth' ? 'Growth' : plan === 'start' ? 'Start' : 'Trial'} plan</span>
+              {dashboard.latestReport && <span><Gauge size={12} /> {dashboard.latestReport.content.aiNarrativeAvailable ? 'AI narrative grounded in store facts' : 'Deterministic analysis'}</span>}
+            </div>
+            <div className="gq-hero-metrics">
+              <div className="gq-hero-metric"><strong>{formatExecutiveMoney(revenue30, dashboard.currency, 0)}{revenueGrowth !== null && <DeltaTag value={revenueGrowth} />}</strong><span>Revenue · last 30 days</span></div>
+              <div className="gq-hero-metric"><strong>{formatExecutiveNumber(orders30, 0)}{ordersGrowth !== null && <DeltaTag value={ordersGrowth} />}</strong><span>Orders · last 30 days</span></div>
+              <div className="gq-hero-metric"><strong>{aov === null ? '—' : formatExecutiveMoney(aov, dashboard.currency)}</strong><span>Average order value</span></div>
+              <div className="gq-hero-metric"><strong>{health ? <>{health.overallScore}<small> /100</small></> : '—'}</strong><span>Health score</span></div>
             </div>
           </div>
           <div className="exec-summary-actions">
-            <div className="exec-hero-stats">
-              <div className="exec-hero-stat"><strong>{formatExecutiveMoney(revenueTotal, dashboard.currency, 0)}</strong><span>60-day revenue</span></div>
-              <div className="exec-hero-stat"><strong>{ordersTotal}</strong><span>60-day orders</span></div>
-            </div>
-            <button type="button" className="button primary" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/reports`)}>Read Full Report <ArrowUpRight size={14} /></button>
+            <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports`)}>Read Full Report <ArrowUpRight size={14} /></button>
+            {gateFor('reports')?.allowed && plan !== 'trial' && (
+              <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports`)}><FileBarChart size={14} /> Generate Report</button>
+            )}
           </div>
         </section>
 
-        {/* 2 — Business health score */}
+        {/* 2 — Strategic health */}
         <section className="exec-section span-6">
           <div className="exec-section-head">
-            <div><div className="exec-kicker">Vital signs</div><h3>Business Health</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/health`)}>Full diagnosis <ArrowUpRight size={13} /></button>
+            <div><div className="exec-kicker">Vital signs</div><h3>Strategic Health</h3></div>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/health`)}>Full diagnosis <ArrowUpRight size={13} /></button>
           </div>
           {health ? (
             <div className="exec-health-row">
-              <ExecutiveRadialGauge score={health.overallScore} label={health.overallStatus} sublabel={`as of ${executiveDateLabel(health.diagnosedAt)}`} size={200} />
+              <ExecutiveRadialGauge score={health.overallScore} label={health.overallStatus} sublabel={`as of ${executiveDateLabel(health.diagnosedAt)}`} size={190} />
               <div className="exec-vitals-grid">
                 {health.vitalSigns.slice(0, 6).map((vital) => (
                   <div className="exec-vital" key={vital.key}>
@@ -212,7 +316,7 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
               </div>
             </div>
           ) : (
-            <ExecutiveEmptyState icon={Gauge} title="No diagnosis yet" description="Run the health check to score eight vital signs from your real store rows." action="Open health" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/health`)} />
+            <ExecutiveEmptyState icon={Gauge} title="No diagnosis yet" description="Run the health check to score eight vital signs from your real store rows." action="Open health" onAction={() => onNavigate(`${base}/health`)} />
           )}
         </section>
 
@@ -220,11 +324,11 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Benchmarks</div><h3>Industry Position</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/benchmarks`)}>All benchmarks <ArrowUpRight size={13} /></button>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/benchmarks`)}>All benchmarks <ArrowUpRight size={13} /></button>
           </div>
           {position ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                 <span className="exec-pill gold"><i />{position.category}</span>
                 <span className="exec-muted-note">{position.categorySource === 'AUTO_DETECTED' ? 'auto-detected from your catalog' : position.categorySource === 'PREFERENCE' ? 'from your settings' : 'default category'}</span>
               </div>
@@ -234,10 +338,10 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
                 display: metric.percentile === null ? 'not measurable' : `${metric.percentile}th`,
                 tone: metric.percentile !== null && metric.percentile >= 75 ? 'positive' : metric.percentile !== null && metric.percentile >= 40 ? 'gold' : 'danger',
               }))} />
-              <p className="exec-muted-note" style={{ marginTop: 12 }}>Percentile rank vs public Shopify benchmarks. Missing values mean the metric is not measurable yet.</p>
+              <p className="exec-muted-note" style={{ marginTop: 12 }}>Percentile rank vs curated public Shopify benchmarks. Missing values mean the metric is not measurable yet — never estimated.</p>
             </>
           ) : (
-            <ExecutiveEmptyState icon={LineChart} title="Position not measured yet" description="Sync orders and customers to measure your percentile against the industry." action="Open benchmarks" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/benchmarks`)} />
+            <ExecutiveEmptyState icon={Gauge} title="Position not measured yet" description="Sync orders and customers to measure your percentile against the industry." action="Open benchmarks" onAction={() => onNavigate(`${base}/benchmarks`)} />
           )}
         </section>
 
@@ -245,16 +349,16 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
         <section className="exec-section span-4">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Growth</div><h3>Strategic Opportunities</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/opportunities`)}>View all <ArrowUpRight size={13} /></button>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/opportunities`)}>View all <ArrowUpRight size={13} /></button>
           </div>
           {dashboard.opportunities.length === 0 ? (
-            <ExecutiveEmptyState icon={Lightbulb} title="No opportunities yet" description="Analyze your business to identify growth moves with computed annual impact." action="Analyze now" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/opportunities`)} />
+            <ExecutiveEmptyState icon={Lightbulb} title="No opportunities yet" description="Analyze your business to identify growth moves with computed annual impact." action="Analyze now" onAction={() => onNavigate(`${base}/opportunities`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {dashboard.opportunities.slice(0, 3).map((opportunity) => (
-                <button key={opportunity.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/opportunities`)}>
+                <button key={opportunity.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/opportunities`)}>
                   <strong>{opportunity.title}</strong>
-                  <span style={{ color: 'var(--exec-gold)', fontWeight: 600, fontFamily: 'var(--exec-serif)' }}>{formatExecutiveMoney(opportunity.estimatedImpactAnnual, opportunity.impactCurrency, 0)} / yr</span>
+                  <span style={{ color: 'var(--exec-purple)', fontWeight: 700 }}>{formatExecutiveMoney(opportunity.estimatedImpactAnnual, opportunity.impactCurrency, 0)} / yr</span>
                   <span>{opportunity.effortLevel.toLowerCase()} effort · {opportunity.timeline.replace('_', ' ').toLowerCase()}</span>
                 </button>
               ))}
@@ -266,60 +370,60 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
         <section className="exec-section span-4">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Early warning</div><h3>Risk Radar</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/risks`)}>Open radar <ArrowUpRight size={13} /></button>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/risks`)}>Open radar <ArrowUpRight size={13} /></button>
           </div>
           {risks.length === 0 ? (
-            <ExecutiveEmptyState icon={ShieldCheck} title="No significant risks detected" description="Your diversification currently sits inside healthy bands. Scans re-check this automatically." action="Run scan" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/risks`)} />
+            <ExecutiveEmptyState icon={ShieldCheck} title="No significant risks detected" description="Your diversification currently sits inside healthy bands. Scans re-check this automatically." action="Run scan" onAction={() => onNavigate(`${base}/risks`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((severity) => {
                   const count = risks.filter((risk) => risk.severity === severity).length
-                  return <div key={severity} className={`exec-risk-count ${severity.toLowerCase()}`} style={{ flex: 1 }}><strong>{count}</strong><span>{severity.toLowerCase()}</span></div>
+                  return <div key={severity} className={`exec-risk-count ${severity.toLowerCase()}`} style={{ flex: 1, padding: '10px 12px' }}><strong>{count}</strong><span>{severity.toLowerCase()}</span></div>
                 })}
               </div>
               {risks.slice(0, 3).map((risk) => (
-                <div key={risk.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--exec-surface-2)' }}>
+                <div key={risk.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, border: '1px solid var(--exec-border)', background: 'var(--exec-surface-2)' }}>
                   <ExecutiveStatusPill status={risk.severity} />
-                  <span style={{ fontSize: 11.5, color: 'var(--exec-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.title}</span>
-                  <span style={{ fontSize: 10.5, color: 'var(--exec-muted)' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--exec-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.title}</span>
+                  <span style={{ fontSize: 11, color: 'var(--exec-muted)', whiteSpace: 'nowrap' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        {/* 6 — Revenue & orders trend */}
+        {/* 6 — Trajectory */}
         <section className="exec-section span-4">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Trajectory</div><h3>Revenue & Orders</h3></div>
-            <span className="exec-muted-note">last 60 synced days</span>
+            <span className="exec-muted-note">last {Math.min(60, dashboard.revenueSeries.length)} synced days</span>
           </div>
           {revenueValues.length > 1 ? (
             <>
               <ExecutiveAreaChart points={dashboard.revenueSeries} height={120} label="Revenue trend" formatValue={(value) => formatExecutiveMoney(value, dashboard.currency, 0)} />
-              <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ExecutiveSparkline points={ordersValues} width={90} height={26} tone="var(--exec-gold)" /><span style={{ fontSize: 11, color: 'var(--exec-muted)' }}>{ordersTotal} orders</span></div>
-                <span style={{ fontSize: 11, color: 'var(--exec-muted)' }}>{formatExecutiveMoney(revenueTotal, dashboard.currency, 0)} revenue</span>
+              <div style={{ display: 'flex', gap: 18, marginTop: 10, alignItems: 'center' }}>
+                <ExecutiveSparkline points={ordersValues} width={90} height={26} tone="var(--exec-purple)" />
+                <span style={{ fontSize: 11.5, color: 'var(--exec-muted)' }}>{ordersTotal} orders · {formatExecutiveMoney(revenueTotal, dashboard.currency, 0)} revenue</span>
               </div>
             </>
           ) : (
-            <ExecutiveEmptyState icon={LineChart} title="Not enough synced history" description="The trajectory chart appears once two or more days of revenue are synced." />
+            <ExecutiveEmptyState icon={Gauge} title="Not enough synced history" description="The trajectory chart appears once two or more days of revenue are synced." />
           )}
         </section>
 
-        {/* 7 — Active scenarios */}
+        {/* 7 — Scenarios */}
         <section className="exec-section span-6">
           <div className="exec-section-head">
-            <div><div className="exec-kicker">What-if</div><h3>Active Scenarios</h3></div>
-            <button type="button" className="button secondary" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/scenarios`)}>Create New Scenario</button>
+            <div><div className="exec-kicker">What-if</div><h3>Scenario Planning</h3></div>
+            <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/scenarios`)}><Compass size={14} /> New Scenario</button>
           </div>
           {dashboard.scenarios.length === 0 ? (
-            <ExecutiveEmptyState icon={Compass} title="No scenarios yet" description="Model a price change, product launch, or marketing move against your real baseline." action="Create scenario" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/scenarios`)} />
+            <ExecutiveEmptyState icon={Compass} title="No scenarios yet" description="Model a price change, product launch, or marketing move against your real baseline." action="Create scenario" onAction={() => onNavigate(`${base}/scenarios`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {dashboard.scenarios.slice(0, 3).map((scenario) => (
-                <button key={scenario.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/scenarios`)}>
+                <button key={scenario.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/scenarios`)}>
                   <strong>{scenario.title}</strong>
                   <span>{scenario.scenarioType} · {scenario.predictions.currency} {formatExecutiveMoney(Math.round(scenario.predictions.delta.monthlyRevenue ?? 0), null, 0)}/mo projected delta · {executiveDateLabel(scenario.createdAt)}</span>
                 </button>
@@ -328,55 +432,55 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
           )}
         </section>
 
-        {/* 8 — Roadmap snapshot */}
+        {/* 8 — Roadmap */}
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Direction</div><h3>Strategic Roadmap</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/roadmaps`)}>Full roadmap <ArrowUpRight size={13} /></button>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/roadmaps`)}>Full roadmap <ArrowUpRight size={13} /></button>
           </div>
           {roadmap ? (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                 <div>
-                  <strong style={{ fontFamily: 'var(--exec-serif)', fontSize: 16, color: 'var(--exec-heading)' }}>{roadmap.title}</strong>
-                  <div style={{ fontSize: 11, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
+                  <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 15, fontWeight: 700, color: 'var(--exec-heading)' }}>{roadmap.title}</strong>
+                  <div style={{ fontSize: 11.5, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
                 </div>
                 <span className="exec-pill gold"><i />{Math.round(roadmap.currentProgress * 100)}%</span>
               </div>
-              <div className="exec-roadmap-progress-track" style={{ background: 'var(--exec-grid)' }}><span style={{ display: 'block', height: '100%', width: `${Math.round(roadmap.currentProgress * 100)}%`, borderRadius: 5, background: 'var(--exec-gold)' }} /></div>
+              <div className="exec-roadmap-progress-track" style={{ background: 'var(--exec-grid)' }}><span style={{ display: 'block', height: '100%', width: `${Math.round(roadmap.currentProgress * 100)}%`, borderRadius: 5, background: 'var(--exec-gradient)' }} /></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
                 {roadmap.milestones.slice(0, 3).map((milestone) => (
                   <div key={milestone.key} className="exec-history-spark">
                     <ExecutiveStatusPill status={milestone.status === 'COMPLETE' ? 'COMPLETE' : milestone.status === 'CURRENT' ? 'CURRENT' : 'PENDING'} />
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{milestone.title}</strong>
-                      <span style={{ display: 'block', fontSize: 10.5, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <ExecutiveEmptyState icon={Map} title="No active roadmap" description="Generate a personalized 30/60/90-day plan from your business state." action="Generate roadmap" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/roadmaps`)} />
+            <ExecutiveEmptyState icon={Map} title="No active roadmap" description="Generate a personalized 30/60/90-day plan from your business state." action="Generate roadmap" onAction={() => onNavigate(`${base}/roadmaps`)} />
           )}
         </section>
 
-        {/* 9 — Recent decisions */}
+        {/* 9 — Decisions */}
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Accountability</div><h3>Recent Decisions</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/decisions`)}>Decision log <ArrowUpRight size={13} /></button>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/decisions`)}>Decision log <ArrowUpRight size={13} /></button>
           </div>
           {dashboard.decisions.length === 0 ? (
-            <ExecutiveEmptyState icon={ListChecks} title="No decisions logged" description="Log strategic decisions and record real outcomes — accuracy grades follow automatically." action="Log a decision" onAction={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/decisions`)} />
+            <ExecutiveEmptyState icon={ListChecks} title="No decisions logged" description="Log strategic decisions and record real outcomes — accuracy grades follow automatically." action="Log a decision" onAction={() => onNavigate(`${base}/decisions`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {dashboard.decisions.slice(0, 3).map((decision) => (
                 <div key={decision.id} className="exec-history-spark" style={{ alignItems: 'flex-start' }}>
                   <ExecutiveStatusPill status={decision.qualityRating} />
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{decision.title}</strong>
-                    <span style={{ display: 'block', fontSize: 10.5, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
                   </div>
                 </div>
               ))}
@@ -384,11 +488,52 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
           )}
         </section>
 
-        {/* 10 — Usage panel */}
+        {/* 10 — Board report (with investor PDF on Commander) */}
+        <section className="exec-section span-6">
+          <div className="exec-section-head">
+            <div><div className="exec-kicker">Boardroom</div><h3>Monthly Board Report</h3></div>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/reports`)}>All reports <ArrowUpRight size={13} /></button>
+          </div>
+          {dashboard.latestReport ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <span className="exec-empty-icon" style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 0 }}><FileBarChart size={18} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong style={{ fontSize: 14, color: 'var(--exec-heading)', fontFamily: 'var(--exec-sans)', fontWeight: 700 }}>{executiveMonthLabel(dashboard.latestReport.periodStart)} board report</strong>
+                  <p style={{ margin: '4px 0 8px', fontSize: 12.5, color: 'var(--exec-body)', lineHeight: 1.55 }}>Executive summary · strategic position · key insights · financial forecast · recommendations.</p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports/${dashboard.latestReport!.id}`)}><Eye size={14} /> View Report</button>
+                    {plan === 'commander' && (
+                      <a className="button secondary" href={executivePdfDownloadUrl(dashboard.latestReport!.id)}><Download size={14} /> Download PDF</a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <ExecutiveEmptyState
+              icon={FileBarChart}
+              title="No board report yet"
+              description="Generate your first board-ready report from your real store data — executive summary, forecast, and recommended decisions."
+              action="Generate report"
+              onAction={() => onNavigate(`${base}/reports`)}
+            />
+          )}
+        </section>
+
+        {/* 11 — Plan & usage */}
+        <section className="exec-section span-6">
+          <div className="exec-section-head">
+            <div><div className="exec-kicker">Your plan</div><h3>GrowthIQ Features</h3></div>
+            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/settings`)}>Preferences</button>
+          </div>
+          <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
+        </section>
+
+        {/* 12 — Usage meters */}
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Plan allowance</div><h3>Executive Usage</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${EXECUTIVE_ROUTE_PREFIX}/settings`)}>Preferences</button>
           </div>
           <div className="exec-usage-panel">
             {usage.features.filter((entry) => entry.limit !== null || entry.used > 0).slice(0, 8).map((entry) => (
@@ -404,9 +549,21 @@ function ExecutiveDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: {
   )
 }
 
-function ExecutiveDashboardSkeleton() {
+function DeltaTag({ value }: { value: number }) {
+  const tone = value > 0.5 ? 'up' : value < -0.5 ? 'down' : 'flat'
+  const arrow = value > 0.5 ? '↑' : value < -0.5 ? '↓' : '→'
+  return <span className={`gq-delta ${tone}`}>{arrow} {Math.abs(value).toFixed(1)}%</span>
+}
+
+function ExecutiveTrendArrow({ trend }: { trend: string }) {
+  const tone = trend === 'up' ? 'up' : trend === 'down' ? 'down' : 'flat'
+  return <span className={`exec-trend ${tone}`}>{trend === 'up' ? '↗' : trend === 'down' ? '↘' : trend === 'flat' ? '→' : '·'}</span>
+}
+
+function GrowthIqDashboardSkeleton() {
   return (
-    <div className="exec-page" role="status" aria-label="Executive dashboard loading">
+    <div className="exec-page" role="status" aria-label="GrowthIQ dashboard loading">
+      <GrowthIqHeader plan="trial" onNavigate={() => undefined} onUpgrade={() => undefined} />
       <ExecutiveSkeleton rows={2} label="Executive summary" />
       <div className="exec-dashboard">
         <div className="span-6"><ExecutiveSkeleton rows={4} label="Health" /></div>
@@ -418,3 +575,6 @@ function ExecutiveDashboardSkeleton() {
     </div>
   )
 }
+
+// Kept for deep-link helpers in the workspace.
+export { isGrowthIqHash }

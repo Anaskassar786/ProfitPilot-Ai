@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive API router.
+ * GrowthIQ (formerly "AI Executive") — API router.
  *
  * All boardroom-grade endpoints behind plan gating (402 UPGRADE_REQUIRED
  * with upgrade context), a per-store rate limit (default 20 req/min,
@@ -8,6 +8,10 @@
  *
  * Fixed paths are registered before `/:id` paths so a resource name is
  * never parsed as an identifier.
+ *
+ * The `/ai-executive/*` path namespace is intentionally unchanged: it is
+ * the stable backend contract (tables, webhooks, and shared links already
+ * use it). The GrowthIQ rebrand is a UI- and copy-level rename.
  */
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
@@ -97,7 +101,7 @@ export function createExecutiveRouter(dependencies: ExecutiveRouteDependencies):
     try {
       const tenant = queryStoreId(request)
       const decision = limiter.check(tenant)
-      if (!decision.allowed) throw new AppError('RATE_LIMITED', `AI Executive rate limit reached (${dependencies.rateLimitPerStore ?? 20} requests per minute).`, 429, { retryAfterMs: decision.retryAfterMs, storeId: tenant })
+      if (!decision.allowed) throw new AppError('RATE_LIMITED', `GrowthIQ rate limit reached (${dependencies.rateLimitPerStore ?? 20} requests per minute).`, 429, { retryAfterMs: decision.retryAfterMs, storeId: tenant })
       await handler(request, response, next)
     } catch (error: unknown) { next(error) }
   }
@@ -231,8 +235,8 @@ export function createExecutiveRouter(dependencies: ExecutiveRouteDependencies):
     const message = await dependencies.email.send(recipient, {
       report,
       facts,
-      appUrl: `${dependencies.appUrl()}/?storeId=${encodeURIComponent(tenant)}#/ai-growth-command/executive/reports`,
-      unsubscribeUrl: `${dependencies.appUrl()}/?storeId=${encodeURIComponent(tenant)}#/ai-growth-command/executive/settings`,
+      appUrl: `${dependencies.appUrl()}/?storeId=${encodeURIComponent(tenant)}#/ai-growth-command/growthiq/reports`,
+      unsubscribeUrl: `${dependencies.appUrl()}/?storeId=${encodeURIComponent(tenant)}#/ai-growth-command/growthiq/settings`,
       includePdf,
       pdfBuffer,
     })
@@ -248,9 +252,13 @@ export function createExecutiveRouter(dependencies: ExecutiveRouteDependencies):
     const rows = await dependencies.repository.benchmarkRows(category)
     const plan = await dependencies.plan(tenant)
     const gates = await executiveGates(dependencies, tenant)
-    const visibleMetrics = gates.benchmarks?.limit ?? 3
-    const ladders = laddersFromRows(rows).slice(0, Math.max(visibleMetrics, 0))
-    response.status(200).json(success({ category, ladders, sourceMode: 'SHOPIFY_PUBLIC', visibleMetrics, totalMetrics: laddersFromRows(rows).length }, requestIdFrom(request)))
+    // A `null` limit means "unlimited" (Commander) — never fall back to a
+    // number, or the top tier silently loses metrics.
+    const allLadders = laddersFromRows(rows)
+    const limit = gates.benchmarks?.limit
+    const visibleMetrics = limit === null || limit === undefined ? allLadders.length : Math.min(limit, allLadders.length)
+    const ladders = allLadders.slice(0, Math.max(visibleMetrics, 0))
+    response.status(200).json(success({ category, ladders, sourceMode: 'SHOPIFY_PUBLIC', visibleMetrics, totalMetrics: allLadders.length }, requestIdFrom(request)))
   }))
 
   router.get('/ai-executive/benchmarks/position', run(async (request, response) => {
@@ -268,13 +276,17 @@ export function createExecutiveRouter(dependencies: ExecutiveRouteDependencies):
     const effectiveCategory = preferences.benchmarkCategory !== 'Other' ? preferences.benchmarkCategory : detected ?? 'Other'
     const categorySource = preferences.benchmarkCategory !== 'Other' ? 'PREFERENCE' as const : detected !== null ? 'AUTO_DETECTED' as const : 'DEFAULT' as const
     const gates = await executiveGates(dependencies, tenant)
+    const allLadders = laddersFromRows(rows)
+    // A `null` limit means "unlimited" (Commander) — never fall back to a
+    // number, or the top tier silently loses metrics.
+    const limit = gates.benchmarks?.limit
     const position = buildBenchmarkPosition({
       storeId: tenant,
       category: effectiveCategory,
       categorySource,
-      ladders: laddersFromRows(rows),
+      ladders: allLadders,
       merchantValues: merchantMetricValues(snapshot, analytics, catalog),
-      visibleMetrics: gates.benchmarks?.limit ?? 3,
+      visibleMetrics: limit === null || limit === undefined ? allLadders.length : Math.min(limit, allLadders.length),
       now: new Date(dependencies.now()),
     })
     response.status(200).json(success(position, requestIdFrom(request)))

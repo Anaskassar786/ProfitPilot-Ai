@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive API client.
+ * GrowthIQ (formerly "AI Executive") — API client.
  *
  * Thin typed wrappers over the /ai-executive endpoints. All responses use
  * the standard `{ ok, data, requestId }` envelope handled by `requestJson`;

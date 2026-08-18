@@ -50,10 +50,15 @@ export class InMemoryAnalyticsRepository implements AnalyticsRepository {
   }
 }
 
-type RevenueRow = QueryResultRow & { store_id: string; day: string; gross_revenue: string | number; discounts: string | number; order_count: number }
-type OrdersRow = QueryResultRow & { store_id: string; day: string; order_count: number; fulfilled_count: number; cancelled_count: number; average_order_value: string | number }
-type ProductSalesRow = QueryResultRow & { store_id: string; day: string; product_id: string; units_sold: number; gross_revenue: string | number }
-type CohortRow = QueryResultRow & { store_id: string; cohort_day: string; activity_day: string; customer_count: number; gross_revenue: string | number }
+// `pg` deserializes Postgres `date` columns into JavaScript `Date` objects
+// (UTC midnight) while the snapshot types declare `day` as a `string`.
+// RevenueRow and friends keep the driver-honest `string | Date` union, and
+// `dayLabel` normalizes both shapes to the canonical `YYYY-MM-DD` label at
+// the repository boundary so every consumer sees what the types promise.
+type RevenueRow = QueryResultRow & { store_id: string; day: string | Date; gross_revenue: string | number; discounts: string | number; order_count: number }
+type OrdersRow = QueryResultRow & { store_id: string; day: string | Date; order_count: number; fulfilled_count: number; cancelled_count: number; average_order_value: string | number }
+type ProductSalesRow = QueryResultRow & { store_id: string; day: string | Date; product_id: string; units_sold: number; gross_revenue: string | number }
+type CohortRow = QueryResultRow & { store_id: string; cohort_day: string | Date; activity_day: string | Date; customer_count: number; gross_revenue: string | number }
 type CatalogRow = QueryResultRow & { store_id: string; product_id: string; payload: DbJsonObject; synced_at: Date }
 
 export class PostgresAnalyticsRepository implements AnalyticsRepository {
@@ -78,10 +83,10 @@ export class PostgresAnalyticsRepository implements AnalyticsRepository {
       this.executor.query<CohortRow>('SELECT store_id, cohort_day, activity_day, customer_count, gross_revenue FROM analytics_customer_cohorts_daily WHERE store_id = $1 ORDER BY activity_day', [storeId]),
     ])
     return {
-      revenue: revenue.rows.map((row) => ({ storeId: row.store_id as StoreId, day: row.day, grossRevenue: numeric(row.gross_revenue), discounts: numeric(row.discounts), orderCount: row.order_count })),
-      orders: orders.rows.map((row) => ({ storeId: row.store_id as StoreId, day: row.day, orderCount: row.order_count, fulfilledCount: row.fulfilled_count, cancelledCount: row.cancelled_count, averageOrderValue: numeric(row.average_order_value) })),
-      productSales: productSales.rows.map((row) => ({ storeId: row.store_id as StoreId, day: row.day, productId: row.product_id, unitsSold: row.units_sold, grossRevenue: numeric(row.gross_revenue) })),
-      customerCohorts: customerCohorts.rows.map((row) => ({ storeId: row.store_id as StoreId, cohortDay: row.cohort_day, activityDay: row.activity_day, customerCount: row.customer_count, grossRevenue: numeric(row.gross_revenue) })),
+      revenue: revenue.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), grossRevenue: numeric(row.gross_revenue), discounts: numeric(row.discounts), orderCount: row.order_count })),
+      orders: orders.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), orderCount: row.order_count, fulfilledCount: row.fulfilled_count, cancelledCount: row.cancelled_count, averageOrderValue: numeric(row.average_order_value) })),
+      productSales: productSales.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), productId: row.product_id, unitsSold: row.units_sold, grossRevenue: numeric(row.gross_revenue) })),
+      customerCohorts: customerCohorts.rows.map((row) => ({ storeId: row.store_id as StoreId, cohortDay: dayLabel(row.cohort_day), activityDay: dayLabel(row.activity_day), customerCount: row.customer_count, grossRevenue: numeric(row.gross_revenue) })),
     }
   }
 
@@ -99,6 +104,23 @@ function numeric(value: string | number): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) throw new Error('Analytics database returned a non-numeric value')
   return parsed
+}
+
+/**
+ * Canonical `YYYY-MM-DD` label for a `date` column value.
+ *
+ * `pg` parses `date` columns into `Date` objects (UTC midnight), so a
+ * `Date` input is converted in UTC — never local time — to keep the label
+ * identical to the stored calendar day. String inputs are truncated to the
+ * date part so ISO timestamps (`timestamptz` mapped as text) still work.
+ */
+export function dayLabel(value: string | Date | null | undefined): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    return value.toISOString().slice(0, 10)
+  }
+  if (typeof value === 'string') return value.slice(0, 10)
+  return ''
 }
 
 function mergeRows<Row>(current: readonly Row[], next: readonly Row[], key: (row: Row) => string): readonly Row[] {

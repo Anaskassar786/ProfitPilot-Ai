@@ -1,3 +1,4 @@
+import { dayLabel } from '@profitpilot/db'
 import type { AnalyticsRepository, CatalogProduct, QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import type { StoreSnapshot } from '@profitpilot/ai'
 import type { StoreId } from '@profitpilot/types'
@@ -35,10 +36,13 @@ export async function buildStoreSnapshot(
   const last30 = since(now, 30)
   const last120 = since(now, 120)
   const prev30 = since(now, 60)
-  const last30dRevenue = snapshot.revenue.filter((row) => row.day >= last30).reduce((sum, row) => sum + row.grossRevenue, 0)
-  const previous30dRevenue = snapshot.revenue.filter((row) => row.day >= prev30 && row.day < last30).reduce((sum, row) => sum + row.grossRevenue, 0)
-  const last30dOrders = snapshot.orders.filter((row) => row.day >= last30).reduce((sum, row) => sum + row.orderCount, 0)
-  const previous30dOrders = snapshot.orders.filter((row) => row.day >= prev30 && row.day < last30).reduce((sum, row) => sum + row.orderCount, 0)
+  // `dayLabel` normalizes `pg`'s Date objects for `date` columns; without it
+  // the string window comparisons below silently match nothing in production
+  // (Date >= string coerces to NaN) and every 30-day figure reads as zero.
+  const last30dRevenue = snapshot.revenue.filter((row) => dayLabel(row.day) >= last30).reduce((sum, row) => sum + row.grossRevenue, 0)
+  const previous30dRevenue = snapshot.revenue.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30).reduce((sum, row) => sum + row.grossRevenue, 0)
+  const last30dOrders = snapshot.orders.filter((row) => dayLabel(row.day) >= last30).reduce((sum, row) => sum + row.orderCount, 0)
+  const previous30dOrders = snapshot.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30).reduce((sum, row) => sum + row.orderCount, 0)
   const salesByProduct = aggregateProductSales(snapshot.productSales, last30, last120, now)
   const rawOrders = orderRows.rows.map((row) => toOrder(row.payload)).filter((order): order is OrderFacts => order !== null)
   return {
@@ -46,7 +50,7 @@ export async function buildStoreSnapshot(
     currency: storeCurrency(rawOrders),
     timezone: 'UTC',
     asOf,
-    dataFreshAt: snapshot.revenue.at(-1)?.day ?? asOf,
+    dataFreshAt: dayLabel(snapshot.revenue.at(-1)?.day) || asOf,
     products: catalog.map((product) => toProduct(product, salesByProduct.get(product.productId))),
     customers: customers.rows.flatMap((row) => toCustomer(row.payload, now)),
     checkouts: checkouts.rows.flatMap((row) => toCheckout(row.payload, now)),
@@ -72,10 +76,11 @@ export function aggregateProductSales(rows: readonly ProductSalesRow[], last30: 
   const perProduct = new Map<string, { units30: number; units120: number; lastSaleDay: string | null }>()
   for (const row of rows) {
     const entry = perProduct.get(row.productId) ?? { units30: 0, units120: 0, lastSaleDay: null }
+    const day = dayLabel(row.day)
     if (row.unitsSold > 0) {
-      if (row.day >= last30) entry.units30 += row.unitsSold
-      if (row.day >= last120) entry.units120 += row.unitsSold
-      if (entry.lastSaleDay === null || row.day > entry.lastSaleDay) entry.lastSaleDay = row.day
+      if (day >= last30) entry.units30 += row.unitsSold
+      if (day >= last120) entry.units120 += row.unitsSold
+      if (entry.lastSaleDay === null || day > entry.lastSaleDay) entry.lastSaleDay = day
     }
     perProduct.set(row.productId, entry)
   }

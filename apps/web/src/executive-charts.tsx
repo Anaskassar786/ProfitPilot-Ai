@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive chart library.
+ * GrowthIQ (formerly "AI Executive") — chart library.
  *
  * Hand-rolled SVG charts that read colors from CSS custom properties, so
  * every chart adapts automatically to the dark and light themes. Deliberate

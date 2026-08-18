@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive client model.
+ * GrowthIQ (formerly "AI Executive") — client model.
  *
  * Types mirror the API payloads from /ai-executive/* plus pure display
  * helpers (status colors, labels, formatters) shared by every executive

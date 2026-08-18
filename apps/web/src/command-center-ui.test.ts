@@ -252,9 +252,10 @@ describe('PR49 shipped AI Growth Command modules', () => {
     expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'patternai', 'ai-command'])
     expect(GROWTH_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
   })
-  it('marks AI Executive as Requires Growth on lower plans only', () => {
+  it('marks GrowthIQ (formerly AI Executive) as Requires Growth on lower plans only', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
     if (!module) throw new Error('missing module')
+    expect(module.label).toBe('GrowthIQ')
     expect(growthModuleAccess(module, 'trial')).toMatchObject({ badge: 'requires', badgeLabel: 'Requires Growth', requiresUpgrade: true, upgradePlan: 'growth' })
     expect(growthModuleAccess(module, 'start')).toMatchObject({ badge: 'requires', requiresUpgrade: true })
     expect(growthModuleAccess(module, 'growth')).toMatchObject({ badge: 'available', badgeLabel: 'Available', requiresUpgrade: false })
@@ -284,6 +285,18 @@ describe('PR49 shipped AI Growth Command modules', () => {
     expect(html).toContain('Open Store Coach')
     expect(html).not.toContain('Coming soon')
     expect(html).not.toContain('Launching soon')
+  })
+  it('renders the GrowthIQ card with the rebranded label and gated CTA', () => {
+    const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
+    if (!module) throw new Error('missing module')
+    const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'start', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
+    expect(html).toContain('GrowthIQ')
+    expect(html).not.toContain('AI Executive')
+    // Start plan: gated by the growth tier — badge names the required tier,
+    // the CTA opens the module (which carries the "Upgrade Plan" gate).
+    expect(html).toContain('Requires Growth')
+    expect(html).toContain('Open GrowthIQ')
+    expect(html).not.toContain('Upgrade to Growth')
   })
   it('renders the module info drawer with a plan matrix and an Open CTA', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'STORE_COACH')

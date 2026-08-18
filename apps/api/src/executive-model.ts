@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive module types.
+ * GrowthIQ (formerly "AI Executive") — module types.
  *
  * "Your Boardroom in a Box": CEO-level strategic intelligence for Shopify
  * merchants. Every value in these payloads is computed from real synced

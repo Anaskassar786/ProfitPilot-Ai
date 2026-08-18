@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 // Section icons are Lucide glyphs plus PatternAI's own constellation mark,
 // which renders the same `size`/`className` contract without being a Lucide
 // forwardRef component — hence the widened icon type below.
-type SectionIcon = LucideIcon | ((props: Readonly<{ size?: number | string; className?: string }>) => ReactElement)
+type SectionIcon = LucideIcon | ((props: Readonly<{ size?: number | string; className?: string; strokeWidth?: number }>) => ReactElement)
 import {
   Activity,
   AlertCircle,
@@ -41,7 +41,6 @@ import {
   Inbox,
   Info,
   Keyboard,
-  Landmark,
   LayoutDashboard,
   LifeBuoy,
   LineChart,
@@ -115,13 +114,14 @@ import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
-import { AiExecutivePage } from './executive.js'
+import { GrowthIqPage } from './executive.js'
 import { StoreCoachWorkspace } from './store-coach.js'
 import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
 import { PatternAiWorkspace } from './patternai.js'
 import { PatternAiIcon } from './patternai-logo.js'
+import { GrowthIqNavIcon } from './growthiq-logo.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -148,7 +148,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
     label: 'AI Growth Command',
     items: [
       { id: 'store-coach', label: 'Store Coach', icon: GraduationCap, tag: 'NEW' },
-      { id: 'ai-executive', label: 'AI Executive', icon: Landmark, tag: 'NEW' },
+      { id: 'ai-executive', label: 'GrowthIQ', icon: GrowthIqNavIcon, tag: 'NEW' },
       { id: 'patternai', label: 'PatternAI', icon: PatternAiIcon, tag: 'NEW' },
     ],
   },
@@ -176,7 +176,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   recommendations: { title: 'Recommendations', description: 'Your AI team has been watching your store. Review opportunities and take action.', icon: WandSparkles },
   'ai-growth-command': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
-  'ai-executive': { title: 'AI Executive', description: 'Boardroom-grade strategy — reports, benchmarks, scenarios, and risks from your real store data.', icon: Landmark },
+  'ai-executive': { title: 'GrowthIQ', description: 'Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports from your real store data.', icon: GrowthIqNavIcon },
   automation: { title: 'Automation', description: 'Automate the busywork — recover carts, welcome customers, and stay on top of stock.', icon: Workflow },
   patternai: { title: 'PatternAI', description: 'Discover the patterns that drive your business — discoveries, lessons, personas, and Why? answers computed from your real synced data.', icon: PatternAiIcon },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
@@ -211,9 +211,9 @@ export default function App() {
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
     if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
-    if (window.location.hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
+    if (window.location.hash.startsWith('#/ai-growth-command/growthiq') || window.location.hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
     if (window.location.pathname.startsWith('/ai-growth-command/patternai') || window.location.pathname.startsWith('/ai-growth-command/insights')) return 'patternai'
-    if (window.location.pathname.startsWith('/ai-growth-command/executive')) return 'ai-executive'
+    if (window.location.pathname.startsWith('/ai-growth-command/growthiq') || window.location.pathname.startsWith('/ai-growth-command/executive')) return 'ai-executive'
     if (window.location.pathname.startsWith('/ai-growth-command')) return 'store-coach'
     if (window.location.pathname.startsWith('/automation')) return 'automation'
     return 'dashboard'
@@ -400,7 +400,7 @@ export default function App() {
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
-      else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
+      else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/growthiq`)
       else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     } catch { /* embedded browsers may restrict history access */ }
   }
@@ -413,7 +413,7 @@ export default function App() {
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
       if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
       const onPatternAi = window.location.pathname.startsWith('/ai-growth-command/patternai') || window.location.pathname.startsWith('/ai-growth-command/insights')
-      const onExecutive = window.location.pathname.startsWith('/ai-growth-command/executive') || window.location.hash.startsWith('#/ai-growth-command/executive')
+      const onExecutive = isGrowthIqLocation(window.location.pathname, window.location.hash)
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
       setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
@@ -606,7 +606,7 @@ function PageRouter({
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
   if (active === 'ai-growth-command' || active === 'store-coach') return <StoreCoachWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'ai-executive') return <AiExecutivePage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'ai-executive') return <GrowthIqPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onSync={onSync} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI team" title="Recommendations" description="Your AI team has been watching your store 🎯 Here are opportunities to grow your business — review and take action."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
@@ -926,17 +926,26 @@ function storeNumberRecord(key: string, value: Readonly<Record<string, number>>)
 /** True for the 503 the API returns while a store's Shopify circuit is open. */
 function isCircuitOpen(error: unknown): boolean { return error instanceof ApiClientError && error.status === 503 && /circuit is open/i.test(error.message) }
 function errorMessage(error: unknown): string { if (error instanceof ApiClientError) return error.message; if (error instanceof Error) return error.message; return 'The API could not be reached.' }
+/** True when a pathname or hash points at GrowthIQ (new route or the
+ * legacy "AI Executive" deep link kept for shared links and bookmarks). */
+function isGrowthIqLocation(pathname: string, hash: string): boolean {
+  return pathname.startsWith('/ai-growth-command/growthiq')
+    || pathname.startsWith('/ai-growth-command/executive')
+    || hash.startsWith('#/ai-growth-command/growthiq')
+    || hash.startsWith('#/ai-growth-command/executive')
+}
+
 /** Resolves a deep-link hash to a workspace section id, or null. */
 function hashSection(hash: string): 'recommendations' | 'ai-executive' | 'store-coach' | null {
   if (hash.startsWith('#/recommendations')) return 'recommendations'
-  if (hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
+  if (hash.startsWith('#/ai-growth-command/growthiq') || hash.startsWith('#/ai-growth-command/executive')) return 'ai-executive'
   if (hash.startsWith('#/ai-growth-command')) return 'store-coach'
   return null
 }
 
 function growthCommandPath(page: SectionId): string | null {
   if (page === 'patternai') return '/ai-growth-command/patternai'
-  if (page === 'ai-executive') return '/ai-growth-command/executive'
+  if (page === 'ai-executive') return '/ai-growth-command/growthiq'
   if (page === 'store-coach' || page === 'ai-growth-command') return '/ai-growth-command/coach'
   return null
 }

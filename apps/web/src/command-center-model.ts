@@ -364,7 +364,7 @@ export const GROWTH_MODULES: readonly GrowthModule[] = [
   },
   {
     id: 'AI_EXECUTIVE',
-    label: 'AI Executive',
+    label: 'GrowthIQ',
     description: 'Strategic boardroom intelligence for big decisions.',
     sampleInsight: 'Quarterly revenue is tracking 9% above plan — a board-ready summary is ready.',
     path: 'ai-executive',

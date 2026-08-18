@@ -57,12 +57,16 @@ The Recommendations page is a dedicated workspace (`apps/web/src/recommendations
 - **Execution bridge** — `POST /recommendations/:id/execute` runs the idempotent `ActionExecutor` (drafts only — `SEND_EMAIL` creates a reviewable campaign template), records `ai_executions`, and feeds the time-window attribution matcher that populates `ai_attribution_events` for `/billing/roi`.
 
 
-### AI Executive (PR #49)
+### GrowthIQ (PR #49, rebranded from AI Executive)
 
-AI Executive — **"Your Boardroom in a Box"** — is the strategic half of the AI
-Growth Command page (`#/ai-growth-command/executive`), designed for CEO-level
-decisions rather than daily operations. It ships with its own
-`docs/AI_EXECUTIVE.md`.
+GrowthIQ — **"Intelligent growth for ambitious merchants"** — is the strategic
+half of the AI Growth Command page (`/ai-growth-command/growthiq`), designed
+for CEO-level decisions rather than daily operations. It carries a new
+growth-arrow + neural logo and an intelligence-purple design system (dark +
+light). The rebuild also fixed the dashboard's `pg` date-crash, a CORS
+same-origin 403 that blanked the SPA, an off-by-one hash parser that made
+sub-pages unreachable, and a Commander benchmark-visibility cap. It ships with
+its own `docs/GROWTHIQ.md`.
 
 - **Zero fake data** — board reports, the eight-vital-sign health diagnosis,
   the risk radar, opportunities, scenarios, and the dashboard are all computed

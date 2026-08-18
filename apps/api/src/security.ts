@@ -169,6 +169,14 @@ export function corsMiddleware(allowedOrigins: readonly string[]): RequestHandle
       next()
       return
     }
+    // Same-origin requests are not cross-origin — never reject them. Some
+    // browser builds (notably headless shells) send `Origin` on same-origin
+    // subresource loads; 403-ing those responses (CSS/JS) breaks the whole
+    // SPA instead of just a cross-origin read.
+    if (origin === requestOrigin(request)) {
+      next()
+      return
+    }
     if (!allowed.has(origin)) {
       next(new AppError('FORBIDDEN', 'Origin is not allowed', 403))
       return
@@ -184,6 +192,21 @@ export function corsMiddleware(allowedOrigins: readonly string[]): RequestHandle
     }
     next()
   }
+}
+
+/**
+ * Origin of the incoming request itself, derived from the `Host` header and
+ * the proxy-forwarded protocol (Railway/LB set `x-forwarded-proto`). Returns
+ * null when it cannot be determined, in which case the caller falls back to
+ * the allowlist check.
+ */
+function requestOrigin(request: Request): string | null {
+  const host = request.header('host')
+  if (!host) return null
+  const forwarded = request.header('x-forwarded-proto')
+  const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
+  const scheme = proto === 'https' || proto === 'http' ? proto : request.secure ? 'https' : 'http'
+  return `${scheme}://${host}`
 }
 
 export function rateLimitMiddleware(limiter: EndpointRateLimiter): RequestHandler {
