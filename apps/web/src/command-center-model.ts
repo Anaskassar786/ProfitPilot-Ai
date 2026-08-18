@@ -169,16 +169,20 @@ export function relativeTime(iso: string, now = Date.now()): string {
 }
 
 export function agentImpactSummary(activity: readonly AgentActivityItem[]): Readonly<{ count: number; totalImpact: number; currency: string; approvalRate: number | null; averageConfidence: number | null; lastRunAt: string | null }> {
-  if (activity.length === 0) return { count: 0, totalImpact: 0, currency: 'USD', approvalRate: null, averageConfidence: null, lastRunAt: null }
+  if (!Array.isArray(activity) || activity.length === 0) return { count: 0, totalImpact: 0, currency: 'USD', approvalRate: null, averageConfidence: null, lastRunAt: null }
   const decided = activity.filter((item) => item.status === 'APPROVED' || item.status === 'REJECTED')
   const approved = decided.filter((item) => item.status === 'APPROVED')
+  const latestRun = activity.reduce<string | null>((latest, item) => {
+    if (!latest) return item.createdAt
+    return item.createdAt > latest ? item.createdAt : latest
+  }, null)
   return {
     count: activity.length,
     totalImpact: activity.reduce((sum, item) => sum + item.impactValue, 0),
     currency: activity[0]?.currency ?? 'USD',
     approvalRate: decided.length === 0 ? null : Math.round((approved.length / decided.length) * 100),
-    averageConfidence: Math.round((activity.reduce((sum, item) => sum + item.confidence, 0) / activity.length) * 100),
-    lastRunAt: activity[0]?.createdAt ?? null,
+    averageConfidence: Math.round((activity.reduce((sum, item) => sum + (typeof item.confidence === 'number' ? item.confidence : 0), 0) / activity.length) * 100),
+    lastRunAt: latestRun ?? activity[0]?.createdAt ?? null,
   }
 }
 
