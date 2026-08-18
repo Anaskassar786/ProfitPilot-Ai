@@ -26,6 +26,17 @@ describe('F6 automation and marketing APIs', () => {
   it('exports real rows with the selected writer', async () => await withServer(async (base) => { const response = await fetch(`${base}/exports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: 'CSV', rows: [{ id: 1, name: 'A' }] }) }); expect(response.status).toBe(200); expect((await response.json()).data.contentType).toContain('csv') }))
   it('creates tickets with plan priority', async () => await withServer(async (base) => { const response = await fetch(`${base}/support/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', subject: 'Help', plan: 'commander' }) }); expect(response.status).toBe(201); expect((await response.json()).data.priority).toBe('URGENT') }))
   it('verifies merchant email settings before campaign use', async () => await withServer(async (base) => { const saved = await fetch(`${base}/settings/merchant-email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', email: 'merchant@example.com', fromName: 'Store' }) }); const token = (await saved.json()).data.verificationToken as string; const verified = await fetch(`${base}/settings/merchant-email/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }); expect(verified.status).toBe(200) }))
+  it('loads saved merchant email and persists workspace preferences', async () => await withServer(async (base) => {
+    await fetch(`${base}/settings/merchant-email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', email: 'merchant@example.com', fromName: 'Store' }) })
+    const loaded = await fetch(`${base}/settings/merchant-email?shopId=s`)
+    expect(loaded.status).toBe(200)
+    expect((await loaded.json()).data.merchantEmail).toBe('merchant@example.com')
+    const saved = await fetch(`${base}/settings/workspace`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 's', reducedMotion: true, bubbleEnabled: false }) })
+    expect(saved.status).toBe(200)
+    const workspace = await (await fetch(`${base}/settings/workspace?storeId=s`)).json()
+    expect(workspace.data.reducedMotion).toBe(true)
+    expect(workspace.data.bubbleEnabled).toBe(false)
+  }))
   it('hydrates durable merchant sender state when verification reaches a restarted process', async () => {
     const merchantEmails = new InMemoryMerchantEmailConfigRepository()
     const dependencies = (verifier: MerchantEmailVerifier) => ({ workflows: new InMemoryWorkflowRepository(), templates: new InMemoryTemplateRepository(), emailVerifier: verifier, merchantEmails, tickets: new ThreadLedger() })

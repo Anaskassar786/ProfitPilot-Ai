@@ -23,6 +23,7 @@ import './upgrade-overrides.css'
 import './final-polish.css'
 // Loaded last: AI Command Center light-theme surfaces only (dark theme untouched).
 import './command-center-light.css'
+import './settings.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
 
 const root = document.getElementById('root')

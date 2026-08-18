@@ -24,6 +24,7 @@ export type AutomationRouteDependencies = Readonly<{
   billing?: BillingRepository
   requirePermission?: (storeId: string, userId: string, permission: Permission) => Promise<void>
   exportRows?: (storeId: string, dataset: 'orders' | 'catalog' | 'audit' | 'revenue') => Promise<readonly import('@profitpilot/reporting').ExportRow[]>
+  sendVerificationEmail?: (input: Readonly<{ shopId: string; email: string; fromName: string; token: string }>) => Promise<boolean>
 }>
 
 export function createAutomationRouter(dependencies: AutomationRouteDependencies): Router {
@@ -104,10 +105,56 @@ export function createAutomationRouter(dependencies: AutomationRouteDependencies
   router.post('/exports', asyncRoute(async(request)=>{const body=record(request.body);if(!isFormat(body.format))throw new AppError('VALIDATION_ERROR','format is required',400);const dataset=isDataset(body.dataset)?body.dataset:null;const supplied=Array.isArray(body.rows)?body.rows.filter(isExportRow):[];const tenant=typeof body.storeId==='string'?body.storeId:typeof request.query.storeId==='string'?request.query.storeId:'';const rows=dataset&&dependencies.exportRows&&tenant?await dependencies.exportRows(tenant,dataset):supplied;const file=body.format==='CSV'?writeCsv(`${dataset??'export'}-${randomUUID()}.csv`,rows):body.format==='XLSX'?writeXlsx(`${dataset??'export'}-${randomUUID()}.xlsx`,rows):writePdf(`${dataset??'export'}-${randomUUID()}.pdf`,rows);return{filename:file.filename,contentType:file.contentType,bodyBase64:file.body.toString('base64'),rows:rows.length,ceiling:50_000,ceilingNote:'Technical safety limit for one file — not a plan quota.'}}))
   router.get('/support/tickets',(request,response)=>response.status(200).json(success(dependencies.tickets.list(queryStore(request)),requestIdFrom(request))))
   router.post('/support/tickets',asyncRoute(async(request)=>{const body=record(request.body);if(typeof body.shopId!=='string'||typeof body.subject!=='string'||!isPlan(body.plan))throw new AppError('VALIDATION_ERROR','shopId, subject, and plan are required',400);const now=Date.now();const priority=body.priority==='NORMAL'||body.priority==='HIGH'||body.priority==='URGENT'?body.priority:priorityForPlan(body.plan);const ticket:Ticket={id:randomUUID(),shopId:body.shopId,subject:body.subject.trim().slice(0,200)||'Support request',description:typeof body.description==='string'?body.description.trim().slice(0,4_000):'',priority,status:'OPEN',createdAt:now,updatedAt:now,version:0};return dependencies.tickets.create(ticket)},201))
-  router.post('/settings/merchant-email',asyncRoute(async(request)=>{const body=record(request.body);if(typeof body.shopId!=='string'||typeof body.email!=='string'||typeof body.fromName!=='string')throw new AppError('VALIDATION_ERROR','shopId, email, and fromName are required',400);const saved=dependencies.emailVerifier.save(body.shopId,body.email,body.fromName);const config={...saved,verificationSentAt:Date.now()};dependencies.emailVerifier.hydrate(config);await dependencies.merchantEmails?.put(config);return{config,verificationRequired:true,verificationToken:dependencies.emailVerifier.token(body.shopId,body.email,Date.now()+86_400_000)}}))
-  router.post('/settings/merchant-email/verify',asyncRoute(async(request)=>{const body=record(request.body);if(typeof body.token!=='string')throw new AppError('VALIDATION_ERROR','verification token is required',400);const claimedStore=body.token.split('|')[0]??'';if(claimedStore&&dependencies.merchantEmails){const durable=await dependencies.merchantEmails.get(claimedStore);if(durable)dependencies.emailVerifier.hydrate(durable)}const config=dependencies.emailVerifier.verify(body.token);await dependencies.merchantEmails?.put(config);return config}))
+  router.get('/settings/merchant-email', asyncRoute(async (request) => {
+    const shopId = typeof request.query.shopId === 'string' ? request.query.shopId : typeof request.query.storeId === 'string' ? request.query.storeId : ''
+    if (!shopId.trim()) throw new AppError('VALIDATION_ERROR', 'shopId is required', 400)
+    const durable = dependencies.merchantEmails ? await dependencies.merchantEmails.get(shopId) : null
+    return durable ?? dependencies.emailVerifier.get(shopId)
+  }))
+  router.post('/settings/merchant-email', asyncRoute(async (request) => {
+    const body = record(request.body)
+    if (typeof body.shopId !== 'string' || typeof body.email !== 'string' || typeof body.fromName !== 'string') throw new AppError('VALIDATION_ERROR', 'shopId, email, and fromName are required', 400)
+    const saved = dependencies.emailVerifier.save(body.shopId, body.email, body.fromName)
+    const config = { ...saved, verificationSentAt: Date.now() }
+    dependencies.emailVerifier.hydrate(config)
+    await dependencies.merchantEmails?.put(config)
+    const verificationToken = dependencies.emailVerifier.token(body.shopId, body.email, Date.now() + 86_400_000)
+    let emailSent = false
+    if (dependencies.sendVerificationEmail) {
+      try { emailSent = await dependencies.sendVerificationEmail({ shopId: body.shopId, email: body.email, fromName: body.fromName, token: verificationToken }) }
+      catch { emailSent = false }
+    }
+    return { config, verificationRequired: true, verificationToken, emailSent }
+  }))
+  router.post('/settings/merchant-email/verify', asyncRoute(async (request) => {
+    const body = record(request.body)
+    if (typeof body.token !== 'string') throw new AppError('VALIDATION_ERROR', 'verification token is required', 400)
+    const claimedStore = body.token.split('|')[0] ?? ''
+    if (claimedStore && dependencies.merchantEmails) {
+      const durable = await dependencies.merchantEmails.get(claimedStore)
+      if (durable) dependencies.emailVerifier.hydrate(durable)
+    }
+    const config = dependencies.emailVerifier.verify(body.token)
+    await dependencies.merchantEmails?.put(config)
+    return config
+  }))
+  router.get('/settings/workspace', asyncRoute(async (request) => {
+    const tenant = typeof request.query.storeId === 'string' ? request.query.storeId : typeof request.query.shopId === 'string' ? request.query.shopId : ''
+    if (!tenant.trim()) throw new AppError('VALIDATION_ERROR', 'storeId is required', 400)
+    return workspacePreferences.get(tenant) ?? { storeId: tenant }
+  }))
+  router.put('/settings/workspace', asyncRoute(async (request) => {
+    const body = record(request.body)
+    const tenant = typeof body.storeId === 'string' ? body.storeId : typeof body.shopId === 'string' ? body.shopId : ''
+    if (!tenant.trim()) throw new AppError('VALIDATION_ERROR', 'storeId is required', 400)
+    const next = { ...(workspacePreferences.get(tenant) ?? { storeId: tenant }), ...body, storeId: tenant }
+    workspacePreferences.set(tenant, next)
+    return next
+  }))
   return router
 }
+
+const workspacePreferences = new Map<string, Readonly<Record<string, unknown>>>()
 
 async function startRun(deps:AutomationRouteDependencies,request:Request,testMode:boolean){const body=record(request.body);const tenant=requiredString(body.storeId,'storeId');await permit(deps,request,tenant,'automation:write');if(!deps.runs||!deps.execution)throw unavailable('Workflow execution');const workflow=required(await deps.workflows.get(tenant,param(request.params.id)),'Workflow not found');if(!testMode&&workflow.status!=='ACTIVE')throw new AppError('CONFLICT','Publish the workflow before running it',409);const activated=workflow.definitionHash&&workflow.activatedAt?{...workflow,definitionHash:workflow.definitionHash,activatedAt:workflow.activatedAt}:activateWorkflow(workflow,new Date().toISOString());const context=isRecord(body.context)?body.context:{};const run=await deps.execution.start(activated,{triggerType:testMode?'TEST':'MANUAL',context,testMode});void deps.execution.execute(activated,run.id);return run}
 async function decideApproval(deps:AutomationRouteDependencies,request:Request,decision:'APPROVED'|'REJECTED'){const body=record(request.body);const tenant=requiredString(body.storeId,'storeId');await permit(deps,request,tenant,'automation:write');if(!deps.runs||!deps.execution)throw unavailable('Approval inbox');const approval=required(await deps.runs.decideApproval(tenant,param(request.params.id),decision,actor(request),typeof body.reason==='string'?body.reason:undefined),'Approval is no longer pending');if(decision==='REJECTED'){await deps.runs.transition(tenant,approval.runId,'CANCELLED',{error:approval.decisionReason??'Action rejected by merchant'});return approval}const workflow=required(await deps.workflows.get(tenant,approval.workflowId),'Workflow not found');if(!workflow.definitionHash||!workflow.activatedAt)throw new AppError('CONFLICT','Published workflow version is unavailable',409);void deps.execution.execute({...workflow,definitionHash:workflow.definitionHash,activatedAt:workflow.activatedAt},approval.runId,approval.nodeId);return approval}
