@@ -732,40 +732,70 @@ function ApprovedBars({ values }: { values: readonly number[] }) {
 }
 
 function ApprovalRateBar({ rate }: { rate: number | null }) {
-  const value = rate === null ? 0 : Math.min(100, Math.max(0, rate))
+  // Empty state: a plain gray track with Low/Medium/Good labels — no marker
+  // and no fill, so a missing rate never looks like a broken gauge.
+  if (rate === null) {
+    return (
+      <div className="recs-kpi-progress recs-kpi-progress-empty" aria-hidden>
+        <div className="recs-kpi-progress-track" />
+        <div className="recs-kpi-progress-axis"><span>Low</span><span>Medium</span><span>Good</span></div>
+      </div>
+    )
+  }
+  // With data: red/amber/green zones plus a marker pinned to the current rate.
+  const value = Math.min(100, Math.max(0, rate))
   return (
     <div className="recs-kpi-progress" aria-hidden>
       <div className="recs-kpi-progress-track">
-        <div className="recs-kpi-progress-fill" style={{ width: `${value}%` }} />
-        <span className="recs-kpi-progress-marker" style={{ left: '70%' }} title="Healthy target" />
+        <span className="recs-kpi-progress-zone low" />
+        <span className="recs-kpi-progress-zone mid" />
+        <span className="recs-kpi-progress-zone good" />
+        <span className="recs-kpi-progress-marker" style={{ left: `${value}%` }} title={`${value}% approval rate`} />
       </div>
-      <div className="recs-kpi-progress-axis">
-        <span>0%</span>
-        <span className="target">70% · Good</span>
-        <span>100%</span>
-      </div>
+      <div className="recs-kpi-progress-axis"><span>Low</span><span>Medium</span><span>Good</span></div>
     </div>
   )
 }
 
 function DecideSpeedometer({ ms }: { ms: number | null }) {
-  // Map 0 → 8h onto -90° → 90°. <1h is the green zone, 1-4h amber, >4h red.
+  // Map 0 → 8h onto -90° → +90°. <1h is the fast (green) zone, 1–4h normal
+  // (amber), >4h slow (red). A null reading shows a neutral, needle-free arc
+  // with a "No data yet" label instead of an empty-looking gauge.
   const FAST = 60 * 60 * 1000
   const SLOW = 4 * 60 * 60 * 1000
   const MAX = 8 * 60 * 60 * 1000
-  const angle = ms === null ? -90 : Math.min(90, Math.max(-90, ((ms - 0) / MAX) * 180 - 90))
+  const point = (angleDeg: number): { x: number; y: number } => {
+    const rad = (angleDeg * Math.PI) / 180
+    return { x: Math.round((50 + 40 * Math.sin(rad)) * 100) / 100, y: Math.round((46 - 40 * Math.cos(rad)) * 100) / 100 }
+  }
+  const arc = (from: number, to: number): string => {
+    const start = point(from)
+    const end = point(to)
+    return `M ${start.x},${start.y} A 40,40 0 0,1 ${end.x},${end.y}`
+  }
   const zone = ms === null ? 'idle' : ms <= FAST ? 'fast' : ms <= SLOW ? 'mid' : 'slow'
+  if (ms === null) {
+    return (
+      <div className="recs-kpi-visual" aria-hidden>
+        <svg className="recs-kpi-speedo" viewBox="0 0 100 56">
+          <path d="M 10,46 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
+        </svg>
+        <span className="recs-kpi-speedo-label" data-zone={zone}>No data yet</span>
+      </div>
+    )
+  }
+  const angle = Math.min(90, Math.max(-90, (ms / MAX) * 180 - 90))
   return (
     <div className="recs-kpi-visual" aria-hidden>
       <svg className="recs-kpi-speedo" viewBox="0 0 100 56">
-        <path d="M 10,46 A 40,40 0 0,1 50,6" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
-        <path d="M 10,46 A 40,40 0 0,1 32,12" fill="none" className="recs-kpi-speedo-zone-fast" strokeWidth="6" strokeLinecap="round" />
-        <path d="M 32,12 A 40,40 0 0,1 68,12" fill="none" className="recs-kpi-speedo-zone-mid" strokeWidth="6" />
-        <path d="M 68,12 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-zone-slow" strokeWidth="6" strokeLinecap="round" />
-        <line x1="50" y1="46" x2="50" y2="14" stroke="var(--text)" strokeWidth="2.5" className="recs-kpi-speedo-needle" transform={`rotate(${angle} 50 46)`} />
-        <circle cx="50" cy="46" r="3" fill="var(--text)" />
+        <path d="M 10,46 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
+        <path d={arc(-90, -67.5)} fill="none" className="recs-kpi-speedo-zone-fast" strokeWidth="6" strokeLinecap="round" />
+        <path d={arc(-67.5, 0)} fill="none" className="recs-kpi-speedo-zone-mid" strokeWidth="6" />
+        <path d={arc(0, 90)} fill="none" className="recs-kpi-speedo-zone-slow" strokeWidth="6" strokeLinecap="round" />
+        <line x1="50" y1="46" x2="50" y2="16" stroke="var(--text)" strokeWidth="2.5" className="recs-kpi-speedo-needle" transform={`rotate(${angle} 50 46)`} />
+        <circle cx="50" cy="46" r="3.5" fill="var(--text)" className="recs-kpi-speedo-hub" />
       </svg>
-      <span className="recs-kpi-speedo-label" data-zone={zone}>{ms === null ? '—' : zone === 'fast' ? 'Fast' : zone === 'mid' ? 'OK' : 'Slow'}</span>
+      <span className="recs-kpi-speedo-label" data-zone={zone}>{zone === 'fast' ? 'Fast' : zone === 'mid' ? 'OK' : 'Slow'}</span>
     </div>
   )
 }
@@ -822,7 +852,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
         </div>
         <h3 className="recs-card-title">{recommendation.title}</h3>
         <div className="recs-card-story">
-          <div className="recs-story-block">
+          <div className="recs-story-block what">
             <strong><Lightbulb size={13} /> What to do</strong>
             <p>{recommendation.title}</p>
           </div>
@@ -830,7 +860,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
             <strong><TrendingUp size={13} /> Impact if you act</strong>
             <p><em>{formatImpact(recommendation.impactValue, recommendation.currency)}</em> {impactLabelText(recommendation.impactLabel).toLowerCase()}</p>
           </div>
-          <div className="recs-story-block">
+          <div className="recs-story-block why">
             <strong><Search size={13} /> Why we are telling you</strong>
             <p>{recommendation.reason}</p>
           </div>
@@ -1340,7 +1370,7 @@ function SampleRecommendationPreview() {
           </div>
           <h3 className="recs-card-title">Restock "Everyday Hoodie — Black / M" before it sells out</h3>
           <div className="recs-card-story">
-            <div className="recs-story-block">
+            <div className="recs-story-block what">
               <strong><Lightbulb size={13} /> What to do</strong>
               <p>Restock this product — it will sell out in 5 days</p>
             </div>
@@ -1348,7 +1378,7 @@ function SampleRecommendationPreview() {
               <strong><TrendingUp size={13} /> Impact if you act</strong>
               <p><em>$1,240</em> potential revenue</p>
             </div>
-            <div className="recs-story-block">
+            <div className="recs-story-block why">
               <strong><Search size={13} /> Why we are telling you</strong>
               <p>Based on the last 7 days of sales, you will run out before your usual reorder window.</p>
             </div>

@@ -191,6 +191,12 @@ describe('greeting helpers', () => {
     expect(shopDisplayName('acme.myshopify.com')).toBe('Acme')
     expect(shopDisplayName(null)).toBeNull()
   })
+  it('drops the ProfitPilot "pilot" brand suffix from the greeting name', () => {
+    expect(shopDisplayName('commander-pilot.myshopify.com')).toBe('Commander')
+    expect(shopDisplayName('commander.myshopify.com')).toBe('Commander')
+    expect(shopDisplayName('pilot.myshopify.com')).toBe('Pilot')
+    expect(shopDisplayName('acme.myshopify.com')).toBe('Acme')
+  })
   it('covers every rule with a tagline, emoji, and find-bullet list', () => {
     for (const rule of Object.keys(RULE_LABELS) as (keyof typeof RULE_LABELS)[]) {
       expect(RULE_TAGLINES[rule].length).toBeGreaterThan(8)
