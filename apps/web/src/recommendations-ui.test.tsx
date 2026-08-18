@@ -1,9 +1,23 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { AllClearState, ApproveConfirmSheet, FirstRunState, HowItWorksModal, InsightsSidebar, KpiHero, RecommendationCard, RejectReasonSheet } from './recommendations.js'
+import {
+  AllClearState,
+  AnalysisProgressModal,
+  AnalysisReportPanel,
+  ApproveConfirmSheet,
+  FirstRunState,
+  HowItWorksModal,
+  InsightsSidebar,
+  KpiHero,
+  RecommendationCard,
+  RejectReasonSheet,
+  RuleDetailModal,
+  SampleRecommendationPreview,
+  Tip,
+} from './recommendations.js'
 import { usageState } from './recommendations-model.js'
-import type { RecommendationSummary, RecommendationView } from './recommendations-model.js'
+import type { AnalysisReport, RecommendationSummary, RecommendationView } from './recommendations-model.js'
 
 const noop = vi.fn()
 
@@ -25,6 +39,21 @@ function summary(overrides: Partial<RecommendationSummary> = {}): Recommendation
     generatedTrend: [{ day: '2026-08-14', generated: 3, approved: 2 }],
     plan: 'trial',
     usage: { feature: 'ai_recommendations_month', used: 4, limit: 10, remaining: 6 },
+    ...overrides,
+  }
+}
+
+function report(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
+  return {
+    storeId: 's',
+    generatedAt: new Date().toISOString(),
+    receivedAt: new Date().toISOString(),
+    elapsedMs: 4_200,
+    recommendations: [],
+    deduplicated: 0,
+    rulesChecked: 8,
+    health: { score: 84, method: 'deterministic-v1' },
+    snapshotStats: { products: 42, customers: 128, checkouts: 7, orders: 913, dataFreshAt: new Date().toISOString(), currency: 'USD' },
     ...overrides,
   }
 }
@@ -90,6 +119,27 @@ describe('KPI hero', () => {
     expect(html).toContain('80%')
     expect(html).toContain('1h 30m')
   })
+  it('uses merchant-friendly KPI labels and hover tooltips on every card', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('Revenue opportunity pending')
+    expect(html).not.toContain('Pending impact')
+    // Every KPI card carries an explanatory tooltip
+    expect((html.match(/role="tooltip"/g) ?? []).length).toBe(5)
+    expect(html).toContain('Total modeled revenue value waiting in pending recommendations')
+    expect(html).toContain('higher rate means agents are suggesting things worth doing')
+  })
+  it('shows honest empty states when there is nothing to measure', () => {
+    const empty = summary({ counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 }, total: 0, pendingImpact: [], approvedThisMonth: { count: 0, impact: [] }, approvalRate: { allTime: null, last30d: null }, averageDecisionMs: null, recentDecisions: [] })
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: empty, usage: usageState(0, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('No pending recommendations yet')
+    expect(html).toContain('Approve recommendations to see the impact here')
+    expect(html).toContain('Need decisions to calculate')
+    expect(html).toContain('Decide recommendations to track this')
+  })
+  it('formats the zero pending impact in a real currency when one is known', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ pendingImpact: [], counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 } }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('$0')
+  })
   it('never mixes currencies in pending impact', () => {
     const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ pendingImpact: [{ currency: 'USD', value: 100 }, { currency: 'EUR', value: 50 }] }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
     expect(html).toContain('$100 + €50')
@@ -102,19 +152,138 @@ describe('KPI hero', () => {
 })
 
 describe('empty states', () => {
-  it('first-run state teaches the eight rules and offers Run Analysis', () => {
-    const html = renderToStaticMarkup(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop }))
-    expect(html).toContain('Your AI team is ready to work')
-    expect(html).toContain('Run Analysis')
+  it('first-run state is compact, action-oriented, and educational', () => {
+    const html = renderToStaticMarkup(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
+    expect(html).toContain('Ready to analyze your store')
+    expect(html).toContain('Run First Analysis')
+    expect(html).toContain('How it works')
+    expect(html).not.toContain('Your AI team is ready to work')
+  })
+  it('rule cards carry icons, descriptions, and data-source badges', () => {
+    const html = renderToStaticMarkup(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
     expect(html).toContain('Stockout Risk')
     expect(html).toContain('Cart Abandonment')
+    expect(html).toContain('Uses: Products')
+    expect(html).toContain('Uses: Checkouts')
+    expect(html).toContain('New Customer Welcome')
+  })
+  it('explains what to expect and shows the honest no-invention promise', () => {
+    const html = renderToStaticMarkup(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
+    expect(html).toContain('What to expect after an analysis')
+    expect(html).toContain('Impact estimates')
+    expect(html).toContain('Approve / reject')
     expect(html).toContain('never invents a recommendation')
   })
-  it('all-clear state frames a healthy store positively', () => {
-    const html = renderToStaticMarkup(createElement(AllClearState, { summary: summary({ total: 0, usage: { feature: 'ai_recommendations_month', used: 3, limit: 10, remaining: 7 } }) }))
-    expect(html).toContain('All clear')
+  it('embeds the how-rules-work explainer with trust indicators', () => {
+    const html = renderToStaticMarkup(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
+    expect(html).toContain('How rules work')
+    expect(html).toContain('Synced store data')
+    expect(html).toContain('8 deterministic rules')
+    expect(html).toContain('Your decision')
+    expect(html).toContain('Never invents numbers')
+    expect(html).toContain('Grounded in your synced data')
+    expect(html).toContain('You approve every action')
+  })
+  it('all-clear state frames a healthy store positively and offers a fresh run', () => {
+    const html = renderToStaticMarkup(createElement(AllClearState, { summary: summary({ total: 0, usage: { feature: 'ai_recommendations_month', used: 3, limit: 10, remaining: 7 } }), onAnalyze: noop, analyzing: false }))
+    expect(html).toContain('No urgent issues detected')
     expect(html).toContain('healthy store')
     expect(html).toContain('3 recommendations generated this month')
+    expect(html).toContain('Run a fresh analysis')
+  })
+})
+
+describe('sample recommendation preview', () => {
+  it('is clearly labeled SAMPLE and disables its actions with a tooltip', () => {
+    const html = renderToStaticMarkup(createElement(SampleRecommendationPreview))
+    expect(html).toContain('Sample')
+    expect(html).toContain('not your data')
+    expect((html.match(/disabled=""|disabled/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(html).toContain('This is a preview — run an analysis to get real recommendations')
+    expect(html).toContain('$1,240')
+    expect(html).toContain('Revenue at risk')
+  })
+})
+
+describe('analysis progress modal', () => {
+  it('shows staged progress with the real engine steps', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisProgressModal, { step: 2, elapsedMs: 2600, onHide: noop }))
+    expect(html).toContain('ANALYZING YOUR STORE')
+    expect(html).toContain('Scanning products')
+    expect(html).toContain('Analyzing customers')
+    expect(html).toContain('Checking inventory')
+    expect(html).toContain('Reviewing orders')
+    expect(html).toContain('Applying deterministic rules')
+    expect(html).toContain('Composing recommendations')
+    expect(html).toContain('role="progressbar"')
+    expect(html).toContain('Keep browsing')
+  })
+  it('caps the progress bar before the final step so it never lies', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisProgressModal, { step: 5, elapsedMs: 9000, onHide: noop }))
+    expect(html).toContain('aria-valuenow="86"')
+  })
+})
+
+describe('analysis report panel', () => {
+  it('reports exactly what was analyzed with a health grade', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisReportPanel, { report: report(), onDismiss: noop, onNavigateSection: noop, onHow: noop, onRerun: noop, rerunBlocked: false }))
+    expect(html).toContain('Store Health Check Complete')
+    expect(html).toContain('No urgent issues detected')
+    expect(html).toContain('>42<')
+    expect(html).toContain('products')
+    expect(html).toContain('>128<')
+    expect(html).toContain('>913<')
+    expect(html).toContain('8/8')
+    expect(html).toContain('Excellent · 84/100')
+    expect(html).toContain('took 4.2s')
+  })
+  it('lists the per-rule all-clear breakdown when nothing fired', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisReportPanel, { report: report(), onDismiss: noop, onNavigateSection: noop, onHow: noop, onRerun: noop, rerunBlocked: false }))
+    expect(html).toContain('No stockout risks')
+    expect(html).toContain('No churn risks')
+    expect(html).toContain('Cart abandonment is within the normal range')
+    expect(html).toContain('Re-run analysis')
+    expect(html).toContain('View analytics')
+    expect(html).toContain('Set up automation')
+  })
+  it('swaps the breakdown for an honest dedup note when signals were skipped', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisReportPanel, { report: report({ deduplicated: 3 }), onDismiss: noop, onNavigateSection: noop, onHow: noop, onRerun: noop, rerunBlocked: false }))
+    expect(html).toContain('3 signals matched recommendations already open')
+    expect(html).not.toContain('No stockout risks')
+  })
+  it('degrades gracefully without snapshot stats or a health score', () => {
+    const html = renderToStaticMarkup(createElement(AnalysisReportPanel, { report: report({ snapshotStats: null, health: { score: null } }), onDismiss: noop, onNavigateSection: undefined, onHow: noop, onRerun: noop, rerunBlocked: false }))
+    expect(html).toContain('Learning')
+    expect(html).toContain('store data analyzed')
+    expect(html).not.toContain('View analytics')
+  })
+})
+
+describe('rule detail modal', () => {
+  it('explains trigger, impact, data source, and accountable agent', () => {
+    const html = renderToStaticMarkup(createElement(RuleDetailModal, { ruleId: 'STOCKOUT_RISK', plan: 'growth', onClose: noop, onUpgrade: noop }))
+    expect(html).toContain('Stockout Risk')
+    expect(html).toContain('Fires when')
+    expect(html).toContain('7 or fewer days of cover')
+    expect(html).toContain('Revenue at risk before a restock')
+    expect(html).toContain('Uses: Products')
+    expect(html).toContain('Inventory Agent')
+    expect(html).toContain('Got it')
+  })
+  it('keeps plan gating intact for locked agents', () => {
+    const html = renderToStaticMarkup(createElement(RuleDetailModal, { ruleId: 'CROSS_SELL', plan: 'start', onClose: noop, onUpgrade: noop }))
+    expect(html).toContain('Upgrade plan')
+    expect(html).not.toContain('Upgrade to')
+    expect(html).toContain('needs Growth')
+  })
+})
+
+describe('tooltip primitive', () => {
+  it('exposes an accessible label and a tooltip role', () => {
+    const html = renderToStaticMarkup(createElement(Tip, { label: 'What this means', children: createElement('span', null, 'Metric') }))
+    expect(html).toContain('aria-label="What this means"')
+    expect(html).toContain('role="tooltip"')
+    expect(html).toContain('Metric')
   })
 })
 
@@ -132,18 +301,39 @@ describe('decision sheets', () => {
 })
 
 describe('insights sidebar', () => {
-  it('renders donut legend, trend, top rules, and decisions from real summary data', () => {
-    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary(), onFilterAgent: noop }))
+  it('lists every agent with real pending counts and distribution bars', () => {
+    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary(), plan: 'trial', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
     expect(html).toContain('Pending by agent')
     expect(html).toContain('Inventory Agent')
+    expect(html).toContain('Executive Agent')
+    expect(html).toContain('Guards high-value customers')
+  })
+  it('marks plan-locked agents without implying a different upgrade destination', () => {
+    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary(), plan: 'trial', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
+    // Trial unlocks 2 agents; the other five show their required plan chip
+    expect(html).toContain('recs-agent-row-plan')
+    expect(html).toContain('Commander')
+    expect(html).not.toContain('Upgrade to')
+  })
+  it('renders trend metrics and decision quick stats from real summary data', () => {
+    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary(), plan: 'growth', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
     expect(html).toContain('30-day activity')
+    expect(html).toContain('>3</strong> generated')
+    expect(html).toContain('>2</strong> approved')
     expect(html).toContain('Top rules firing')
     expect(html).toContain('Recent decisions')
+    expect(html).toContain('75%') // approval-rate quick stat
   })
-  it('shows honest empties instead of fake chart data', () => {
-    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary({ byAgent: [], byRule: [], recentDecisions: [], generatedTrend: [], counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 } }), onFilterAgent: noop }))
-    expect(html).toContain('No pending recommendations right now')
-    expect(html).toContain('Activity appears after your first analysis run')
+  it('shows educational empties instead of blank space', () => {
+    const empty = summary({ byAgent: [], byRule: [], recentDecisions: [], generatedTrend: [], total: 0, counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 } })
+    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: empty, plan: 'growth', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
+    expect(html).toContain('No recommendations yet — your team reports here after the first analysis.')
+    expect(html).toContain('See sample activity')
+    expect(html).toContain('30 days ago')
+    expect(html).toContain('Rules fire when a pattern in your data crosses its threshold')
+    expect(html).toContain('Approve or reject recommendations to build history')
+    expect(html).toContain('Sample')
+    expect(html).toContain('>0<') // zero triggers shown per rule
   })
 })
 

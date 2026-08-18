@@ -66,6 +66,16 @@ describe('PR46 analyze endpoint', () => {
     expect(payload.data.recommendations.length).toBeGreaterThan(0)
     expect(usage.added[0]).toBe(payload.data.recommendations.length)
   }))
+  it('reports what the engine read — snapshot stats, rules checked, and health', async () => await withServer(() => ({ seed: [] }), async ({ base }) => {
+    const response = await fetch(`${base}/recommendations/analyze`, { method: 'POST', headers: json, body: JSON.stringify({ storeId: 's' }) })
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    // The health-check panel renders these facts verbatim — the workspace
+    // never invents analysis context.
+    expect(payload.data.snapshotStats).toEqual({ products: 1, customers: 1, checkouts: 0, orders: 0, dataFreshAt: '2026-08-01T00:00:00.000Z', currency: 'EUR' })
+    expect(payload.data.rulesChecked).toBe(8)
+    expect(payload.data.health.score).not.toBeNull()
+  }))
   it('blocks generation with an upgrade error at the plan limit', async () => await withServer(() => ({ plan: 'trial', limit: 10, used: 10, seed: [] }), async ({ base }) => {
     const response = await fetch(`${base}/recommendations/analyze`, { method: 'POST', headers: json, body: JSON.stringify({ storeId: 's' }) })
     expect(response.status).toBe(403)

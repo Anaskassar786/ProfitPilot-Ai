@@ -70,6 +70,41 @@ export type EvidenceVerification = Readonly<{ verified: boolean; sha256: string 
 export type BulkDecisionResult = Readonly<{ results: readonly Readonly<{ id: string; ok: boolean; recommendation?: RecommendationView; error?: Readonly<{ code: string; message: string; status: number }> }>[] }>
 export type AnalyzeResult = Readonly<{ storeId: string; recommendations: readonly RecommendationView[]; generatedAt: string }>
 
+// ---------------------------------------------------------------------------
+// Analysis report (POST /recommendations/analyze). Carries everything the
+// health-check panel renders: what was read, what the engine found, and how
+// healthy the store looked — all measured server-side, never invented here.
+// ---------------------------------------------------------------------------
+
+export type AnalysisSnapshotStats = Readonly<{
+  products: number
+  customers: number
+  checkouts: number
+  orders: number
+  dataFreshAt: string | null
+  currency: string | null
+}>
+
+export type AnalysisHealth = Readonly<{
+  score: number | null
+  method?: string
+  components?: readonly Readonly<{ key: string; score: number | null; weight: number; reason: string }>[]
+}>
+
+export type AnalyzeApiResult = Readonly<{
+  storeId: string
+  generatedAt: string
+  recommendations: readonly RecommendationView[]
+  deduplicated: number
+  cacheHits?: number
+  rulesChecked?: number
+  health?: AnalysisHealth | null
+  snapshotStats?: AnalysisSnapshotStats | null
+}>
+
+/** A completed analysis run, as the workspace remembers it for the session. */
+export type AnalysisReport = AnalyzeApiResult & Readonly<{ receivedAt: string; elapsedMs: number }>
+
 export type RecommendationListFilters = Readonly<{
   status?: RecommendationStatus
   agent?: AgentId
@@ -119,6 +154,67 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = {
   CART_ABANDONMENT: 'Catches recent abandoned checkouts still inside the recovery window.',
   CROSS_SELL: 'Surfaces product pairs your customers already buy together.',
   NEW_CUSTOMER_WELCOME: 'Highlights brand-new customers inside the welcome window.',
+}
+
+/** One-line agent roles for educational surfaces (sidebar, empty states). */
+export const AGENT_DESCRIPTIONS: Readonly<Record<AgentId, string>> = {
+  REVENUE_AGENT: 'Watches revenue momentum and calls out swings worth acting on.',
+  INVENTORY_AGENT: 'Protects stock cover and frees cash locked in dead inventory.',
+  CUSTOMER_AGENT: 'Guards high-value customers and times their next purchase.',
+  PRICING_AGENT: 'Finds margin-safe products that can absorb a price test.',
+  CAMPAIGN_AGENT: 'Recovers abandoned carts and welcomes brand-new buyers.',
+  PRODUCT_AGENT: 'Spots product pairs your customers already buy together.',
+  EXECUTIVE_AGENT: 'Summarizes the deterministic store health score for you.',
+}
+
+// ---------------------------------------------------------------------------
+// Rule education — merchant-facing mirror of the engine's ruleCatalog(). The
+// thresholds below track RULE_VERSION 1.x defaults; they describe behavior,
+// they never compute it.
+// ---------------------------------------------------------------------------
+
+/** The data source a rule reads, shown as the "Uses:" badge on rule cards. */
+export const RULE_DATA_SOURCES: Readonly<Record<RuleId, string>> = {
+  STOCKOUT_RISK: 'Products',
+  DEAD_STOCK: 'Products + orders',
+  CHURN_RISK: 'Customers',
+  PRICING_UPLIFT: 'Products',
+  REPEAT_PURCHASE: 'Customers + orders',
+  CART_ABANDONMENT: 'Checkouts',
+  CROSS_SELL: 'Orders',
+  NEW_CUSTOMER_WELCOME: 'Customers',
+}
+
+/** Which agent is accountable for each rule's recommendations. */
+export const RULE_AGENT: Readonly<Record<RuleId, AgentId>> = {
+  STOCKOUT_RISK: 'INVENTORY_AGENT',
+  DEAD_STOCK: 'INVENTORY_AGENT',
+  CHURN_RISK: 'CUSTOMER_AGENT',
+  PRICING_UPLIFT: 'PRICING_AGENT',
+  REPEAT_PURCHASE: 'CUSTOMER_AGENT',
+  CART_ABANDONMENT: 'CAMPAIGN_AGENT',
+  CROSS_SELL: 'PRODUCT_AGENT',
+  NEW_CUSTOMER_WELCOME: 'CAMPAIGN_AGENT',
+}
+
+export type RuleDetail = Readonly<{
+  /** Plain-language trigger condition, e.g. "Fires at ≤ 7 days of cover". */
+  trigger: string
+  /** The impact label the rule prices its findings with. */
+  impact: string
+  /** What "all clear" means for this rule in the health-check breakdown. */
+  healthy: string
+}>
+
+export const RULE_DETAILS: Readonly<Record<RuleId, RuleDetail>> = {
+  STOCKOUT_RISK: { trigger: 'Fires when a product has 7 or fewer days of cover left at its current sales velocity.', impact: 'Revenue at risk before a restock can land.', healthy: 'No stockout risks — every selling product has more than a week of cover.' },
+  DEAD_STOCK: { trigger: 'Fires when a stocked product has had zero sales across the trailing 120 days.', impact: 'Inventory value sitting idle.', healthy: 'No dead stock — nothing on shelves has gone 120 days without a sale.' },
+  CHURN_RISK: { trigger: 'Fires when a customer worth $250+ lifetime value goes quiet for 75+ days.', impact: 'Customer lifetime value at risk.', healthy: 'No churn risks — high-value customers are ordering inside their window.' },
+  PRICING_UPLIFT: { trigger: 'Fires when a product with 55%+ margin still has active daily demand.', impact: 'Modeled 30-day uplift from a measured price test.', healthy: 'No pricing openings — no high-margin product is under-priced with demand today.' },
+  REPEAT_PURCHASE: { trigger: 'Fires when a returning customer is 45+ days past their expected reorder.', impact: 'Modeled value of their next order.', healthy: 'No overdue reorders — repeat customers are inside their cadence.' },
+  CART_ABANDONMENT: { trigger: 'Fires on abandoned checkouts 1–48 hours old that have not recovered.', impact: 'Expected recovery at an 11% win-back rate.', healthy: 'Cart abandonment is within the normal range — nothing winnable is pending.' },
+  CROSS_SELL: { trigger: 'Fires when two products are bought together in 8%+ of their orders.', impact: 'Modeled basket value of recommending the pair.', healthy: 'No cross-sell gaps — no new product pairs cleared the co-purchase threshold.' },
+  NEW_CUSTOMER_WELCOME: { trigger: 'Fires when a first order landed within the last 7 days.', impact: 'First-order value worth protecting.', healthy: 'No unwelcomed customers — every first order is past the welcome window.' },
 }
 
 export const ACTION_TYPE_LABELS: Readonly<Record<ActionType, string>> = {
@@ -283,6 +379,33 @@ export function planRequiredForAgent(agent: AgentId): PlanTier {
 
 export const PLAN_LABELS: Readonly<Record<PlanTier, string>> = { trial: 'Trial', start: 'Start', growth: 'Growth', commander: 'Commander' }
 
+// ---------------------------------------------------------------------------
+// KPI education copy — every headline metric explains itself on hover.
+// ---------------------------------------------------------------------------
+
+export const KPI_TOOLTIPS = {
+  pendingImpact: 'Total modeled revenue value waiting in pending recommendations. Approving is how you capture it.',
+  approvedThisMonth: "Recommendations you've approved this month and the modeled impact they represent.",
+  approvalRate: 'Share of your decisions that were approvals. A higher rate means agents are suggesting things worth doing.',
+  averageDecision: 'Average time between a recommendation being created and your decision. Faster review means fresher impact.',
+  monthlyUsage: 'Newly generated recommendations against your plan limit this month. Reviewing and deciding always stay free.',
+} as const
+
+// ---------------------------------------------------------------------------
+// Store health tone — words for the deterministic 0–100 score returned by
+// the analysis run. The score is computed server-side; this only names it.
+// ---------------------------------------------------------------------------
+
+export type HealthTone = Readonly<{ label: string; hint: string }>
+
+export function healthTone(score: number | null): HealthTone {
+  if (score === null || !Number.isFinite(score)) return { label: 'Learning', hint: 'Sync more closed-period history for a full score' }
+  if (score >= 80) return { label: 'Excellent', hint: 'Store fundamentals look strong across the board' }
+  if (score >= 60) return { label: 'Good', hint: 'Solid footing with room to grow' }
+  if (score >= 40) return { label: 'Fair', hint: 'A few areas deserve attention' }
+  return { label: 'Needs attention', hint: 'The next recommendations will focus on the fixes that matter' }
+}
+
 export type UsageState = Readonly<{ used: number; limit: number | null; remaining: number | null; ratio: number | null; nearLimit: boolean; atLimit: boolean; label: string }>
 
 export function usageState(used: number | null, limit: number | null): UsageState {
@@ -307,6 +430,15 @@ export function usageState(used: number | null, limit: number | null): UsageStat
 
 export type StatusTab = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED'
 export const STATUS_TABS: readonly StatusTab[] = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'EXECUTED']
+
+/** Hover tips explaining what each status tab means (Issue: filter tabs were cryptic). */
+export const STATUS_TAB_TOOLTIPS: Readonly<Record<StatusTab, string>> = {
+  ALL: 'Every recommendation your AI team has generated, in any state.',
+  PENDING: 'Waiting on your decision. Reviewing and deciding never count against your plan.',
+  APPROVED: 'Opportunities you approved. Customer-facing actions stop at drafts you review.',
+  REJECTED: 'Passes and expired items. Rejections teach agents to raise the bar.',
+  EXECUTED: 'Approved actions that ran — including any that failed and need a retry.',
+}
 
 export function statusTabLabel(tab: StatusTab): string { return tab === 'ALL' ? 'All' : STATUS_LABELS[tab] }
 

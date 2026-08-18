@@ -13,6 +13,10 @@ const SORTS: readonly RecommendationSort[] = ['impact', 'confidence', 'created',
 const BULK_DECISION_LIMIT = 20
 const SNOOZE_MAX_HOURS = 7 * 24
 export const AI_RECOMMENDATION_USAGE_FEATURE = 'ai_recommendations_month'
+// Merchant-facing opportunity rules reported by the health-check panel —
+// the eight catalog entries that are not momentum signals or the weekly
+// digest (those are engine extras, not merchant "rules").
+export const MERCHANT_RULE_COUNT = ruleCatalog().filter((entry) => !['REVENUE_SPIKE', 'REVENUE_DROP', 'WEEKLY_HEALTH_DIGEST'].includes(entry.id)).length
 
 export type RecommendationUsageMeter = Readonly<{
   current(storeId: StoreId): Promise<number>
@@ -202,7 +206,17 @@ export function createAiRouter(dependencies: AiRouteDependencies): Router {
       const result = await dependencies.engine.run(snapshot, { agents: unlocked, ...(remaining === null ? {} : { maxRecommendations: remaining }) })
       if (dependencies.usage && result.recommendations.length > 0) await dependencies.usage.add(tenant, result.recommendations.length)
       if (dependencies.audit) await dependencies.audit.record({ storeId: tenant, actorId: actorId(request), action: 'recommendations.analyze', recommendationId: 'batch', detail: { generated: result.recommendations.length } })
-      response.status(200).json(success(result, requestIdFrom(request)))
+      // Analysis transparency: the health-check panel shows exactly what the
+      // engine read, so an all-clear result carries real volume context.
+      const snapshotStats = {
+        products: snapshot.products.length,
+        customers: snapshot.customers.length,
+        checkouts: snapshot.checkouts.length,
+        orders: snapshot.orders.length,
+        dataFreshAt: snapshot.dataFreshAt,
+        currency: snapshot.currency,
+      }
+      response.status(200).json(success({ ...result, rulesChecked: MERCHANT_RULE_COUNT, snapshotStats }, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
 
