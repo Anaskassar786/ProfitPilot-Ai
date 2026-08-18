@@ -1,7 +1,7 @@
 /**
- * PR #49 — AI Executive repositories.
+ * GrowthIQ (formerly "AI Executive") — repositories.
  *
- * PostgreSQL-backed repositories for the nine AI Executive tables plus an
+ * PostgreSQL-backed repositories for the nine GrowthIQ tables plus an
  * in-memory implementation for tests. All Postgres access runs inside
  * `withTenantContext` so the RLS `app.store_id` session is set and every
  * query stays tenant-isolated at the database layer as well as the route
@@ -10,7 +10,7 @@
  * of throwing into the response.
  */
 import { randomUUID } from 'node:crypto'
-import { withTenantContext } from '@profitpilot/db'
+import { dayLabel, withTenantContext } from '@profitpilot/db'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { storeId } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
@@ -542,8 +542,10 @@ export class PostgresExecutiveRepository implements ExecutiveRepository {
       currency: typeof row.currency === 'string' ? row.currency : null,
       dataSource: row.data_source === 'ANONYMIZED_INTERNAL' ? 'ANONYMIZED_INTERNAL' : 'SHOPIFY_PUBLIC',
       sourceLabel: asString(row.source_label),
-      validFrom: asString(row.valid_from),
-      validTo: asString(row.valid_to),
+      // `valid_from` / `valid_to` are `date` columns — pg returns Date objects,
+      // which the string-only `asString` would silently blank out.
+      validFrom: dayLabel(row.valid_from),
+      validTo: dayLabel(row.valid_to),
     }))
   }
 
@@ -1015,8 +1017,8 @@ function mapReport(row: JsonRow): ExecutiveReport {
     id: asString(row.id),
     storeId: storeIdFrom(row.store_id),
     reportType: asString(row.report_type, 'MONTHLY') as ExecutiveReport['reportType'],
-    periodStart: asString(row.report_period_start),
-    periodEnd: asString(row.report_period_end),
+    periodStart: dayLabel(row.report_period_start),
+    periodEnd: dayLabel(row.report_period_end),
     executiveSummary: asString(row.executive_summary),
     content: {
       strategicPosition: typeof content.strategicPosition === 'string' ? content.strategicPosition : null,
@@ -1090,7 +1092,7 @@ function mapDiagnosis(row: JsonRow): ExecutiveHealthDiagnosis {
       return { title: asString(record.title), action: asString(record.action), timeframe: asString(record.timeframe) }
     }),
     diagnosedAt: toIso(row.diagnosed_at) ?? '',
-    nextDiagnosisDue: typeof row.next_diagnosis_due === 'string' ? row.next_diagnosis_due : toIso(row.next_diagnosis_due),
+    nextDiagnosisDue: dayLabel(row.next_diagnosis_due) || (toIso(row.next_diagnosis_due) ?? ''),
   }
 }
 
@@ -1123,7 +1125,7 @@ function mapDecision(row: JsonRow): ExecutiveDecision {
     decisionType: asString(row.decision_type, 'CUSTOM') as ExecutiveDecision['decisionType'],
     title: asString(row.title),
     description: asString(row.description),
-    decisionDate: asString(row.decision_date),
+    decisionDate: dayLabel(row.decision_date),
     predictedOutcome: row.predicted_outcome === null || row.predicted_outcome === undefined ? null : valueRecord(asRecord(row.predicted_outcome)),
     actualOutcome: row.actual_outcome === null || row.actual_outcome === undefined ? null : valueRecord(asRecord(row.actual_outcome)),
     accuracyScore: row.accuracy_score === null || row.accuracy_score === undefined ? null : asNumber(row.accuracy_score),
@@ -1161,8 +1163,8 @@ function mapRoadmap(row: JsonRow): ExecutiveRoadmap {
     id: asString(row.id),
     storeId: storeIdFrom(row.store_id),
     roadmapType: asString(row.roadmap_type, '30_DAY') as ExecutiveRoadmap['roadmapType'],
-    periodStart: asString(row.period_start),
-    periodEnd: asString(row.period_end),
+    periodStart: dayLabel(row.period_start),
+    periodEnd: dayLabel(row.period_end),
     title: asString(row.title),
     milestones: asArray(row.milestones).map((item) => {
       const record = asRecord(item)

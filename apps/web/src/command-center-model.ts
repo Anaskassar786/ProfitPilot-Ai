@@ -306,7 +306,7 @@ export const UPCOMING_MODULES: readonly UpcomingModule[] = [
   },
   {
     id: 'AI_EXECUTIVE',
-    label: 'AI Executive',
+    label: 'GrowthIQ',
     description: 'Strategic boardroom intelligence for big decisions.',
     sampleInsight: 'Quarterly revenue is tracking 9% above plan — a board-ready summary is ready.',
     planTiers: { trial: 'Sample', start: 'Basic', growth: 'Full', commander: '+ Investor PDFs' },

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { QueryResultRow } from 'pg'
 import { storeId } from '@profitpilot/types'
 import type { DatabaseResult, SqlExecutor } from './index.js'
-import { InMemoryAnalyticsRepository, PostgresAnalyticsRepository } from './index.js'
+import { dayLabel, InMemoryAnalyticsRepository, PostgresAnalyticsRepository } from './index.js'
 import type { AnalyticsSnapshot, CatalogProduct } from './index.js'
 
 const store = storeId('store-1')
@@ -75,5 +75,37 @@ describe('Postgres analytics repository', () => {
   it('maps catalog rows from Postgres', async () => {
     const executor: SqlExecutor = { async query<Row extends QueryResultRow>(): Promise<DatabaseResult<Row>> { return { rows: [{ store_id: 'store-1', product_id: 'p1', payload: { title: 'Product' }, synced_at: new Date(100) } as unknown as Row], rowCount: 1 } } }
     expect((await new PostgresAnalyticsRepository(executor).readCatalog(store))[0]?.syncedAt).toBe(100)
+  })
+  it('normalizes pg Date objects for date columns into YYYY-MM-DD strings', async () => {
+    // Regression: `pg` deserializes Postgres `date` columns into JavaScript
+    // `Date` objects (UTC midnight). Downstream consumers call `.slice()` on
+    // `day` (e.g. monthlySeasonality in the executive engine) and crash the
+    // dashboard with "row.day.slice is not a function" in production. The
+    // repository must return the string the snapshot types promise.
+    const asDate = (value: string): Date => new Date(`${value}T00:00:00Z`)
+    const executor: SqlExecutor = { async query<Row extends QueryResultRow>(text: string): Promise<DatabaseResult<Row>> {
+      const rows: readonly Record<string, unknown>[] = text.includes('analytics_revenue') ? [{ store_id: 'store-1', day: asDate('2024-06-01'), gross_revenue: '100.5', discounts: '2', order_count: 1 }] : text.includes('analytics_orders') ? [{ store_id: 'store-1', day: asDate('2024-06-01'), order_count: 1, fulfilled_count: 1, cancelled_count: 0, average_order_value: '100.5' }] : text.includes('product_sales') ? [{ store_id: 'store-1', day: asDate('2024-06-01'), product_id: 'p1', units_sold: 2, gross_revenue: '100.5' }] : text.includes('customer_cohorts') ? [{ store_id: 'store-1', cohort_day: asDate('2024-05-01'), activity_day: asDate('2024-06-01'), customer_count: 1, gross_revenue: '100.5' }] : []
+      return { rows: rows as unknown as readonly Row[], rowCount: rows.length }
+    } }
+    const result = await new PostgresAnalyticsRepository(executor).read(store)
+    for (const row of result.revenue) expect(typeof row.day).toBe('string')
+    for (const row of result.orders) expect(typeof row.day).toBe('string')
+    for (const row of result.productSales) expect(typeof row.day).toBe('string')
+    for (const row of result.customerCohorts) { expect(typeof row.cohortDay).toBe('string'); expect(typeof row.activityDay).toBe('string') }
+    expect(result.revenue[0]?.day).toBe('2024-06-01')
+    // The crash site: string day labels must support the slice arithmetic the
+    // seasonal/velocity engines perform.
+    expect(result.revenue[0]?.day.slice(0, 7)).toBe('2024-06')
+  })
+})
+
+describe('dayLabel', () => {
+  it('converts Date, string, and ISO timestamp inputs to YYYY-MM-DD', () => {
+    expect(dayLabel(new Date('2024-06-01T00:00:00Z'))).toBe('2024-06-01')
+    expect(dayLabel('2024-06-01')).toBe('2024-06-01')
+    expect(dayLabel('2024-06-01T12:34:56Z')).toBe('2024-06-01')
+    expect(dayLabel(null)).toBe('')
+    expect(dayLabel(undefined)).toBe('')
+    expect(dayLabel(new Date('invalid'))).toBe('')
   })
 })

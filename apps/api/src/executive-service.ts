@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive service layer.
+ * GrowthIQ (formerly "AI Executive") — service layer.
  *
  * Orchestrates plan-gated executive features on top of the deterministic
  * engine, the repository, the benchmark ladder, and the AI narrative
@@ -512,7 +512,7 @@ export async function executiveDashboard(context: ExecutiveContext, storeId: Sto
     return await loadExecutiveDashboard(context, storeId)
   } catch (error: unknown) {
     if (isMissingRelationError(error) || (error instanceof Error && isMissingRelationError(error.cause))) {
-      throw new AppError('DEPENDENCY_ERROR', 'AI Executive tables are missing (migration 0022_ai_executive). Restart the API so pending migrations can apply.', 503, { reason: 'SCHEMA_MISSING', migration: '0022' })
+      throw new AppError('DEPENDENCY_ERROR', 'GrowthIQ tables are missing (migration 0022_ai_executive). Restart the API so pending migrations can apply.', 503, { reason: 'SCHEMA_MISSING', migration: '0022' })
     }
     throw error
   }
@@ -537,7 +537,10 @@ async function loadExecutiveDashboard(context: ExecutiveContext, storeId: StoreI
   const detected = detectBenchmarkCategory(catalog)
   const category = preferences.benchmarkCategory !== 'Other' ? preferences.benchmarkCategory : detected ?? 'Other'
   const categorySource = preferences.benchmarkCategory !== 'Other' ? 'PREFERENCE' as const : detected !== null ? 'AUTO_DETECTED' as const : 'DEFAULT' as const
-  const visibleMetrics = gates.benchmarks?.limit ?? 3
+  // A `null` limit means "unlimited" (Commander) — never fall back to a
+  // number, or the top tier silently loses benchmark metrics.
+  const benchmarkLimit = gates.benchmarks?.limit
+  const visibleMetrics = benchmarkLimit === null || benchmarkLimit === undefined ? ladders.length : Math.min(benchmarkLimit, ladders.length)
   const position = buildBenchmarkPosition({ storeId, category, categorySource, ladders, merchantValues: merchantMetricValues(snapshot, analytics, catalog), visibleMetrics })
   const activeRoadmap = roadmaps.find((roadmap) => roadmap.status === 'ACTIVE') ?? null
   const now = context.now()
@@ -617,19 +620,19 @@ export async function runMonthlyReportTick(context: ExecutiveContext, logger: Re
         await context.email.send(recipient, {
           report,
           facts,
-          appUrl: `${context.appUrl()}/?storeId=${encodeURIComponent(storeId)}#/ai-growth-command/executive/reports`,
-          unsubscribeUrl: `${context.appUrl()}/?storeId=${encodeURIComponent(storeId)}#/ai-growth-command/executive/settings`,
+          appUrl: `${context.appUrl()}/?storeId=${encodeURIComponent(storeId)}#/ai-growth-command/growthiq/reports`,
+          unsubscribeUrl: `${context.appUrl()}/?storeId=${encodeURIComponent(storeId)}#/ai-growth-command/growthiq/settings`,
           includePdf,
           pdfBuffer,
         })
         emailed += 1
       } catch (error: unknown) {
         failed += 1
-        logger.error('AI Executive monthly report email failed', { storeId, error: error instanceof Error ? error.message : String(error) })
+        logger.error('GrowthIQ monthly report email failed', { storeId, error: error instanceof Error ? error.message : String(error) })
       }
     } catch (error: unknown) {
       failed += 1
-      logger.error('AI Executive monthly report generation failed', { storeId, error: error instanceof Error ? error.message : String(error) })
+      logger.error('GrowthIQ monthly report generation failed', { storeId, error: error instanceof Error ? error.message : String(error) })
     }
   }
   return { scanned: dueStores.length, due: dueStores.length, generated, emailed, skippedNoEmail, failed }

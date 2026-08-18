@@ -1,8 +1,8 @@
 /**
- * PR #49 — AI Executive deterministic analytics engine.
+ * GrowthIQ (formerly "AI Executive") — deterministic analytics engine.
  *
  * Every health vital sign, risk, opportunity, scenario projection, decision
- * accuracy score, and roadmap progress value in AI Executive is computed
+ * accuracy score, and roadmap progress value in GrowthIQ is computed
  * here from REAL synced store rows (`StoreSnapshot` from the F2 data plane
  * and `AnalyticsSnapshot` from the daily aggregation tables). The AI layer
  * only ever writes narrative language around these numbers — it is never
@@ -266,7 +266,7 @@ export function detectExecutiveRisks(snapshot: StoreSnapshot, analytics: Analyti
       impactCurrency: currency,
       mitigationPlan: [
         { step: 'Isolate the drop by product and channel in analytics.', timeline: '7 days' },
-        { step: 'Run a pricing and promotion scenario in AI Executive before cutting prices.', timeline: '14 days' },
+        { step: 'Run a pricing and promotion scenario in GrowthIQ before cutting prices.', timeline: '14 days' },
       ],
     })
   }
@@ -712,6 +712,21 @@ function sinceDays(now: number, days: number): string {
   return new Date(now - days * DAY_MS).toISOString().slice(0, 10)
 }
 
+/**
+ * Defensive date-label normalization for `date` column values.
+ *
+ * The analytics repository already normalizes `day` to `YYYY-MM-DD` strings,
+ * but this engine also runs in scheduled ticks and tests where rows can arrive
+ * as `Date` objects (the `pg` driver's default for `date` columns). A
+ * non-string `day` here previously crashed the whole dashboard with
+ * "row.day.slice is not a function", so every window comparison and slice in
+ * the executive engine goes through this helper instead.
+ */
+function dayLabel(value: unknown): string {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10)
+  return typeof value === 'string' ? value.slice(0, 10) : ''
+}
+
 function growthRate(current: number, previous: number): Readonly<{ value: number | null; status: VitalSignStatus; trend: ExecutiveVitalSign['trend'] }> {
   if (previous <= 0 || current <= 0) return { value: null, status: 'NEEDS_ATTENTION', trend: 'unknown' }
   const rate = current / previous - 1
@@ -730,7 +745,7 @@ function repeatPurchaseRate(snapshot: StoreSnapshot): Readonly<{ value: number |
 function inventoryTurnover(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): Readonly<{ value: number | null; status: VitalSignStatus; trend: ExecutiveVitalSign['trend']; evidenceInventoryValue: number }> {
   const units30 = new Map<string, number>()
   const last30 = sinceDays(Date.parse(snapshot.asOf), 30)
-  for (const row of analytics.productSales) if (row.day >= last30) units30.set(row.productId, (units30.get(row.productId) ?? 0) + row.unitsSold)
+  for (const row of analytics.productSales) if (dayLabel(row.day) >= last30) units30.set(row.productId, (units30.get(row.productId) ?? 0) + row.unitsSold)
   let cogs30 = 0
   let inventoryValue = 0
   for (const product of snapshot.products) {
@@ -764,8 +779,8 @@ function productDiversity(analytics: AnalyticsSnapshot): Readonly<{ value: numbe
 function orderVelocity(analytics: AnalyticsSnapshot): Readonly<{ value: number | null; status: VitalSignStatus; trend: ExecutiveVitalSign['trend']; last30dOrders: number; previous30dOrders: number }> {
   const last30 = sinceDays(Date.now(), 30)
   const prev30 = sinceDays(Date.now(), 60)
-  const last = analytics.orders.filter((row) => row.day >= last30).reduce((sum, row) => sum + row.orderCount, 0)
-  const previous = analytics.orders.filter((row) => row.day >= prev30 && row.day < last30).reduce((sum, row) => sum + row.orderCount, 0)
+  const last = analytics.orders.filter((row) => dayLabel(row.day) >= last30).reduce((sum, row) => sum + row.orderCount, 0)
+  const previous = analytics.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30).reduce((sum, row) => sum + row.orderCount, 0)
   const growth = growthRate(last, previous)
   return { value: growth.value, status: growth.status, trend: growth.trend, last30dOrders: last, previous30dOrders: previous }
 }
@@ -826,7 +841,11 @@ function customerLtvConcentration(snapshot: StoreSnapshot): Readonly<{ share: nu
 
 function monthlySeasonality(analytics: AnalyticsSnapshot): Readonly<{ cv: number; meanMonthly: number }> | null {
   const byMonth = new Map<string, number>()
-  for (const row of analytics.revenue) byMonth.set(row.day.slice(0, 7), (byMonth.get(row.day.slice(0, 7)) ?? 0) + row.grossRevenue)
+  for (const row of analytics.revenue) {
+    const month = dayLabel(row.day).slice(0, 7)
+    if (!month) continue
+    byMonth.set(month, (byMonth.get(month) ?? 0) + row.grossRevenue)
+  }
   const values = [...byMonth.values()]
   if (values.length < 3) return null
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length
@@ -851,8 +870,8 @@ function stockoutExposure(snapshot: StoreSnapshot): Readonly<{ count: number; mo
 function competitionSignal(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): Readonly<{ orderChange: number; aovChange: number; orderShortfall: number; aov: number }> | null {
   const last30 = sinceDays(Date.now(), 30)
   const prev30 = sinceDays(Date.now(), 60)
-  const last = analytics.orders.filter((row) => row.day >= last30)
-  const previous = analytics.orders.filter((row) => row.day >= prev30 && row.day < last30)
+  const last = analytics.orders.filter((row) => dayLabel(row.day) >= last30)
+  const previous = analytics.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30)
   const lastOrders = last.reduce((sum, row) => sum + row.orderCount, 0)
   const prevOrders = previous.reduce((sum, row) => sum + row.orderCount, 0)
   const lastAov = last.reduce((sum, row) => sum + row.averageOrderValue * row.orderCount, 0) / Math.max(lastOrders, 1)
@@ -891,8 +910,9 @@ function risingMomentum(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): 
   const windows = new Map<string, { last: number; previous: number }>()
   for (const row of analytics.productSales) {
     const entry = windows.get(row.productId) ?? { last: 0, previous: 0 }
-    if (row.day >= last30) entry.last += row.unitsSold
-    else if (row.day >= prev30) entry.previous += row.unitsSold
+    const day = dayLabel(row.day)
+    if (day >= last30) entry.last += row.unitsSold
+    else if (day >= prev30) entry.previous += row.unitsSold
     windows.set(row.productId, entry)
   }
   return [...windows.entries()]

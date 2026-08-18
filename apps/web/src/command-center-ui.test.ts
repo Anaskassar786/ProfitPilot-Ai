@@ -247,7 +247,7 @@ describe('PR49 upcoming AI Growth Command modules', () => {
     expect(UPCOMING_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'INSIGHTS_HUB', 'AI_COMMAND'])
     expect(UPCOMING_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
   })
-  it('marks AI Executive as Requires Growth on lower plans only', () => {
+  it('marks GrowthIQ (formerly AI Executive) as Requires Growth on lower plans only', () => {
     const module = UPCOMING_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
     if (!module) throw new Error('missing module')
     expect(upcomingModuleAccess(module, 'trial')).toMatchObject({ badge: 'requires', badgeLabel: 'Requires Growth', requiresUpgrade: true, upgradePlan: 'growth' })
@@ -274,7 +274,7 @@ describe('PR49 upcoming AI Growth Command modules', () => {
     const module = UPCOMING_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
     if (!module) throw new Error('missing module')
     const html = renderToStaticMarkup(createElement(UpcomingModuleCard, { module, plan: 'start', onOpen: () => undefined, onUpgrade: () => undefined }))
-    expect(html).toContain('AI Executive')
+    expect(html).toContain('GrowthIQ')
     expect(html).toContain('Coming soon')
     expect(html).toContain('Requires Growth')
     expect(html).toContain('AI Employee')

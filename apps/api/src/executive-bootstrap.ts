@@ -1,7 +1,7 @@
 /**
- * PR #49 — AI Executive bootstrap.
+ * GrowthIQ (formerly "AI Executive") — bootstrap.
  *
- * Assembles the executive module from environment configuration and the F9
+ * Assembles the GrowthIQ module from environment configuration and the F9
  * bootstrap: its own OpenRouter client (reusing the shared STORE_COACH_API_KEY
  * with the AI_EXECUTIVE model pair), Postgres repositories, the deterministic
  * snapshot pipeline, plan resolution, the `billing_usage` meter, Brevo SMTP
@@ -90,7 +90,7 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   const email: ExecutiveEmailDelivery = createExecutiveEmailDelivery({
     transport: mailTransport,
     from: env.SMTP_FROM?.trim() || 'reports@profitpilot.example',
-    fromName: env.SMTP_FROM_NAME?.trim() || 'ProfitPilot AI Executive',
+    fromName: env.SMTP_FROM_NAME?.trim() || 'ProfitPilot GrowthIQ',
   })
 
   const pdfEnabled = env.AI_EXECUTIVE_PDF_ENABLED?.trim() !== 'false'
@@ -132,7 +132,7 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   }
 
   const tick = async (): Promise<MonthlyTickResult> => runMonthlyReportTick(context, logger)
-  logger.info('AI Executive AI provider', {
+  logger.info('GrowthIQ AI provider', {
     configured: provider.configured,
     keySource: resolvedKeys.source ?? 'none',
     modelCount: provider.models.length,

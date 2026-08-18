@@ -2,8 +2,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Landmark } from 'lucide-react'
 import { ExecutiveAreaChart, ExecutiveBubbleMap, ExecutiveBullet, ExecutiveConfidenceBar, ExecutiveHeatmap, ExecutiveHorizontalBars, ExecutivePercentileBar, ExecutiveRadialGauge, ExecutiveSparkline, ExecutiveStackedBars, ExecutiveWaterfall } from './executive-charts.js'
-import { ComingSoonPanel, ExecutiveEmptyState, ExecutiveGateOverlay, ExecutiveSkeleton, ExecutiveStatusPill, GrowthCommandTabs } from './executive-ui.js'
+import { ComingSoonPanel, ExecutiveEmptyState, ExecutiveGateOverlay, ExecutiveSkeleton, ExecutiveStatusPill, GrowthCommandTabs, GrowthIqBaselineState, GrowthIqPlanPanel, GrowthIqWelcomeState } from './executive-ui.js'
 import type { ExecutiveGate } from './executive-model.js'
+import { GrowthIqMark, GrowthIqNavIcon, GrowthIqWordmark } from './growthiq-logo.js'
 
 describe('PR49 executive charts render for both themes', () => {
   it('renders the radial gauge with the score and label', () => {
@@ -69,14 +70,85 @@ describe('PR49 plan gating UI', () => {
     expect(empty).toContain('Upgrade Plan')
     expect(empty).not.toContain('Upgrade to')
     const tabs = renderToStaticMarkup(<GrowthCommandTabs active="executive" onNavigate={() => undefined} />)
-    expect(tabs).toContain('AI Executive')
+    expect(tabs).toContain('GrowthIQ')
     expect(tabs).toContain('Store Coach')
     expect(tabs).toContain('Insights Hub')
+    // The rebrand must not leak "Upgrade to <plan>" copy anywhere.
+    expect(tabs).not.toContain('Upgrade to')
   })
 
   it('renders skeletons and coming-soon panels for loading/empty states', () => {
     expect(renderToStaticMarkup(<ExecutiveSkeleton rows={3} label="Loading" />)).toContain('exec-skeleton')
     expect(renderToStaticMarkup(<ComingSoonPanel title="Insights Hub" description="Next release" />)).toContain('Insights Hub')
     expect(renderToStaticMarkup(<ExecutiveStatusPill status="AT_RISK" />)).toContain('AT RISK')
+  })
+})
+
+describe('GrowthIQ brand mark', () => {
+  it('renders the growth-arrow + neural-node logo as an accessible SVG', () => {
+    const html = renderToStaticMarkup(<GrowthIqMark size={24} />)
+    expect(html).toContain('role="img"')
+    expect(html).toContain('aria-label="GrowthIQ"')
+    // The signature is the purple gradient, not the old navy/gold.
+    expect(html).toContain('#8B5CF6')
+    expect(html).toContain('#6366F1')
+    expect(html).not.toContain('#C9A227')
+  })
+  it('provides a nav icon adapter and a wordmark lockup', () => {
+    const nav = renderToStaticMarkup(<GrowthIqNavIcon size={17} strokeWidth={2.25} />)
+    expect(nav).toContain('width="17"')
+    const wordmark = renderToStaticMarkup(<GrowthIqWordmark size={30} />)
+    expect(wordmark).toContain('GrowthIQ')
+  })
+})
+
+describe('GrowthIQ plan-based feature display', () => {
+  it('shows only sample previews unlocked for a trial plan', () => {
+    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} />)
+    expect(html).toContain('Your plan: Trial')
+    expect(html).toContain('Currently available')
+    expect(html).toContain('Sample benchmarks (3 metrics)')
+    expect(html).toContain('One opportunity preview')
+    expect(html).toContain('Available on higher plans')
+    expect(html).toContain('Investor reports (PDF)')
+    expect(html).toContain('Commander')
+    expect(html).toContain('Upgrade Plan')
+    expect(html).not.toContain('Upgrade to')
+  })
+  it('shows every capability unlocked for a commander plan', () => {
+    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="commander" onUpgrade={() => undefined} />)
+    expect(html).toContain('Your plan: Commander')
+    expect(html).toContain('All GrowthIQ features unlocked')
+    expect(html).toContain('Everything in GrowthIQ')
+    expect(html).toContain('Investor reports (PDF)')
+    // A commander plan has nothing locked, so no locked list renders.
+    expect(html).not.toContain('Available on higher plans')
+    expect(html).not.toContain('Upgrade Plan')
+  })
+})
+
+describe('GrowthIQ educational first-run states', () => {
+  it('welcomes new merchants and lists real capabilities without fake data', () => {
+    const html = renderToStaticMarkup(<GrowthIqWelcomeState />)
+    expect(html).toContain('Welcome to GrowthIQ')
+    expect(html).toContain('Board-ready monthly reports')
+    expect(html).toContain('Industry benchmarking')
+    expect(html).toContain('What-if scenario planning')
+    expect(html).toContain('Decision tracking')
+  })
+  it('reports the honest sync baseline when history is thin', () => {
+    const html = renderToStaticMarkup(
+      <GrowthIqBaselineState
+        readiness={{ hasStoreInfo: true, ordersSynced: 15, daysSynced: 20, minOrders: 30, minDays: 60 }}
+        onLogDecision={() => undefined}
+        onViewSample={() => undefined}
+      />,
+    )
+    expect(html).toContain('Building your intelligence baseline')
+    expect(html).toContain('15')
+    expect(html).toContain('30')
+    expect(html).toContain('20')
+    expect(html).toContain('60')
+    expect(html).toContain('Log a business decision')
   })
 })

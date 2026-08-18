@@ -1,5 +1,5 @@
 /**
- * PR #49 — AI Executive language orchestration.
+ * GrowthIQ (formerly "AI Executive") — language orchestration.
  *
  * The AI layer writes narrative ONLY. Every number it is allowed to use
  * comes from `ExecutiveFacts` — real values computed from synced store rows
@@ -110,7 +110,7 @@ function factSheet(facts: ExecutiveFacts): string {
 }
 
 const SYSTEM_PROMPT = [
-  'You are the AI Executive of a Shopify store, writing for its owner in a formal boardroom tone.',
+  'You are GrowthIQ, the growth-intelligence engine of a Shopify store, writing for its owner in a formal boardroom tone.',
   'You write only from the FACT SHEET provided. You may ONLY use numbers that appear in the fact sheet.',
   'Never invent, estimate, or restate a number that is not in the fact sheet. Refer to metrics qualitatively if a number is not provided.',
   'Use formal business language. No emojis, no exclamation marks, no casual phrasing.',
@@ -424,5 +424,5 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 export function executiveAiUnavailableError(): AppError {
-  return new AppError('DEPENDENCY_ERROR', 'AI Executive language provider is not configured', 503)
+  return new AppError('DEPENDENCY_ERROR', 'GrowthIQ language provider is not configured', 503)
 }
