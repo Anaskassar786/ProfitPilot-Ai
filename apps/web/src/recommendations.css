@@ -55,14 +55,17 @@
 .recs-kpi-bars .bar:hover { background: var(--purple); }
 .recs-kpi-bars-label { display: flex; justify-content: space-between; width: 84px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 8.5px; margin-top: 3px; }
 
-/* Progress bar with marker (Approval Rate) */
-.recs-kpi-progress { width: 100%; margin-top: 2px; }
-.recs-kpi-progress-track { position: relative; height: 8px; background: var(--border-soft); border-radius: 4px; overflow: visible; }
-.recs-kpi-progress-fill { height: 100%; background: linear-gradient(90deg, var(--purple), #A78BFA); border-radius: 4px; transition: width 500ms ease; }
-.recs-kpi-progress-marker { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--amber); border-radius: 1px; }
-.recs-kpi-progress-marker::before { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 99px; background: var(--amber); }
+/* Progress bar with zones + marker (Approval Rate) */
+.recs-kpi-progress { position: relative; width: 100%; margin-top: 2px; }
+.recs-kpi-progress-track { position: relative; display: flex; height: 8px; border-radius: 4px; overflow: visible; background: var(--border-soft); }
+.recs-kpi-progress-empty .recs-kpi-progress-track { background: var(--border-soft); }
+.recs-kpi-progress-zone { display: block; height: 100%; }
+.recs-kpi-progress-zone.low { flex: 0 0 40%; background: rgba(239, 68, 68, .55); border-radius: 4px 0 0 4px; }
+.recs-kpi-progress-zone.mid { flex: 0 0 30%; background: rgba(245, 158, 11, .6); }
+.recs-kpi-progress-zone.good { flex: 1; background: rgba(16, 185, 129, .6); border-radius: 0 4px 4px 0; }
+.recs-kpi-progress-marker { position: absolute; top: -3px; width: 3px; height: 14px; background: var(--text); border-radius: 2px; transform: translateX(-50%); }
+.recs-kpi-progress-marker::before { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 7px; height: 7px; border-radius: 99px; background: var(--text); }
 .recs-kpi-progress-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; }
-.recs-kpi-progress-axis .target { color: var(--amber); font-weight: 700; }
 
 /* Speedometer (Avg Time to Decide) */
 .recs-kpi-speedo { width: 96px; height: 56px; display: block; }
@@ -70,7 +73,7 @@
 .recs-kpi-speedo-zone-fast { stroke: var(--green); }
 .recs-kpi-speedo-zone-mid { stroke: var(--amber); }
 .recs-kpi-speedo-zone-slow { stroke: var(--red); }
-.recs-kpi-speedo-needle { stroke-linecap: round; transition: transform 600ms ease; transform-origin: 50px 40px; }
+.recs-kpi-speedo-needle { stroke-linecap: round; }
 .recs-kpi-speedo-label { display: block; text-align: center; margin-top: -4px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; color: var(--text-tertiary); letter-spacing: .04em; text-transform: uppercase; }
 .recs-kpi-speedo-label[data-zone="fast"] { color: var(--green); }
 .recs-kpi-speedo-label[data-zone="mid"] { color: var(--amber); }
@@ -824,7 +827,8 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 20px rgba(15, 23, 42, .04) !important;
 }
 .app-shell.light-mode .recs-topline {
-  background: radial-gradient(circle at 0% 0%, rgba(124, 58, 237, .08), transparent 46%), #FFFFFF !important;
+  background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%) !important;
+  border-color: #C4B5FD !important;
 }
 .app-shell.light-mode .recs-first-run {
   background: radial-gradient(circle at 50% 0%, rgba(124, 58, 237, .08), transparent 46%), #FFFFFF !important;
@@ -900,8 +904,9 @@
 .app-shell.light-mode .recs-card-actions .button.reject { color: #DC2626; border-color: #FCA5A5; background: #fff; }
 .app-shell.light-mode .recs-card-actions .button.reject:hover { color: #fff; background: #DC2626; }
 .app-shell.light-mode .recs-kpi-value.accent { color: #059669 !important; }
-.app-shell.light-mode .recs-story-block { background: #F5F3FF !important; }
-.app-shell.light-mode .recs-story-block.impact { background: #ECFDF5 !important; border-color: #A7F3D0 !important; }
+.app-shell.light-mode .recs-story-block.what { background: #EFF6FF !important; border-color: #BFDBFE !important; }
+.app-shell.light-mode .recs-story-block.impact { background: #F0FDF4 !important; border-color: #BBF7D0 !important; }
+.app-shell.light-mode .recs-story-block.why { background: #FEF3C7 !important; border-color: #FCD34D !important; }
 .app-shell.light-mode .recs-finds { background: #FFFBEB !important; border-color: #FDE68A !important; }
 .app-shell.light-mode .recs-live-dot.on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 8px #059669; }
 .app-shell.light-mode .recs-tip-bubble,
@@ -945,7 +950,7 @@
   transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
 .app-shell.light-mode .recs-kpi:hover {
-  border-color: #C4B5FD !important;
+  border-color: #A78BFA !important;
   box-shadow: 0 4px 8px rgba(124, 58, 237, .08), 0 2px 4px rgba(15, 23, 42, .04) !important;
   transform: translateY(-1px);
 }
@@ -964,15 +969,18 @@
 .app-shell.light-mode .recs-kpi-bars .bar.filled { background: linear-gradient(180deg, #34D399, #059669); }
 .app-shell.light-mode .recs-kpi-bars-label { color: #94A3B8; }
 .app-shell.light-mode .recs-kpi-progress-track { background: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-progress-fill { background: linear-gradient(90deg, #7C3AED, #A78BFA); }
-.app-shell.light-mode .recs-kpi-progress-marker { background: #D97706; }
-.app-shell.light-mode .recs-kpi-progress-marker::before { background: #D97706; }
-.app-shell.light-mode .recs-kpi-progress-axis { color: #94A3B8; }
-.app-shell.light-mode .recs-kpi-progress-axis .target { color: #D97706; }
+.app-shell.light-mode .recs-kpi-progress-zone.low { background: #FCA5A5; }
+.app-shell.light-mode .recs-kpi-progress-zone.mid { background: #FCD34D; }
+.app-shell.light-mode .recs-kpi-progress-zone.good { background: #6EE7B7; }
+.app-shell.light-mode .recs-kpi-progress-marker { background: #0F172A; }
+.app-shell.light-mode .recs-kpi-progress-marker::before { background: #0F172A; }
+.app-shell.light-mode .recs-kpi-progress-axis { color: #64748B; }
 .app-shell.light-mode .recs-kpi-speedo-track { stroke: #F1F5F9; }
 .app-shell.light-mode .recs-kpi-speedo-zone-fast { stroke: #10B981; }
 .app-shell.light-mode .recs-kpi-speedo-zone-mid { stroke: #F59E0B; }
 .app-shell.light-mode .recs-kpi-speedo-zone-slow { stroke: #EF4444; }
+.app-shell.light-mode .recs-kpi-speedo-needle,
+.app-shell.light-mode .recs-kpi-speedo-hub { stroke: #0F172A; fill: #0F172A; }
 
 /* Filter tabs and toolbar */
 .app-shell.light-mode .recs-toolbar { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
@@ -1016,7 +1024,7 @@
 
 /* Agent chips */
 .app-shell.light-mode .recs-chip {
-  background: #FFFFFF;
+  background: #F8FAFC;
   border-color: #E2E8F0;
   color: #475569;
 }
@@ -1082,8 +1090,9 @@
 .app-shell.light-mode .recs-card-meta .recs-entity-chip,
 .app-shell.light-mode .recs-card-meta .recs-rule-chip,
 .app-shell.light-mode .recs-card-meta .recs-action-chip { color: #64748B; }
-.app-shell.light-mode .recs-story-block { background: #F5F3FF !important; border-color: #DDD6FE !important; }
-.app-shell.light-mode .recs-story-block.impact { background: #ECFDF5 !important; border-color: #A7F3D0 !important; }
+.app-shell.light-mode .recs-story-block.what { background: #EFF6FF !important; border-color: #BFDBFE !important; }
+.app-shell.light-mode .recs-story-block.impact { background: #F0FDF4 !important; border-color: #BBF7D0 !important; }
+.app-shell.light-mode .recs-story-block.why { background: #FEF3C7 !important; border-color: #FCD34D !important; }
 .app-shell.light-mode .recs-impact-label { color: #64748B; }
 .app-shell.light-mode .recs-impact-value { color: #059669; }
 .app-shell.light-mode .recs-impact-bar { background: #F1F5F9; }
@@ -1246,8 +1255,9 @@
 .app-shell.light-mode .recs-sample-card:hover { border-color: #F59E0B !important; }
 .app-shell.light-mode .recs-sample-card .recs-card-title { color: #0F172A; }
 .app-shell.light-mode .recs-sample-card .recs-card-reason { color: #475569; }
-.app-shell.light-mode .recs-sample-card .recs-story-block { background: #F5F3FF !important; border-color: #DDD6FE !important; }
-.app-shell.light-mode .recs-sample-card .recs-story-block.impact { background: #ECFDF5 !important; border-color: #A7F3D0 !important; }
+.app-shell.light-mode .recs-sample-card .recs-story-block.what { background: #EFF6FF !important; border-color: #BFDBFE !important; }
+.app-shell.light-mode .recs-sample-card .recs-story-block.impact { background: #F0FDF4 !important; border-color: #BBF7D0 !important; }
+.app-shell.light-mode .recs-sample-card .recs-story-block.why { background: #FEF3C7 !important; border-color: #FCD34D !important; }
 .app-shell.light-mode .recs-sample-chip { background: #FEF3C7; color: #92400E; border-color: #FCD34D; }
 .app-shell.light-mode .recs-sample-chip.floating { background: #FFFFFF; }
 .app-shell.light-mode .recs-sample-actions .button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }

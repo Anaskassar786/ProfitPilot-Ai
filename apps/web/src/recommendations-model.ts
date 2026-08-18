@@ -436,7 +436,12 @@ export function shopDisplayName(shop: string | null | undefined): string | null 
   const raw = shop.replace(/\.myshopify\.com$/i, '').split('.')[0] ?? ''
   const cleaned = raw.replace(/[-_]+/g, ' ').trim()
   if (!cleaned) return null
-  return cleaned.split(/\s+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  // "pilot" is the ProfitPilot brand suffix, not part of the merchant's store
+  // name — drop it so the greeting reads "Good evening, Commander" instead of
+  // "Good evening, Commander Pilot". Any other store name is left intact.
+  const words = cleaned.split(/\s+/).filter((word) => word.toLowerCase() !== 'pilot')
+  const name = words.length > 0 ? words : cleaned.split(/\s+/)
+  return name.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
 // ---------------------------------------------------------------------------

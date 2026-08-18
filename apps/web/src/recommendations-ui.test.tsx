@@ -238,31 +238,40 @@ describe('KPI hero micro-visualizations', () => {
     const barCount = (html.match(/class="bar filled|class="bar "/g) ?? []).length
     expect(barCount).toBe(7)
   })
-  it('renders a progress bar with a "Good" marker for approval rate', () => {
+  it('renders a zoned approval-rate bar with a marker at the current rate', () => {
     const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
     expect(html).toContain('recs-kpi-progress')
     expect(html).toContain('recs-kpi-progress-track')
-    expect(html).toContain('recs-kpi-progress-fill')
+    expect(html).toContain('recs-kpi-progress-zone low')
+    expect(html).toContain('recs-kpi-progress-zone mid')
+    expect(html).toContain('recs-kpi-progress-zone good')
     expect(html).toContain('recs-kpi-progress-marker')
-    expect(html).toContain('70% · Good')
-    expect(html).toContain('0%')
-    expect(html).toContain('100%')
+    expect(html).toContain('Low')
+    expect(html).toContain('Medium')
+    expect(html).toContain('Good')
+    // The marker sits at the current last-30d rate (80%), not a hardcoded target
+    expect(html).toMatch(/left:\s*80%/)
   })
-  it('renders a speedometer with three colored zones for avg time to decide', () => {
+  it('renders a speedometer with three colored zones and a visible needle', () => {
     const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ averageDecisionMs: 5_400_000 }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
     expect(html).toContain('recs-kpi-speedo')
     expect(html).toContain('recs-kpi-speedo-zone-fast')
     expect(html).toContain('recs-kpi-speedo-zone-mid')
     expect(html).toContain('recs-kpi-speedo-zone-slow')
     expect(html).toContain('recs-kpi-speedo-needle')
+    expect(html).toContain('recs-kpi-speedo-hub')
     // 1h 30m (5,400,000ms) lands in the mid zone — "OK"
     expect(html).toContain('data-zone="mid"')
     expect(html).toContain('OK')
   })
-  it('renders the speedometer idle zone when there is no decision history yet', () => {
+  it('renders a neutral needle-free gauge when there is no decision history yet', () => {
     const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ averageDecisionMs: null }), usage: usageState(0, 10), plan: 'trial', onUpgrade: noop }))
     expect(html).toContain('recs-kpi-speedo')
     expect(html).toContain('data-zone="idle"')
+    expect(html).toContain('No data yet')
+    // No needle or hub in the empty state — it must not look like a broken gauge
+    expect(html).not.toContain('recs-kpi-speedo-needle')
+    expect(html).not.toContain('recs-kpi-speedo-hub')
   })
   it('keeps the existing usage ring for monthly usage', () => {
     const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
@@ -277,12 +286,14 @@ describe('KPI hero micro-visualizations', () => {
     expect(html).toContain('recs-kpi-bars')
     expect(html).toContain('recs-kpi-progress')
     expect(html).toContain('recs-kpi-speedo')
-    // The progress fill width is 0% (zero rate) — never a fabricated number
-    expect(html).toMatch(/width:\s*0%/)
+    // Approval rate uses the explicit empty-state track — no zones, no marker
+    expect(html).toContain('recs-kpi-progress-empty')
+    expect(html).not.toContain('recs-kpi-progress-marker')
+    expect(html).not.toContain('recs-kpi-progress-zone')
     // No "filled" bar in the chart
     expect(html).not.toMatch(/class="bar filled"/)
-    // Speed needle is parked at the leftmost (idle) position
-    expect(html).toMatch(/rotate\(-90 50 46\)/)
+    // Speedometer is needle-free in the idle state — never a fabricated angle
+    expect(html).not.toContain('recs-kpi-speedo-needle')
   })
 })
 
