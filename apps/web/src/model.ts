@@ -8,6 +8,7 @@ export type SectionId =
   | 'command-center'
   | 'recommendations'
   | 'automation'
+  | 'insights-hub'
   | 'campaigns'
   | 'copilot'
   | 'reports'

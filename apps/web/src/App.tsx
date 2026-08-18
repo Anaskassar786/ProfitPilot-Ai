@@ -30,6 +30,7 @@ import {
   FileBarChart,
   FileText,
   Filter,
+  FlaskConical,
   Gauge,
   GitBranch,
   Globe2,
@@ -109,6 +110,7 @@ import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
+import { InsightsHubWorkspace } from './insights-hub.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -130,6 +132,12 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'campaigns', label: 'Campaigns', icon: Send, tag: 'Marketing' },
       { id: 'copilot', label: 'Copilot', icon: Sparkles, tag: 'Ask' },
+    ],
+  },
+  {
+    label: 'AI Growth Command',
+    items: [
+      { id: 'insights-hub', label: 'Insights Hub', icon: FlaskConical, tag: 'NEW' },
     ],
   },
   {
@@ -155,6 +163,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'command-center': { title: 'AI Command Center', description: 'Seven agents explain deterministic store evidence. They never invent numbers.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
+  'insights-hub': { title: 'Insights Hub', description: 'Where data becomes wisdom — discoveries, lessons, personas, and Why? answers from your real synced data.', icon: FlaskConical },
   campaigns: { title: 'Campaigns', description: 'Email customers from your verified merchant address after you approve a send.', icon: Send },
   copilot: { title: 'Copilot', description: 'A grounded query surface for the evidence packs built by ProfitPilot.', icon: Sparkles },
   reports: { title: 'Reports', description: 'Closed-period PDF reports built from your real store data.', icon: FileBarChart },
@@ -178,7 +187,12 @@ export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
   // the user expects instead of resetting to the dashboard.
-  const [activePage, setActivePage] = useState<SectionId>(() => (window.location.hash.startsWith('#/recommendations') ? 'recommendations' : 'dashboard'))
+  // PR #50: /ai-growth-command/insights* deep links open Insights Hub; its
+  // sub-tabs manage their own detail segments from there.
+  const [activePage, setActivePage] = useState<SectionId>(() => {
+    if (window.location.pathname.startsWith('/ai-growth-command/insights')) return 'insights-hub'
+    return window.location.hash.startsWith('#/recommendations') ? 'recommendations' : 'dashboard'
+  })
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -345,7 +359,9 @@ export default function App() {
 
   const navigate = (page: SectionId) => {
     if (page === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
-    else if (page !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
+    else if (page === 'insights-hub' && !window.location.pathname.startsWith('/ai-growth-command/insights')) window.history.pushState({}, '', `/ai-growth-command/insights${window.location.search}`)
+    else if (page !== 'automation' && page !== 'insights-hub' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
+    else if (page !== 'automation' && page !== 'insights-hub' && window.location.pathname.startsWith('/ai-growth-command/insights')) window.history.pushState({}, '', `/${window.location.search}`)
     setActivePage(page)
     setMobileOpen(false)
     setCommandOpen(false)
@@ -357,12 +373,18 @@ export default function App() {
     } catch { /* embedded browsers may restrict history access */ }
   }
 
-  // Browser back/forward between the recommendations hash route and other
-  // pages keeps the visible page in sync.
+  // Browser back/forward between the recommendations hash route, the
+  // Insights Hub path route, and other pages keeps the visible page in sync.
   useEffect(() => {
     const onHashNavigation = () => {
+      const onInsights = window.location.pathname.startsWith('/ai-growth-command/insights')
       const onRecommendations = window.location.hash.startsWith('#/recommendations')
-      setActivePage((current) => (onRecommendations ? 'recommendations' : current === 'recommendations' ? 'dashboard' : current))
+      setActivePage((current) => {
+        if (onInsights) return 'insights-hub'
+        if (current === 'insights-hub') return onRecommendations ? 'recommendations' : 'dashboard'
+        if (onRecommendations) return 'recommendations'
+        return current === 'recommendations' ? 'dashboard' : current
+      })
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -551,6 +573,7 @@ function PageRouter({
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
+  if (active === 'insights-hub') return <PageLayout eyebrow="AI Growth Command" title="Insights Hub" description="Where data becomes wisdom — discoveries, lessons, patterns, personas, and Why? answers computed from your real synced store data."><InsightsHubWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns') return <CampaignsPage onPhaseGate={onPhaseGate} context={context} onToast={onToast} />
   if (active === 'copilot') return <PageLayout eyebrow="Grounded questions" title="Copilot" description="A closed ten-intent grammar answers from tenant-scoped evidence packs."><CopilotWorkspace context={context} /></PageLayout>

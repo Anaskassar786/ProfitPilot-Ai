@@ -20,7 +20,17 @@ describe('database configuration', () => {
 
 describe('F0 migrations', () => {
   it('contains core tenancy migrations', () => expect(F0_MIGRATIONS.map((migration) => migration.id)).toEqual(['0001', '0002']))
-  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0016', '0017', '0018', '0019', '0020']))
+  it('returns unapplied migrations in order', () => expect(pendingMigrations(['0001']).map((migration) => migration.id)).toEqual(['0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0016', '0017', '0018', '0019', '0020', '0021']))
+  it('registers the Insights Hub migration with tenant RLS on all twelve tables', () => {
+    const sql = readFileSync('migrations/0021_insights_hub.sql', 'utf8')
+    for (const table of ['insights_discoveries', 'insights_lessons', 'insights_patterns', 'insights_personas', 'insights_investigations', 'insights_trends', 'insights_comparisons', 'insights_knowledge_base', 'insights_timeline_events', 'insights_predictions', 'insights_preferences', 'insights_api_usage']) {
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS ${table}`)
+      expect(sql).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`)
+      expect(sql).toContain(`${table}_tenant_isolation`)
+    }
+    expect((sql.match(/WITH CHECK/g) ?? []).length).toBe(12)
+    expect(sql).toContain('REFERENCES stores(id) ON DELETE CASCADE')
+  })
   it('adds an explicit stores WITH CHECK policy for tenant-safe writes', () => {
     const sql = readFileSync('migrations/0013_stores_rls_with_check.sql', 'utf8')
     expect(sql).toContain('CREATE POLICY stores_tenant_isolation ON stores')

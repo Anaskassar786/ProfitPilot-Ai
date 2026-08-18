@@ -6,6 +6,7 @@ import type { CustomerDetail, CustomerInsightFeature, CustomerInsightsResult, Cu
 import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPageResult, InventoryQuery } from './inventory-model.js'
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { AnalyticsInsights } from './analytics-model.js'
+import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult, DiscoveryStatus, GeneratedDiscoveries, InsightComparison, InsightDiscovery, InsightInvestigation, InsightKnowledgeEntry, InsightLesson, InsightPattern, InsightPersona, InsightPrediction, InsightTrend, InsightsDataReadiness, InsightsOverview, InsightsPreferences, InsightsUsageSummary, KnowledgeEntryType, MarketTrendsResult, PersonaCustomersResult, PersonaListResult, PredictionHorizon, PredictionListResult, TimelineEntityType, TimelineResult, TrendListResult } from './insights-hub-model.js'
 import type { AgentActivityItem, AgentOverview, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
@@ -483,6 +484,86 @@ export function setMerchantFlags(stepUpToken: string, flags: MerchantFlags, fetc
 export function fetchOpsQueue(stepUpToken: string, fetcher: Fetcher = fetch): Promise<QueueSnapshot> { return requestJson('/admin/ops/queue', { headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 export function fetchOpsMetrics(stepUpToken: string, fetcher: Fetcher = fetch): Promise<OpsMetrics> { return requestJson('/admin/ops/metrics', { headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
 export function retryOpsJob(stepUpToken: string, jobId: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson(`/admin/ops/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', headers: { 'x-admin-step-up': stepUpToken } }, fetcher) }
+
+/* ── Insights Hub (PR #50) ─────────────────────────────────────────────── */
+
+const insightsQuery = (storeId: string, extra = ''): string => `storeId=${encodeURIComponent(storeId)}${extra}`
+const insightsBody = (storeId: string, extra: Readonly<Record<string, unknown>> = {}): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, ...extra }) })
+const insightsPatch = (storeId: string, extra: Readonly<Record<string, unknown>>): RequestInit => ({ method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, ...extra }) })
+const insightsDelete = (storeId: string): RequestInit => ({ method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) })
+
+export function fetchInsightsOverview(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsOverview> { return requestJson<InsightsOverview>(`/insights/overview?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightsUsage(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsUsageSummary> { return requestJson<InsightsUsageSummary>(`/insights/usage?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightsCostSummary(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ estimatedCostUsd: number; dailyBudgetUsd: number; models: readonly string[]; note: string }>> { return requestJson(`/insights/cost-summary?${insightsQuery(storeId)}`, {}, fetcher) }
+
+export function fetchDiscoveryFeed(storeId: string, fetcher: Fetcher = fetch): Promise<DiscoveryFeedResult> { return requestJson<DiscoveryFeedResult>(`/insights/discoveries/feed?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchDiscoveries(storeId: string, filters: Readonly<{ status?: string; category?: string; limit?: number; cursor?: number }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightDiscovery[] }>> {
+  const extra = `${filters.status ? `&status=${encodeURIComponent(filters.status)}` : ''}${filters.category ? `&category=${encodeURIComponent(filters.category)}` : ''}${filters.limit ? `&limit=${filters.limit}` : ''}${filters.cursor ? `&cursor=${filters.cursor}` : ''}`
+  return requestJson(`/insights/discoveries?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+export function generateInsightsDiscoveries(storeId: string, fetcher: Fetcher = fetch): Promise<GeneratedDiscoveries> { return requestJson<GeneratedDiscoveries>('/insights/discoveries/generate', insightsBody(storeId), fetcher) }
+export function fetchInsightDiscovery(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightDiscovery> { return requestJson<InsightDiscovery>(`/insights/discoveries/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function setInsightDiscoveryStatus(storeId: string, id: string, status: DiscoveryStatus, fetcher: Fetcher = fetch): Promise<InsightDiscovery> { return requestJson<InsightDiscovery>(`/insights/discoveries/${encodeURIComponent(id)}/status`, insightsBody(storeId, { status }), fetcher) }
+
+export function fetchRecommendedLessons(storeId: string, fetcher: Fetcher = fetch): Promise<readonly InsightLesson[]> { return requestJson<readonly InsightLesson[]>(`/insights/lessons/recommended?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightLessons(storeId: string, category?: string, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightLesson[] }>> { return requestJson(`/insights/lessons?${insightsQuery(storeId, category ? `&category=${encodeURIComponent(category)}` : '')}`, {}, fetcher) }
+export function generateInsightLessons(storeId: string, category: string | null = null, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; lessons: readonly InsightLesson[] }>> { return requestJson('/insights/lessons/generate', insightsBody(storeId, category ? { category } : {}), fetcher) }
+export function fetchInsightLesson(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function markInsightLessonRead(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/read`, insightsBody(storeId), fetcher) }
+export function rateInsightLesson(storeId: string, id: string, rating: number, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/rate`, insightsBody(storeId, { rating }), fetcher) }
+export function bookmarkInsightLesson(storeId: string, id: string, bookmarked: boolean, fetcher: Fetcher = fetch): Promise<InsightLesson> { return requestJson<InsightLesson>(`/insights/lessons/${encodeURIComponent(id)}/bookmark`, insightsBody(storeId, { bookmarked }), fetcher) }
+
+export function fetchInsightPatterns(storeId: string, type?: string, fetcher: Fetcher = fetch): Promise<Readonly<{ plan: string; viewOnly: boolean; patterns: readonly InsightPattern[] }>> { return requestJson(`/insights/patterns?${insightsQuery(storeId, type ? `&type=${encodeURIComponent(type)}` : '')}`, {}, fetcher) }
+export function detectInsightPatterns(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ detected: number; patterns: readonly InsightPattern[] }>> { return requestJson('/insights/patterns/detect', insightsBody(storeId), fetcher) }
+export function setInsightPatternAlerts(storeId: string, id: string, enabled: boolean, fetcher: Fetcher = fetch): Promise<InsightPattern> { return requestJson<InsightPattern>(`/insights/patterns/${encodeURIComponent(id)}/alert`, insightsBody(storeId, { enabled }), fetcher) }
+export function invalidateInsightPattern(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ invalidated: boolean }>> { return requestJson(`/insights/patterns/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function fetchInsightPersonas(storeId: string, fetcher: Fetcher = fetch): Promise<PersonaListResult> { return requestJson<PersonaListResult>(`/insights/personas?${insightsQuery(storeId)}`, {}, fetcher) }
+export function generateInsightPersonas(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; personas: readonly InsightPersona[]; readiness: InsightsDataReadiness }>> { return requestJson('/insights/personas/generate', insightsBody(storeId), fetcher) }
+export function fetchInsightPersona(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightPersona> { return requestJson<InsightPersona>(`/insights/personas/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightPersonaCustomers(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<PersonaCustomersResult> { return requestJson<PersonaCustomersResult>(`/insights/personas/${encodeURIComponent(id)}/customers?${insightsQuery(storeId)}`, {}, fetcher) }
+
+export function askInsightsWhy(storeId: string, question: string, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>('/insights/investigations', insightsBody(storeId, { question }), fetcher) }
+export function fetchInsightInvestigations(storeId: string, limit = 20, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightInvestigation[] }>> { return requestJson(`/insights/investigations?${insightsQuery(storeId, `&limit=${limit}`)}`, {}, fetcher) }
+export function fetchInsightInvestigation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>(`/insights/investigations/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function rateInsightInvestigation(storeId: string, id: string, rating: number, fetcher: Fetcher = fetch): Promise<InsightInvestigation> { return requestJson<InsightInvestigation>(`/insights/investigations/${encodeURIComponent(id)}/rate`, insightsBody(storeId, { rating }), fetcher) }
+
+export function fetchBusinessTrends(storeId: string, fetcher: Fetcher = fetch): Promise<TrendListResult> { return requestJson<TrendListResult>(`/insights/trends/business?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchMarketTrends(storeId: string, fetcher: Fetcher = fetch): Promise<MarketTrendsResult> { return requestJson<MarketTrendsResult>(`/insights/trends/market?${insightsQuery(storeId)}`, {}, fetcher) }
+export function fetchInsightTrends(storeId: string, type = 'all', fetcher: Fetcher = fetch): Promise<TrendListResult> { return requestJson<TrendListResult>(`/insights/trends?${insightsQuery(storeId, `&type=${encodeURIComponent(type)}`)}`, {}, fetcher) }
+export function setInsightTrendAlerts(storeId: string, id: string, enabled: boolean, fetcher: Fetcher = fetch): Promise<InsightTrend> { return requestJson<InsightTrend>(`/insights/trends/${encodeURIComponent(id)}/alert`, insightsBody(storeId, { enabled }), fetcher) }
+
+export function createInsightComparison(storeId: string, comparisonType: ComparisonType, subjectA: string, subjectB: string, fetcher: Fetcher = fetch): Promise<InsightComparison> { return requestJson<InsightComparison>('/insights/comparisons', insightsBody(storeId, { comparisonType, subjectA, subjectB }), fetcher) }
+export function fetchInsightComparisons(storeId: string, type?: string, limit = 20, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightComparison[] }>> { return requestJson(`/insights/comparisons?${insightsQuery(storeId, `${type ? `&type=${encodeURIComponent(type)}` : ''}&limit=${limit}`)}`, {}, fetcher) }
+export function fetchInsightComparison(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<InsightComparison> { return requestJson<InsightComparison>(`/insights/comparisons/${encodeURIComponent(id)}?${insightsQuery(storeId)}`, {}, fetcher) }
+export function deleteInsightComparison(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(`/insights/comparisons/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function searchInsightsKnowledge(storeId: string, q: string, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightKnowledgeEntry[] }>> { return requestJson('/insights/knowledge/search', insightsBody(storeId, { q }), fetcher) }
+export function fetchInsightsKnowledge(storeId: string, filters: Readonly<{ type?: string; tag?: string; limit?: number }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ items: readonly InsightKnowledgeEntry[] }>> {
+  const extra = `${filters.type ? `&type=${encodeURIComponent(filters.type)}` : ''}${filters.tag ? `&tag=${encodeURIComponent(filters.tag)}` : ''}${filters.limit ? `&limit=${filters.limit}` : ''}`
+  return requestJson(`/insights/knowledge?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+export function createInsightsKnowledge(storeId: string, entry: Readonly<{ entryType?: KnowledgeEntryType; title: string; contentMarkdown?: string; tags?: readonly string[]; linkedInsights?: readonly string[] }>, fetcher: Fetcher = fetch): Promise<InsightKnowledgeEntry> { return requestJson<InsightKnowledgeEntry>('/insights/knowledge', insightsBody(storeId, { ...entry }), fetcher) }
+export function updateInsightsKnowledge(storeId: string, id: string, patch: Readonly<{ title?: string; contentMarkdown?: string; tags?: readonly string[] }>, fetcher: Fetcher = fetch): Promise<InsightKnowledgeEntry> { return requestJson<InsightKnowledgeEntry>(`/insights/knowledge/${encodeURIComponent(id)}`, insightsPatch(storeId, { ...patch }), fetcher) }
+export function deleteInsightsKnowledge(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(`/insights/knowledge/${encodeURIComponent(id)}`, insightsDelete(storeId), fetcher) }
+
+export function fetchInsightsTimeline(storeId: string, options: Readonly<{ days?: number; type?: TimelineEntityType }> = {}, fetcher: Fetcher = fetch): Promise<TimelineResult> {
+  const extra = `${options.days ? `&days=${options.days}` : ''}${options.type ? `&type=${encodeURIComponent(options.type)}` : ''}`
+  const path = options.type ? '/insights/timeline/filter' : '/insights/timeline'
+  return requestJson<TimelineResult>(`${path}?${insightsQuery(storeId, extra)}`, {}, fetcher)
+}
+
+export function fetchInsightPredictions(storeId: string, horizon?: PredictionHorizon, fetcher: Fetcher = fetch): Promise<PredictionListResult> { return requestJson<PredictionListResult>(`/insights/predictions?${insightsQuery(storeId, horizon ? `&horizon=${encodeURIComponent(horizon)}` : '')}`, {}, fetcher) }
+export function generateInsightPredictions(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ generated: number; predictions: readonly InsightPrediction[] }>> { return requestJson('/insights/predictions/generate', insightsBody(storeId), fetcher) }
+export function validateInsightPrediction(storeId: string, id: string, actualValue: number, fetcher: Fetcher = fetch): Promise<InsightPrediction> { return requestJson<InsightPrediction>(`/insights/predictions/${encodeURIComponent(id)}/validate`, insightsBody(storeId, { actualValue }), fetcher) }
+
+export function fetchInsightsPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<InsightsPreferences> { return requestJson<InsightsPreferences>(`/insights/preferences?${insightsQuery(storeId)}`, {}, fetcher) }
+export function updateInsightsPreferences(storeId: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<InsightsPreferences> { return requestJson<InsightsPreferences>('/insights/preferences', insightsPatch(storeId, patch), fetcher) }
+
+export function fetchInsightsApiAccess(storeId: string, fetcher: Fetcher = fetch): Promise<ApiAccessStatus> { return requestJson<ApiAccessStatus>(`/insights/api-access/usage?${insightsQuery(storeId)}`, {}, fetcher) }
+export function generateInsightsApiKey(storeId: string, fetcher: Fetcher = fetch): Promise<ApiKeyReveal> { return requestJson<ApiKeyReveal>('/insights/api-access/generate-key', insightsBody(storeId), fetcher) }
+export function regenerateInsightsApiKey(storeId: string, fetcher: Fetcher = fetch): Promise<ApiKeyReveal> { return requestJson<ApiKeyReveal>('/insights/api-access/regenerate', insightsBody(storeId), fetcher) }
+export function fetchInsightsApiDocs(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ specUrl: string; authentication: string; rateLimit: Readonly<{ perHour: number; perDay: number }>; endpoints: readonly string[] }>> { return requestJson(`/insights/api-access/documentation?${insightsQuery(storeId)}`, {}, fetcher) }
 
 function embeddedSessionToken(): string | null {
   if (typeof window === 'undefined') return null

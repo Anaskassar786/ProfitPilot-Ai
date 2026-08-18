@@ -1,5 +1,6 @@
 export * from './agents.js'
 export * from './approval.js'
+export * from './insights-hub.js'
 export * from './attribution.js'
 export * from './calibration.js'
 export * from './context.js'
