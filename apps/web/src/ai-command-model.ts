@@ -148,6 +148,13 @@ export function usagePercent(usage: AiCommandUsage | null): number {
   return Math.min(100, Math.round((usage.commandsUsed / usage.limit) * 100))
 }
 
+/** Whole hours until the daily command limit resets (UTC midnight). */
+export function hoursUntilDailyReset(now = new Date()): number {
+  const next = new Date(now)
+  next.setUTCHours(24, 0, 0, 0)
+  return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 3_600_000))
+}
+
 export function planLabel(plan: AiCommandPlan): string {
   if (plan === 'commander') return 'Commander'
   if (plan === 'growth') return 'Growth'

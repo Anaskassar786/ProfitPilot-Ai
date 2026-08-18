@@ -274,6 +274,26 @@
   border: 1px solid rgba(239, 68, 68, .3);
   background: rgba(239, 68, 68, .08);
 }
+.aic-banner.limit {
+  color: #FDE68A;
+  border: 1px solid rgba(245, 158, 11, .35);
+  background: rgba(245, 158, 11, .1);
+  align-items: flex-start;
+}
+.app-shell.light-mode .aic-banner.limit {
+  color: #92400E;
+  border-color: #FDE68A;
+  background: #FFFBEB;
+}
+.aic-limit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.aic-limit-copy strong { font-size: 13px; font-weight: 650; }
+.aic-limit-copy span { font-size: 12px; opacity: .9; }
 .app-shell.light-mode .aic-banner.error {
   color: #B91C1C;
   border-color: rgba(220, 38, 38, .25);

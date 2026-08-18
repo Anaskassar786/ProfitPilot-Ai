@@ -350,3 +350,71 @@
 .cc-how-it-works li strong { flex-shrink: 0; color: var(--purple); font-family: var(--font-mono); font-size: 12px; }
 .cc-how-it-works li span { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 .app-shell.light-mode .cc-how-it-works li { background: #FFFFFF; }
+
+/* ── Light theme contrast hardening (WCAG AA) ── */
+.app-shell.light-mode .cc-kpi,
+.app-shell.light-mode .cc-agent-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.app-shell.light-mode .cc-kpi:hover,
+.app-shell.light-mode .cc-agent-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+.app-shell.light-mode .cc-agent-card {
+  background-image: none;
+}
+.app-shell.light-mode .cc-agent-card.locked {
+  background: #F8FAFC;
+  border-style: dashed;
+  border-color: #CBD5E1;
+}
+.app-shell.light-mode .cc-section-header h2,
+.app-shell.light-mode .cc-empty h2,
+.app-shell.light-mode .cc-drawer-header h2 {
+  color: #111827;
+}
+.app-shell.light-mode .cc-section-header p,
+.app-shell.light-mode .cc-empty p {
+  color: #4B5563;
+}
+.app-shell.light-mode .cc-agent-tagline,
+.app-shell.light-mode .cc-agent-stats span,
+.app-shell.light-mode .cc-confidence {
+  color: #4B5563;
+}
+.app-shell.light-mode .cc-status-pill.active {
+  color: #166534;
+  background: #DCFCE7;
+  border: 1px solid #BBF7D0;
+}
+.app-shell.light-mode .cc-status-pill.paused,
+.app-shell.light-mode .cc-plan-badge {
+  color: #92400E;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+}
+.app-shell.light-mode .cc-agent-icon.active { background: #DCFCE7; color: #059669; }
+.app-shell.light-mode .cc-agent-icon.paused { background: #FEF3C7; color: #D97706; }
+.app-shell.light-mode .cc-feed { border: 1px solid #E2E8F0; }
+.app-shell.light-mode .cc-feed-row:hover { background: #F1F5F9; }
+.app-shell.light-mode .cc-menu-list {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+.app-shell.light-mode .cc-kpi-icon.health { background: #DCFCE7; color: #059669; }
+.app-shell.light-mode .cc-kpi-icon.actions { background: #FEF3C7; color: #D97706; }
+.app-shell.light-mode .cc-kpi-icon.insights { background: #EDE9FE; color: #7C3AED; }
+.app-shell.light-mode .cc-kpi-icon.agents { background: #DBEAFE; color: #2563EB; }
+.app-shell.light-mode .cc-agent-dots i.locked { background: #CBD5E1; }
+.app-shell.light-mode .cc-button.secondary {
+  color: #111827;
+  border-color: #E2E8F0;
+  background: #FFFFFF;
+}
+.app-shell.light-mode .cc-button.secondary:hover {
+  border-color: #7C3AED;
+}
