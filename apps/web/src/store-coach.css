@@ -59,39 +59,51 @@
 }
 
 .app-shell.light-mode .coach-workspace {
+  background: #F8FAFC;
   --c-purple: #7C3AED;
   --c-purple-strong: #6D28D9;
-  --c-purple-soft: rgba(124, 58, 237, 0.10);
-  /* Darker warm tones than the raw brand ramp so 12px text passes WCAG AA on white */
-  --c-orange: #C2410C;
+  --c-purple-soft: #F3E8FF;
+  --c-orange: #EA580C;
   --c-orange-soft: rgba(234, 88, 12, 0.10);
   --c-green: #059669;
   --c-green-soft: rgba(5, 150, 105, 0.11);
   --c-red: #DC2626;
   --c-red-soft: rgba(220, 38, 38, 0.08);
-  --c-gold: #B45309;
-  --c-gold-soft: rgba(217, 119, 6, 0.11);
+  --c-gold: #D97706;
+  --c-gold-soft: #FEF3C7;
   --c-blue: #2563EB;
   --c-blue-soft: rgba(37, 99, 235, 0.09);
   --c-card: #FFFFFF;
   --c-card-2: #FAFBFC;
   --c-card-3: #F3F4F6;
-  --c-border: #E5E7EB;
-  --c-border-strong: #D1D5DB;
-  --c-text: #111827;
-  --c-text-2: #4B5563;
-  --c-text-3: #6B7280;
+  --c-border: #E2E8F0;
+  --c-border-strong: #CBD5E1;
+  --c-text: #0F172A;
+  --c-text-2: #475569;
+  --c-text-3: #64748B;
   --coach-chart-stroke: #7C3AED;
   --coach-chart-fill-top: #8B5CF6;
-  --coach-chart-grid: #E5E7EB;
-  --coach-chart-text: #6B7280;
+  --coach-chart-grid: #E2E8F0;
+  --coach-chart-text: #64748B;
   --coach-chart-comparison: #0891B2;
-  --c-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
-  --c-shadow-lift: 0 8px 16px rgba(16, 24, 40, 0.07), 0 20px 36px rgba(124, 58, 237, 0.08);
-  --c-hero: radial-gradient(120% 160% at 0% 0%, rgba(124, 58, 237, 0.09), transparent 52%),
-            radial-gradient(90% 130% at 100% 100%, rgba(234, 88, 12, 0.06), transparent 55%),
-            linear-gradient(165deg, #FFFFFF, #FAFBFC);
-  --c-inner: #FAFBFC;
+  --c-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --c-shadow-lift: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --c-hero: radial-gradient(120% 160% at 0% 0%, rgba(124, 58, 237, 0.08), transparent 52%),
+            radial-gradient(90% 130% at 100% 100%, rgba(234, 88, 12, 0.05), transparent 55%),
+            linear-gradient(165deg, #FFFFFF, #F8FAFC);
+  --c-inner: #FFFFFF;
+}
+
+.app-shell.light-mode .coach-locked-note,
+.app-shell.light-mode .coach-plan-teaser {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+.app-shell.light-mode .coach-locked-note .text-button,
+.app-shell.light-mode .coach-plan-teaser .text-button,
+.app-shell.light-mode .coach-workspace .text-button {
+  color: #7C3AED;
 }
 
 /* ── Layout ────────────────────────────────────────────────────────────── */

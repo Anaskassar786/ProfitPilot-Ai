@@ -288,9 +288,12 @@ export function greetingForDaypart(part: CoachDaypart): string {
 export function merchantDisplayName(shop: string | null): string | null {
   if (!shop) return null
   const subdomain = shop.toLowerCase().replace(/\.myshopify\.com$/, '').split('.')[0] ?? ''
-  const words = subdomain.split(/[-_]+/).filter((word) => word.length > 0 && !/^\d+$/.test(word)).slice(0, 3)
+  if (subdomain === 'commander-pilot' || subdomain === 'commander_pilot' || subdomain === 'pilot') return 'Commander'
+  const words = subdomain.split(/[-_]+/).filter((word) => word.length > 0 && !/^\d+$/.test(word) && word.toLowerCase() !== 'pilot').slice(0, 3)
   if (words.length === 0) return null
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  const formatted = words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  if (formatted === 'Commander Pilot') return 'Commander'
+  return formatted
 }
 
 // ── Streak milestones (mirror of the backend STREAK badge ladder) ──────────
