@@ -89,7 +89,8 @@ import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCa
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
-import { JarvisExperience, ReportsWorkspace } from './f8.js'
+import { JarvisExperience } from './f8.js'
+import { ReportsWorkspace } from './reports.js'
 import { AdminOpsWorkspace } from './f9.js'
 import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
 import { PASSIVE_RECOMMENDATION_INTERVAL_MS, PASSIVE_SNOOZE_MS, passiveRecommendationsAllowed, selectPassiveRecommendation } from './passive-jarvis.js'
@@ -183,7 +184,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: AiCommandIcon },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
-  reports: { title: 'Reports', description: 'Closed-period PDF reports built from your real store data.', icon: FileBarChart },
+  reports: { title: 'Business Reports', description: 'Generate professional reports from your real store data.', icon: FileBarChart },
   exports: { title: 'Exports', description: 'Export real synced records when the data plane has something to deliver.', icon: Download },
   support: { title: 'Support tickets', description: 'A direct, auditable line to the ProfitPilot team.', icon: LifeBuoy },
   billing: { title: 'Billing', description: 'Your trial, plan, usage, and verified AI return on this store.', icon: WalletCards },
@@ -612,7 +613,7 @@ function PageRouter({
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'reports') return <PageLayout eyebrow="Closed-period PDFs" title="Reports" description="Closed-period PDF reports, deterministic forecast methods, and honest delivery status."><ReportsWorkspace context={context} /></PageLayout>
+  if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
   if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} />
