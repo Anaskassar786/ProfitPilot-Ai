@@ -634,8 +634,9 @@ export function formatDayLabel(day: string): string {
 }
 
 /** Evidence panels render only primitive pairs — nested JSON is summarized. */
-export function evidenceRows(evidence: InsightsJsonObject, max = 6): readonly Readonly<{ label: string; value: string }>[] {
+export function evidenceRows(evidence: InsightsJsonObject | null | undefined, max = 6): readonly Readonly<{ label: string; value: string }>[] {
   const rows: { label: string; value: string }[] = []
+  if (typeof evidence !== 'object' || evidence === null) return rows
   for (const [key, value] of Object.entries(evidence)) {
     if (rows.length >= max) break
     const label = key.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -731,23 +732,395 @@ export const DISCOVERY_TYPE_HEADLINES: Readonly<Record<DiscoveryType, string>> =
   BEHAVIOR: 'Behaviour observed',
 }
 
-export type PatternAiStat = Readonly<{ id: string; label: string; value: string; caption: string }>
+/**
+ * Micro-visualization kind for a hero tile. Every tile draws a *different*
+ * shape so the header reads as six distinct signals rather than a grid of
+ * numbers — and every shape is unique to PatternAI inside this app.
+ */
+export type PatternAiStatVisual = 'bubbles' | 'network' | 'cohort' | 'answers' | 'arrows' | 'wave'
+
+export type PatternAiStat = Readonly<{
+  id: string
+  label: string
+  value: string
+  caption: string
+  /** Raw count behind `value`; null while the overview has not answered yet. */
+  count: number | null
+  visual: PatternAiStatVisual
+  /** What the tile is doing while it is still empty (never a fake number). */
+  pending: string
+}>
 
 /**
  * The six hero tiles. Values come straight from the API's counts — this
- * function only formats, it never derives a number of its own.
+ * function only formats, it never derives a number of its own. Each tile also
+ * names the micro-visualization it renders and the honest "still working"
+ * caption used while the count is zero.
  */
 export function patternAiStats(overview: InsightsOverview | null): readonly PatternAiStat[] {
   const value = (count: number | undefined): string => (overview ? formatInsightNumber(count ?? 0) : '—')
+  const raw = (count: number | undefined): number | null => (overview ? count ?? 0 : null)
   const counts = overview?.counts
   return [
-    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread' },
-    { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now' },
-    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified' },
-    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered' },
-    { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch' },
-    { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live' },
+    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread', count: raw(counts?.newDiscoveries), visual: 'bubbles', pending: 'waiting to populate' },
+    { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now', count: raw(counts?.patterns), visual: 'network', pending: 'discovering…' },
+    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified', count: raw(counts?.personas), visual: 'cohort', pending: 'analysing customers…' },
+    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered', count: raw(counts?.investigations), visual: 'answers', pending: 'ask your first question' },
+    { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch', count: raw(counts?.trends), visual: 'arrows', pending: 'monitoring…' },
+    { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live', count: raw(counts?.predictions), visual: 'wave', pending: 'learning…' },
   ]
+}
+
+/* ── Discovery pipeline (funnel) ───────────────────────────────────────── */
+
+export type DiscoveryFunnelStage = Readonly<{
+  id: 'discovered' | 'reviewed' | 'saved' | 'acted'
+  label: string
+  value: number
+  /** Share of the "discovered" stage, 0–1. 0 when nothing was discovered. */
+  share: number
+  /** The statuses this stage counts — used to filter the feed on click. */
+  statuses: readonly DiscoveryStatus[]
+}>
+
+export type DiscoveryFunnel = Readonly<{
+  stages: readonly DiscoveryFunnelStage[]
+  discovered: number
+  actedOn: number
+  /** Acted-on ÷ discovered, 0–1. Null when there is nothing to convert yet. */
+  conversion: number | null
+  hint: string
+}>
+
+/**
+ * The discovery pipeline. Stages are cumulative — a saved discovery has by
+ * definition been reviewed — so the funnel narrows honestly instead of
+ * double-counting. Dismissed findings leave the pipeline and are not counted
+ * as progress; they stay in the "discovered" total because they happened.
+ */
+export function discoveryFunnel(discoveries: readonly InsightDiscovery[]): DiscoveryFunnel {
+  const count = (statuses: readonly DiscoveryStatus[]): number => discoveries.filter((discovery) => statuses.includes(discovery.status)).length
+  const discovered = discoveries.length
+  const reviewedStatuses: readonly DiscoveryStatus[] = ['REVIEWED', 'SAVED', 'ACTED_ON']
+  const savedStatuses: readonly DiscoveryStatus[] = ['SAVED', 'ACTED_ON']
+  const actedStatuses: readonly DiscoveryStatus[] = ['ACTED_ON']
+  const reviewed = count(reviewedStatuses)
+  const saved = count(savedStatuses)
+  const acted = count(actedStatuses)
+  const share = (value: number): number => (discovered > 0 ? value / discovered : 0)
+  const conversion = discovered > 0 ? acted / discovered : null
+  const hint = discovered === 0
+    ? 'Run a discovery sweep to start the pipeline.'
+    : acted > 0
+      ? `${acted} of ${discovered} discover${discovered === 1 ? 'y has' : 'ies have'} turned into action.`
+      : 'Take action on a discovery to close the loop.'
+  return {
+    stages: [
+      { id: 'discovered', label: 'Discovered', value: discovered, share: discovered > 0 ? 1 : 0, statuses: ['NEW', 'REVIEWED', 'SAVED', 'ACTED_ON', 'DISMISSED'] },
+      { id: 'reviewed', label: 'Reviewed', value: reviewed, share: share(reviewed), statuses: reviewedStatuses },
+      { id: 'saved', label: 'Saved', value: saved, share: share(saved), statuses: savedStatuses },
+      { id: 'acted', label: 'Acted on', value: acted, share: share(acted), statuses: actedStatuses },
+    ],
+    discovered,
+    actedOn: acted,
+    conversion,
+    hint,
+  }
+}
+
+/* ── Human framing for a discovery card ────────────────────────────────── */
+
+/**
+ * A friendly, human headline for the card. It states the *kind* of finding in
+ * plain language — it never restates or invents a number, so the engine's own
+ * sentence stays the single source of every figure.
+ */
+export function discoveryHeadline(discovery: InsightDiscovery): string {
+  const key = `${discovery.discoveryType}:${discovery.category}`
+  switch (key) {
+    case 'TREND:PRODUCTS': return 'Rising product spotted'
+    case 'TREND:REVENUE': return 'Your revenue momentum shifted'
+    case 'TREND:CUSTOMERS': return 'Customer demand is moving'
+    case 'PATTERN:TIME': return 'Your week has a rhythm'
+    case 'PATTERN:PRODUCTS': return 'One product carries the load'
+    case 'ANOMALY:REVENUE': return 'One day broke the pattern'
+    case 'OPPORTUNITY:PRODUCTS': return 'These products travel together'
+    case 'SEGMENT:CUSTOMERS': return 'A customer group stands out'
+    case 'BEHAVIOR:TIME': return 'Your buyers have a favourite hour'
+    default: break
+  }
+  switch (discovery.discoveryType) {
+    case 'PATTERN': return 'A pattern keeps repeating'
+    case 'ANOMALY': return 'Something broke the pattern'
+    case 'OPPORTUNITY': return 'There is room to grow here'
+    case 'CORRELATION': return 'Two things move together'
+    case 'TREND': return 'A trend is forming'
+    case 'SEGMENT': return 'A group behaves differently'
+    case 'BEHAVIOR': return 'A buying behaviour showed up'
+  }
+}
+
+export type MomentumUnit = 'units' | 'money' | 'customers' | 'orders'
+export type DiscoveryMomentum = Readonly<{
+  title: string
+  beforeLabel: string
+  afterLabel: string
+  before: number
+  after: number
+  unit: MomentumUnit
+  currency: string
+  /** Change between the two bars, 0–1 based; null when "before" was zero. */
+  change: number | null
+}>
+
+const asNumber = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+const nestedNumber = (value: unknown, key: string): number | null => {
+  if (typeof value !== 'object' || value === null) return null
+  return asNumber((value as Record<string, unknown>)[key])
+}
+
+/**
+ * Before/after pair for the card's momentum bars — read *only* from the
+ * engine's own evidence. Returns null when the discovery has no measured pair,
+ * so the card simply omits the visual rather than inventing one.
+ */
+export function discoveryMomentum(discovery: InsightDiscovery): DiscoveryMomentum | null {
+  const evidence = discovery.dataEvidence
+  if (typeof evidence !== 'object' || evidence === null) return null
+  const currency = discovery.impactCurrency || 'USD'
+  const pair = (before: number, after: number, extras: Omit<DiscoveryMomentum, 'before' | 'after' | 'currency' | 'change'>): DiscoveryMomentum => ({
+    ...extras,
+    before,
+    after,
+    currency,
+    change: before > 0 ? (after - before) / before : null,
+  })
+
+  const recentUnits = asNumber(evidence.recentUnits)
+  const priorUnits = asNumber(evidence.priorUnits)
+  if (recentUnits !== null && priorUnits !== null) {
+    return pair(priorUnits, recentUnits, { title: 'Units sold', beforeLabel: 'Prior 14 days', afterLabel: 'Last 14 days', unit: 'units' })
+  }
+
+  const currentRevenue = nestedNumber(evidence.current, 'revenue')
+  const previousRevenue = nestedNumber(evidence.previous, 'revenue')
+  if (currentRevenue !== null && previousRevenue !== null) {
+    return pair(previousRevenue, currentRevenue, { title: 'Revenue', beforeLabel: 'Previous 30 days', afterLabel: 'Last 30 days', unit: 'money' })
+  }
+
+  const actual = asNumber(evidence.value)
+  const expected = asNumber(evidence.expected)
+  if (actual !== null && expected !== null) {
+    return pair(expected, actual, { title: 'That day vs the norm', beforeLabel: 'Expected', afterLabel: 'Actual', unit: 'money' })
+  }
+
+  const repeat = asNumber(evidence.repeatCustomers)
+  const oneTime = asNumber(evidence.oneTimeCustomers)
+  if (repeat !== null && oneTime !== null) {
+    return pair(oneTime, repeat, { title: 'Customers', beforeLabel: 'Bought once', afterLabel: 'Came back', unit: 'customers' })
+  }
+
+  return null
+}
+
+/** Formats one side of the momentum pair in its own unit. */
+export function formatMomentumValue(momentum: DiscoveryMomentum, value: number): string {
+  if (momentum.unit === 'money') return formatInsightMoney(value, momentum.currency)
+  const rounded = formatInsightNumber(Math.round(value))
+  if (momentum.unit === 'units') return `${rounded} sold`
+  if (momentum.unit === 'orders') return `${rounded} orders`
+  return `${rounded} customers`
+}
+
+/** Bar widths for the momentum pair, 0–100, scaled to the larger side. */
+export function momentumWidths(momentum: DiscoveryMomentum): Readonly<{ before: number; after: number }> {
+  const max = Math.max(Math.abs(momentum.before), Math.abs(momentum.after))
+  if (max <= 0) return { before: 0, after: 0 }
+  return { before: Math.round((Math.abs(momentum.before) / max) * 100), after: Math.round((Math.abs(momentum.after) / max) * 100) }
+}
+
+/**
+ * Evidence keys that are storage plumbing, not merchant information. They are
+ * hidden from cards so a shopper-facing surface never shows a product id.
+ */
+const TECHNICAL_EVIDENCE_KEYS: ReadonlySet<string> = new Set(['productId', 'storeId', 'id', 'method', 'basedOnRealData', 'sampleReason', 'entityId'])
+
+const EVIDENCE_LABELS: Readonly<Record<string, string>> = {
+  recentUnits: 'Sold in the last 14 days',
+  priorUnits: 'Sold in the prior 14 days',
+  growthPercent: 'Growth',
+  recentRevenue: 'Recent revenue',
+  coPurchaseRate: 'Bought together',
+  repeatCustomers: 'Repeat customers',
+  oneTimeCustomers: 'One-time customers',
+  repeatShare: 'Share of customers',
+  repeatLtvShare: 'Share of lifetime value',
+  topShare: 'Top product share',
+  top3Share: 'Top three share',
+  peakHour: 'Busiest hour',
+  peakOrders: 'Orders in that hour',
+  totalOrders: 'Orders analysed',
+  deviationPercent: 'Deviation from normal',
+  revenueChange: 'Revenue change',
+  ordersChange: 'Orders change',
+  aovChange: 'Average order value change',
+  expected: 'Expected',
+  value: 'Actual',
+  day: 'Day',
+  product: 'Product',
+  related: 'Bought with',
+}
+
+/**
+ * Merchant-readable evidence rows: technical identifiers removed, keys given
+ * plain-English labels. Values are still the engine's own numbers, untouched.
+ */
+export function humanEvidenceRows(evidence: InsightsJsonObject | null | undefined, max = 3): readonly Readonly<{ label: string; value: string }>[] {
+  const filtered: Record<string, unknown> = {}
+  if (typeof evidence !== 'object' || evidence === null) return []
+  for (const [key, value] of Object.entries(evidence)) {
+    if (TECHNICAL_EVIDENCE_KEYS.has(key)) continue
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue
+    filtered[key] = value
+  }
+  return evidenceRows(filtered, max).map((row) => {
+    const key = Object.keys(filtered).find((candidate) => candidate.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2') === row.label)
+    const label = key && EVIDENCE_LABELS[key] ? EVIDENCE_LABELS[key]! : row.label.charAt(0).toUpperCase() + row.label.slice(1)
+    return { label, value: row.value }
+  })
+}
+
+/* ── Discovery impact summary (treemap + strongest signal) ─────────────── */
+
+export type DiscoveryCategoryBlock = Readonly<{ id: string; label: string; value: number }>
+
+/** Signal counts per category — the treemap's blocks. Real counts only. */
+export function discoveryCategoryBlocks(discoveries: readonly InsightDiscovery[]): readonly DiscoveryCategoryBlock[] {
+  const counts = new Map<DiscoveryCategory, number>()
+  for (const discovery of discoveries) counts.set(discovery.category, (counts.get(discovery.category) ?? 0) + 1)
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([category, value]) => ({ id: category, label: DISCOVERY_CATEGORY_LABELS[category], value }))
+}
+
+export type DiscoveryImpactSummary = Readonly<{
+  total: number
+  blocks: readonly DiscoveryCategoryBlock[]
+  mostActive: DiscoveryCategoryBlock | null
+  strongest: Readonly<{ title: string; confidence: number }> | null
+  /** Total money the engine attached to the visible discoveries, if any. */
+  moneyInPlay: number | null
+  currency: string
+}>
+
+/** Everything the "what PatternAI has found" panel needs, all measured. */
+export function discoveryImpactSummary(discoveries: readonly InsightDiscovery[]): DiscoveryImpactSummary {
+  const blocks = discoveryCategoryBlocks(discoveries)
+  const withImpact = discoveries.filter((discovery) => typeof discovery.impactEstimate === 'number')
+  const moneyInPlay = withImpact.length > 0 ? withImpact.reduce((sum, discovery) => sum + (discovery.impactEstimate ?? 0), 0) : null
+  const strongestDiscovery = [...discoveries].sort((left, right) => right.confidenceScore - left.confidenceScore)[0] ?? null
+  return {
+    total: discoveries.length,
+    blocks,
+    mostActive: blocks[0] ?? null,
+    strongest: strongestDiscovery ? { title: strongestDiscovery.title, confidence: strongestDiscovery.confidenceScore } : null,
+    moneyInPlay,
+    currency: withImpact[0]?.impactCurrency ?? 'USD',
+  }
+}
+
+/* ── Pattern strength meter ────────────────────────────────────────────── */
+
+/**
+ * Engine thresholds, mirrored from `@profitpilot/ai` `insights-hub.ts`. They
+ * are the same constants the backend gates on, so the meter can never promise
+ * a pattern the engine would refuse to publish.
+ */
+export const ENGINE_MIN_ORDERS_FOR_DISCOVERY = 10
+export const ENGINE_MIN_PRODUCTS_FOR_PATTERNS = 2
+
+export type PatternStrengthState = 'strong' | 'good' | 'moderate' | 'building' | 'learning'
+export type PatternStrengthRow = Readonly<{
+  id: string
+  label: string
+  /** 0–100, always have ÷ need from the API's readiness block. */
+  percent: number
+  state: PatternStrengthState
+  stateLabel: string
+  detail: string
+}>
+
+export function patternStrengthState(percent: number): PatternStrengthState {
+  if (percent >= 80) return 'strong'
+  if (percent >= 60) return 'good'
+  if (percent >= 40) return 'moderate'
+  if (percent >= 20) return 'building'
+  return 'learning'
+}
+
+const STRENGTH_STATE_LABELS: Readonly<Record<PatternStrengthState, string>> = {
+  strong: 'Strong',
+  good: 'Good',
+  moderate: 'Moderate',
+  building: 'Building',
+  learning: 'Learning',
+}
+
+/**
+ * How much evidence the store has for each family of pattern. Every row is
+ * have ÷ need against a real engine threshold — nothing is modelled, and the
+ * detail line always states the raw counts behind the bar.
+ */
+export function patternStrengthRows(readiness: InsightsDataReadiness | null): readonly PatternStrengthRow[] {
+  if (!readiness) return []
+  const row = (id: string, label: string, have: number, need: number, unit: string): PatternStrengthRow => {
+    const percent = need <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((have / need) * 100)))
+    const state = patternStrengthState(percent)
+    return {
+      id,
+      label,
+      percent,
+      state,
+      stateLabel: STRENGTH_STATE_LABELS[state],
+      detail: `${formatInsightNumber(have)} of ${formatInsightNumber(need)} ${unit}`,
+    }
+  }
+  return [
+    row('orders', 'Order evidence', readiness.totalOrders, ENGINE_MIN_ORDERS_FOR_DISCOVERY, 'orders'),
+    row('products', 'Product patterns', readiness.productsWithSales, ENGINE_MIN_PRODUCTS_FOR_PATTERNS, 'products with sales'),
+    row('personas', 'Customer behaviour', readiness.personasRequirement.have, readiness.personasRequirement.need, 'customers'),
+    row('predictions', 'Forecasting', readiness.predictRequirement.have, readiness.predictRequirement.need, 'days of history'),
+    row('trends', 'Trend detection', readiness.trendsRequirement.have, readiness.trendsRequirement.need, 'days of history'),
+  ]
+}
+
+/* ── Monthly discovery allowance ───────────────────────────────────────── */
+
+export type MonthlyDiscoveryProgress = Readonly<{
+  used: number
+  limit: number | null
+  remaining: number | null
+  /** 0–100 for the ring; 0 when the plan has no monthly cap. */
+  percent: number
+  unlimited: boolean
+  atLimit: boolean
+  caption: string
+}>
+
+/** Ring model for "discoveries this month" — API usage numbers, formatted. */
+export function monthlyDiscoveryProgress(overview: InsightsOverview | null): MonthlyDiscoveryProgress | null {
+  if (!overview) return null
+  const { used, limit, remaining } = overview.usage.discoveries
+  const unlimited = limit === null
+  const percent = unlimited ? 0 : Math.max(0, Math.min(100, Math.round((used / Math.max(1, limit)) * 100)))
+  const left = remaining ?? (limit === null ? null : Math.max(0, limit - used))
+  const atLimit = !unlimited && (left ?? 0) <= 0
+  const caption = unlimited
+    ? 'No monthly cap on your plan'
+    : atLimit
+      ? 'Allowance used for this month'
+      : `${formatInsightNumber(left ?? 0)} discover${(left ?? 0) === 1 ? 'y' : 'ies'} left this month`
+  return { used, limit, remaining: left, percent, unlimited, atLimit, caption }
 }
 
 export type PatternAiPlanFeature = Readonly<{ feature: InsightsFeature; label: string; unlocked: boolean; requiredPlan: PlanTier }>
@@ -809,4 +1182,64 @@ export function degradedNotice(overview: InsightsOverview | null): string {
   if (sections.length === 0) return ''
   const list = [...sections].sort().join(', ')
   return `PatternAI rendered this page without ${list}. Those sections are retrying in the background — nothing shown here is estimated.`
+}
+
+/* ── Explore-card mini-visualization models ────────────────────────────── */
+
+/**
+ * Word-cloud entries for the learning card. Weights are how often a real
+ * lesson category/type appears in the store's own library — never a canned
+ * vocabulary list.
+ */
+export function lessonTopicCloud(lessons: readonly InsightLesson[], limit = 8): readonly Readonly<{ tag: string; weight: number }>[] {
+  const counts = new Map<string, number>()
+  for (const lesson of lessons) {
+    for (const word of [DISCOVERY_CATEGORY_LABELS[lesson.category], LESSON_TYPE_LABELS[lesson.lessonType]]) {
+      counts.set(word, (counts.get(word) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag, weight]) => ({ tag, weight }))
+}
+
+export type DivergingRow = Readonly<{ id: string; label: string; magnitude: number; direction: TrendDirection }>
+
+/** Diverging bars for the trend card: signed magnitude straight from the API. */
+export function trendDivergingRows(trends: readonly InsightTrend[], limit = 5): readonly DivergingRow[] {
+  return [...trends]
+    .sort((left, right) => Math.abs(right.magnitude) - Math.abs(left.magnitude))
+    .slice(0, limit)
+    .map((trend) => ({ id: trend.id, label: trend.title, magnitude: trend.magnitude, direction: trend.direction }))
+}
+
+export type CauseNode = Readonly<{ id: string; label: string; weight: number }>
+
+/** Root-cause web for the Why? card — ranked causes with their real shares. */
+export function investigationCauseNodes(investigations: readonly InsightInvestigation[], limit = 5): readonly CauseNode[] {
+  const latest = [...investigations].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0]
+  if (!latest) return []
+  return latest.rootCauses.slice(0, limit).map((cause, index) => ({ id: `${latest.id}-${index}`, label: cause.cause, weight: Math.max(0, Math.min(1, cause.impactShare)) }))
+}
+
+export type WavePoint = Readonly<{ day: string; value: number; lower: number; upper: number }>
+
+/** Probability-wave points for the predictions card — the API's own series. */
+export function predictionWavePoints(predictions: readonly InsightPrediction[], limit = 10): readonly WavePoint[] {
+  const first = predictions.find((prediction) => prediction.series.length > 0)
+  if (!first) return []
+  return first.series.slice(0, limit).map((point) => ({ day: point.day, value: point.value, lower: point.lower, upper: point.upper }))
+}
+
+/** Average persona radar across the store's personas — measured traits only. */
+export function personaRadarAverage(personas: readonly InsightPersona[]): readonly PersonaRadarTrait[] {
+  const totals = new Map<string, { sum: number; count: number }>()
+  for (const persona of personas) {
+    for (const trait of persona.radar) {
+      const entry = totals.get(trait.trait) ?? { sum: 0, count: 0 }
+      totals.set(trait.trait, { sum: entry.sum + trait.score, count: entry.count + 1 })
+    }
+  }
+  return [...totals.entries()].map(([trait, entry]) => ({ trait, score: entry.count > 0 ? entry.sum / entry.count : 0 }))
 }

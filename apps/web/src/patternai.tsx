@@ -55,7 +55,21 @@ import type { LucideIcon } from 'lucide-react'
 import { ApiClientError } from './api.js'
 import * as api from './api.js'
 import type { CatalogProduct, WorkspaceContext } from './model.js'
-import { PatternAiMark } from './patternai-logo.js'
+import { PatternAiDiscoverGlyph, PatternAiMark } from './patternai-logo.js'
+import {
+  DiscoveryPipelineFunnel,
+  MiniCauseWeb,
+  MiniDivergingBars,
+  MiniProbabilityWave,
+  MiniRadar,
+  MiniScatter,
+  MiniWordCloud,
+  MomentumCompare,
+  MoneyInPlay,
+  MonthlyDiscoveryRing,
+  PatternStrengthMeter,
+  StatVisualization,
+} from './patternai-viz.js'
 import {
   COMPARISON_TYPES,
   DISCOVERY_CATEGORIES,
@@ -92,7 +106,19 @@ import {
   insightsTabPurpose,
   isPatternAiPath,
   degradedNotice,
+  discoveryFunnel,
+  discoveryHeadline,
+  discoveryImpactSummary,
+  discoveryMomentum,
+  humanEvidenceRows,
+  investigationCauseNodes,
+  lessonTopicCloud,
   meterPercent,
+  monthlyDiscoveryProgress,
+  patternStrengthRows,
+  personaRadarAverage,
+  predictionWavePoints,
+  trendDivergingRows,
   parseInsightsRoute,
   patternAiPlanSummary,
   patternAiStats,
@@ -134,7 +160,6 @@ import {
   InsightsAreaBand,
   InsightsBubbleChart,
   InsightsComparisonBars,
-  InsightsFlowChart,
   InsightsHeatmap,
   InsightsNetworkGraph,
   InsightsRadarChart,
@@ -373,7 +398,30 @@ function ChartExportButton({ targetRef, filename, enabled, onLocked }: { targetR
 /* ── Section navigation ────────────────────────────────────────────────── */
 
 type NavEntry = Readonly<{ tab: InsightsTab; icon: LucideIcon; feature: InsightsFeature | null }>
-type NavGroup = Readonly<{ label: string; entries: readonly NavEntry[] }>
+type NavGroup = Readonly<{ label: string; tone: 'discover' | 'understand' | 'remember' | 'workspace'; entries: readonly NavEntry[] }>
+
+/**
+ * Count badge for a nav row. Every badge is an API count — the sidebar never
+ * shows a number the overview did not report, and it shows nothing at all
+ * until the overview has answered.
+ */
+export function navBadgeCount(tab: InsightsTab, overview: InsightsOverview | null): number | null {
+  if (!overview) return null
+  const counts = overview.counts
+  switch (tab) {
+    case 'overview': return counts.newDiscoveries
+    case 'discoveries': return counts.totalDiscoveries
+    case 'lessons': return counts.lessons
+    case 'patterns': return counts.patterns
+    case 'personas': return counts.personas
+    case 'why': return counts.investigations
+    case 'trends': return counts.trends
+    case 'comparisons': return counts.comparisons
+    case 'knowledge': return counts.knowledge
+    case 'predictions': return counts.predictions
+    default: return null
+  }
+}
 
 /**
  * Grouped navigation. PatternAI is a discovery product, so the order follows
@@ -383,6 +431,7 @@ type NavGroup = Readonly<{ label: string; entries: readonly NavEntry[] }>
 const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: 'Discover',
+    tone: 'discover',
     entries: [
       { tab: 'overview', icon: Compass, feature: null },
       { tab: 'lessons', icon: BookOpen, feature: null },
@@ -392,6 +441,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     label: 'Understand',
+    tone: 'understand',
     entries: [
       { tab: 'why', icon: HelpCircle, feature: 'investigations' },
       { tab: 'trends', icon: TrendingUp, feature: 'trends' },
@@ -400,6 +450,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     label: 'Remember & look ahead',
+    tone: 'remember',
     entries: [
       { tab: 'knowledge', icon: Library, feature: 'knowledge' },
       { tab: 'timeline', icon: History, feature: 'timeline' },
@@ -408,6 +459,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     label: 'Workspace',
+    tone: 'workspace',
     entries: [
       { tab: 'settings', icon: Settings2, feature: null },
       { tab: 'api-access', icon: KeyRound, feature: 'apiAccess' },
@@ -451,6 +503,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
   const plan: PlanTier = overview?.plan ?? 'trial'
   const lockedFor = (feature: InsightsFeature): boolean => insightsFeatureLock(plan, feature, overview).locked
   const stats = patternAiStats(overview)
+  const monthly = monthlyDiscoveryProgress(overview)
   const degraded = degradedNotice(overview)
   const activeEntry = ALL_NAV_ENTRIES.find((entry) => entry.tab === route.tab) ?? ALL_NAV_ENTRIES[0]!
 
@@ -484,7 +537,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
           <p className="pa-hero-body">PatternAI reads your synced Shopify history and surfaces the structures underneath it — the rhythms, the segments, the correlations you would never spot by eye. Every number below is computed from your store; nothing here is invented or borrowed from another shop.</p>
           <div className="pa-hero-actions">
             <button className="pa-button primary" onClick={() => void runDiscovery()}>
-              <Sparkles size={14} /> Run discovery
+              <PatternAiDiscoverGlyph size={15} /> Run discovery
             </button>
             <button className="pa-button ghost" onClick={() => go('settings')}><Settings2 size={14} /> Settings</button>
             <button className="pa-plan-chip" onClick={() => setPlanPanelOpen((open) => !open)} aria-expanded={planPanelOpen}>
@@ -495,18 +548,24 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
         </div>
         <div className="pa-hero-stats" role="list" aria-label="PatternAI at a glance">
           {stats.map((stat) => (
-            <div key={stat.id} className="pa-stat" role="listitem">
+            <div key={stat.id} className={`pa-stat viz-${stat.visual} ${(stat.count ?? 0) > 0 ? 'has-data' : 'is-empty'}`} role="listitem">
               <span className="pa-stat-label">{stat.label}</span>
               <strong className="pa-stat-value">{stat.value}</strong>
               <span className="pa-stat-caption">{stat.caption}</span>
+              <StatVisualization visual={stat.visual} count={stat.count} pending={stat.pending} label={stat.label} />
             </div>
           ))}
-          {overview && overview.usage.discoveries.limit !== null && (
-            <div className="pa-stat pa-stat-meter" role="listitem">
-              <UsageMeterBar label="Discoveries this month" used={overview.usage.discoveries.used} limit={overview.usage.discoveries.limit} />
-            </div>
-          )}
         </div>
+        {monthly && (
+          <aside className="pa-allowance" aria-label="Discoveries this month">
+            <span className="pa-eyebrow">Discoveries this month</span>
+            <MonthlyDiscoveryRing progress={monthly} />
+            <p className="pa-allowance-caption">{monthly.caption}</p>
+            {monthly.unlimited
+              ? <span className="pa-allowance-note">Your plan runs discovery on demand.</span>
+              : <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA} for more discoveries</button>}
+          </aside>
+        )}
       </header>
 
       {planPanelOpen && <PlanPanel plan={plan} overview={overview} onNavigateBilling={onNavigateBilling} onClose={() => setPlanPanelOpen(false)} />}
@@ -519,21 +578,30 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
       <div className="pa-layout">
         <nav className="pa-nav" aria-label="PatternAI sections">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="pa-nav-group">
+            <div key={group.label} className={`pa-nav-group tone-${group.tone}`}>
               <span className="pa-nav-group-label">{group.label}</span>
               {group.entries.map(({ tab, icon: Icon, feature }) => {
                 const locked = feature !== null && lockedFor(feature)
                 const active = route.tab === tab || (route.tab === 'discoveries' && tab === 'overview')
+                const badge = navBadgeCount(tab, overview)
                 return (
-                  <button key={tab} className={`pa-nav-item ${active ? 'active' : ''} ${locked ? 'locked' : ''}`} onClick={() => go(tab)} aria-current={active ? 'page' : undefined}>
+                  <button
+                    key={tab}
+                    className={`pa-nav-item ${active ? 'active' : ''} ${locked ? 'locked' : ''}`}
+                    onClick={() => go(tab)}
+                    aria-current={active ? 'page' : undefined}
+                    title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}
+                  >
                     <Icon size={15} />
                     <span>{insightsTabLabel(tab)}</span>
-                    {locked && <Lock size={11} />}
+                    {badge !== null && badge > 0 && <span className="pa-nav-badge">{formatInsightNumber(badge)}</span>}
+                    {locked && <Lock size={11} className="pa-nav-lock" />}
                   </button>
                 )
               })}
             </div>
           ))}
+          <p className="pa-nav-note"><Lock size={10} /> Locked sections open with a plan upgrade.</p>
         </nav>
 
         <main className="pa-tab-panel">
@@ -646,6 +714,10 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
   const filtered = statusFilter !== 'ALL' || categoryFilter !== 'ALL'
   const weekdayCells = useMemo(() => weekdayHeatCells(discoveries), [discoveries])
   const hourCells = useMemo(() => hourHeatCells(discoveries), [discoveries])
+  const funnel = useMemo(() => discoveryFunnel(discoveries), [discoveries])
+  const impact = useMemo(() => discoveryImpactSummary(discoveries), [discoveries])
+  const strengthRows = useMemo(() => patternStrengthRows(readiness), [readiness])
+  const activeStage = funnel.stages.find((stage) => statusFilter !== 'ALL' && stage.statuses[0] === statusFilter)?.id ?? (statusFilter === 'ALL' ? 'discovered' : null)
 
   if (!storeId) return <InsightsEmptyState icon={Compass} title="Connect your store first" body="PatternAI reads your synced Shopify history. Connect a store and run a sync, and the first discoveries appear here." />
 
@@ -665,12 +737,25 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
           </select>
         </div>
         <div className="pa-toolbar-actions">
-          <ChartExportButton targetRef={chartRef} filename="insights-discovery-heatmap" enabled={exportEnabled} onLocked={onExportLocked} />
+          {filtered && <button className="pa-button ghost compact subtle" onClick={() => { setStatusFilter('ALL'); setCategoryFilter('ALL') }}><X size={11} /> Clear filters</button>}
+          <ChartExportButton targetRef={chartRef} filename="patternai-discovery-charts" enabled={exportEnabled} onLocked={onExportLocked} />
           {generationLocked
             ? <button className="button primary" onClick={onNavigateBilling} title="On-demand discovery generation unlocks with a plan upgrade"><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void generate()} disabled={generating}><Network size={13} /> {generating ? 'Examining your data…' : 'Run discovery'}</button>}
+            : <button className="button primary" onClick={() => void generate()} disabled={generating}><PatternAiDiscoverGlyph size={14} /> {generating ? 'Examining your data…' : 'Run discovery'}</button>}
         </div>
       </div>
+
+      {generating && (
+        <div className="pa-progress-steps" role="status" aria-live="polite">
+          <span className="pa-eyebrow">Discovery in progress</span>
+          <ol>
+            <li className="done">Reading your synced orders</li>
+            <li className="done">Testing rhythms, baskets and segments</li>
+            <li className="active">Scoring what clears the confidence bar</li>
+          </ol>
+          <p className="pa-muted">PatternAI publishes nothing it cannot evidence — a quiet sweep is a valid result.</p>
+        </div>
+      )}
 
       {(feed.status === 'loading' || list.status === 'loading') && <InsightsSkeleton rows={4} />}
       {feed.status === 'error' && (feed.upgradeRequired
@@ -678,9 +763,45 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
         : <InsightsErrorPanel message={feed.message ?? 'The discovery feed failed to load.'} onRetry={feed.reload} />)}
 
       {discoveries.length > 0 && (
-        <div className="pa-card pa-funnel-card">
-          <div className="pa-card-head"><span className="section-kicker"><Zap size={11} /> FROM SIGNAL TO ACTION</span><small>Where your discoveries stand in review</small></div>
-          <InsightsFlowChart stages={funnelStages(discoveries)} />
+        <div className="pa-value-grid">
+          <div className="pa-card pa-funnel-card">
+            <div className="pa-card-head">
+              <span className="section-kicker"><PatternAiDiscoverGlyph size={12} /> DISCOVERY PIPELINE</span>
+              <small>Your discoveries&rsquo; journey — click a stage to filter the feed</small>
+            </div>
+            <DiscoveryPipelineFunnel
+              funnel={funnel}
+              activeStage={activeStage}
+              onSelect={(stage) => {
+                if (stage.id === 'discovered') { setStatusFilter('ALL'); return }
+                const target = stage.statuses[0]
+                if (target) setStatusFilter(statusFilter === target ? 'ALL' : target)
+              }}
+            />
+          </div>
+
+          <div className="pa-card pa-impact-card">
+            <div className="pa-card-head">
+              <span className="section-kicker"><Lightbulb size={11} /> WHAT PATTERNAI HAS FOUND</span>
+              <small>Signals by category, counted from your own data</small>
+            </div>
+            <InsightsTreeMap blocks={[...impact.blocks]} width={420} height={170} />
+            <ul className="pa-impact-facts">
+              {impact.mostActive && <li>Most active category: <strong>{impact.mostActive.label}</strong> ({formatInsightNumber(impact.mostActive.value)} signal{impact.mostActive.value === 1 ? '' : 's'})</li>}
+              {impact.strongest && <li>Strongest insight: <strong>{impact.strongest.title}</strong> ({confidencePercent(impact.strongest.confidence)}% confidence)</li>}
+            </ul>
+            <MoneyInPlay amount={impact.moneyInPlay} currency={impact.currency} />
+          </div>
+        </div>
+      )}
+
+      {strengthRows.length > 0 && (
+        <div className="pa-card pa-strength-card">
+          <div className="pa-card-head">
+            <span className="section-kicker"><Radar size={11} /> PATTERN CONFIDENCE</span>
+            <small>How much evidence your store has for each family of pattern</small>
+          </div>
+          <PatternStrengthMeter rows={strengthRows} tip="More synced orders mean stronger patterns — every bar is your real count against the engine's own threshold." />
         </div>
       )}
 
@@ -707,7 +828,7 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
         {discoveries.map((discovery) => <DiscoveryCard key={discovery.id} discovery={discovery} storeId={storeId} onOpen={() => go('discoveries', discovery.id)} onChanged={() => list.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
       </div>
 
-      <ExploreFurther go={go} />
+      <ExploreFurther go={go} storeId={storeId} overview={overview} plan={plan} />
     </section>
   )
 }
@@ -717,27 +838,86 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
  * store — deliberately none of them duplicate Store Coach's daily plan,
  * GrowthIQ's strategy reports or the Recommendations queue.
  */
-export function ExploreFurther({ go }: { go: (tab: InsightsTab, id?: string | null) => void }) {
-  const destinations: readonly Readonly<{ tab: InsightsTab; icon: LucideIcon; blurb: string }>[] = [
-    { tab: 'lessons', icon: BookOpen, blurb: 'Read a briefing written from your own numbers.' },
-    { tab: 'patterns', icon: Network, blurb: 'Map every recurring structure by confidence and recurrence.' },
-    { tab: 'personas', icon: Users, blurb: 'Meet the behaviour groups behind your revenue.' },
-    { tab: 'why', icon: HelpCircle, blurb: 'Ask why something moved and see the ranked causes.' },
-    { tab: 'trends', icon: TrendingUp, blurb: 'Watch what is rising and fading, with confidence.' },
-    { tab: 'predictions', icon: Radar, blurb: 'Look ahead with ranges instead of single numbers.' },
+export function ExploreFurther({ go, storeId, overview, plan }: {
+  go: (tab: InsightsTab, id?: string | null) => void
+  storeId: string | null
+  overview: InsightsOverview | null
+  plan: PlanTier
+}) {
+  const counts = overview?.counts
+  const unlocked = (feature: InsightsFeature): boolean => !insightsFeatureLock(plan, feature, overview).locked
+  const enabled = (feature: InsightsFeature, count: number | undefined): boolean => Boolean(storeId) && unlocked(feature) && (count ?? 0) > 0
+
+  // Each card only fetches when the overview already says there is something
+  // to draw and the plan allows it — so a locked or empty card costs nothing
+  // and, critically, never renders a shape without real data behind it.
+  const lessons = useResource<readonly InsightLesson[]>(
+    enabled('lessons', counts?.lessons) ? () => api.fetchInsightLessons(storeId ?? '').then((result) => result.items) : null, [storeId, counts?.lessons])
+  const patterns = useResource<readonly InsightPattern[]>(
+    enabled('patterns', counts?.patterns) ? () => api.fetchInsightPatterns(storeId ?? '').then((result) => result.patterns) : null, [storeId, counts?.patterns])
+  const personas = useResource<readonly InsightPersona[]>(
+    enabled('personas', counts?.personas) ? () => api.fetchInsightPersonas(storeId ?? '').then((result) => result.personas) : null, [storeId, counts?.personas])
+  const investigations = useResource<readonly InsightInvestigation[]>(
+    enabled('investigations', counts?.investigations) ? () => api.fetchInsightInvestigations(storeId ?? '', 5).then((result) => result.items) : null, [storeId, counts?.investigations])
+  const trends = useResource<readonly InsightTrend[]>(
+    enabled('trends', counts?.trends) ? () => api.fetchInsightTrends(storeId ?? '').then((result) => result.trends) : null, [storeId, counts?.trends])
+  const predictions = useResource<readonly InsightPrediction[]>(
+    enabled('predictions', counts?.predictions) ? () => api.fetchInsightPredictions(storeId ?? '').then((result) => result.predictions) : null, [storeId, counts?.predictions])
+
+  const lockedNote = 'Opens with a plan upgrade'
+
+  const destinations: readonly Readonly<{ tab: InsightsTab; icon: LucideIcon; feature: InsightsFeature; blurb: string; viz: ReactNode }>[] = [
+    {
+      tab: 'lessons', icon: BookOpen, feature: 'lessons',
+      blurb: 'Briefings written from your numbers.',
+      viz: <MiniWordCloud words={lessonTopicCloud(lessons.data ?? [])} emptyLabel={unlocked('lessons') ? 'Topics appear with your first lesson' : lockedNote} />,
+    },
+    {
+      tab: 'patterns', icon: Network, feature: 'patterns',
+      blurb: 'Recurring structures by confidence.',
+      viz: <MiniScatter points={patternBubbles(patterns.data ?? []).map((point) => ({ id: point.id, label: point.label, x: point.x, y: point.y }))} emptyLabel={unlocked('patterns') ? 'Patterns plot here once detected' : lockedNote} />,
+    },
+    {
+      tab: 'personas', icon: Users, feature: 'personas',
+      blurb: 'Behaviour groups in your revenue.',
+      viz: <MiniRadar traits={personaRadarAverage(personas.data ?? [])} emptyLabel={unlocked('personas') ? 'Traits appear with your first persona' : lockedNote} />,
+    },
+    {
+      tab: 'why', icon: HelpCircle, feature: 'investigations',
+      blurb: 'Ranked root causes, with evidence.',
+      viz: <MiniCauseWeb causes={investigationCauseNodes(investigations.data ?? [])} emptyLabel={unlocked('investigations') ? 'Ask a question to map its causes' : lockedNote} />,
+    },
+    {
+      tab: 'trends', icon: TrendingUp, feature: 'trends',
+      blurb: 'What is rising and what is fading.',
+      viz: <MiniDivergingBars rows={trendDivergingRows(trends.data ?? [])} emptyLabel={unlocked('trends') ? 'Rises and falls appear here' : lockedNote} />,
+    },
+    {
+      tab: 'predictions', icon: Radar, feature: 'predictions',
+      blurb: 'Forecasts with honest ranges.',
+      viz: <MiniProbabilityWave points={predictionWavePoints(predictions.data ?? [])} emptyLabel={unlocked('predictions') ? 'Forecast ranges appear here' : lockedNote} />,
+    },
   ]
+
   return (
     <section className="pa-explore">
       <span className="pa-eyebrow">Keep exploring</span>
       <div className="pa-explore-grid">
-        {destinations.map(({ tab, icon: Icon, blurb }) => (
-          <button key={tab} className="pa-explore-card" onClick={() => go(tab)}>
-            <span className="pa-explore-icon"><Icon size={15} /></span>
-            <strong>{insightsTabLabel(tab)}</strong>
-            <p>{blurb}</p>
-            <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
-          </button>
-        ))}
+        {destinations.map(({ tab, icon: Icon, feature, blurb, viz }) => {
+          const locked = !unlocked(feature)
+          return (
+            <button key={tab} className={`pa-explore-card ${locked ? 'locked' : ''}`} onClick={() => go(tab)} title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}>
+              <span className="pa-explore-head">
+                <span className="pa-explore-icon"><Icon size={15} /></span>
+                <strong>{insightsTabLabel(tab)}</strong>
+                {locked && <Lock size={11} className="pa-explore-lock" />}
+              </span>
+              <span className="pa-explore-viz">{viz}</span>
+              <p>{blurb}</p>
+              <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
+            </button>
+          )
+        })}
       </div>
     </section>
   )
@@ -747,17 +927,6 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 const HOUR_LABELS = ['12am', '4am', '8am', '12pm', '4pm', '8pm'] as const
 
 type HeatCell = Readonly<{ x: number; y: number; value: number; label: string }>
-
-/** Discovery review funnel — a count of the visible list's statuses. */
-export function funnelStages(discoveries: readonly InsightDiscovery[]): readonly Readonly<{ id: string; label: string; value: number }>[] {
-  const count = (statuses: readonly DiscoveryStatus[]) => discoveries.filter((discovery) => statuses.includes(discovery.status)).length
-  return [
-    { id: 'new', label: 'New', value: count(['NEW']) },
-    { id: 'reviewed', label: 'Reviewed', value: count(['REVIEWED']) },
-    { id: 'saved', label: 'Saved', value: count(['SAVED']) },
-    { id: 'acted', label: 'Acted on', value: count(['ACTED_ON']) },
-  ]
-}
 
 /** Weekday revenue-share cells from the engine's TIME discovery profile. */
 export function weekdayHeatCells(discoveries: readonly InsightDiscovery[]): readonly HeatCell[] {
@@ -839,9 +1008,11 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
       else onToast(error instanceof Error ? error.message : 'Could not update the discovery.', 'error')
     } finally { setBusy(false) }
   }
-  // Evidence rows are the engine's own numbers; the card shows the first three
-  // and the detail view shows the full bundle. Nothing is computed here.
-  const evidence = evidenceRows(discovery.dataEvidence, 3)
+  // Evidence rows are the engine's own numbers with storage plumbing (product
+  // ids, method strings) filtered out; the detail view still shows the full
+  // bundle. Nothing on this card is computed locally.
+  const evidence = humanEvidenceRows(discovery.dataEvidence, 3)
+  const momentum = discoveryMomentum(discovery)
   return (
     <article className={`pa-discovery-card tone-${discoveryTone(discovery.discoveryType)} ${discovery.status === 'NEW' ? 'fresh' : ''}`}>
       <header className="pa-discovery-head">
@@ -850,9 +1021,18 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
         <time dateTime={discovery.discoveredAt}>{formatRelativeTime(discovery.discoveredAt)}</time>
       </header>
 
+      <p className="pa-discovery-headline">{discoveryHeadline(discovery)}</p>
       <h3 className="pa-discovery-title">{discovery.title}</h3>
       <p className="pa-discovery-body">{discovery.description}</p>
-      {discovery.explanation && <blockquote className="pa-narration"><Waypoints size={12} /> {discovery.explanation}</blockquote>}
+
+      {momentum && <MomentumCompare momentum={momentum} />}
+
+      {discovery.explanation && (
+        <blockquote className="pa-narration">
+          <Lightbulb size={12} />
+          <span><strong>What this means for you:</strong> {discovery.explanation}</span>
+        </blockquote>
+      )}
 
       {evidence.length > 0 && (
         <dl className="pa-evidence-inline">
@@ -870,7 +1050,7 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
         <button className="pa-button secondary compact" onClick={onOpen}><Search size={12} /> Explore</button>
         <button className="pa-button ghost compact" disabled={busy || discovery.status === 'SAVED'} onClick={() => void setStatus('SAVED')}><Star size={12} /> Save</button>
         <button className="pa-button ghost compact" disabled={busy || discovery.status === 'ACTED_ON'} onClick={() => void setStatus('ACTED_ON')}><CheckCircle2 size={12} /> Acted on it</button>
-        <button className="pa-button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')}>Dismiss</button>
+        <button className="pa-button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')} title="Dismiss this discovery"><X size={12} /> Dismiss</button>
       </footer>
     </article>
   )

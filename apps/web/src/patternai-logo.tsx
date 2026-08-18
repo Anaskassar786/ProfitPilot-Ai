@@ -113,3 +113,70 @@ export function PatternAiWordmark({ size = 28 }: { size?: number }) {
     </span>
   )
 }
+
+/**
+ * "Run discovery" glyph — a compass rose whose needle is a discovery spark.
+ *
+ * Why this shape: discovery is *directed* exploration, so the mark reads as a
+ * compass (orientation) with a four-point spark at its heart (the find) and
+ * two small constellation points being revealed at the edge. It replaces the
+ * generic sparkle/network icons that previously sat on the action buttons, and
+ * it is used nowhere else in the app — no other module ships a compass mark.
+ *
+ * Pure SVG, per-instance gradient ids, legible at 12/14/16/24/32px, and driven
+ * by the same theme-aware `--pa-mark-*` variables as the brand constellation
+ * so it reads on both the dark (#0B0D14) and light (#F8FAFC) canvases.
+ */
+export function PatternAiDiscoverGlyph({ size = 16, title = 'Run discovery', className }: Readonly<{ size?: number; title?: string; className?: string }>) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const ring = `pa-disc-ring-${uid}`
+  const spark = `pa-disc-spark-${uid}`
+  return (
+    <svg
+      className={`pa-discover-glyph ${className ?? ''}`.trim()}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      role="img"
+      aria-label={title}
+      focusable="false"
+    >
+      <title>{title}</title>
+      <defs>
+        <linearGradient id={ring} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--pa-mark-from, #A78BFA)" />
+          <stop offset="100%" stopColor="var(--pa-mark-to, #06B6D4)" />
+        </linearGradient>
+        <linearGradient id={spark} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--pa-mark-mid, #8B5CF6)" />
+          <stop offset="100%" stopColor="var(--pa-mark-accent, #06B6D4)" />
+        </linearGradient>
+      </defs>
+
+      {/* Compass ring, open at the top-right where the new find appears. */}
+      <path
+        d="M 18.9 6.6 A 8.4 8.4 0 1 0 20.4 12"
+        fill="none"
+        stroke={`url(#${ring})`}
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+
+      {/* Needle: a four-point discovery spark, brightest toward the find. */}
+      <path
+        d="M 12 5.6 L 13.5 10.5 L 18.4 12 L 13.5 13.5 L 12 18.4 L 10.5 13.5 L 5.6 12 L 10.5 10.5 Z"
+        fill={`url(#${spark})`}
+      />
+
+      {/* Constellation points being revealed outside the ring. */}
+      <circle cx="20.8" cy="4.6" r="1.5" fill="var(--pa-mark-accent, #06B6D4)" />
+      <circle cx="17.4" cy="3.2" r="0.9" fill="var(--pa-mark-from, #A78BFA)" />
+    </svg>
+  )
+}
+
+/** Lucide-compatible wrapper so the glyph drops into `icon` slots. */
+export function PatternAiDiscoverIcon(props: Readonly<{ size?: number | string; className?: string }>) {
+  const size = typeof props.size === 'number' ? props.size : Number.parseInt(String(props.size ?? 16), 10) || 16
+  return props.className === undefined ? <PatternAiDiscoverGlyph size={size} /> : <PatternAiDiscoverGlyph size={size} className={props.className} />
+}

@@ -4,7 +4,8 @@
  * House rules honored here:
  *  - NO line charts, NO donut/pie charts. We ship bubble, radar, heatmap,
  *    area-with-gradient, scatter, timeline, word cloud, network, treemap and
- *    diverging comparison bars instead.
+ *    diverging comparison bars instead. The discovery pipeline funnel lives in
+ *    patternai-viz.tsx, which owns the value visuals unique to this module.
  *  - Both themes: every stroke/fill flows through the `--pa-*` CSS custom
  *    properties defined in insights-hub.css (dark default, `.light-mode`
  *    overrides), never a hard-coded page color.
@@ -366,44 +367,6 @@ export function InsightsComparisonBars({ rows, formatValue }: {
       })}
       {rows.length === 0 && <div className="pa-compare-empty">Run a comparison to see metrics side by side.</div>}
     </div>
-  )
-}
-
-/* ── Sankey-lite flow (discovery → action funnel) ──────────────────────── */
-
-export function InsightsFlowChart({ stages, width = 560, height = 200, onSelect }: {
-  stages: readonly Readonly<{ id: string; label: string; value: number }>[]
-  width?: number
-  height?: number
-  onSelect?: (id: string) => void
-}) {
-  if (stages.length === 0) return <svg className="pa-chart pa-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="No flow data"><text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">Funnel appears as discoveries move through review</text></svg>
-  const max = Math.max(...stages.map((stage) => stage.value), 1)
-  const columnWidth = (width - 24) / stages.length
-  return (
-    <svg className="pa-chart pa-flow" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Discovery review funnel">
-      {stages.map((stage, index) => {
-        const barHeight = Math.max(10, ((height - 64) * stage.value) / max)
-        const x = 12 + index * columnWidth + columnWidth * 0.18
-        const y = height - 30 - barHeight
-        const next = stages[index + 1]
-        return (
-          <g key={stage.id}>
-            {next && (
-              <path
-                className="pa-flow-ribbon"
-                d={`M ${x + columnWidth * 0.64} ${y + barHeight / 2} C ${x + columnWidth * 0.9} ${y + barHeight / 2}, ${x + columnWidth} ${height - 30 - Math.max(10, ((height - 64) * next.value) / max) + Math.max(10, ((height - 64) * next.value) / max) / 2}, ${12 + (index + 1) * columnWidth + columnWidth * 0.18} ${height - 30 - Math.max(10, ((height - 64) * next.value) / max) + Math.max(10, ((height - 64) * next.value) / max) / 2}`}
-              />
-            )}
-            <g className="pa-flow-stage" onClick={() => onSelect?.(stage.id)} role={onSelect ? 'button' : undefined}>
-              <rect x={x} y={y} width={columnWidth * 0.64} height={barHeight} rx={7}><title>{`${stage.label}: ${stage.value}`}</title></rect>
-              <text className="pa-flow-value" x={x + columnWidth * 0.32} y={y - 7} textAnchor="middle">{stage.value}</text>
-              <text className="pa-flow-label" x={x + columnWidth * 0.32} y={height - 12} textAnchor="middle">{stage.label}</text>
-            </g>
-          </g>
-        )
-      })}
-    </svg>
   )
 }
 
