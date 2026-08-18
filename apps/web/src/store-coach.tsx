@@ -7,25 +7,28 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpenCheck,
-  Bot,
   CalendarDays,
   Check,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Compass,
   Flame,
   Gauge,
   Gem,
   Goal,
+  Handshake,
+  Heart,
   History,
   Lightbulb,
   LockKeyhole,
   Mail,
   MessageSquare,
-  Mic,
   MoonStar,
   RefreshCw,
+  Rocket,
   Settings,
+  Smile,
   Sparkles,
   Sun,
   SunMedium,
@@ -33,12 +36,10 @@ import {
   TrendingUp,
   Trophy,
   Users,
-  Volume2,
-  X,
   Zap,
 } from 'lucide-react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ApiClientError, completeCoachPriority, dismissCoachPriority, fetchCoachActivityHeatmap, fetchCoachAchievements, fetchCoachAvailableAchievements, fetchCoachChatSuggestions, fetchCoachGoals, fetchCoachHealthScore, fetchCoachHuddle, fetchCoachPreferences, fetchCoachPriorities, fetchCoachProgressSummary, fetchCoachProgressTrends, fetchCoachReview, fetchCoachStreak, fetchCoachUsage, markCoachHuddleViewed, regenerateCoachHuddle, regenerateCoachPriorities } from './api.js'
+import { ApiClientError, completeCoachPriority, dismissCoachPriority, fetchCoachActivityHeatmap, fetchCoachAchievements, fetchCoachAvailableAchievements, fetchCoachGoals, fetchCoachHealthScore, fetchCoachHuddle, fetchCoachPreferences, fetchCoachPriorities, fetchCoachProgressSummary, fetchCoachProgressTrends, fetchCoachReview, fetchCoachStreak, fetchCoachUsage, markCoachHuddleViewed, regenerateCoachHuddle, regenerateCoachPriorities } from './api.js'
 import type { WorkspaceContext } from './model.js'
 import { formatMoney, formatNumber } from './model.js'
 import {
@@ -46,19 +47,28 @@ import {
   PERSONALITY_META,
   PLAN_LABEL,
   STREAK_BADGE_TARGETS,
+  WEEKDAY_LABELS,
   WEEKDAY_LABELS_SHORT,
   badgeTitleFromId,
   coachPersonalitiesForPlan,
+  dailyCoachTip,
   daypartForHour,
+  engagementPill,
   formatCoachDate,
+  friendlyFeasibility,
   greetingForDaypart,
   heatmapPatterns,
   huddleTimeLabel,
+  learningMoment,
   merchantDisplayName,
   nextStreakMilestone,
+  openAiCommand,
   paceLabel,
   planFeatureSummary,
   relativeTimeLabel,
+  streakStatusCopy,
+  weekCelebration,
+  whyPriorityMatters,
 } from './store-coach-model.js'
 import type {
   CoachAchievement,
@@ -66,6 +76,7 @@ import type {
   CoachGoal,
   CoachHeatmapView,
   CoachHuddle,
+  CoachPersonality,
   CoachPlan,
   CoachPreferencesView,
   CoachPriority,
@@ -75,7 +86,7 @@ import type {
   CoachStreakView,
   CoachUsageView,
 } from './store-coach-model.js'
-import { CoachChatPanel, CoachOnboardingModal } from './store-coach-panels.js'
+import { CoachOnboardingModal } from './store-coach-panels.js'
 
 export type CoachToast = (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
 
@@ -202,7 +213,7 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
     if (failed.length === 0) { setLoadState('ready'); setError(null) }
     else {
       const first = failed[0]!.reason
-      const message = first instanceof ApiClientError && first.status === 402 ? 'Store Coach is locked on your current plan. Upgrade to keep coaching.' : first instanceof Error ? first.message : 'Some Store Coach data could not be loaded.'
+      const message = first instanceof ApiClientError && first.status === 402 ? 'Store Coach is locked on your current plan. Upgrade Plan to keep coaching.' : first instanceof Error ? first.message : 'Some Store Coach data could not be loaded.'
       setLoadState(failed.length >= 10 ? 'error' : 'partial')
       setError(message)
     }
@@ -229,7 +240,6 @@ export function StoreCoachWorkspace({ context, onToast, onNavigateBilling }: { c
         health={data.health}
         streak={data.streak}
         usage={data.usage}
-        onAskCoach={() => navigate('chat')}
         onSettings={() => navigate('settings')}
         onOnboarding={() => setOnboardingOpen(true)}
         onHuddle={() => {
@@ -279,13 +289,12 @@ function daypartIcon(part: ReturnType<typeof daypartForHour>, size = 16): ReactN
  * derived from the shop domain, live streak, honest engagement status, and
  * the two actions merchants open every morning.
  */
-function CoachHero({ shop, plan, health, streak, usage, onAskCoach, onSettings, onOnboarding, onHuddle }: {
+function CoachHero({ shop, plan, health, streak, onSettings, onOnboarding, onHuddle }: {
   shop: string | null
   plan: CoachPlan
   health: CoachData['health']
   streak: CoachStreakView | null
   usage: CoachUsageView | null
-  onAskCoach: () => void
   onSettings: () => void
   onOnboarding: () => void
   onHuddle: () => void
@@ -295,47 +304,42 @@ function CoachHero({ shop, plan, health, streak, usage, onAskCoach, onSettings, 
   const greeting = greetingForDaypart(part)
   const merchantName = merchantDisplayName(shop)
   const streakDays = streak?.currentStreak ?? 0
-  const chatLimit = usage?.chatLimit ?? (COACH_LIMITS[plan].chatMessagesPerDay as number)
-  const chatUsed = usage?.chatMessagesToday ?? 0
   return (
     <header className="coach-hero">
       <div className="coach-hero-main">
         <span className="coach-avatar" aria-hidden="true">
-          <Bot size={26} />
-          <i className="coach-avatar-presence" title="Your coach is online" />
+          <Compass size={26} />
+          <i className="coach-avatar-presence" title="Your coach is here" />
         </span>
         <div className="coach-hero-copy">
           <div className="coach-hero-eyebrow">
-            <span className="coach-hero-brand">Your Store Coach</span>
-            <span className={`coach-plan-badge ${plan}`}>{PLAN_LABEL[plan]}</span>
+            <span className="coach-hero-brand">Your personal store growth coach</span>
           </div>
           <h1 className="coach-hero-title">
             {greeting}{merchantName ? `, ${merchantName}` : ''}! <span className="coach-hero-daypart">{daypartIcon(part, 20)}</span>
           </h1>
-          <p className="coach-hero-sub">Ready to help you grow today — every number you see is grounded in your synced Shopify data.</p>
+          <p className="coach-hero-sub">Let’s grow together today — I’ll keep things simple and focused on what actually helps your store.</p>
           <div className="coach-hero-meta">
-            {health && (
-              <span className={`coach-meta-pill ${health.tone}`} title="Coach engagement score — how much value you are getting from Store Coach">
-                <i className="pill-dot" />
-                {health.label}{typeof health.score === 'number' ? ` · ${health.score}/100` : ''}
-              </span>
-            )}
-            <span className="coach-meta-pill streak" title="Consecutive days you viewed your huddle">
+            <span className="coach-meta-pill" title="Where you are on your coaching journey">
+              <Handshake size={13} />
+              {engagementPill(streakDays)}
+            </span>
+            <span className="coach-meta-pill streak" title="Consecutive days you checked in with your coach">
               <Flame size={13} />
               Streak: {streakDays} day{streakDays === 1 ? '' : 's'}
             </span>
-            {usage && (
-              <span className="coach-meta-pill" title="Coach chat messages used today">
-                <MessageSquare size={13} />
-                {chatUsed} / {chatLimit >= 999 ? '∞' : chatLimit} messages today
+            {health && (
+              <span className={`coach-meta-pill ${health.tone}`} title="How consistently you are using Store Coach">
+                <i className="pill-dot" />
+                {health.label}
               </span>
             )}
+            <span className={`coach-plan-badge ${plan}`}>{PLAN_LABEL[plan]}</span>
           </div>
         </div>
       </div>
       <div className="coach-hero-actions">
-        <button className="button primary" onClick={onHuddle}><Mic size={15} /> Start Morning Huddle</button>
-        <button className="button secondary" onClick={onAskCoach}><MessageSquare size={15} /> Ask Coach</button>
+        <button className="button primary" onClick={onHuddle}><Sun size={15} /> Start Morning Huddle</button>
         <button className="icon-button coach-hero-icon" onClick={onOnboarding} aria-label="Take the two-minute tour" title="Take the two-minute tour"><Sparkles size={16} /></button>
         <button className="icon-button coach-hero-icon" onClick={onSettings} aria-label="Store Coach settings" title="Store Coach settings"><Settings size={16} /></button>
       </div>
@@ -371,12 +375,12 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
 }) {
   if (view === 'goals') return <CoachGoalsView context={context} goals={data.goals} plan={plan} onToast={onToast} onNavigate={onNavigate} onNavigateBilling={onNavigateBilling} />
   if (view === 'progress') return <CoachProgressView context={context} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} />
-  if (view === 'chat') return <CoachChatView context={context} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} />
+  if (view === 'chat') return <CoachAskRedirect onBack={() => onNavigate('coach')} />
   if (view === 'achievements') return <CoachAchievementsView context={context} achievements={data.achievements} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} />
   if (view === 'settings') return <CoachSettingsView context={context} preferences={data.preferences} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onReload={onReload} />
 
   if (!context.storeId) {
-    return <CoachEmptyState icon={Bot} title="Connect Shopify to meet your Store Coach" description="Store Coach builds every briefing, priority, and goal from your real synced store data. ProfitPilot never ships demo numbers." action="Connect Shopify" onAction={onOpenOnboarding} />
+    return <CoachEmptyState icon={Compass} title="Connect Shopify to meet your Store Coach" description="Your coach builds every briefing, priority, and goal from your real store. Nothing here is invented." action="Connect Shopify" onAction={onOpenOnboarding} />
   }
   if (loadState === 'loading') return <CoachSkeletonMain />
   if (loadState === 'error') return <CoachErrorState error="Store Coach could not load. Check your connection and retry." onRetry={onReload} onNavigateBilling={onNavigateBilling} />
@@ -384,17 +388,18 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
   return (
     <div className="coach-main">
       <section className="coach-sections">
-        <TodayBriefingCard storeId={context.storeId!} huddle={data.huddle} plan={plan} onToast={onToast} onReload={onReload} />
-        <PrioritiesSection storeId={context.storeId!} priorities={data.priorities} plan={plan} onToast={onToast} onReload={onReload} onNavigate={() => onNavigate('goals')} />
+        <TodayBriefingCard storeId={context.storeId!} huddle={data.huddle} plan={plan} onToast={onToast} onReload={onReload} onOpenTour={onOpenOnboarding} />
+        <CoachValueStrip data={data} onFocusGoals={() => onNavigate('goals')} onFocusDays={() => onNavigate('progress')} />
+        <PrioritiesSection storeId={context.storeId!} priorities={data.priorities} plan={plan} onToast={onToast} onReload={onReload} onNavigate={() => onNavigate('goals')} onNavigateBilling={onNavigateBilling} />
         <GoalSection storeId={context.storeId!} goals={data.goals} plan={plan} onToast={onToast} onNavigate={() => onNavigate('goals')} onNavigateBilling={onNavigateBilling} />
         <ProgressDashboard summary={data.summary} plan={plan} onNavigate={() => onNavigate('progress')} onNavigateBilling={onNavigateBilling} />
-        <HeatmapSection heatmap={data.heatmap} onNavigate={() => onNavigate('progress')} />
+        <BestDaysSection heatmap={data.heatmap} onNavigate={() => onNavigate('progress')} />
         <AchievementsSection achievements={data.achievements} badgeCatalog={data.badgeCatalog} streak={data.streak} plan={plan} onNavigate={() => onNavigate('achievements')} onViewHuddle={() => { void onHuddleClick(context.storeId!, onToast, onReload) }} />
-        <AskCoachSection context={context} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} />
+        <CoachStyleSection storeId={context.storeId!} preferences={data.preferences} plan={plan} onToast={onToast} onReload={onReload} onNavigateBilling={onNavigateBilling} />
         {data.review && context.storeId && <WeeklyReviewCard storeId={context.storeId} review={data.review} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onSetGoal={() => onNavigate('goals')} />}
         <CoachPlanCard plan={plan} onNavigateBilling={onNavigateBilling} />
       </section>
-      <div className="coach-onboarding-nudge"><Sparkles size={15} /><span>New to Store Coach? Take the 2-minute tour.</span><button className="text-button" onClick={onOpenOnboarding}>Start tour <ChevronRight size={14} /></button></div>
+      <div className="coach-onboarding-nudge"><Smile size={15} /><span>New here? Take a quick 2-minute tour to see how your Store Coach can help you grow.</span><button className="text-button" onClick={onOpenOnboarding}>Start Interactive Tour <ChevronRight size={14} /></button></div>
     </div>
   )
 }
@@ -414,16 +419,14 @@ async function onHuddleClick(storeId: string, onToast: CoachToast, onReload: () 
 // ---------------------------------------------------------------------------
 
 const HUDDLE_STEPS = [
-  { label: 'Reading yesterday’s synced orders and revenue', detail: 'Real rows only' },
-  { label: 'Reviewing your recent trends', detail: 'Compared against your own baseline' },
-  { label: 'Finding today’s opportunities', detail: 'Where growth is actually possible' },
+  { label: 'Looking at your recent sales and customers', detail: 'From your actual store' },
+  { label: 'Checking how this week compares', detail: 'Against your own recent days' },
+  { label: 'Finding today’s best opportunities', detail: 'Only where growth is possible' },
   { label: 'Writing your personalized briefing', detail: 'In your coach’s voice' },
 ] as const
 
-function TodayBriefingCard({ storeId, huddle, plan, onToast, onReload }: { storeId: string; huddle: CoachHuddle | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void }) {
-  const [speaking, setSpeaking] = useState(false)
+function TodayBriefingCard({ storeId, huddle, onToast, onReload, onOpenTour }: { storeId: string; huddle: CoachHuddle | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void; onOpenTour: () => void }) {
   const [generating, setGenerating] = useState(false)
-  const voicePlan = plan === 'growth' || plan === 'commander'
 
   const generate = () => {
     setGenerating(true)
@@ -433,37 +436,18 @@ function TodayBriefingCard({ storeId, huddle, plan, onToast, onReload }: { store
       .finally(() => setGenerating(false))
   }
 
-  const stopSpeaking = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-    setSpeaking(false)
-  }
-
-  const speak = () => {
-    if (speaking) { stopSpeaking(); return }
-    if (!('speechSynthesis' in window)) { onToast('Voice output is not supported in this browser.', 'info'); return }
-    const content = huddle?.content
-    if (!content) return
-    const text = [content.greeting, content.yesterdaySnapshot, content.todayPreview, content.keyInsight].filter((part): part is string => typeof part === 'string').join('. ')
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.onend = () => setSpeaking(false)
-    utterance.onerror = () => setSpeaking(false)
-    setSpeaking(true)
-    window.speechSynthesis.speak(utterance)
-  }
-
-  // ── State A: first visit / no briefing yet — a warm, educational welcome ──
   if (!huddle && !generating) {
     return (
       <section className="coach-card coach-briefing-card">
-        <CoachCardHeading kicker="TODAY’S BRIEFING" dot="purple" title="Welcome to Store Coach!" />
+        <CoachCardHeading kicker="TODAY’S BRIEFING" dot="purple" title="Welcome — I’m glad you’re here" />
         <div className="coach-briefing-welcome">
-          <span className="coach-orb"><Bot size={24} /></span>
+          <span className="coach-orb"><Compass size={24} /></span>
           <div className="coach-briefing-welcome-copy">
-            <strong>I’m your personal AI business coach.</strong>
-            <p>Every morning I analyze your synced orders, revenue, and customers, then hand you a short briefing with the top opportunities to grow — real numbers only, never invented ones. If your store data is still thin, I’ll say so honestly and tell you what to sync next.</p>
+            <strong>We’re getting to know your store…</strong>
+            <p>Coach will have insights ready after you sync your first orders. I’ll look at your recent sales and customers, then show you what’s worth doing today — real insights from your real store.</p>
             <div className="coach-briefing-welcome-actions">
-              <button className="button primary" onClick={generate}><Mic size={15} /> Generate My First Briefing</button>
-              <button className="button secondary" onClick={() => onToast('The tour walks you through huddles, goals, priorities, and chat in about two minutes.', 'info')}><BookOpenCheck size={15} /> Learn how it works</button>
+              <button className="button primary" onClick={generate}><Sparkles size={15} /> Show Me Today’s Insights</button>
+              <button className="button secondary" onClick={onOpenTour}><BookOpenCheck size={15} /> Learn how it works</button>
             </div>
           </div>
         </div>
@@ -471,31 +455,28 @@ function TodayBriefingCard({ storeId, huddle, plan, onToast, onReload }: { store
     )
   }
 
-  // ── State B: generating — animated, honest progress while the coach works ──
   if (!huddle && generating) {
     return (
       <section className="coach-card coach-briefing-card">
-        <CoachCardHeading kicker="TODAY’S BRIEFING" dot="purple" title="Your Coach is preparing today’s briefing…" />
+        <CoachCardHeading kicker="TODAY’S BRIEFING" dot="purple" title="Your coach is preparing today’s briefing…" />
         <div className="coach-briefing-generating">
           <CoachGenerationSteps />
-          <p className="coach-generating-note"><Clock3 size={13} /> This usually takes 10–30 seconds. Every number is checked against your synced data before it reaches you.</p>
+          <p className="coach-generating-note"><Clock3 size={13} /> This usually takes a few moments. I’ll only share numbers I can see in your store.</p>
         </div>
       </section>
     )
   }
 
   if (generating) {
-    // A huddle already exists and a refresh is in flight — keep showing the
-    // current content with a lightweight progress strip instead of a blank.
     return (
       <section className="coach-card coach-briefing-card">
-        <div className="coach-refreshing-strip"><RefreshCw size={14} className="spin" /> Refreshing today’s briefing from your latest synced data…</div>
-        <BriefingReadyCard storeId={storeId} huddle={huddle!} voicePlan={voicePlan} speaking={speaking} onSpeak={speak} onToast={onToast} onReload={onReload} />
+        <div className="coach-refreshing-strip"><RefreshCw size={14} className="spin" /> Refreshing today’s briefing from your latest store activity…</div>
+        <BriefingReadyCard storeId={storeId} huddle={huddle!} onToast={onToast} onReload={onReload} />
       </section>
     )
   }
 
-  return <section className="coach-card coach-briefing-card"><BriefingReadyCard storeId={storeId} huddle={huddle!} voicePlan={voicePlan} speaking={speaking} onSpeak={speak} onToast={onToast} onReload={onReload} /></section>
+  return <section className="coach-card coach-briefing-card"><BriefingReadyCard storeId={storeId} huddle={huddle!} onToast={onToast} onReload={onReload} /></section>
 }
 
 /** Animated step checklist shown while the AI writes the briefing. Steps advance on a timer; completion is the real API promise. */
@@ -522,7 +503,7 @@ export function CoachGenerationSteps({ stepMs = 2600 }: { stepMs?: number }) {
   )
 }
 
-function BriefingReadyCard({ storeId, huddle, voicePlan, speaking, onSpeak, onToast, onReload }: { storeId: string; huddle: CoachHuddle; voicePlan: boolean; speaking: boolean; onSpeak: () => void; onToast: CoachToast; onReload: () => void }) {
+function BriefingReadyCard({ storeId, huddle, onToast, onReload }: { storeId: string; huddle: CoachHuddle; onToast: CoachToast; onReload: () => void }) {
   const content = huddle.content
   const greeting = typeof content.greeting === 'string' ? content.greeting : 'Good morning.'
   const yesterday = typeof content.yesterdaySnapshot === 'string' ? content.yesterdaySnapshot : ''
@@ -533,33 +514,28 @@ function BriefingReadyCard({ storeId, huddle, voicePlan, speaking, onSpeak, onTo
     <>
       <div className="coach-briefing-top">
         <div>
-          <CoachCardHeading kicker={`TODAY’S BRIEFING · ${formatCoachDate(huddle.huddleDate).toUpperCase()}`} dot="purple" title={formatCoachDate(huddle.huddleDate)} />
+          <CoachCardHeading kicker={`TODAY’S BRIEFING · ${formatCoachDate(huddle.huddleDate).toUpperCase()}`} dot="purple" title="Here’s what’s important today" />
           <h2 className="coach-greeting">{greeting}</h2>
-          <p className="coach-briefing-lede">Here’s what matters today — pulled from your real store data.</p>
+          <p className="coach-briefing-lede">A short look at your store — two or three things worth your time.</p>
         </div>
         <div className="coach-briefing-actions">
-          <span className="coach-review-time"><Clock3 size={13} /> {minutes} min read</span>
+          <span className="coach-review-time"><Clock3 size={13} /> {minutes} min</span>
           <button className="button secondary coach-briefing-refresh" onClick={() => { void onHuddleClick(storeId, onToast, onReload) }}><RefreshCw size={14} /> Refresh</button>
         </div>
       </div>
       <div className="coach-briefing-grid">
-        <CoachBriefingCell label="Yesterday’s snapshot" icon={History} text={yesterday} />
-        <CoachBriefingCell label="Key insight" icon={Lightbulb} text={insight} />
-        <CoachBriefingCell label="Today’s focus" icon={Target} text={preview} />
+        <CoachBriefingCell label="Yesterday" icon={History} text={yesterday} />
+        <CoachBriefingCell label="Worth noticing" icon={Lightbulb} text={insight} />
+        <CoachBriefingCell label="Focus today" icon={Target} text={preview} />
       </div>
       <div className="coach-briefing-footer">
         {huddle.viewed ? (
-          <span className="coach-viewed-note"><CheckCircle2 size={13} /> Viewed — streak is safe for today</span>
+          <span className="coach-viewed-note"><CheckCircle2 size={13} /> Checked in — your streak is safe for today</span>
         ) : (
-          <button className="button primary" onClick={() => { void markCoachHuddleViewed(storeId, huddle.id).then(() => onReload()).catch((error: unknown) => onToast(errorMessage(error), 'error')) }}><Check size={14} /> Mark as read — keep the streak alive</button>
+          <button className="button primary" onClick={() => { void markCoachHuddleViewed(storeId, huddle.id).then(() => onReload()).catch((error: unknown) => onToast(errorMessage(error), 'error')) }}><Check size={14} /> I’ve read this — keep my streak going</button>
         )}
         <div className="coach-briefing-footer-side">
-          {voicePlan ? (
-            <button className="button secondary" onClick={onSpeak}>{speaking ? <><X size={14} /> Stop audio</> : <><Volume2 size={14} /> Play audio</>}</button>
-          ) : (
-            <span className="coach-voice-locked" title="Voice coaching unlocks on higher plans"><Volume2 size={13} /> Voice on higher plans</span>
-          )}
-          <span className="coach-data-note"><Sparkles size={12} /> Numbers come from synced store rows — never estimated.</span>
+          <span className="coach-data-note"><Sparkles size={12} /> Based on your actual store performance.</span>
         </div>
       </div>
     </>
@@ -567,14 +543,14 @@ function BriefingReadyCard({ storeId, huddle, voicePlan, speaking, onSpeak, onTo
 }
 
 function CoachBriefingCell({ label, icon: Icon, text }: { label: string; icon: LucideIcon; text: string }) {
-  return <div className="coach-briefing-cell"><span className="coach-briefing-cell-icon"><Icon size={15} /></span><div><strong>{label}</strong><p>{text || 'Not enough synced data yet — sync orders to fill this in.'}</p></div></div>
+  return <div className="coach-briefing-cell"><span className="coach-briefing-cell-icon"><Icon size={15} /></span><div><strong>{label}</strong><p>{text || 'Still getting to know this part of your store. Sync a few more orders and I’ll fill this in.'}</p></div></div>
 }
 
 // ---------------------------------------------------------------------------
 // 2. Priorities (FIX 4 — rich, actionable priority cards)
 // ---------------------------------------------------------------------------
 
-function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNavigate }: { storeId: string; priorities: CoachPrioritiesView | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void; onNavigate: () => void }) {
+function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNavigate, onNavigateBilling }: { storeId: string; priorities: CoachPrioritiesView | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void; onNavigate: () => void; onNavigateBilling: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [resolvedIds, setResolvedIds] = useState<ReadonlySet<string>>(new Set())
   const visible = (priorities?.priorities ?? []).filter((priority) => !resolvedIds.has(priority.id)).slice(0, Math.max(priorities?.planLimit ?? COACH_LIMITS[plan].prioritiesPerDay as number, 1))
@@ -598,20 +574,27 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
   return (
     <section className="coach-card coach-priorities-section">
       <div className="coach-section-head">
-        <CoachCardHeading kicker="TODAY'S TOP PRIORITIES" dot="red" title={priorities === null ? 'Loading your priorities…' : visible.length === 0 ? 'Everything is handled' : `${remaining} action${remaining === 1 ? '' : 's'} worth your time today`} />
+        <CoachCardHeading kicker="TODAY'S TOP PRIORITIES" dot="red" title={priorities === null ? 'Building your priorities…' : visible.length === 0 ? 'Everything is handled' : `${remaining} action${remaining === 1 ? '' : 's'} worth your time today`} />
         <div className="coach-section-head-actions">
-          <span className="coach-plan-chip">{planLimit >= 999 ? 'Unlimited' : planLimit} / day on your plan</span>
-          <button className="text-button" onClick={regenerate}><RefreshCw size={13} /> Regenerate</button>
+          <span className="coach-plan-chip">{planLimit >= 999 ? 'You get unlimited personalized priorities each day' : `You get ${planLimit} personalized ${planLimit === 1 ? 'priority' : 'priorities'} each day`}</span>
+          {plan !== 'commander' && <button className="text-button" onClick={onNavigateBilling}>Upgrade Plan for more priorities →</button>}
+          <button className="text-button" onClick={regenerate}><RefreshCw size={13} /> Refresh</button>
         </div>
       </div>
       {priorities === null ? (
-        <CoachSkeletonRow />
+        <div className="coach-building-priorities">
+          <span className="coach-orb small"><Sparkles size={18} /></span>
+          <div>
+            <strong>Building your priorities…</strong>
+            <p>Your coach is looking at your store to find the best actions for you today. This usually takes a few minutes.</p>
+          </div>
+        </div>
       ) : visible.length === 0 ? (
         <div className="coach-all-clear">
           <span className="coach-all-clear-icon"><CheckCircle2 size={26} /></span>
           <div className="coach-all-clear-copy">
             <strong>All caught up — great news!</strong>
-            <p>No urgent actions for today. Your store is running smoothly, or your synced data does not show open issues. Priorities only appear when the Coach finds something real: revenue dips, order anomalies, or growth opportunities worth acting on. Come back tomorrow, or work ahead on a weekly goal below.</p>
+            <p>No urgent actions for today. Your store looks steady, or there isn’t enough recent activity to suggest a move. Come back tomorrow, or set a weekly goal below while things are calm.</p>
             <div className="coach-all-clear-actions">
               <button className="button primary" onClick={onNavigate}><Target size={14} /> Set a weekly goal</button>
               <button className="button secondary" onClick={regenerate}><RefreshCw size={14} /> Refresh analysis</button>
@@ -628,20 +611,21 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
 }
 
 export function PriorityCard({ priority, busy, onComplete, onDismiss }: { priority: CoachPriority; busy: boolean; onComplete: () => void; onDismiss: () => void }) {
-  const meta = priority.category === 'HIGH_IMPACT' ? { icon: Flame, tone: 'red', label: 'High Impact' } : priority.category === 'QUICK_WIN' ? { icon: Zap, tone: 'green', label: 'Quick Win' } : { icon: Sparkles, tone: 'amber', label: 'Opportunity' }
+  const meta = priority.category === 'HIGH_IMPACT' ? { icon: Flame, tone: 'red', label: 'High Impact' } : priority.category === 'QUICK_WIN' ? { icon: Zap, tone: 'green', label: 'Quick Win' } : { icon: Heart, tone: 'amber', label: 'Opportunity' }
   const Icon = meta.icon
   return (
     <article className={`coach-priority-card ${meta.tone}`}>
       <div className="coach-priority-top">
         <span className="coach-priority-icon"><Icon size={15} /></span>
         <span className="coach-priority-category">{meta.label}</span>
-        <span className="coach-priority-time"><Clock3 size={12} /> {priority.timeEstimateMinutes} min</span>
+        <span className="coach-priority-time"><Clock3 size={12} /> Takes {priority.timeEstimateMinutes} min</span>
       </div>
       <h3>{priority.title}</h3>
       <p>{priority.description}</p>
+      <p className="coach-priority-why">{whyPriorityMatters(priority)}</p>
       <div className="coach-priority-impact">
         <strong>{priority.impactValue > 0 ? formatMoney(priority.impactValue, priority.impactCurrency) : 'Growth'}</strong>
-        <span>{priority.impactValue > 0 && priority.impactLabel ? priority.impactLabel : 'no dollar estimate — do it for the momentum'}</span>
+        <span>{priority.impactValue > 0 && priority.impactLabel ? `Impact: ${priority.impactLabel}` : 'Impact: long-term momentum'}</span>
       </div>
       <div className="coach-priority-actions">
         <button className="button primary" disabled={busy} onClick={onComplete}><Check size={14} /> Take Action</button>
@@ -662,7 +646,6 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
   const [accepting, setAccepting] = useState(-1)
   const active = goals[0]
   const goalPct = active ? Math.min((progress[active.id]?.current ?? active.currentProgress) / Math.max(active.targetValue, 1) * 100, 100) : 0
-  const goalLimit = COACH_LIMITS[plan].activeGoals as number
 
   useEffect(() => {
     if (!active) return
@@ -700,17 +683,17 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
           <div className="coach-goal-empty-copy">
             <span className="coach-orb small"><Target size={20} /></span>
             <div>
-              <strong>Weekly goals turn effort into direction.</strong>
-              <p>Your Coach suggests goals from your real trend — e.g. beat last week's revenue by a realistic margin — and tracks progress automatically from synced orders. Pick one below, or create your own.</p>
+              <strong>What do you want to achieve this week?</strong>
+              <p>Coach suggests goals based on your real data. Pick one below or create your own.</p>
             </div>
           </div>
           <div className="coach-goal-suggestions">
-            <div className="coach-goal-suggestions-label"><Sparkles size={13} /> AI-suggested goals from your real data</div>
+            <div className="coach-goal-suggestions-label"><Sparkles size={13} /> Coach’s suggestions from your store</div>
             {suggestionsLoading && <div className="coach-suggestion-list"><div className="coach-suggestion-card loading" /><div className="coach-suggestion-card loading" /></div>}
             {!suggestionsLoading && suggestions !== null && suggestions.length === 0 && (
               <div className="coach-goal-suggestions-empty">
-                <p>No suggestions yet — goals are proposed from your trailing revenue and order trend. Sync more order history (or a few more days of sales) and the Coach will have something realistic to aim for. You can always set a custom goal manually.</p>
-                <button className="button secondary" onClick={onNavigate}><Goal size={14} /> Create a custom goal</button>
+                <p>No suggestions yet — I’ll propose goals from what your store is already doing. Sync a few more days of sales and I’ll have something realistic to aim for. You can always create your own.</p>
+                <button className="button secondary" onClick={onNavigate}><Goal size={14} /> Create Your Own Goal</button>
               </div>
             )}
             {!suggestionsLoading && suggestions !== null && suggestions.length > 0 && (
@@ -719,22 +702,21 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
                   <div className="coach-suggestion-card" key={index}>
                     <div className="coach-suggestion-head">
                       <strong>{suggestion.title}</strong>
-                      <span className={`coach-feasibility ${suggestion.feasibility.toLowerCase()}`}>feasibility: {suggestion.feasibility.toLowerCase()}</span>
+                      <span className={`coach-feasibility ${suggestion.feasibility.toLowerCase()}`}>{friendlyFeasibility(suggestion.feasibility)}</span>
                     </div>
                     <p>{suggestion.description}</p>
                     <div className="coach-suggestion-facts">
-                      <span><Target size={12} /> Target: {formatMoney(suggestion.targetValue, suggestion.currency)}</span>
-                      <span>metric: {suggestion.metric.toLowerCase()}</span>
+                      <span><Target size={12} /> Aim for {formatMoney(suggestion.targetValue, suggestion.currency)}</span>
                     </div>
-                    {suggestion.rationale && <small className="coach-suggestion-rationale">“{suggestion.rationale}”</small>}
-                    <button className="button secondary" disabled={accepting === index} onClick={() => acceptSuggestion(suggestion, index)}>{accepting === index ? 'Setting…' : 'Choose this goal'}</button>
+                    {suggestion.rationale && <small className="coach-suggestion-rationale">Why it’s achievable: {suggestion.rationale}</small>}
+                    <button className="button secondary" disabled={accepting === index} onClick={() => acceptSuggestion(suggestion, index)}>{accepting === index ? 'Setting…' : 'Set This Goal'}</button>
                   </div>
                 ))}
                 <button className="text-button coach-goal-custom" onClick={onNavigate}>Or create a custom goal <ChevronRight size={13} /></button>
               </div>
             )}
             {goals.length > 0 && <p className="coach-goal-note">You have {goals.length} goal{goals.length === 1 ? '' : 's'} — none active this week.</p>}
-            {plan === 'trial' && <LockedFeatureNote feature={`Track more than ${goalLimit} goal at a time`} planName="Start" onUpgrade={onNavigateBilling} />}
+            {plan === 'trial' && <LockedFeatureNote feature="Want to track multiple goals?" onUpgrade={onNavigateBilling} />}
           </div>
         </div>
       ) : (
@@ -748,7 +730,7 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
             </div>
             <div className="coach-goal-status-row">
               <span className={`coach-pace-badge ${goalPct >= 100 ? 'ahead' : (progress[active.id]?.pace ?? 'ON_TRACK') === 'BEHIND' && goalPct < 40 ? 'behind' : 'on-track'}`}>{goalPct >= 100 ? 'Achieved 🎉' : paceLabel(progress[active.id]?.pace ?? 'ON_TRACK')}</span>
-              <span className="coach-feasibility-inline">feasibility: {active.feasibility.toLowerCase()}</span>
+              <span className="coach-feasibility-inline">{friendlyFeasibility(active.feasibility)}</span>
               <span className="coach-goal-metric">{active.metric.replaceAll('_', ' ').toLowerCase()}</span>
             </div>
             <GoalPaceNote goal={active} progress={progress[active.id] ?? null} />
@@ -757,7 +739,7 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
               <button className="button secondary" onClick={onNavigate}>View Details</button>
               <button className="text-button" onClick={() => onToast('Adjust the goal from the Goals view — targets and end dates are editable there.', 'info')}>Adjust Goal</button>
             </div>
-            {plan === 'trial' && <LockedFeatureNote feature="Track more than 1 goal" planName="Start" onUpgrade={onNavigateBilling} />}
+            {plan === 'trial' && <LockedFeatureNote feature="Want to track multiple goals?" onUpgrade={onNavigateBilling} />}
           </div>
         </div>
       )}
@@ -807,11 +789,11 @@ export function RadialGauge({ percent, tone, size = 132 }: { percent: number; to
   )
 }
 
-export function LockedFeatureNote({ feature, planName, onUpgrade }: { feature: string; planName: string; onUpgrade: () => void }) {
+export function LockedFeatureNote({ feature, onUpgrade }: { feature: string; planName?: string; onUpgrade: () => void }) {
   return (
     <div className="coach-locked-note">
       <LockKeyhole size={13} />
-      <span><strong>{feature}</strong> is available on {planName}.</span>
+      <span><strong>{feature}</strong></span>
       <button className="text-button" onClick={onUpgrade}>Upgrade Plan</button>
     </div>
   )
@@ -829,17 +811,17 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling }: { s
     return (
       <section className="coach-card coach-progress-dashboard">
         <div className="coach-section-head">
-          <CoachCardHeading kicker={`30-DAY PROGRESS · ${historyDays} DAYS OF HISTORY ON ${PLAN_LABEL[plan].toUpperCase()}`} dot="blue" title="How your store is moving" />
+          <CoachCardHeading kicker={`${historyDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
           <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
         </div>
-        <CoachEmptyState icon={BarChart3} title="No trend to chart yet" description="The progress dashboard draws only from synced daily revenue and order rows. Sync orders to start seeing your real 30-day trend — the chart never shows placeholder data." action="Go to progress view" onAction={onNavigate} />
+        <CoachEmptyState icon={BarChart3} title="No trend to chart yet" description="This chart fills in from your real daily sales. Sync orders and I’ll show how your store is moving — never a placeholder line." action="Go to progress view" onAction={onNavigate} />
       </section>
     )
   }
   return (
     <section className="coach-card coach-progress-dashboard">
       <div className="coach-section-head">
-        <CoachCardHeading kicker={`30-DAY PROGRESS · ${historyDays} DAYS OF HISTORY ON ${PLAN_LABEL[plan].toUpperCase()}`} dot="blue" title="How your store is moving" />
+        <CoachCardHeading kicker={`${historyDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
         <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
       </div>
       <div className="coach-metric-grid">
@@ -923,7 +905,7 @@ function HeatmapSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | n
   return (
     <section className="coach-card coach-heatmap-section">
       <div className="coach-section-head">
-        <CoachCardHeading kicker="ACTIVITY PATTERN · LAST 12 WEEKS" dot="green" title="Your store's weekly rhythm" />
+        <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
         <button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></button>
       </div>
       {cells.length === 0 ? (
@@ -1016,23 +998,23 @@ function AchievementsSection({ achievements, badgeCatalog, streak, plan, onNavig
   return (
     <section className="coach-card coach-achievements-section">
       <div className="coach-section-head">
-        <CoachCardHeading kicker={`ACHIEVEMENTS · ${achievements.length} OF ${visibleCap} ON YOUR PLAN`} dot="gold" title="Your achievements" />
+        <CoachCardHeading kicker="YOUR JOURNEY" dot="gold" title={achievements.length > 0 ? `You’ve earned ${achievements.length} badge${achievements.length === 1 ? '' : 's'} so far` : 'Your journey is just beginning'} />
         <button className="text-button" onClick={onNavigate}>View all badges <ChevronRight size={14} /></button>
       </div>
       <div className="coach-streak-strip">
         <span className="coach-streak-flame"><Flame size={16} /></span>
         <div className="coach-streak-copy">
-          <strong>{streakDays}-day streak</strong>
+          <strong>{streakStatusCopy(streakDays, streak?.todayViewed ?? false).headline}</strong>
           {milestone ? (
             <>
               <div className="coach-progress-track slim"><span style={{ width: `${milestone.progressPct}%` }} /></div>
-              <small>{streakDays} / {milestone.target} days to the next streak badge — {streak?.todayViewed ? 'today is logged, nice work.' : 'view today’s huddle to keep it alive.'}</small>
+              <small>{streakStatusCopy(streakDays, streak?.todayViewed ?? false).detail}</small>
             </>
           ) : (
-            <small>Every streak milestone is earned — longest: {streak?.longestStreak ?? 0} days.</small>
+            <small>{streakStatusCopy(streakDays, streak?.todayViewed ?? false).detail}</small>
           )}
         </div>
-        {!streak?.todayViewed && <button className="button secondary coach-streak-cta" onClick={onViewHuddle}>Keep it alive</button>}
+        {!streak?.todayViewed && <button className="button secondary coach-streak-cta" onClick={onViewHuddle}>{streakStatusCopy(streakDays, false).cta ?? 'Check in today'}</button>}
       </div>
       {recent.length === 0 ? (
         <div className="coach-empty-state slim">
@@ -1084,19 +1066,132 @@ function AchievementsSection({ achievements, badgeCatalog, streak, plan, onNavig
 }
 
 // ---------------------------------------------------------------------------
-// 7. Ask your coach (chat panel)
+// 7. Human-friendly coaching value (tips, celebrations, style, best days)
 // ---------------------------------------------------------------------------
 
-function AskCoachSection({ context, plan, onToast, onNavigateBilling }: { context: WorkspaceContext; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void }) {
-  if (!context.storeId) return null
+function CoachValueStrip({ data, onFocusGoals, onFocusDays }: { data: CoachData; onFocusGoals: () => void; onFocusDays: () => void }) {
+  const patterns = heatmapPatterns(data.heatmap?.cells ?? [])
+  const pending = (data.priorities?.priorities ?? []).filter((priority) => priority.status === 'PENDING').length
+  const completed = (data.priorities?.priorities ?? []).filter((priority) => priority.status === 'COMPLETED').length
+  const insight = typeof data.huddle?.content.keyInsight === 'string' ? data.huddle.content.keyInsight : null
+  const tip = dailyCoachTip({ huddleInsight: insight, heatmapBestWeekday: patterns.bestWeekday, pendingPriorities: pending, hasGoal: data.goals.length > 0, streakDays: data.streak?.currentStreak ?? 0 })
+  const active = data.goals[0]
+  const goalPct = active ? Math.min(active.currentProgress / Math.max(active.targetValue, 1) * 100, 100) : null
+  const celebration = weekCelebration({ revenueTrendPct: data.summary && data.summary.series.length > 0 ? data.summary.revenueTrendPct : null, completedPriorities: completed, goalProgressPct: goalPct, earnedBadges: data.achievements.length })
+  const lesson = learningMoment({ heatmapBestWeekday: patterns.bestWeekday, hasGoal: data.goals.length > 0 })
+  const tipAction = tip.kind === 'goal' ? onFocusGoals : tip.kind === 'pattern' ? onFocusDays : undefined
   return (
-    <section className="coach-card coach-ask-section">
+    <div className="coach-value-grid">
+      <section className="coach-card coach-tip-card">
+        <CoachCardHeading kicker="TODAY’S COACHING TIP" dot="purple" title={tip.title} />
+        <p>{tip.body}</p>
+        {tipAction && <button className="text-button" onClick={tipAction}>{tip.action} <ChevronRight size={13} /></button>}
+      </section>
+      <section className="coach-card coach-wins-card">
+        <CoachCardHeading kicker="THIS WEEK’S WINS" dot="gold" title={celebration ? 'Look at what you already did' : 'Wins will show up here'} />
+        {celebration ? (
+          <>
+            <ul className="coach-win-list">{celebration.items.map((item) => <li key={item}><CheckCircle2 size={13} />{item}</li>)}</ul>
+            <p className="coach-win-note">{celebration.note}</p>
+          </>
+        ) : (
+          <p>Nothing to celebrate yet — and that’s honest. Check in, finish a priority, or set a goal and I’ll cheer the real ones.</p>
+        )}
+      </section>
+      <section className="coach-card coach-lesson-card">
+        <CoachCardHeading kicker="QUICK LESSON" dot="blue" title={lesson.title} />
+        <p>{lesson.body}</p>
+      </section>
+    </div>
+  )
+}
+
+function BestDaysSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | null; onNavigate: () => void }) {
+  if (!heatmap) return <CoachSkeletonRow />
+  const patterns = useMemo(() => heatmapPatterns(heatmap.cells), [heatmap.cells])
+  const bestName = patterns.bestWeekday !== null ? WEEKDAY_LABELS[patterns.bestWeekday] : null
+  return (
+    <section className="coach-card coach-bestdays-section">
       <div className="coach-section-head">
-        <CoachCardHeading kicker="ASK YOUR COACH" dot="purple" title="A real conversation about your store" />
-        <span className="coach-ground-note"><Sparkles size={12} /> Responses are checked against your store numbers before they reach you.</span>
+        <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
+        <button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></button>
       </div>
-      <CoachChatPanel storeId={context.storeId} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} compact />
+      {heatmap.cells.length === 0 ? (
+        <div className="coach-heatmap-empty">
+          <span className="coach-empty-icon"><CalendarDays size={22} /></span>
+          <div className="coach-heatmap-empty-copy">
+            <strong>Your best days will appear here</strong>
+            <p>As real orders come in, I’ll show which days your customers already love. Nothing is guessed.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="coach-bestdays-grid">
+            <article className="coach-bestday-card">
+              <span>⭐ Your best day</span>
+              <strong>{bestName ?? 'Still learning'}</strong>
+              <p>{bestName ? `${bestName}s are when your customers buy most.` : 'Need a few more order days to name a favorite.'}</p>
+            </article>
+            <article className="coach-bestday-card">
+              <span>🔥 Peak week</span>
+              <strong>{heatmap.busiestWeek ?? 'Not enough history yet'}</strong>
+              <p>{heatmap.busiestWeek ? 'Your busiest stretch from the last 12 weeks.' : 'I’ll name a peak week once more days sync in.'}</p>
+            </article>
+            <article className="coach-bestday-card">
+              <span>💡 Coach’s tip</span>
+              <strong>{bestName ? `Plan around ${bestName}` : 'Keep syncing'}</strong>
+              <p>{bestName ? `Try scheduling promotions and emails for ${bestName}s, when your customers are already active.` : 'A little more store history makes this advice specific.'}</p>
+            </article>
+          </div>
+        </>
+      )}
     </section>
+  )
+}
+
+function CoachStyleSection({ storeId, preferences, plan, onToast, onReload, onNavigateBilling }: { storeId: string; preferences: CoachPreferencesView | null; plan: CoachPlan; onToast: CoachToast; onReload: () => void; onNavigateBilling: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const allowed = coachPersonalitiesForPlan(plan)
+  const save = (personality: CoachPersonality) => {
+    setSaving(true)
+    void import('./api.js').then(({ updateCoachPreferences }) => updateCoachPreferences(storeId, { personality })).then(() => { onToast('Coach style updated.', 'success'); onReload() }).catch((error: unknown) => onToast(errorMessage(error), 'error')).finally(() => setSaving(false))
+  }
+  return (
+    <section className="coach-card coach-style-section">
+      <CoachCardHeading kicker="CHOOSE YOUR COACH STYLE" dot="purple" title="How should I talk with you?" />
+      <p className="coach-style-lede">Your Store Coach can match the way you like to work.</p>
+      <div className="coach-personality-grid">
+        {(Object.keys(PERSONALITY_META) as CoachPersonality[]).map((id) => {
+          const meta = PERSONALITY_META[id]
+          const unlocked = allowed.includes(id)
+          const active = preferences?.personality === id
+          return (
+            <button key={id} className={`coach-personality-card ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`} disabled={!unlocked || saving} onClick={() => save(id)}>
+              <div className="coach-personality-head"><strong>{meta.emoji} {meta.label}</strong>{!unlocked && <LockKeyhole size={12} />}</div>
+              <small>{meta.tagline}{active ? ' · Current' : ''}</small>
+              <p>“{meta.sample}”</p>
+            </button>
+          )
+        })}
+      </div>
+      {allowed.length < 4 && <LockedFeatureNote feature="Want every coach style?" onUpgrade={onNavigateBilling} />}
+    </section>
+  )
+}
+
+function CoachAskRedirect({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="coach-subview">
+      <CoachSubHeader eyebrow="Store Coach" title="Questions live in AI Command" description="Store Coach is for briefings, priorities, and goals. For a conversation about your store, head to AI Command." onBack={onBack} />
+      <section className="coach-card coach-ask-cta">
+        <span className="coach-orb"><MessageSquare size={22} /></span>
+        <div>
+          <strong>Have a specific question?</strong>
+          <p>AI Command is the place for detailed answers about your store.</p>
+          <button className="button primary" onClick={openAiCommand}>Open AI Command <ChevronRight size={14} /></button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -1203,22 +1298,20 @@ function CoachPlanCard({ plan, onNavigateBilling }: { plan: CoachPlan; onNavigat
       <div className="coach-plan-head">
         <span className="coach-plan-gem"><Gem size={17} /></span>
         <div>
-          <div className="section-kicker"><span className="kicker-dot purple" />YOUR PLAN</div>
-          <h3>{PLAN_LABEL[plan]}{plan === 'commander' ? ' — every coaching feature' : ''}</h3>
-          <p>Exactly what your Store Coach includes today. No mystery tiers, no hidden limits.</p>
+          <div className="section-kicker"><span className="kicker-dot purple" />YOUR STORE COACH INCLUDES</div>
+          <h3>Right now on {PLAN_LABEL[plan]}</h3>
+          <p>Clear coaching — no mystery tiers, no hidden limits.</p>
         </div>
-        {plan !== 'commander' && <button className="button primary coach-plan-upgrade" onClick={onNavigateBilling}><ArrowUpRight size={14} /> Upgrade Plan</button>}
+        {plan !== 'commander' && <button className="button primary coach-plan-upgrade" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</button>}
       </div>
       <ul className="coach-plan-included">
         {summary.included.map((feature) => <li key={feature}><Check size={14} />{feature}</li>)}
       </ul>
-      {summary.upgradeTeaser && summary.upgradeTeaser.length > 0 && (
+      {plan !== 'commander' && (
         <div className="coach-plan-teaser">
-          <strong>Higher plans add</strong>
-          <div className="coach-plan-teaser-items">
-            {summary.upgradeTeaser.map((feature) => <span key={feature}><Sparkles size={12} />{feature}</span>)}
-          </div>
-          <button className="button secondary" onClick={onNavigateBilling}><ArrowUpRight size={14} /> Upgrade Plan</button>
+          <strong>Unlock more coaching</strong>
+          <p>Get more priorities, more goals, longer history, and every coach style.</p>
+          <button className="button secondary" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</button>
         </div>
       )}
     </section>
@@ -1416,14 +1509,9 @@ function WeeklyPatternBars({ storeId, onToast }: { storeId: string | null; onToa
   )
 }
 
-export function CoachChatView({ context, plan, onToast, onNavigateBilling }: { context: WorkspaceContext; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void }) {
+export function CoachChatView({ context }: { context: WorkspaceContext; plan?: CoachPlan; onToast?: CoachToast; onNavigateBilling?: () => void }) {
   if (!context.storeId) return null
-  return (
-    <div className="coach-subview">
-      <CoachSubHeader eyebrow="Store Coach" title="Chat" description="Ask anything about your store. Answers are checked against your real numbers." onBack={() => window.history.back()} />
-      <CoachChatPanel storeId={context.storeId} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} />
-    </div>
-  )
+  return <CoachAskRedirect onBack={() => window.history.back()} />
 }
 
 export function CoachAchievementsView({ context, achievements, plan, onToast, onNavigateBilling }: { context: WorkspaceContext; achievements: readonly CoachAchievement[]; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void }) {
@@ -1486,7 +1574,7 @@ export function CoachSettingsView({ context, preferences, plan, onToast, onNavig
   const allowedPersonalities = coachPersonalitiesForPlan(plan)
   return (
     <div className="coach-subview">
-      <CoachSubHeader eyebrow="Store Coach" title="Preferences" description="Tune the Coach’s personality, huddle time, notifications, voice, widget, and language." onBack={() => window.history.back()} />
+      <CoachSubHeader eyebrow="Store Coach" title="Preferences" description="Tune your coach’s style, briefing time, notifications, widget, and language." onBack={() => window.history.back()} />
       <div className="coach-settings-grid">
         <section className="coach-card">
           <CoachCardHeading kicker="PERSONALITY" dot="purple" title="How your Coach talks" />
@@ -1526,11 +1614,8 @@ export function CoachSettingsView({ context, preferences, plan, onToast, onNavig
           <CoachSettingRow label="Sunday weekly email" description="A digest of wins, metrics, and next-week focus"><Toggle value={preferences?.weeklyEmailEnabled ?? true} onChange={(value) => save({ weeklyEmailEnabled: value })} disabled={saving} /></CoachSettingRow>
         </section>
         <section className="coach-card">
-          <CoachCardHeading kicker="VOICE · WIDGET · LANGUAGE" dot="purple" title="Extras" />
-          <CoachSettingRow label="Voice coaching" description="Listen to huddles and chat replies">
-            {plan === 'growth' || plan === 'commander' ? <Toggle value={preferences?.voiceEnabled ?? false} onChange={(value) => save({ voiceEnabled: value })} disabled={saving} /> : <LockedFeatureNote feature="Voice coaching" planName="Growth" onUpgrade={onNavigateBilling} />}
-          </CoachSettingRow>
-          <CoachSettingRow label="Coach widget" description="Floating coach on every page">
+          <CoachCardHeading kicker="WIDGET · LANGUAGE" dot="purple" title="Extras" />
+          <CoachSettingRow label="Coach widget" description="A friendly reminder on every page">
             {plan === 'trial' ? <LockedFeatureNote feature="The floating Coach widget" planName="Start" onUpgrade={onNavigateBilling} /> : <Toggle value={preferences?.widgetEnabled ?? false} onChange={(value) => save({ widgetEnabled: value })} disabled={saving} />}
           </CoachSettingRow>
           <CoachSettingRow label="Language" description="English or Hindi coaching">

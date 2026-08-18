@@ -198,26 +198,30 @@ export const PLAN_LABEL: Readonly<Record<CoachPlan, string>> = {
   commander: 'Commander',
 }
 
-export const PERSONALITY_META: Readonly<Record<CoachPersonality, Readonly<{ label: string; tagline: string; sample: string }>>> = {
+export const PERSONALITY_META: Readonly<Record<CoachPersonality, Readonly<{ label: string; tagline: string; sample: string; emoji: string }>>> = {
+  CASUAL: {
+    label: 'Friendly',
+    tagline: 'Warm and encouraging',
+    emoji: '😊',
+    sample: 'Hey there! Great to see you. Quick look at yesterday, then we will figure out today together.',
+  },
   PROFESSIONAL: {
     label: 'Professional',
-    tagline: 'Formal, friendly, data-focused',
-    sample: 'Good morning. Yesterday your store generated real orders. Let\u2019s review what the data says before we plan today.',
+    tagline: 'Direct and businesslike',
+    emoji: '💼',
+    sample: 'Good morning. Yesterday your store generated real orders. Let’s review what happened, then plan today.',
   },
   MOTIVATIONAL: {
     label: 'Motivational',
-    tagline: 'Enthusiastic, celebration-heavy',
-    sample: 'Good morning, champion! You showed up today and that is already a win. Let\u2019s build some momentum!',
+    tagline: 'Energetic and inspiring',
+    emoji: '🎯',
+    sample: 'Good morning, champion! You showed up today and that is already a win. Let’s build some momentum!',
   },
   ANALYTICAL: {
     label: 'Analytical',
-    tagline: 'Data-heavy, detail-oriented',
-    sample: 'Morning briefing. Yesterday: revenue, orders, and AOV against the trailing 7-day baseline. Key deltas follow.',
-  },
-  CASUAL: {
-    label: 'Casual',
-    tagline: 'Friendly and conversational',
-    sample: 'Hey there! Great to see you. Quick look at yesterday, then we\u2019ll figure out today together.',
+    tagline: 'Detailed and data-focused',
+    emoji: '📊',
+    sample: 'Morning briefing. Here is yesterday against your own recent baseline, then the one move that matters most.',
   },
 }
 
@@ -402,26 +406,24 @@ export function planFeatureSummary(plan: CoachPlan): CoachPlanSummary {
   const flag = (key: string): boolean => limits[key] === true
   const historyDays = num('progressHistoryDays')
   const included: string[] = [
-    `${countLabel(num('prioritiesPerDay'), 'priorities per day')}`,
-    `${countLabel(num('activeGoals'), 'active goals')}`,
-    `${historyDays >= UNLIMITED ? 'Full progress history' : `${historyDays} days of progress history`}`,
-    `${countLabel(num('chatMessagesPerDay'), 'coach chat messages a day')}`,
-    `${num('badgesVisible')}-badge catalog`,
-    flag('customHuddleTime') ? 'Custom huddle time' : 'Daily 7:00 AM huddle',
-    `${coachPersonalitiesForPlan(plan).length} of 4 coach personalities`,
+    'Daily morning briefings',
+    `${countLabel(num('prioritiesPerDay'), num('prioritiesPerDay') === 1 ? 'personalized priority per day' : 'personalized priorities per day')}`,
+    `${countLabel(num('activeGoals'), num('activeGoals') === 1 ? 'weekly goal to track' : 'weekly goals to track')}`,
+    `${num('badgesVisible')} achievement badges`,
+    `${historyDays >= UNLIMITED ? 'Full history of your journey' : `${historyDays} days of history`}`,
+    `${coachPersonalitiesForPlan(plan).length} of 4 coach styles`,
   ]
-  if (flag('voice')) included.push('Voice coaching (huddles + chat)')
+  if (flag('customHuddleTime')) included.push('Choose your own briefing time')
   if (flag('weeklyPdf')) included.push('Weekly PDF reports')
-  if (flag('widget')) included.push('Floating coach widget')
+  if (flag('widget')) included.push('Floating coach reminder')
   if (flag('hindi')) included.push('English + Hindi coaching')
   if (plan === 'commander') return { included, upgradeTeaser: null, nextTierLabel: null }
   const teaser: string[] = []
-  if (!flag('customHuddleTime')) teaser.push('Custom huddle time')
-  if (num('chatMessagesPerDay') < 100) teaser.push('More daily chat messages')
-  if (!flag('voice')) teaser.push('Voice coaching')
+  if (num('prioritiesPerDay') < UNLIMITED) teaser.push('More personalized priorities each day')
+  if (num('activeGoals') < UNLIMITED) teaser.push('Track more than one goal at a time')
+  if (historyDays < 90) teaser.push('Longer history')
+  if (coachPersonalitiesForPlan(plan).length < 4) teaser.push('Every coach style')
   if (!flag('weeklyPdf')) teaser.push('Weekly PDF reports')
-  if (historyDays < 90) teaser.push('Longer progress history')
-  if (plan === 'trial') teaser.push('Floating coach widget')
   const nextTierLabel = plan === 'trial' ? 'Start' : plan === 'start' ? 'Growth' : 'Commander'
   return { included, upgradeTeaser: teaser, nextTierLabel }
 }
@@ -436,4 +438,175 @@ export function formatCoachDate(iso: string): string {
 /** "Aug 18 – Aug 24" style range from two ISO dates. */
 export function formatCoachDateRange(startIso: string, endIso: string): string {
   return `${formatCoachDate(startIso)} – ${formatCoachDate(endIso)}`
+}
+
+// ── Human-friendly coaching copy (derived from real payloads only) ────────
+
+export function engagementPill(currentStreak: number): string {
+  if (currentStreak <= 0) return 'Just getting started'
+  if (currentStreak < 3) return 'Building a habit'
+  if (currentStreak < 7) return 'On a roll'
+  if (currentStreak < 30) return 'Consistent coach'
+  return 'Seasoned operator'
+}
+
+export type StreakStatusCopy = Readonly<{ headline: string; detail: string; cta: string | null }>
+
+/** Motivational streak language. Never invents a streak the merchant did not earn. */
+export function streakStatusCopy(currentStreak: number, todayViewed: boolean): StreakStatusCopy {
+  const days = Math.max(0, Math.floor(currentStreak))
+  if (days <= 0) {
+    return {
+      headline: 'Build your streak',
+      detail: todayViewed ? 'Nice check-in. Come back tomorrow to start a 3-day streak.' : 'Check in today to start building a 3-day streak.',
+      cta: todayViewed ? null : 'Check in today',
+    }
+  }
+  if (days === 1) {
+    return {
+      headline: 'Day 1 — you showed up',
+      detail: todayViewed ? 'Come back tomorrow and make it two in a row.' : 'Open today’s briefing to keep this going.',
+      cta: todayViewed ? null : 'Keep it going',
+    }
+  }
+  const milestone = nextStreakMilestone(days)
+  if (!milestone) {
+    return {
+      headline: `${days}-day streak`,
+      detail: 'Amazing consistency — every day here is a real check-in.',
+      cta: todayViewed ? null : 'Keep it alive',
+    }
+  }
+  return {
+    headline: `${days}-day streak`,
+    detail: todayViewed
+      ? `${days} of ${milestone.target} days toward your next badge.`
+      : `Open today’s briefing to keep your ${days}-day streak alive.`,
+    cta: todayViewed ? null : 'Keep it alive',
+  }
+}
+
+export type CoachTip = Readonly<{ title: string; body: string; action: string; kind: 'priority' | 'pattern' | 'goal' | 'streak' | 'insight' | 'welcome' }>
+
+/** A coaching tip grounded in what the store actually has right now. */
+export function dailyCoachTip(input: Readonly<{
+  huddleInsight: string | null
+  heatmapBestWeekday: number | null
+  pendingPriorities: number
+  hasGoal: boolean
+  streakDays: number
+}>): CoachTip {
+  if (input.pendingPriorities > 0) {
+    return {
+      title: "Today's coaching tip",
+      body: `You have ${input.pendingPriorities} action${input.pendingPriorities === 1 ? '' : 's'} waiting. Start with the smallest one — finishing something real builds momentum.`,
+      action: 'See today’s priorities',
+      kind: 'priority',
+    }
+  }
+  if (input.heatmapBestWeekday !== null && input.heatmapBestWeekday >= 0 && input.heatmapBestWeekday <= 6) {
+    const day = WEEKDAY_LABELS[input.heatmapBestWeekday] ?? 'your best day'
+    return {
+      title: "Today's coaching tip",
+      body: `${day} is when your customers buy most. Plan promotions and emails for ${day} so you meet them when they are already shopping.`,
+      action: 'See your best days',
+      kind: 'pattern',
+    }
+  }
+  if (!input.hasGoal) {
+    return {
+      title: "Today's coaching tip",
+      body: 'A weekly goal gives your effort a finish line. Pick one target this week so every action has a direction.',
+      action: 'Set a weekly goal',
+      kind: 'goal',
+    }
+  }
+  if (input.streakDays <= 0) {
+    return {
+      title: "Today's coaching tip",
+      body: 'Checking in daily helps you notice what changed. Open today’s briefing and mark it read to start your streak.',
+      action: 'Open today’s briefing',
+      kind: 'streak',
+    }
+  }
+  const insight = input.huddleInsight?.trim() ?? ''
+  if (insight.length > 0) {
+    return { title: "Today's coaching tip", body: insight, action: 'Review today’s briefing', kind: 'insight' }
+  }
+  return {
+    title: "Today's coaching tip",
+    body: 'Keep showing up. Your coach gets sharper as more of your real store activity syncs in.',
+    action: 'Refresh your briefing',
+    kind: 'welcome',
+  }
+}
+
+export type WeekCelebration = Readonly<{ items: readonly string[]; note: string }>
+
+/** Celebrate only facts we can see. Returns null when there is nothing real to cheer. */
+export function weekCelebration(input: Readonly<{
+  revenueTrendPct: number | null
+  completedPriorities: number
+  goalProgressPct: number | null
+  earnedBadges: number
+}>): WeekCelebration | null {
+  const items: string[] = []
+  if (input.revenueTrendPct !== null && Number.isFinite(input.revenueTrendPct) && input.revenueTrendPct !== 0) {
+    items.push(input.revenueTrendPct > 0
+      ? `Revenue is up ${Math.abs(input.revenueTrendPct).toFixed(1)}% versus the previous stretch`
+      : `Revenue is down ${Math.abs(input.revenueTrendPct).toFixed(1)}% — a chance to focus today’s actions`)
+  }
+  if (input.completedPriorities > 0) items.push(`${input.completedPriorities} priorit${input.completedPriorities === 1 ? 'y' : 'ies'} finished`)
+  if (input.goalProgressPct !== null && Number.isFinite(input.goalProgressPct) && input.goalProgressPct > 0) {
+    items.push(`Weekly goal is ${Math.round(Math.min(input.goalProgressPct, 100))}% of the way there`)
+  }
+  if (input.earnedBadges > 0) items.push(`${input.earnedBadges} badge${input.earnedBadges === 1 ? '' : 's'} earned so far`)
+  if (items.length === 0) return null
+  return {
+    items,
+    note: input.revenueTrendPct !== null && input.revenueTrendPct < 0
+      ? 'Slow weeks happen. Stay with the plan — you’ve got this.'
+      : 'Keep going — this is real progress from your store.',
+  }
+}
+
+export function friendlyFeasibility(level: CoachGoal['feasibility']): string {
+  if (level === 'HIGH') return 'Well within reach'
+  if (level === 'MEDIUM') return 'A healthy stretch'
+  return 'Ambitious — we’ll take it day by day'
+}
+
+export function whyPriorityMatters(priority: CoachPriority): string {
+  if (priority.impactValue > 0 && priority.impactLabel) return `Why it matters: ${priority.impactLabel}`
+  if (priority.category === 'QUICK_WIN') return 'Why it matters: a small win today keeps the store moving.'
+  if (priority.category === 'HIGH_IMPACT') return 'Why it matters: this is one of the highest-leverage moves on your store right now.'
+  return 'Why it matters: this is an opening your recent store activity surfaced.'
+}
+
+export function learningMoment(input: Readonly<{ heatmapBestWeekday: number | null; hasGoal: boolean }>): Readonly<{ title: string; body: string }> {
+  if (input.heatmapBestWeekday !== null && input.heatmapBestWeekday >= 0 && input.heatmapBestWeekday <= 6) {
+    const day = WEEKDAY_LABELS[input.heatmapBestWeekday] ?? 'your busiest day'
+    return {
+      title: 'Why timing matters',
+      body: `Your customers already have a favorite shopping day — ${day}. Meeting them then uses a pattern your store already has.`,
+    }
+  }
+  if (!input.hasGoal) {
+    return {
+      title: 'Why a weekly goal helps',
+      body: 'A single weekly target turns a pile of tasks into a direction. Your coach tracks it from your real orders, so you never have to guess the score.',
+    }
+  }
+  return {
+    title: 'Why daily check-ins help',
+    body: 'Your briefing is written from yesterday’s real orders. Checking in keeps the streak honest and tells your coach you are in the loop.',
+  }
+}
+
+export function openAiCommand(): void {
+  try {
+    window.location.hash = '/ai-command'
+  } catch {
+    /* embedded browsers may restrict location writes */
+  }
 }

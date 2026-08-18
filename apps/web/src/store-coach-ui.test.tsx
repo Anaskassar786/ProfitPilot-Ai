@@ -30,8 +30,15 @@ import {
   huddleTimeLabel,
   merchantDisplayName,
   nextStreakMilestone,
+  dailyCoachTip,
+  engagementPill,
+  friendlyFeasibility,
+  learningMoment,
   paceLabel,
   planFeatureSummary,
+  streakStatusCopy,
+  weekCelebration,
+  whyPriorityMatters,
 } from './store-coach-model.js'
 import type { CoachPriority } from './store-coach-model.js'
 
@@ -203,17 +210,17 @@ describe('Streak milestones (FIX 7)', () => {
 describe('Plan feature summary (FIX 12)', () => {
   it('lists exactly what each tier includes', () => {
     const trial = planFeatureSummary('trial')
-    expect(trial.included.join(' ')).toContain('2 priorities per day')
-    expect(trial.included.join(' ')).toContain('5 coach chat messages a day')
+    expect(trial.included.join(' ')).toContain('2 personalized priorities per day')
+    expect(trial.included.join(' ')).toContain('Daily morning briefings')
     expect(trial.upgradeTeaser).not.toBeNull()
     const commander = planFeatureSummary('commander')
-    expect(commander.included.join(' ')).toContain('Unlimited priorities per day')
+    expect(commander.included.join(' ')).toContain('Unlimited personalized priorities per day')
     expect(commander.included.join(' ')).toContain('Weekly PDF reports')
     expect(commander.upgradeTeaser).toBeNull()
   })
   it('teases upgrades without promising fake store outcomes', () => {
     const start = planFeatureSummary('start')
-    expect(start.upgradeTeaser).toContain('Voice coaching')
+    expect(start.upgradeTeaser).toContain('More personalized priorities each day')
     const growth = planFeatureSummary('growth')
     expect(growth.upgradeTeaser).toContain('Weekly PDF reports')
     for (const summary of [planFeatureSummary('trial'), planFeatureSummary('start'), planFeatureSummary('growth')]) {
@@ -258,7 +265,7 @@ describe('Store Coach components', () => {
   it('renders the animated generation steps for the briefing', () => {
     const html = renderToStaticMarkup(createElement(CoachGenerationSteps))
     expect(html).toContain('coach-generating-steps')
-    expect(html).toContain('Reading yesterday’s synced orders')
+    expect(html).toContain('Looking at your recent sales and customers')
     expect(html).toContain('Writing your personalized briefing')
   })
   it('renders big number cards with trend arrows and sparkline', () => {
@@ -299,5 +306,38 @@ describe('Store Coach components', () => {
     const html = renderToStaticMarkup(createElement(Toggle, { value: true, onChange: () => undefined }))
     expect(html).toContain('role="switch"')
     expect(html).toContain('aria-checked="true"')
+  })
+})
+
+describe('Human-friendly coaching copy (zero fake data)', () => {
+  it('encourages a 0-day streak instead of sounding sad', () => {
+    expect(engagementPill(0)).toBe('Just getting started')
+    const copy = streakStatusCopy(0, false)
+    expect(copy.headline).toBe('Build your streak')
+    expect(copy.detail.toLowerCase()).not.toContain('0-day')
+    expect(copy.cta).toBe('Check in today')
+  })
+  it('derives tips only from real store state', () => {
+    const fromPriorities = dailyCoachTip({ huddleInsight: null, heatmapBestWeekday: null, pendingPriorities: 2, hasGoal: false, streakDays: 0 })
+    expect(fromPriorities.body).toContain('2 actions waiting')
+    const fromPattern = dailyCoachTip({ huddleInsight: null, heatmapBestWeekday: 0, pendingPriorities: 0, hasGoal: true, streakDays: 4 })
+    expect(fromPattern.body).toContain('Sunday')
+    const empty = dailyCoachTip({ huddleInsight: null, heatmapBestWeekday: null, pendingPriorities: 0, hasGoal: true, streakDays: 3 })
+    expect(empty.body).not.toMatch(/\d+%|3x|studies show/i)
+  })
+  it('returns null celebration when there is nothing real to cheer', () => {
+    expect(weekCelebration({ revenueTrendPct: null, completedPriorities: 0, goalProgressPct: null, earnedBadges: 0 })).toBeNull()
+    const win = weekCelebration({ revenueTrendPct: 12.4, completedPriorities: 2, goalProgressPct: 40, earnedBadges: 1 })
+    expect(win?.items.join(' ')).toContain('12.4%')
+    expect(win?.items.join(' ')).toContain('2 priorities finished')
+  })
+  it('uses friendly feasibility labels', () => {
+    expect(friendlyFeasibility('HIGH')).toBe('Well within reach')
+    expect(friendlyFeasibility('LOW')).toMatch(/Ambitious/)
+  })
+  it('keeps learning moments free of invented statistics', () => {
+    const lesson = learningMoment({ heatmapBestWeekday: 6, hasGoal: false })
+    expect(lesson.body).toContain('Saturday')
+    expect(lesson.body).not.toMatch(/\d+%/ )
   })
 })
