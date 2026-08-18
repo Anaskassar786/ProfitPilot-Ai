@@ -6,6 +6,7 @@ export type SectionId =
   | 'inventory'
   | 'analytics'
   | 'command-center'
+  | 'ai-growth-command'
   | 'recommendations'
   | 'automation'
   | 'campaigns'

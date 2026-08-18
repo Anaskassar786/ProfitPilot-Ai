@@ -33,9 +33,11 @@ import {
   Gauge,
   GitBranch,
   Globe2,
+  GraduationCap,
   Inbox,
   Info,
   Keyboard,
+  Landmark,
   LayoutDashboard,
   LifeBuoy,
   LineChart,
@@ -109,8 +111,10 @@ import { CustomersPage } from './customers.js'
 import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
+import { AiGrowthCommandPage } from './executive.js'
 import { AiCommandPage } from './ai-command-page.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
+import { CoachWidget } from './coach-widget.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -127,6 +131,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI employee',
     items: [
+      { id: 'ai-growth-command', label: 'AI Growth Command', icon: GraduationCap, badge: 'NEW' },
       { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
@@ -155,6 +160,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
   'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
+  'ai-growth-command': { title: 'AI Growth Command', description: 'Store Coach for daily tactics, AI Executive for boardroom strategy, and the Insights Hub.', icon: Landmark },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
@@ -182,11 +188,13 @@ export default function App() {
   // the user expects instead of resetting to the dashboard.
   const [activePage, setActivePage] = useState<SectionId>(() => {
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
+    if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
     if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
+    if (window.location.pathname.startsWith('/ai-growth-command')) return 'ai-growth-command'
+    if (window.location.pathname.startsWith('/automation')) return 'automation'
     return 'dashboard'
   })
-
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -356,6 +364,8 @@ export default function App() {
     if (page === 'campaigns') showToast('Campaigns has been replaced by AI Command', 'info')
     if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
+    if (next === 'ai-growth-command' && !window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/ai-growth-command${window.location.search}`)
+    else if (next !== 'ai-growth-command' && window.location.pathname.startsWith('/ai-growth-command')) window.history.pushState({}, '', `/${window.location.search}`)
     setActivePage(next)
     setMobileOpen(false)
     setCommandOpen(false)
@@ -364,7 +374,8 @@ export default function App() {
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
-      else if (window.location.hash.startsWith('#/recommendations') || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      else if (next === 'ai-growth-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
+      else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     } catch { /* embedded browsers may restrict history access */ }
   }
 
@@ -372,10 +383,12 @@ export default function App() {
   // pages keeps the visible page in sync.
   useEffect(() => {
     const onHashNavigation = () => {
-      const onRecommendations = window.location.hash.startsWith('#/recommendations')
+      const section = hashSection(window.location.hash)
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
       if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
-      setActivePage((current) => (onRecommendations ? 'recommendations' : onCommand ? 'ai-command' : current === 'recommendations' || current === 'ai-command' ? 'dashboard' : current))
+      const onCoach = window.location.pathname.startsWith('/ai-growth-command')
+      const onAutomation = window.location.pathname.startsWith('/automation')
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onCoach ? 'ai-growth-command' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -491,6 +504,7 @@ export default function App() {
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+      {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} />}
     </div>
   )
 }
@@ -563,6 +577,7 @@ function PageRouter({
   if (active === 'analytics') return <RedesignedAnalyticsPage context={context} snapshot={data.analytics} onSync={onSync} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
+  if (active === 'ai-growth-command') return <AiGrowthCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
@@ -696,12 +711,26 @@ function RecommendationCard({ recommendation, onEvidence, onDecide }: { recommen
   return <article className="recommendation-card"><div className="recommendation-card-main"><div className="recommendation-card-top"><span className="agent-pill"><span />{recommendation.agent}</span><span className={`confidence-pill ${recommendation.confidenceLevel.toLowerCase()}`}><span />{recommendation.confidenceLevel}</span><span className="recommendation-time">{recommendation.status}</span></div><h3>{recommendation.title}</h3><p>{recommendation.reason}</p><div className="evidence-snippets"><span><Database size={13} /> Rule {recommendation.ruleId} · v1.0.0</span><span><ShieldCheck size={13} /> {recommendation.explanationStatus}</span>{recommendation.explanation && <span><MessageSquare size={13} /> {recommendation.explanation}</span>}</div></div><div className="recommendation-card-side"><span className="impact-label">{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><button className="text-button" onClick={onEvidence}><Eye size={14} /> Evidence</button>{recommendation.status === 'PENDING' ? <div className="recommendation-actions"><button className="button reject" onClick={() => void onDecide(recommendation.id, 'reject', recommendation.version)}>Reject</button><button className="button approve" onClick={() => void onDecide(recommendation.id, 'approve', recommendation.version)}><Check size={14} /> Approve</button></div> : <span className="resolved-label"><CheckCircle2 size={14} />{recommendation.status}</span>}</div></article>
 }
 
-function CampaignsPage({ context, onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
-  const [templates, setTemplates] = useState<readonly import('./api.js').CampaignTemplateRecord[]>([])
-  const refresh = () => { if (!context.storeId) { setTemplates([]); return }; void fetchCampaignTemplates(context.storeId).then(setTemplates).catch((error: unknown) => onToast(errorMessage(error), 'error')) }
-  useEffect(() => { refresh() }, [context.storeId])
-  const create = async () => { try { await createCampaignTemplate({ id: crypto.randomUUID(), storeId: context.storeId ?? '', name: 'New compliant email', kind: 'EMAIL', subject: 'Hello {{customer.first_name}}', body: 'Your unsubscribe link: {{unsubscribe.url}}' }); onToast('Closed-variable template created.', 'success'); refresh() } catch (error: unknown) { onToast(errorMessage(error), 'error') } }
-  return <PageLayout eyebrow="Marketing center" title="Campaigns" description="Closed 11-variable templates, suppression checks, HMAC tracking, and merchant-owned sending." actions={<><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Refresh templates</button><button className="button primary" onClick={() => void create()}><Plus size={15} /> New template</button></>}><div className="campaign-hero"><div><div className="section-kicker"><span className="kicker-dot purple" /> Two-layer email flow</div><h2>System mail and merchant campaigns never share a sender.</h2><p>{context.storeId ? 'Campaigns send approved emails to customers from your store address. Verify that address in Settings, then create a template and review it before send.' : 'Connect a store before creating merchant campaign templates.'}</p></div><div className="campaign-hero-art"><Mail size={28} /><span>Email</span></div></div><div className="sync-banner"><ShieldCheck size={15} /><span>Verify your merchant email in Settings before any campaign can send.</span><button onClick={() => onToast('Open Settings → Merchant campaign email to save and confirm your From address.', 'info')}>Open verification</button></div>{templates.length === 0 ? <EmptyState icon={Mail} title="No templates yet" description="Create a closed-variable email template. Invalid variables and missing unsubscribe links fail honestly on the server." action="Create template" onAction={() => void create()} /> : <div className="template-grid">{templates.map((template) => <div className="card template-card" key={template.id}><span className="export-icon purple"><Mail size={18} /></span><h3>{template.name}</h3><p>{template.subject}</p><div className="template-footer"><span>{template.variables.length} variables · {template.kind}</span><button className="button secondary" onClick={() => onToast('Verify merchant email in Settings, then return here to send this template.', 'info')}>Verify to send</button></div></div>)}</div>}</PageLayout>
+function CampaignsComingSoon({ onNavigate, onNavigateAutomation }: { onNavigate: () => void; onNavigateAutomation: () => void }) {
+  const previewFeatures = ['AI-drafted subject lines', 'Advanced segmentation', 'A/B testing', 'Revenue attribution', 'Full analytics'] as const
+  return (
+    <PageLayout eyebrow="Marketing center" title="Campaigns" description="A professional email marketing experience is on its way.">
+      <div className="campaigns-coming-soon">
+        <span className="campaigns-coming-soon-icon"><Mail size={26} /><Clock3 size={13} className="campaigns-coming-soon-clock" /></span>
+        <div className="section-kicker"><span className="kicker-dot purple" />MARKETING CENTER</div>
+        <h2>Campaigns are Coming Soon</h2>
+        <p>We’re building a professional email marketing experience with full legal compliance. Currently, you can use automated workflows in the Automation module for transactional emails.</p>
+        <div className="campaigns-coming-soon-features">
+          {previewFeatures.map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}
+        </div>
+        <div className="campaigns-coming-soon-actions">
+          <button className="button primary" onClick={onNavigate}><GraduationCap size={15} /> Try AI Growth Command Instead</button>
+          <button className="button secondary" onClick={onNavigateAutomation}><Workflow size={15} /> Open Automation for transactional emails</button>
+        </div>
+        <p className="campaigns-coming-soon-note">Your existing campaign templates are safe — nothing has been deleted, and they will be available again when Campaigns launches.</p>
+      </div>
+    </PageLayout>
+  )
 }
 
 function CopilotPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { const [query, setQuery] = useState(''); return <PageLayout eyebrow="Advanced query" title="Copilot" description="A closed-intent grammar will answer from evidence packs once F8 is implemented." actions={<button className="button secondary"><Clock3 size={15} /> Thread history</button>}><div className="copilot-layout"><section className="copilot-main"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">10 SUPPORTED INTENTS · F8</div><h2>Ask a grounded question.</h2><p>There are no generated answers in this phase.</p></div></div><div className="copilot-empty"><Database size={24} /><strong>Copilot is not answering yet</strong><span>F8 will connect closed grammar intents to real evidence tables.</span><button className="button secondary" onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><LockKeyhole size={14} /> View gate</button></div><div className="copilot-composer"><div className="composer-label"><span><Command size={13} /> Try a future intent</span><span>Numbers will come from F2 tables</span></div><div className="composer-input"><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Why did sales change this week?" rows={2} /><button className="send-button" disabled={!query.trim()} onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><ArrowUpRight size={16} /></button></div><div className="suggested-prompts"><button onClick={() => setQuery('Which products are at stockout risk?')}>Stockout risk</button><button onClick={() => setQuery('What changed in revenue?')}>Revenue change</button></div></div></section><aside className="card copilot-sidebar"><CardHeading kicker="Thread history" dot="blue" title="No questions yet" /><EmptySmall icon={MessageSquare} text="F8 threads are not created yet." /></aside></div></PageLayout> }
@@ -867,4 +896,10 @@ function storeNumberRecord(key: string, value: Readonly<Record<string, number>>)
 /** True for the 503 the API returns while a store's Shopify circuit is open. */
 function isCircuitOpen(error: unknown): boolean { return error instanceof ApiClientError && error.status === 503 && /circuit is open/i.test(error.message) }
 function errorMessage(error: unknown): string { if (error instanceof ApiClientError) return error.message; if (error instanceof Error) return error.message; return 'The API could not be reached.' }
+/** Resolves a deep-link hash to a workspace section id, or null. */
+function hashSection(hash: string): 'recommendations' | 'ai-growth-command' | null {
+  if (hash.startsWith('#/recommendations')) return 'recommendations'
+  if (hash.startsWith('#/ai-growth-command')) return 'ai-growth-command'
+  return null
+}
 function isTypingTarget(target: EventTarget | null): boolean { return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement }

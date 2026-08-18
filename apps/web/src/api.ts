@@ -507,3 +507,99 @@ function failureFromPayload(payload: unknown, status: number): ApiClientError {
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+// ---------------------------------------------------------------------------
+// PR #48 — Store Coach client
+// ---------------------------------------------------------------------------
+
+const coachPath = (path: string, storeId: string): string => `${path}?storeId=${encodeURIComponent(storeId)}`
+
+export function fetchCoachHuddle(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHuddle> { return requestJson(coachPath('/store-coach/huddle/today', storeId), {}, fetcher) }
+export function fetchCoachHuddleHistory(storeId: string, days: number, fetcher: Fetcher = fetch): Promise<readonly { id: string; huddleDate: string; content: Readonly<Record<string, unknown>>; viewedAt: number | null; createdAt: number }[]> { return requestJson(coachPath(`/store-coach/huddle/history?days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function markCoachHuddleViewed(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/huddle/${encodeURIComponent(id)}/viewed`, storeId), { method: 'POST' }, fetcher) }
+export function regenerateCoachHuddle(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHuddle> { return requestJson(coachPath('/store-coach/huddle/generate', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachPriorities(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPrioritiesView> { return requestJson(coachPath('/store-coach/priorities/today', storeId), {}, fetcher) }
+export function completeCoachPriority(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/priorities/${encodeURIComponent(id)}/complete`, storeId), { method: 'POST' }, fetcher) }
+export function dismissCoachPriority(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> { return requestJson(coachPath(`/store-coach/priorities/${encodeURIComponent(id)}/dismiss`, storeId), { method: 'POST' }, fetcher) }
+export function regenerateCoachPriorities(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPrioritiesView> { return requestJson(coachPath('/store-coach/priorities/generate', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachGoals(storeId: string, status?: string, fetcher: Fetcher = fetch): Promise<readonly import('./store-coach-model.js').CoachGoal[]> { return requestJson(coachPath(status ? `/store-coach/goals?status=${encodeURIComponent(status)}` : '/store-coach/goals', storeId), {}, fetcher) }
+export function createCoachGoal(storeId: string, input: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath('/store-coach/goals', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, fetcher) }
+export function updateCoachGoal(storeId: string, id: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}`, storeId), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }, fetcher) }
+export function deleteCoachGoal(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ deleted: boolean }>> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}`, storeId), { method: 'DELETE' }, fetcher) }
+export function fetchCoachGoalSuggestions(storeId: string, fetcher: Fetcher = fetch): Promise<readonly import('./store-coach-model.js').CoachGoalSuggestion[]> { return requestJson(coachPath('/store-coach/goals/suggestions', storeId), {}, fetcher) }
+export function acceptCoachGoalSuggestion(storeId: string, suggestion: Readonly<Record<string, unknown>>, startDate: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoal> { return requestJson(coachPath('/store-coach/goals/suggestion/accept-suggestion', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ suggestion, startDate }) }, fetcher) }
+export function fetchCoachGoalProgress(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachGoalProgress> { return requestJson(coachPath(`/store-coach/goals/${encodeURIComponent(id)}/progress`, storeId), {}, fetcher) }
+
+export function fetchCoachAchievements(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ earned: readonly import('./store-coach-model.js').CoachAchievement[]; visible: number }>> { return requestJson(coachPath('/store-coach/achievements', storeId), {}, fetcher) }
+export function fetchCoachAvailableAchievements(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ earnedIds: readonly string[]; catalog: readonly import('./store-coach-model.js').CoachBadgeCatalogEntry[]; visible: number }>> { return requestJson(coachPath('/store-coach/achievements/available', storeId), {}, fetcher) }
+export function fetchCoachStreak(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachStreakView> { return requestJson(coachPath('/store-coach/streak', storeId), {}, fetcher) }
+
+export function fetchCoachProgressSummary(storeId: string, days: number, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachProgressSummary> { return requestJson(coachPath(`/store-coach/progress/summary?days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function fetchCoachProgressTrends(storeId: string, metric: string, days: number, fetcher: Fetcher = fetch): Promise<Readonly<{ metric: string; window: number; series: readonly Readonly<Record<string, string | number>>[] }>> { return requestJson(coachPath(`/store-coach/progress/trends?metric=${encodeURIComponent(metric)}&days=${Math.max(1, days)}`, storeId), {}, fetcher) }
+export function fetchCoachActivityHeatmap(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHeatmapView> { return requestJson(coachPath('/store-coach/progress/heatmap', storeId), {}, fetcher) }
+export function fetchCoachProgressComparisons(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> { return requestJson(coachPath('/store-coach/progress/comparisons', storeId), {}, fetcher) }
+
+/** Streams the coach reply over SSE and resolves with the final message. */
+export async function streamCoachChat(storeId: string, message: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachMessage> {
+  let response: Response
+  try {
+    response = await fetcher(coachPath('/store-coach/chat', storeId), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}) },
+      body: JSON.stringify({ message }),
+    })
+  } catch (error: unknown) {
+    throw new ApiClientError(error instanceof Error ? error.message : 'Network request failed', 0, 'NETWORK_ERROR')
+  }
+  if (!response.ok || !response.body) {
+    let payload: unknown = null
+    try { payload = await response.json() } catch { payload = null }
+    throw failureFromPayload(payload, response.status)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalMessage: import('./store-coach-model.js').CoachMessage | null = null
+  for (;;) {
+    const step = await reader.read()
+    if (step.done) break
+    buffer += decoder.decode(step.value, { stream: true })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const rawFrame = buffer.slice(0, boundary).trim()
+      buffer = buffer.slice(boundary + 2)
+      boundary = buffer.indexOf('\n\n')
+      if (!rawFrame.startsWith('data:')) continue
+      const payload: unknown = JSON.parse(rawFrame.slice(5).trim())
+      if (!isRecord(payload)) continue
+      if (payload.type === 'delta' && typeof payload.text === 'string') onDelta(payload.text)
+      if (payload.type === 'done' && isRecord(payload.message)) finalMessage = payload.message as unknown as import('./store-coach-model.js').CoachMessage
+      if (payload.type === 'error') throw new ApiClientError(String(payload.message ?? 'Chat stream failed'), Number(payload.status ?? 502), String(payload.code ?? 'API_ERROR'))
+    }
+  }
+  if (!finalMessage) throw new ApiClientError('Chat stream ended without a reply', 0, 'STREAM_INCOMPLETE')
+  return finalMessage
+}
+
+export function fetchCoachChatHistory(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ id: string; messages: readonly import('./store-coach-model.js').CoachMessage[] }>> { return requestJson(coachPath('/store-coach/chat/history', storeId), {}, fetcher) }
+export function clearCoachChat(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ cleared: boolean }>> { return requestJson(coachPath('/store-coach/chat/clear', storeId), { method: 'POST' }, fetcher) }
+export function fetchCoachChatSuggestions(storeId: string, fetcher: Fetcher = fetch): Promise<readonly string[]> { return requestJson(coachPath('/store-coach/chat/suggestions', storeId), {}, fetcher) }
+
+export function fetchCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/current', storeId), {}, fetcher) }
+export function fetchCoachReviewHistory(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ reports: readonly Readonly<{ id: string; reportType: string; reportDate: string; createdAt: number; sentViaEmail: boolean }>[] }>> { return requestJson(coachPath('/store-coach/review/history', storeId), {}, fetcher) }
+export function regenerateCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/generate', storeId), { method: 'POST' }, fetcher) }
+export function fetchCoachReviewPdf(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ pdfUrl: string }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/pdf`, storeId), {}, fetcher) }
+export function emailCoachReview(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ sent: boolean }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/email`, storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPreferencesView> { return requestJson(coachPath('/store-coach/preferences', storeId), {}, fetcher) }
+export function updateCoachPreferences(storeId: string, patch: Readonly<Record<string, unknown>>, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPreferencesView> { return requestJson(coachPath('/store-coach/preferences', storeId), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }, fetcher) }
+
+export function fetchCoachHealthScore(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachHealthView> { return requestJson(coachPath('/store-coach/health-score', storeId), {}, fetcher) }
+export function fetchCoachOnboarding(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachOnboardingView> { return requestJson(coachPath('/store-coach/onboarding/status', storeId), {}, fetcher) }
+export function completeCoachOnboardingStep(storeId: string, step: number, fetcher: Fetcher = fetch): Promise<Readonly<{ currentStep: number; completed: boolean; skipped: boolean }>> { return requestJson(coachPath('/store-coach/onboarding/complete-step', storeId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step }) }, fetcher) }
+export function skipCoachOnboarding(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ currentStep: number; completed: boolean; skipped: boolean }>> { return requestJson(coachPath('/store-coach/onboarding/skip', storeId), { method: 'POST' }, fetcher) }
+
+export function fetchCoachUsage(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachUsageView> { return requestJson(coachPath('/store-coach/usage', storeId), {}, fetcher) }
+export function fetchCoachCostSummary(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ tracked: boolean }>> { return requestJson(coachPath('/store-coach/cost-summary', storeId), {}, fetcher) }
