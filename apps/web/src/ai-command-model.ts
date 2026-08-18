@@ -1,5 +1,5 @@
 export type AiCommandPlan = 'trial' | 'start' | 'growth' | 'commander'
-export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked'
+export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked' | 'offtopic'
 export type AiCommandRole = 'user' | 'assistant' | 'system'
 
 export type AiCommandStructuredData = Readonly<{
@@ -83,6 +83,17 @@ export type AiCommandQuickCommand = Readonly<{
   command: string
   kind: 'info' | 'action'
 }>
+
+export type AiCommandQuickCategory = 'analytics' | 'customers' | 'products' | 'growth' | 'actions'
+
+export function quickCommandCategory(command: AiCommandQuickCommand): AiCommandQuickCategory {
+  if (command.kind === 'action') return 'actions'
+  const text = `${command.label} ${command.command}`.toLowerCase()
+  if (/(customer|vip|inactive|segment|churn|subscriber)/.test(text)) return 'customers'
+  if (/(product|stock|inventory|catalog|sku)/.test(text)) return 'products'
+  if (/(grow|increase|recommend|discount|idea)/.test(text)) return 'growth'
+  return 'analytics'
+}
 
 export type AiCommandActionRecord = Readonly<{
   id: string
