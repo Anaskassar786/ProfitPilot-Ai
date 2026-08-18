@@ -130,3 +130,20 @@ New coverage:
 2. Verify with `GET /patternai/health?storeId=<store>`; every section should report `ready`.
 3. No environment changes required. `INSIGHTS_HUB_*` variables keep their names.
 4. Old links (`/ai-growth-command/insights…`, `/insights/*`, existing `ihk_` API keys) continue to work.
+
+---
+
+## 9. Rebased onto main (conflicts resolved)
+
+This branch was opened before six module PRs landed (AI Command Center, Recommendations, Automation, AI Command, Store Coach, GrowthIQ). `main` has been merged in; both conflicts are resolved and the PR is **mergeable**.
+
+| Conflict | Resolution |
+| --- | --- |
+| `PR59_DESCRIPTION.md` (add/add) | `main` claimed that filename for the **Automation redesign** description. Main's file is kept byte-for-byte; this description moved to `PR63_PATTERNAI_DESCRIPTION.md`, matching the repo's `PR<number>_<topic>.md` convention. |
+| `apps/web/src/App.tsx` (content) | Both sides edited adjacent lines in `pageMeta` and `renderPage`. **Kept main's** new Automation copy ("Automate the busywork — recover carts…") and Recommendations copy ("Your AI team has been watching your store 🎯…"); **kept PatternAI's** section id, constellation icon, route and workspace. Nothing was dropped from either side. |
+
+**One follow-through the rename made necessary:** the AI Command Center's *AI Growth Command* module registry pointed its "Open" action at the section id `insights-hub`, which no longer exists — after the merge that card would have navigated nowhere. Renamed the registry entry only (`id: PATTERN_AI`, `path: 'patternai'`, `label: 'PatternAI'`) and swapped its `Microscope` glyph for `Network` so no lab iconography remains. No layout, behaviour, or other copy in that module was touched; its tests were updated to match.
+
+Also removed the now-unused `FlaskConical` import from the shell.
+
+**Verification on the merged tree:** `pnpm -r build` clean, web typecheck clean, **1943 tests passing across 174 files** — the 1902 from this branch plus the 41 that arrived with the six merged PRs. No functionality lost from any module.
