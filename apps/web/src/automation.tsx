@@ -1,11 +1,7 @@
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
-  BarChart3,
-  Bell,
   BookOpen,
-  CheckCircle2,
   ChevronDown,
   CircleGauge,
   FileText,
@@ -22,7 +18,6 @@ import {
   Sparkles,
   Trash2,
   WandSparkles,
-  Workflow,
   X,
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,7 +29,9 @@ import type { WorkflowCategory, WorkflowRecord, WorkflowStatus, WorkflowTemplate
 import { CATEGORIES } from './automation-model.js'
 import { friendlyCategory, friendlyStatus, isEmptyWorkflow, relativeTime, shortDate } from './automation-helpers.js'
 import { HowItWorksModal } from './automation-tutorial.js'
+import { AutomationKpis } from './AutomationKpis.js'
 import { ApprovalInbox } from './ApprovalInbox.js'
+import { CustomSelect } from './CustomSelect.js'
 import { RunHistory } from './RunHistory.js'
 import { TemplateGallery } from './TemplateGallery.js'
 import { WorkflowCard } from './WorkflowCard.js'
@@ -197,7 +194,7 @@ function AutomationHub({
   const gridItems = visible.filter((workflow) => !isEmptyWorkflow(workflow) && (status === 'ALL' ? workflow.status !== 'ARCHIVED' : true))
   const draftItems = visible.filter(isEmptyWorkflow)
   const hasActiveFilters = Boolean(search || status !== 'ALL' || category !== 'ALL')
-  const showKpis = Boolean(summary && (summary.workflows.active > 0 || summary.runs.thisMonth > 0))
+  const showKpis = Boolean(summary)
   const totalLimit = usage?.limit
   const usagePercent = totalLimit ? (usage.used / totalLimit) * 100 : 0
   const featured = featuredTemplates(templates)
@@ -218,19 +215,19 @@ function AutomationHub({
     <div className="automation-page">
       <header className="automation-header">
         <div>
-          <span className="automation-eyebrow">SHOPIFY AUTOMATIONS</span>
-          <h1>🤖 Automations</h1>
-          <p>Save time and grow your business with automated workflows.</p>
+          <span className="automation-eyebrow page-eyebrow">SHOPIFY AUTOMATIONS</span>
+          <h1 className="page-title">🤖 Automations</h1>
+          <p className="page-subtitle">Save time and grow your business with automated workflows.</p>
         </div>
-        <div className="automation-header-actions">
-          <button className="automation-secondary" onClick={() => setHowOpen(true)}>
+        <div className="automation-header-actions header-actions">
+          <button className="automation-secondary how-it-works-btn" onClick={() => setHowOpen(true)}>
             <BookOpen size={16} /> How it works
           </button>
-          <button className="automation-secondary" onClick={() => onNavigate({ view: 'templates' })}>
+          <button className="automation-secondary browse-templates-btn" onClick={() => onNavigate({ view: 'templates' })}>
             <Sparkles size={16} /> Browse Templates
           </button>
           <button
-            className="automation-primary"
+            className="automation-primary create-automation-btn"
             disabled={usage?.limitReached ?? false}
             title={usage?.limitReached ? 'Complete your drafts or upgrade for more space' : ''}
             onClick={() => openCreate('template')}
@@ -272,30 +269,30 @@ function AutomationHub({
       )}
 
       {(gridItems.length > 0 || hasActiveFilters) && (
-        <section className="automation-section your-automations">
+        <section className="automation-section your-automations your-automations-section">
           <header className="automation-section-header">
             <div>
-              <span className="automation-eyebrow">YOUR AUTOMATIONS</span>
-              <h2>
+              <span className="automation-eyebrow section-eyebrow">YOUR AUTOMATIONS</span>
+              <h2 className="section-title">
                 Your Automations <span className="count-badge">{gridItems.length}</span>
               </h2>
-              <p>
+              <p className="section-description automations-stats">
                 {gridItems.length > 0
                   ? `${activeCount} active · ${pausedCount} paused${draftCount > 0 ? ` · ${draftCount} draft` : ''}`
                   : 'Adjust filters to see your automations.'}
               </p>
             </div>
           </header>
-          <div className="automation-toolbar">
+          <div className="automation-toolbar automation-filters">
             <label className="automation-search">
-              <Search size={16} />
+              <Search size={16} className="search-icon" />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search automations" />
             </label>
-            <div className="automation-status-tabs">
+            <div className="automation-status-tabs automation-filter-tabs">
               {(['ALL', 'ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED'] as const).map((value) => (
-                <button key={value} className={status === value ? 'active' : ''} onClick={() => setStatus(value)}>
+                <button key={value} className={`filter-tab ${status === value ? 'active' : ''}`} onClick={() => setStatus(value)}>
                   {value === 'ALL' ? 'All' : friendlyStatus(value)}
-                  <span>
+                  <span className="count-badge">
                     {value === 'ALL'
                       ? Object.values(summary?.workflows ?? {}).reduce((a, b) => a + b, 0)
                       : summary?.workflows[value.toLowerCase() as keyof NonNullable<typeof summary>['workflows']] ?? 0}
@@ -303,30 +300,31 @@ function AutomationHub({
                 </button>
               ))}
             </div>
-            <label className="automation-select">
-              <Filter size={15} />
-              <select value={category} onChange={(event) => setCategory(event.target.value as typeof category)}>
-                <option value="ALL">All categories</option>
-                {CATEGORIES.map((value) => (
-                  <option key={value} value={value}>
-                    {friendlyCategory(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="automation-select">
-              <select value={sort} onChange={(event) => setSort(event.target.value)}>
-                <option value="lastRun">Last run</option>
-                <option value="name">Name</option>
-                <option value="created">Created</option>
-                <option value="successRate">Success rate</option>
-              </select>
-            </label>
+            <CustomSelect
+              className="automation-custom-select category-dropdown"
+              value={category}
+              options={[{ value: 'ALL', label: 'All categories' }, ...CATEGORIES.map((value) => ({ value, label: friendlyCategory(value) }))]}
+              onChange={setCategory}
+              ariaLabel="Filter by category"
+              icon={<Filter size={15} />}
+            />
+            <CustomSelect
+              className="automation-custom-select last-run-dropdown"
+              value={sort}
+              options={[
+                { value: 'lastRun', label: 'Last run' },
+                { value: 'name', label: 'Name' },
+                { value: 'created', label: 'Created' },
+                { value: 'successRate', label: 'Success rate' },
+              ]}
+              onChange={setSort}
+              ariaLabel="Sort automations"
+            />
             <div className="view-toggle">
-              <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="Grid view">
+              <button className={`view-toggle-btn ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')} aria-label="Grid view">
                 <Grid2X2 size={16} />
               </button>
-              <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="List view">
+              <button className={`view-toggle-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} aria-label="List view">
                 <List size={16} />
               </button>
             </div>
@@ -375,7 +373,7 @@ function AutomationHub({
         </section>
       )}
 
-      {showKpis && <KpiMetrics summary={summary} usage={usage} onApprovals={() => onNavigate({ view: 'approvals' })} />}
+      {showKpis && <AutomationKpis summary={summary} usage={usage} onApprovals={() => onNavigate({ view: 'approvals' })} />}
 
       {summary && summary.recentActivity.length > 0 && <ActivityFeed summary={summary} onOpenRun={(id) => onNavigate({ view: 'run', id })} />}
 
@@ -459,29 +457,29 @@ function planBanner(
   if (usage.limitReached) {
     if (drafts > 0) {
       return (
-        <div className="automation-plan-banner drafts">
-          <CircleGauge size={20} />
-          <div>
-            <strong>Complete your drafts or upgrade for more space</strong>
-            <span>
-              {usage.used} of {usage.limit} automations in use · {drafts} draft{drafts === 1 ? '' : 's'} still need{drafts === 1 ? 's' : ''} finishing
+        <div className="automation-plan-banner drafts limit-warning">
+          <CircleGauge size={20} className="limit-warning-icon" />
+          <div className="limit-warning-content">
+            <strong className="limit-warning-title">Complete your drafts or upgrade for more space</strong>
+            <span className="limit-warning-description">
+              <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use · {drafts} draft{drafts === 1 ? '' : 's'} still need{drafts === 1 ? 's' : ''} finishing
             </span>
           </div>
           <button onClick={onCompleteDrafts}>Complete Drafts</button>
-          <button onClick={onUpgrade}>Upgrade Plan</button>
+          <button className="warning-upgrade-btn" onClick={onUpgrade}>Upgrade Plan</button>
         </div>
       )
     }
     return (
-      <div className="automation-plan-banner reached">
-        <CircleGauge size={20} />
-        <div>
-          <strong>You&rsquo;ve reached your limit</strong>
-          <span>
-            {usage.used} of {usage.limit} automations in use. Upgrade Plan to create more automations.
+      <div className="automation-plan-banner reached limit-warning">
+        <CircleGauge size={20} className="limit-warning-icon" />
+        <div className="limit-warning-content">
+          <strong className="limit-warning-title">You&rsquo;ve reached your limit</strong>
+          <span className="limit-warning-description">
+            <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use. Upgrade Plan to create more automations.
           </span>
         </div>
-        <button onClick={onUpgrade}>Upgrade Plan</button>
+        <button className="warning-upgrade-btn" onClick={onUpgrade}>Upgrade Plan</button>
       </div>
     )
   }
@@ -543,69 +541,6 @@ function GettingStartedHero({
           Browse all templates <ArrowRight size={15} />
         </button>
       </div>
-    </section>
-  )
-}
-
-function KpiMetrics({
-  summary,
-  usage,
-  onApprovals,
-}: {
-  summary: ReturnType<typeof useAutomationHub>['summary']
-  usage: ReturnType<typeof useAutomationHub>['usage']
-  onApprovals: () => void
-}): JSX.Element {
-  const runTrend = summary ? summary.runs.thisMonth - summary.runs.previousMonth : 0
-  const impacts = summary ? Object.entries(summary.impact).filter(([, value]) => value > 0) : []
-  return (
-    <section className="automation-kpis">
-      <article>
-        <span>
-          <Workflow size={18} />
-        </span>
-        <small>Active automations</small>
-        <strong>{summary?.workflows.active ?? 0}</strong>
-        <p>
-          {usage?.limit === null ? `${usage?.used ?? 0} automations · unlimited plan` : `${usage?.used ?? 0} of ${usage?.limit ?? 0} automations used`}
-        </p>
-      </article>
-      <article>
-        <span>
-          <Activity size={18} />
-        </span>
-        <small>Runs this month</small>
-        <strong>{summary?.runs.thisMonth ?? 0}</strong>
-        <p>{runTrend === 0 ? 'No change from last month' : `${runTrend > 0 ? '+' : ''}${runTrend} vs last month`}</p>
-      </article>
-      <article>
-        <span>
-          <CheckCircle2 size={18} />
-        </span>
-        <small>Success rate</small>
-        <strong>{summary?.runs.successRate === null || summary?.runs.successRate === undefined ? '—' : `${Math.round(summary.runs.successRate)}%`}</strong>
-        <p>
-          {summary?.runs.completed || summary?.runs.failed
-            ? `${summary.runs.completed} completed · ${summary.runs.failed} with issues`
-            : 'Available after the first run'}
-        </p>
-      </article>
-      <article>
-        <span>
-          <BarChart3 size={18} />
-        </span>
-        <small>Actions completed</small>
-        <strong>{impacts.reduce((total, [, value]) => total + value, 0)}</strong>
-        <p>{impacts.length ? impacts.map(([key, value]) => `${value} ${impactLabel(key)}`).join(' · ') : 'Measured after successful actions'}</p>
-      </article>
-      <button className={summary?.approvalsPending ? 'attention' : ''} onClick={onApprovals}>
-        <span>
-          <Bell size={18} />
-        </span>
-        <small>Pending approvals</small>
-        <strong>{summary?.approvalsPending ?? 0}</strong>
-        <p>{summary?.approvalsPending ? 'Review required' : 'No actions waiting'}</p>
-      </button>
     </section>
   )
 }
@@ -700,13 +635,13 @@ export function CreateAutomationModal({
 
         <label>
           Category
-          <select value={category} onChange={(event) => setCategory(event.target.value as WorkflowCategory)}>
-            {CATEGORIES.map((value) => (
-              <option key={value} value={value}>
-                {friendlyCategory(value)}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            className="automation-custom-select create-category-select"
+            value={category}
+            options={CATEGORIES.map((value) => ({ value, label: friendlyCategory(value) }))}
+            onChange={setCategory}
+            ariaLabel="Automation category"
+          />
         </label>
 
         <span className="creation-label">How do you want to start?</span>
@@ -726,14 +661,14 @@ export function CreateAutomationModal({
         {mode === 'template' ? (
           <label>
             Template
-            <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
-              <option value="">Choose a template</option>
-              {available.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              className="automation-custom-select create-template-select"
+              value={templateId}
+              options={[{ value: '', label: 'Choose a template' }, ...available.map((template) => ({ value: template.id, label: template.name }))]}
+              onChange={setTemplateId}
+              ariaLabel="Automation template"
+              placeholder="Choose a template"
+            />
           </label>
         ) : null}
 

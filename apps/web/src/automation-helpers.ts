@@ -208,6 +208,59 @@ export function friendlyCategory(category: WorkflowCategory | string): string {
   return category
 }
 
+/** Visual tone class for template cards — maps the real category, never invented. */
+export function templateToneClass(category: WorkflowCategory | string): string {
+  if (category === 'Marketing') return 'sales-growth'
+  if (category === 'Customer') return 'customer-experience'
+  if (category === 'Inventory') return 'inventory-stock'
+  if (category === 'Operations') return 'operations'
+  return 'revenue-retention'
+}
+
+/** Plan-badge class for the real minimum plan on a template. */
+export function planBadgeClass(minimumPlan: 'trial' | 'start' | 'growth' | 'commander'): string {
+  if (minimumPlan === 'trial') return 'all-plans'
+  if (minimumPlan === 'start') return 'start'
+  if (minimumPlan === 'growth') return 'growth'
+  return 'commander'
+}
+
+/**
+ * Segmented usage bar from real used/limit counts.
+ * Unlimited (Commander) is flagged so the UI does not invent a cap.
+ */
+export function usageSegments(used: number, limit: number | null): { filled: number; empty: number; unlimited: boolean; total: number } {
+  const safeUsed = Math.max(0, used)
+  if (limit === null) return { filled: safeUsed, empty: 0, unlimited: true, total: Math.max(1, safeUsed) }
+  const safeLimit = Math.max(1, limit)
+  const filled = Math.min(safeUsed, safeLimit)
+  return { filled, empty: safeLimit - filled, unlimited: false, total: safeLimit }
+}
+
+/**
+ * Heights (0–100) for action mini-bars. All-zero stays all-zero —
+ * never pad with decorative fake heights.
+ */
+export function actionBarHeights(values: readonly number[]): readonly number[] {
+  const safe = values.map((value) => Math.max(0, value))
+  const max = Math.max(0, ...safe)
+  if (max === 0) return safe.map(() => 0)
+  return safe.map((value) => Math.max(value > 0 ? 8 : 0, Math.round((value / max) * 100)))
+}
+
+/** Honest 2-point sparkline from last month vs this month. No invented daily series. */
+export function monthSparkPath(previous: number, current: number): { line: string; area: string } {
+  const prev = Math.max(0, previous)
+  const curr = Math.max(0, current)
+  const max = Math.max(prev, curr, 1)
+  const yPrev = 36 - (prev / max) * 28
+  const yCurr = 36 - (curr / max) * 28
+  return {
+    line: `M0,${yPrev.toFixed(1)} L100,${yCurr.toFixed(1)}`,
+    area: `M0,${yPrev.toFixed(1)} L100,${yCurr.toFixed(1)} L100,40 L0,40 Z`,
+  }
+}
+
 /** Short label for the real plan tier. */
 export function planName(plan: 'trial' | 'start' | 'growth' | 'commander'): string {
   if (plan === 'trial') return 'Trial'

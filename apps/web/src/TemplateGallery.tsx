@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, Boxes, Clock3, LockKeyhole, Mail, PackagePlus, S
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 import type { WorkflowTemplate } from './automation-model.js'
-import { friendlyCategory, planBadgeLabel, setupLabel } from './automation-helpers.js'
+import { friendlyCategory, planBadgeClass, planBadgeLabel, setupLabel, templateToneClass } from './automation-helpers.js'
 
 type TabKey =
   | 'All'
@@ -171,27 +171,27 @@ function TemplateCard({
   onUpgrade: () => void
 }): JSX.Element {
   return (
-    <article className={`template-card-pro ${template.locked ? 'locked' : ''}`}>
+    <article className={`template-card template-card-pro ${templateToneClass(template.category)} ${template.locked ? 'locked' : ''}`}>
       <button className="template-card-main" onClick={onPreview}>
         <span className="template-card-top">
           <TemplateIcon template={template} />
-          <span className="plan-badge">{planBadgeLabel(template.minimumPlan)}</span>
+          <span className={`plan-badge template-plan-badge ${planBadgeClass(template.minimumPlan)}`}>{planBadgeLabel(template.minimumPlan)}</span>
         </span>
         <span className="template-category">{friendlyCategory(template.category)}</span>
-        <h3>{template.name}</h3>
-        <p>{template.description}</p>
-        <span className="template-impact-copy">{template.impact}</span>
+        <h3 className="template-name">{template.name}</h3>
+        <p className="template-description">{template.description}</p>
+        <span className="template-impact-copy template-detail">{template.impact}</span>
       </button>
       <footer>
-        <span className="setup-time">
-          <Clock3 size={12} /> {setupLabel(template.complexity)} · {template.nodes} step{template.nodes === 1 ? '' : 's'}
+        <span className="setup-time template-meta">
+          <Clock3 size={12} className="template-meta-icon" /> {setupLabel(template.complexity)} · {template.nodes} step{template.nodes === 1 ? '' : 's'}
         </span>
         {template.locked ? (
-          <button className="upgrade-mini" onClick={onUpgrade}>
+          <button className="upgrade-mini template-upgrade-btn" onClick={onUpgrade}>
             <LockKeyhole size={13} /> Upgrade Plan
           </button>
         ) : (
-          <button className="set-up-mini" onClick={onPreview}>
+          <button className="set-up-mini template-setup-btn" onClick={onPreview}>
             Set Up <ArrowRight size={13} />
           </button>
         )}
@@ -216,8 +216,8 @@ function TemplateIcon({ template }: { template: WorkflowTemplate }): JSX.Element
                 ? Tag
                 : ShoppingBag
   return (
-    <span className="template-icon">
-      <Icon size={20} />
+    <span className="template-icon template-icon-wrap">
+      <Icon size={20} className="template-icon-svg" />
       {template.locked && <LockKeyhole size={11} />}
     </span>
   )
