@@ -50,7 +50,7 @@ export const AI_COMMAND_ACTION_STATUSES = [
 ] as const
 export type AiCommandActionStatus = (typeof AI_COMMAND_ACTION_STATUSES)[number]
 
-export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked'
+export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked' | 'offtopic'
 export type AiCommandMessageRole = 'user' | 'assistant' | 'system'
 export type AiCommandConversationStatus = 'ACTIVE' | 'ARCHIVED'
 export type AiCommandResponseStyle = 'CONCISE' | 'DETAILED' | 'TECHNICAL'
@@ -366,6 +366,68 @@ export function renderBlockedResponse(blocked: Readonly<{ action: string; reason
   ].join('\n')
 }
 
+// A query mentioning any of these is clearly about the merchant's store and is
+// always in scope, even if it also contains an off-topic keyword (for example
+// "help me code a Shopify theme" is about Shopify, not general coding).
+const STORE_SCOPE_SIGNALS = /\b(shopify|shop|store|revenue|sales?|orders?|customers?|products?|inventory|stock|aov|analytics|discount|coupon|promo|emails?|mail|tags?|recommend|report|marketing|campaign|workflow|automation|sync|traffic|conversion|cart|checkout|bestsellers?|refund|fulfil|churn|vips?|segments?|subscriber|catalog|skus?)\b/i
+
+const OFF_TOPIC_PATTERNS: readonly Readonly<{ pattern: RegExp; topic: string }>[] = [
+  { pattern: /weather|forecast|temperature|rain|snow|sunny|climate|humidity/i, topic: 'the weather' },
+  { pattern: /poem|song|joke|riddle|limerick|story|haiku|write me a (poem|story|joke)/i, topic: 'creative writing' },
+  { pattern: /politics|election|president|government|congress|vote|democrat|republican|politician/i, topic: 'politics' },
+  { pattern: /health|medical|symptom|diagnosis|disease|medicine|doctor|illness|treatment|therapy/i, topic: 'health or medical advice' },
+  { pattern: /legal|lawyer|lawsuit|contract law|attorney|sue someone/i, topic: 'legal advice' },
+  { pattern: /news|headline|current event|what is happening in the world/i, topic: 'the news or current events' },
+  { pattern: /movie|film|tv show|netflix|celebrity|actor|singer|music artist|album review/i, topic: 'entertainment' },
+  { pattern: /recipe|cook(ing)?|dinner idea|meal plan|baking/i, topic: 'recipes or cooking' },
+  { pattern: /homework|essay|school project|solve (this )?(equation|math|problem)|translate|what is \d+ ?[+*/-] ?\d+/i, topic: 'homework or general problem-solving' },
+  { pattern: /stock market|wall street|bitcoin|ethereum|crypto ?currency|trading stocks|invest(ing)?/i, topic: 'investing or the stock market' },
+  { pattern: /sports|football|basketball|baseball|soccer|hockey|game result|score of the/i, topic: 'sports' },
+  { pattern: /(yourself|you are|are you|what model|which ai|openai|anthropic|gpt-?|claude|chatgpt|llm)/i, topic: 'questions about AI assistants' },
+  { pattern: /\b(coding|code|programming|javascript|typescript|python|react|node|debugging|algorithm|data structure|unit test)\b/i, topic: 'general coding' },
+  { pattern: /(life advice|relationship|dating|breakup|my boss|my coworker|my friend|mental health)/i, topic: 'personal advice' },
+  { pattern: /(recommend a (book|movie|restaurant|hotel)|places to visit|vacation|travel plan|gift for my)/i, topic: 'personal recommendations' },
+  { pattern: /(horoscope|zodiac|astrology|tarot|fortune|meaning of life|religion|philosophy)/i, topic: 'that topic' },
+]
+
+/**
+ * Detects off-topic questions so AI Command can politely refuse anything that
+ * is not about the merchant's Shopify store. Returns the human-readable topic
+ * that was asked about, or `null` when the query is in scope (store-related)
+ * or ambiguous enough that we should attempt to answer from store data.
+ */
+export function detectOffTopic(query: string): string | null {
+  const normalized = query.trim()
+  if (!normalized) return null
+  if (STORE_SCOPE_SIGNALS.test(normalized)) return null
+  for (const entry of OFF_TOPIC_PATTERNS) {
+    if (entry.pattern.test(normalized)) return entry.topic
+  }
+  return null
+}
+
+export function renderOffTopicResponse(topic: string): string {
+  return [
+    `I'm here specifically to help with your Shopify store. I can't help with ${topic}, but I'd love to help you with:`,
+    '',
+    '• Store performance analysis',
+    '• Customer insights',
+    '• Product recommendations',
+    '• Sales trends',
+    '• Inventory management',
+    '• And much more about your store',
+    '',
+    'What would you like to know about your store?',
+  ].join('\n')
+}
+
+export const STORE_SCOPE_GUIDANCE = [
+  'You are a specialized assistant for Shopify merchants. You answer ONLY questions about the merchant\'s Shopify store.',
+  'Allowed topics: store revenue, orders, customers, product management, inventory, customer insights, marketing, business analytics, store performance, recommendations, and actions inside their store.',
+  'Forbidden topics — politely refuse and redirect back to store help: general knowledge (weather, news), general coding, personal advice, other businesses or platforms, politics, health/medical advice, legal advice, and questions about yourself or other AI systems.',
+  'When the user asks an off-topic question, say you can only help with their Shopify store and list the store areas you can help with.',
+] as const
+
 export function renderUpgradeResponse(action: string, findings: string): string {
   return [
     findings,
@@ -591,6 +653,7 @@ export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: str
   const tools = AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => input.actionsEnabled || !tool.commanderOnly)
   return [
     'You are AI Command, ProfitPilot\'s merchant command center.',
+    ...STORE_SCOPE_GUIDANCE,
     'You never invent numbers, statistics, or action outcomes.',
     'Every claim must come from a tool result or from the merchant\'s own words.',
     'If a tool returns no data, say so. If you are uncertain, say "I\'m not sure".',
@@ -1001,6 +1064,10 @@ export class AiCommandService {
     const blocked = detectBlockedAction(text)
     if (blocked) {
       return message('assistant', renderBlockedResponse(blocked), 'blocked', this.now(), { thinkingSteps: ['Understanding your request...'] })
+    }
+    const offTopic = detectOffTopic(text)
+    if (offTopic) {
+      return message('assistant', renderOffTopicResponse(offTopic), 'offtopic', this.now(), { thinkingSteps: ['Understanding your request...'] })
     }
     const write = detectWriteTool(text)
     if (write) {

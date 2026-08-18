@@ -14,6 +14,7 @@ import {
   conversationGroups,
   defaultQuickCommands,
   detectBlockedAction,
+  detectOffTopic,
   detectWriteTool,
   emptyUsage,
   formatToolAnswer,
@@ -22,6 +23,7 @@ import {
   parseConfirmIntent,
   parseInfoTools,
   renderBlockedResponse,
+  renderOffTopicResponse,
   renderUpgradeResponse,
   summarizeActionResult,
   thinkingStepsFor,
@@ -104,6 +106,35 @@ describe('AI Command safety parsers', () => {
     expect(parseConfirmIntent('cancel')).toBe('cancel')
     expect(parseConfirmIntent('what is revenue')).toBeNull()
   })
+  it('detects off-topic questions but keeps store questions in scope', () => {
+    expect(detectOffTopic("What's the weather today?")).toBe('the weather')
+    expect(detectOffTopic('Write me a poem')).toBe('creative writing')
+    expect(detectOffTopic('Help me with coding')).toBe('general coding')
+    expect(detectOffTopic('Who is the president?')).toBe('politics')
+    expect(detectOffTopic('Give me health advice')).toBe('health or medical advice')
+    expect(detectOffTopic('Are you ChatGPT?')).toBe('questions about AI assistants')
+    expect(detectOffTopic("What's my revenue this month?")).toBeNull()
+    expect(detectOffTopic('Which products are low stock?')).toBeNull()
+    expect(detectOffTopic('Show me inactive customers')).toBeNull()
+    expect(detectOffTopic('Help me code a Shopify theme')).toBeNull()
+    expect(detectOffTopic('Create a discount code')).toBeNull()
+  })
+
+  it('renders a polite off-topic refusal that redirects to store help', () => {
+    const response = renderOffTopicResponse('the weather')
+    expect(response).toContain('Shopify store')
+    expect(response).toContain('the weather')
+    expect(response).toContain('Store performance analysis')
+    expect(response).not.toContain('Upgrade to Commander')
+  })
+
+  it('refuses off-topic questions at the service boundary', async () => {
+    const result = await service().chat({ storeId: tenant, text: 'Tell me a joke' })
+    expect(result.message.contentType).toBe('offtopic')
+    expect(result.message.content).toContain('Shopify store')
+    expect(result.message.structuredData).toBeNull()
+  })
+
   it('validates discount safety caps honestly', () => {
     expect(validateDiscountParams({ value: 60, usage_limit: 10, expires_at: '2026-09-01T00:00:00.000Z' }).ok).toBe(false)
     expect(validateDiscountParams({ value: 15, usage_limit: 2000, expires_at: '2026-09-01T00:00:00.000Z' }).ok).toBe(false)
