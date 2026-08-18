@@ -103,27 +103,56 @@ describe('GrowthIQ brand mark', () => {
 })
 
 describe('GrowthIQ plan-based feature display', () => {
-  it('shows only sample previews unlocked for a trial plan', () => {
+  it('renders compact and collapsed by default so billing never dominates the page', () => {
     const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} />)
     expect(html).toContain('Your plan: Trial')
-    expect(html).toContain('Currently available')
+    expect(html).toContain('3 features active · 12 more available')
+    expect(html).toContain('Show details')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain('Upgrade Plan')
+    // Collapsed means the feature matrix content exists but folded away…
+    expect(html).not.toContain('aria-expanded="true"')
+    expect(html).not.toContain('Hide details')
+  })
+  it('expands to the categorized feature matrix when requested', () => {
+    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} defaultExpanded />)
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('Currently available (3)')
     expect(html).toContain('Sample benchmarks (3 metrics)')
     expect(html).toContain('One opportunity preview')
-    expect(html).toContain('Available on higher plans')
+    expect(html).toContain('Available on higher plans (12)')
+    // Locked rows are grouped under their minimum tier — plans are named as
+    // descriptive grouping, but every CTA still reads "Upgrade Plan".
+    expect(html).toContain('Start plan')
+    expect(html).toContain('Growth plan')
+    expect(html).toContain('Commander plan')
     expect(html).toContain('Investor reports (PDF)')
-    expect(html).toContain('Commander')
+    expect(html).toContain('Quarterly &amp; yearly roadmaps')
     expect(html).toContain('Upgrade Plan')
     expect(html).not.toContain('Upgrade to')
   })
-  it('shows every capability unlocked for a commander plan', () => {
-    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="commander" onUpgrade={() => undefined} />)
+  it('shows every capability unlocked for a commander plan, with no upgrade CTA', () => {
+    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="commander" onUpgrade={() => undefined} defaultExpanded />)
     expect(html).toContain('Your plan: Commander')
-    expect(html).toContain('All GrowthIQ features unlocked')
-    expect(html).toContain('Everything in GrowthIQ')
+    expect(html).toContain('15 features active · all GrowthIQ features unlocked')
+    expect(html).toContain('Currently available (15)')
     expect(html).toContain('Investor reports (PDF)')
-    // A commander plan has nothing locked, so no locked list renders.
+    // A commander plan has nothing locked, so no locked groups render.
     expect(html).not.toContain('Available on higher plans')
     expect(html).not.toContain('Upgrade Plan')
+    expect(html).not.toContain('Upgrade to')
+  })
+  it('mid-tier plans keep remaining capabilities grouped under the tiers above', () => {
+    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="growth" onUpgrade={() => undefined} defaultExpanded />)
+    expect(html).toContain('Your plan: Growth')
+    expect(html).toContain('12 features active · 3 more available')
+    expect(html).toContain('Currently available (12)')
+    expect(html).toContain('Available on higher plans (3)')
+    expect(html).toContain('Commander plan')
+    // Growth-tier rows are unlocked at this point.
+    expect(html).not.toContain('Growth plan</h5>')
+    expect(html).not.toContain('Start plan</h5>')
+    expect(html).not.toContain('Upgrade to')
   })
 })
 

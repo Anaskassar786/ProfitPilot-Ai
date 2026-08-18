@@ -325,6 +325,10 @@ export type ExecutiveDashboard = Readonly<{
   gates: Readonly<Record<string, Readonly<{ allowed: boolean; requiredPlan: PlanTier; used: number; limit: number | null }>>>
   revenueSeries: readonly Readonly<{ day: string; value: number }>[]
   ordersSeries: readonly Readonly<{ day: string; value: number }>[]
+  /** Real synced totals — the strategic sections count from these, never estimates. */
+  totals: Readonly<{ customers: number; products: number; syncedOrders: number; syncedRevenue: number; daysSynced: number }>
+  /** Real top products by synced revenue (empty when nothing has sold yet). */
+  topProducts: readonly Readonly<{ title: string; revenue: number; sharePct: number }>[]
   generatedAt: string
 }>
 

@@ -25,7 +25,7 @@ import type { ExecutiveDashboard, ExecutiveGate } from './executive-model.js'
 import { executiveDateLabel, executiveMonthLabel, formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import { fetchExecutiveDashboard } from './executive-api.js'
 import { executivePdfDownloadUrl } from './executive-api.js'
-import { ExecutiveAreaChart, ExecutiveHorizontalBars, ExecutiveRadialGauge, ExecutiveSparkline } from './executive-charts.js'
+import { ExecutiveHorizontalBars, ExecutiveRadialGauge } from './executive-charts.js'
 import {
   ExecutiveEmptyState,
   ExecutiveErrorState,
@@ -36,6 +36,16 @@ import {
   GrowthIqPlanPanel,
   GrowthIqWelcomeState,
 } from './executive-ui.js'
+import {
+  GrowthIqActionsPanel,
+  GrowthIqDigestSection,
+  GrowthIqImpactSection,
+  GrowthIqInsightsSidebar,
+  GrowthIqMilestonesSection,
+  GrowthIqPositionSection,
+  GrowthIqTrajectorySection,
+} from './growthiq-sections.js'
+import { growthBetween, growthMilestones, impactPreviews, projectTrajectory, strategicPosition, trailingWindows, weeklyDigest } from './growthiq-strategic.js'
 import { GrowthIqMark, GrowthIqWordmark } from './growthiq-logo.js'
 import { ExecutiveReportsPage } from './executive-reports.js'
 import { ExecutiveBenchmarksPage } from './executive-benchmarks.js'
@@ -56,6 +66,61 @@ const LEGACY_EXECUTIVE_ROUTE_PREFIX = '#/ai-growth-command/executive'
 /** Strategic-analysis baseline minimums (honest thresholds, not quotas). */
 const BASELINE_MIN_ORDERS = 30
 const BASELINE_MIN_DAYS = 60
+
+// ────────────────────────────────────────────────────────────────────────────
+// Strategic derivations (assembled once per dashboard payload)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Assembles every strategic-layer derivation from the real dashboard payload.
+ * Pure functions only — the same math is unit-tested in
+ * growthiq-strategic.test.ts, and anything not measurable surfaces as null.
+ */
+function strategicDerivations(dashboard: ExecutiveDashboard) {
+  const revenue30 = trailingWindows(dashboard.revenueSeries, 30)
+  const orders30 = trailingWindows(dashboard.ordersSeries, 30)
+  const revenueGrowthPct = growthBetween(revenue30.current, revenue30.prior)
+  const ordersGrowthPct = growthBetween(orders30.current, orders30.prior)
+  const aov = orders30.current > 0 ? revenue30.current / orders30.current : null
+  const aovDeltaPct = revenueGrowthPct !== null && ordersGrowthPct !== null ? ((1 + revenueGrowthPct / 100) / (1 + ordersGrowthPct / 100) - 1) * 100 : null
+  const projection = projectTrajectory(dashboard.revenueSeries)
+  const revenueMetric = dashboard.benchmarkPosition?.positions.find((entry) => entry.metric === 'REVENUE') ?? null
+  const repeatMetric = dashboard.benchmarkPosition?.positions.find((entry) => entry.metric === 'REPEAT_PURCHASE') ?? null
+  const position = strategicPosition({ revenuePercentile: revenueMetric?.percentile ?? null, growthRatePct: revenueGrowthPct })
+  const milestones = growthMilestones({
+    syncedOrders: dashboard.totals.syncedOrders,
+    customers: dashboard.totals.customers,
+    daysSynced: dashboard.totals.daysSynced,
+    syncedRevenue: dashboard.totals.syncedRevenue,
+    decisionsLogged: dashboard.decisions.length,
+    hasReport: dashboard.latestReport !== null,
+    hasDiagnosis: dashboard.health !== null,
+    currency: dashboard.currency,
+  })
+  const digest = weeklyDigest({
+    revenueSeries: dashboard.revenueSeries,
+    ordersSeries: dashboard.ordersSeries,
+    topProducts: dashboard.topProducts,
+    opportunities: dashboard.opportunities,
+    risks: dashboard.risks,
+    repeatRatePct: repeatMetric?.yourValue ?? null,
+    repeatMedianPct: repeatMetric?.industryMedian ?? null,
+  })
+  const impacts = impactPreviews({
+    position: dashboard.benchmarkPosition,
+    opportunities: dashboard.opportunities,
+    orders30: orders30.current,
+    currency: dashboard.currency,
+    topProductSharePct: dashboard.topProducts[0]?.sharePct ?? null,
+  })
+  return { projection, position, milestones, digest, impacts, revenueGrowthPct, aov, aovDeltaPct, repeatMetric, daysSynced: dashboard.totals.daysSynced }
+}
+
+function healthStatusLabel(status: string | null | undefined): string | null {
+  if (!status) return null
+  if (status === 'AT_RISK') return 'At risk'
+  return status.slice(0, 1) + status.slice(1).toLowerCase()
+}
 
 export type GrowthIqWorkspaceProps = Readonly<{
   context: WorkspaceContext
@@ -173,8 +238,8 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
   } else if (page === 'settings') {
     content = <ExecutiveSettingsPage {...pageProps} />
   } else {
-    const daysSynced = dashboard.revenueSeries.length
-    const ordersSynced = dashboard.ordersSeries.reduce((sum, point) => sum + point.value, 0)
+    const daysSynced = dashboard.totals.daysSynced
+    const ordersSynced = dashboard.totals.syncedOrders
     const noHistoryAtAll = daysSynced === 0 && ordersSynced === 0
     const insufficient = ordersSynced < BASELINE_MIN_ORDERS || daysSynced < BASELINE_MIN_DAYS
     content = noHistoryAtAll ? (
@@ -184,7 +249,8 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
           onExploreReports={() => navigate('/reports')}
           onSync={onSync ? () => onSync('orders') : undefined}
         />
-        <section className="exec-section card span-12">
+        <GrowthIqStrategyStage dashboard={dashboard} plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
+        <section className="exec-section card span-12 gq-plan-wrap">
           <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
         </section>
       </div>
@@ -197,7 +263,8 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
           onViewSample={() => navigate('/reports')}
           onSync={onSync ? () => onSync('orders') : undefined}
         />
-        <section className="exec-section card span-12">
+        <GrowthIqStrategyStage dashboard={dashboard} plan={plan} onNavigate={navigate} onUpgrade={onUpgrade} />
+        <section className="exec-section card span-12 gq-plan-wrap">
           <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
         </section>
       </div>
@@ -238,11 +305,75 @@ function GrowthIqHeader({ plan, onNavigate, onUpgrade }: { plan: PlanTier; onNav
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Strategy stage — the UNIQUE executive layer shown while the baseline fills
+//
+// Renders beneath the welcome/baseline hero so the page carries real
+// strategic value at any data depth: trajectory projection, strategic
+// position, impact previews, growth milestones, the weekly digest, the
+// insights sidebar, and executive actions. Sections degrade to honest
+// education whenever an input is not measurable — nothing is fabricated.
+// ────────────────────────────────────────────────────────────────────────────
+
+function GrowthIqStrategyStage({ dashboard, plan, onNavigate, onUpgrade }: { dashboard: ExecutiveDashboard; plan: PlanTier; onNavigate: (route: string) => void; onUpgrade: () => void }) {
+  const d = strategicDerivations(dashboard)
+  const canReadReports = dashboard.gates.reports?.allowed ?? false
+  const weekIndex = Math.floor(Date.parse(dashboard.generatedAt) / 604_800_000)
+  return (
+    <div className="gq-strategy-layout">
+      <div className="gq-strategy-main">
+        <GrowthIqTrajectorySection
+          projection={d.projection}
+          currency={dashboard.currency}
+          daysSynced={d.daysSynced}
+          onNavigateReports={() => onNavigate('/reports')}
+        />
+        <GrowthIqPositionSection
+          position={d.position}
+          nextMilestone={d.milestones.active?.title ?? null}
+          onNavigateBenchmarks={() => onNavigate('/benchmarks')}
+        />
+        <GrowthIqImpactSection previews={d.impacts} onNavigate={onNavigate} />
+        <GrowthIqMilestonesSection result={d.milestones} onNavigateRoadmaps={() => onNavigate('/roadmaps')} />
+        <GrowthIqDigestSection
+          digest={d.digest}
+          daysSynced={d.daysSynced}
+          currency={dashboard.currency}
+          plan={plan}
+          canReadReports={canReadReports}
+          onNavigateReports={() => onNavigate('/reports')}
+          onUpgrade={onUpgrade}
+        />
+      </div>
+      <div className="gq-strategy-aside">
+        <GrowthIqInsightsSidebar
+          metrics={{
+            daysSynced: d.daysSynced,
+            stage: d.milestones.stage,
+            healthLabel: healthStatusLabel(dashboard.health?.overallStatus),
+            nextFocus: d.digest?.focus?.title ?? d.position.focus,
+            revenueGrowthPct: d.revenueGrowthPct,
+            repeat: d.repeatMetric && d.repeatMetric.yourValue !== null && d.repeatMetric.industryMedian !== null
+              ? { yours: d.repeatMetric.yourValue, median: d.repeatMetric.industryMedian }
+              : null,
+            aov: d.aov !== null ? { value: d.aov, deltaPct: d.aovDeltaPct } : null,
+          }}
+          currency={dashboard.currency}
+          tipIndex={Number.isFinite(weekIndex) ? weekIndex : 0}
+          onNavigateReports={() => onNavigate('/reports')}
+        />
+        <GrowthIqActionsPanel onNavigate={onNavigate} />
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // GrowthIQ dashboard (9 sections + plan panel)
 // ────────────────────────────────────────────────────────────────────────────
 
 function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
   const { plan, gates, usage } = dashboard
+  const d = strategicDerivations(dashboard)
   // Sub-routes are relative to the GrowthIQ prefix (navigate() prepends it).
   const base = ''
   const gateFor = (feature: string): ExecutiveGate | undefined => gates[feature]
@@ -253,8 +384,6 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
   const roadmap = dashboard.roadmap
   const revenueValues = dashboard.revenueSeries.map((point) => point.value)
   const ordersValues = dashboard.ordersSeries.map((point) => point.value)
-  const revenueTotal = dashboard.revenueSeries.reduce((sum, point) => sum + point.value, 0)
-  const ordersTotal = dashboard.ordersSeries.reduce((sum, point) => sum + point.value, 0)
   const revenue30 = revenueValues.slice(-30).reduce((sum, value) => sum + value, 0)
   const revenuePrior30 = revenueValues.slice(-60, -30).reduce((sum, value) => sum + value, 0)
   const revenueGrowth = revenuePrior30 > 0 ? (revenue30 / revenuePrior30 - 1) * 100 : null
@@ -295,6 +424,11 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
             )}
           </div>
         </section>
+
+        {/* Executive actions — strategic moves that work at any data depth */}
+        <div className="span-12 gq-actions-wrap">
+          <GrowthIqActionsPanel onNavigate={(route) => onNavigate(`${base}${route}`)} />
+        </div>
 
         {/* 2 — Strategic health */}
         <section className="exec-section span-6">
@@ -393,24 +527,14 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
           )}
         </section>
 
-        {/* 6 — Trajectory */}
-        <section className="exec-section span-4">
-          <div className="exec-section-head">
-            <div><div className="exec-kicker">Trajectory</div><h3>Revenue & Orders</h3></div>
-            <span className="exec-muted-note">last {Math.min(60, dashboard.revenueSeries.length)} synced days</span>
-          </div>
-          {revenueValues.length > 1 ? (
-            <>
-              <ExecutiveAreaChart points={dashboard.revenueSeries} height={120} label="Revenue trend" formatValue={(value) => formatExecutiveMoney(value, dashboard.currency, 0)} />
-              <div style={{ display: 'flex', gap: 18, marginTop: 10, alignItems: 'center' }}>
-                <ExecutiveSparkline points={ordersValues} width={90} height={26} tone="var(--exec-purple)" />
-                <span style={{ fontSize: 11.5, color: 'var(--exec-muted)' }}>{ordersTotal} orders · {formatExecutiveMoney(revenueTotal, dashboard.currency, 0)} revenue</span>
-              </div>
-            </>
-          ) : (
-            <ExecutiveEmptyState icon={Gauge} title="Not enough synced history" description="The trajectory chart appears once two or more days of revenue are synced." />
-          )}
-        </section>
+        {/* 6 — Business trajectory (real history + measured trend projection) */}
+        <GrowthIqTrajectorySection
+          projection={d.projection}
+          currency={dashboard.currency}
+          daysSynced={d.daysSynced}
+          onNavigateReports={() => onNavigate(`${base}/reports`)}
+          className="span-4"
+        />
 
         {/* 7 — Scenarios */}
         <section className="exec-section span-6">

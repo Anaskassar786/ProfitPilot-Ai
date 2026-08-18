@@ -6,9 +6,10 @@
  * "Upgrade Plan" (never a plan name), educational empty states, and
  * elegant skeleton loaders. Theme-adaptive via the tokens in executive.css.
  */
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { ArrowUpRight, Check, CircleHelp, FlaskConical, Gauge, LockKeyhole, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react'
+import { ArrowUpRight, Check, ChevronDown, ChevronUp, CircleHelp, FlaskConical, Gauge, LockKeyhole, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react'
 import { PLAN_TIERS } from '@profitpilot/types'
 import type { PlanTier } from '@profitpilot/types'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -218,39 +219,69 @@ function planTierLabel(plan: PlanTier): string {
 }
 
 /**
- * Shows what the merchant's plan unlocks in GrowthIQ and what a higher plan
- * adds. Descriptive hints may name tiers; every CTA still says
+ * Compact plan summary — collapsed by default so billing never dominates the
+ * page. One row carries the badge, the counts, and the CTAs; "Show details"
+ * expands the categorized feature matrix with a smooth grid-rows animation.
+ * Descriptive groupings may name tiers; every CTA still says
  * "Upgrade Plan" — never "Upgrade to <plan>".
  */
-export function GrowthIqPlanPanel({ plan, onUpgrade }: { plan: PlanTier; onUpgrade: () => void }) {
+export function GrowthIqPlanPanel({ plan, onUpgrade, defaultExpanded = false }: { plan: PlanTier; onUpgrade: () => void; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const rank = PLAN_TIER_RANK[plan]
   const unlocked = GROWTHIQ_PLAN_FEATURES.filter((feature) => PLAN_TIER_RANK[feature.tier] <= rank)
   const locked = GROWTHIQ_PLAN_FEATURES.filter((feature) => PLAN_TIER_RANK[feature.tier] > rank)
   const isCommander = plan === 'commander'
+  // Group locked rows under their minimum tier so merchants can scan
+  // "what a step up adds" without prices or plan-name CTAs.
+  const lockedByTier = PLAN_TIERS
+    .map((tier) => ({ tier, features: locked.filter((feature) => feature.tier === tier) }))
+    .filter((group) => group.features.length > 0)
   return (
     <div className="gq-plan-panel">
       <div className="gq-plan-head">
         <span className="gq-plan-badge"><span className="gq-plan-dot" />Your plan: {planTierLabel(plan)}</span>
         {isCommander
-          ? <span className="gq-plan-note">All GrowthIQ features unlocked.</span>
-          : <span className="gq-plan-note">{locked.length} more capabilit{locked.length === 1 ? 'y' : 'ies'} on higher plans.</span>}
-        {!isCommander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
+          ? <span className="gq-plan-note">{unlocked.length} features active · all GrowthIQ features unlocked</span>
+          : <span className="gq-plan-note">{unlocked.length} features active · {locked.length} more available</span>}
+        <span className="gq-plan-head-actions">
+          <button
+            type="button"
+            className="text-button gq-plan-toggle"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            aria-controls="gq-plan-details"
+          >
+            {expanded ? <>Hide details <ChevronUp size={14} /></> : <>Show details <ChevronDown size={14} /></>}
+          </button>
+          {!isCommander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
+        </span>
       </div>
-      <div className="gq-plan-columns">
-        <div className="gq-plan-list">
-          <h4>{isCommander ? 'Everything in GrowthIQ' : 'Currently available'}</h4>
-          {unlocked.map((feature) => (
-            <div key={feature.label} className="gq-plan-item unlocked"><Check size={14} />{feature.label}{feature.hint && <small>{feature.hint}</small>}</div>
-          ))}
-        </div>
-        {!isCommander && locked.length > 0 && (
+      <div id="gq-plan-details" className={`gq-plan-details ${expanded ? 'open' : ''}`}>
+        <div className="gq-plan-details-inner">
           <div className="gq-plan-list">
-            <h4>Available on higher plans</h4>
-            {locked.map((feature) => (
-              <div key={feature.label} className="gq-plan-item locked"><LockKeyhole size={13} />{feature.label}{feature.hint && <small>{feature.hint}</small>}</div>
+            <h4>Currently available ({unlocked.length})</h4>
+            {unlocked.map((feature) => (
+              <div key={feature.label} className="gq-plan-item unlocked"><Check size={14} />{feature.label}{feature.hint && <small>{feature.hint}</small>}</div>
             ))}
           </div>
-        )}
+          {!isCommander && lockedByTier.length > 0 && (
+            <div className="gq-plan-locked-groups">
+              <h4>Available on higher plans ({locked.length})</h4>
+              {lockedByTier.map((group) => (
+                <div key={group.tier} className="gq-plan-tier-group">
+                  <h5>{planTierLabel(group.tier)} plan</h5>
+                  {group.features.map((feature) => (
+                    <div key={feature.label} className="gq-plan-item locked"><LockKeyhole size={13} />{feature.label}{feature.hint && <small>{feature.hint}</small>}</div>
+                  ))}
+                </div>
+              ))}
+              <div className="gq-plan-details-cta">
+                <span>Unlock the full matrix — billing is self-serve.</span>
+                <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
