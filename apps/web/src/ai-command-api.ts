@@ -19,9 +19,9 @@ export async function sendAiCommandMessage(storeId: string, text: string, conver
   await initializeCsrf(fetcher)
   return requestJson('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, text, ...(conversationId ? { conversationId } : {}) }) }, fetcher)
 }
-export async function streamAiCommandMessage(storeId: string, text: string, conversationId: string | undefined, onEvent: (event: string, payload: unknown) => void, fetcher: Fetcher = fetch): Promise<ChatResult> {
+export async function streamAiCommandMessage(storeId: string, text: string, conversationId: string | undefined, onEvent: (event: string, payload: unknown) => void, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
-  const response = await fetcher('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }) })
+  const response = await fetcher('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) })
   if (!response.ok || !response.body) throw new ApiClientError('AI Command streaming unavailable', response.status)
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
@@ -58,6 +58,9 @@ export function rollbackAiCommandAction(storeId: string, id: string, fetcher: Fe
 }
 export function fetchAiCommandUsage(storeId: string, fetcher: Fetcher = fetch): Promise<AiCommandUsage> {
   return requestJson(`/ai-command/usage?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+export function fetchAiCommandUsageHistory(storeId: string, days = 7, fetcher: Fetcher = fetch): Promise<readonly AiCommandUsage[]> {
+  return requestJson(`/ai-command/usage/history?storeId=${encodeURIComponent(storeId)}&days=${days}`, {}, fetcher)
 }
 export function fetchAiCommandSaved(storeId: string, fetcher: Fetcher = fetch): Promise<readonly AiCommandSavedCommand[]> {
   return requestJson(`/ai-command/saved?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)

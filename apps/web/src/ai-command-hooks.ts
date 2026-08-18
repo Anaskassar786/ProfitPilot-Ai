@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   archiveAiCommandConversation,
   approveAiCommandAction,
@@ -11,6 +11,7 @@ import {
   fetchAiCommandPreferences,
   fetchAiCommandQuickCommands,
   fetchAiCommandUsage,
+  fetchAiCommandUsageHistory,
   fetchAiCommandSaved,
   rollbackAiCommandAction,
   saveAiCommandCommand,
@@ -33,6 +34,7 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
   const [conversations, setConversations] = useState<readonly AiCommandConversation[]>([])
   const [conversation, setConversation] = useState<AiCommandConversation | null>(null)
   const [usage, setUsage] = useState<AiCommandUsage | null>(null)
+  const [usageHistory, setUsageHistory] = useState<readonly AiCommandUsage[]>([])
   const [saved, setSaved] = useState<readonly AiCommandSavedCommand[]>([])
   const [quick, setQuick] = useState<readonly AiCommandQuickCommand[]>([])
   const [preferences, setPreferences] = useState<AiCommandPreferences | null>(null)
@@ -41,21 +43,24 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [limitReached, setLimitReached] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   const refreshSide = useCallback(async () => {
     if (!storeId) return
-    const [nextConversations, nextUsage, nextSaved, nextQuick, nextPrefs] = await Promise.allSettled([
+    const [nextConversations, nextUsage, nextSaved, nextQuick, nextPrefs, nextHistory] = await Promise.allSettled([
       fetchAiCommandConversations(storeId),
       fetchAiCommandUsage(storeId),
       fetchAiCommandSaved(storeId),
       fetchAiCommandQuickCommands(storeId),
       fetchAiCommandPreferences(storeId),
+      fetchAiCommandUsageHistory(storeId, 7),
     ])
     if (nextConversations.status === 'fulfilled') setConversations(nextConversations.value)
     if (nextUsage.status === 'fulfilled') setUsage(nextUsage.value)
     if (nextSaved.status === 'fulfilled') setSaved(nextSaved.value)
     if (nextQuick.status === 'fulfilled') setQuick(nextQuick.value)
     if (nextPrefs.status === 'fulfilled') setPreferences(nextPrefs.value)
+    if (nextHistory.status === 'fulfilled') setUsageHistory(nextHistory.value)
   }, [storeId])
 
   useEffect(() => { void refreshSide() }, [refreshSide])
@@ -79,6 +84,9 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
 
   const send = useCallback(async (text: string) => {
     if (!storeId || !text.trim() || busy) return
+    const previous = conversation
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
     setBusy(true)
     setError(null)
     setLimitReached(false)
@@ -106,28 +114,39 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
         if (event === 'message' && payload && typeof payload === 'object' && 'content' in payload) {
           setStreaming(String((payload as { content: unknown }).content ?? ''))
         }
-      })
+      }, undefined, abortRef.current.signal)
       setConversation(result.conversation)
       setUsage(result.usage)
       setThinking([])
       setStreaming('')
       await refreshSide()
     } catch (failure: unknown) {
-      try {
-        const fallback = await sendAiCommandMessage(storeId, text.trim(), conversation && conversation.id !== 'pending' ? conversation.id : undefined)
-        setConversation(fallback.conversation)
-        setUsage(fallback.usage)
-      } catch (second: unknown) {
-        const message = second instanceof Error ? second.message : 'AI Command could not answer.'
-        setError(message)
-        if (/limit|upgrade plan/i.test(message)) setLimitReached(true)
-        onToast(message, 'error')
+      if (isAbortError(failure)) {
+        setConversation(previous)
+        onToast('Command cancelled.', 'info')
+      } else {
+        try {
+          const fallback = await sendAiCommandMessage(storeId, text.trim(), conversation && conversation.id !== 'pending' ? conversation.id : undefined)
+          setConversation(fallback.conversation)
+          setUsage(fallback.usage)
+        } catch (second: unknown) {
+          const message = second instanceof Error ? second.message : 'AI Command could not answer.'
+          setError(message)
+          if (/limit|upgrade plan/i.test(message)) setLimitReached(true)
+          onToast(message, 'error')
+        }
       }
     } finally {
       setBusy(false)
       setThinking([])
+      abortRef.current = null
     }
   }, [storeId, busy, conversation, refreshSide, onToast])
+
+  const cancelThinking = useCallback(() => {
+    if (!busy) return
+    abortRef.current?.abort()
+  }, [busy])
 
   const approve = useCallback(async (actionId: string) => {
     if (!storeId) return
@@ -210,7 +229,11 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
   }, [storeId])
 
   return {
-    conversations, conversation, usage, saved, quick, preferences, thinking, streaming, busy, error, limitReached,
-    openConversation, newChat, send, approve, cancel, undo, removeConversation, archive, saveCurrent, runSaved, removeSaved, patchPreferences, refreshSide,
+    conversations, conversation, usage, usageHistory, saved, quick, preferences, thinking, streaming, busy, error, limitReached,
+    openConversation, newChat, send, cancelThinking, approve, cancel, undo, removeConversation, archive, saveCurrent, runSaved, removeSaved, patchPreferences, refreshSide,
   }
+}
+
+function isAbortError(failure: unknown): boolean {
+  return failure instanceof Error && failure.name === 'AbortError'
 }

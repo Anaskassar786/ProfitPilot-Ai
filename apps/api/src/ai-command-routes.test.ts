@@ -88,6 +88,10 @@ describe('AI Command API', () => {
     expect((await usage.json() as { data: { commandsUsed: number; limit: number } }).data.limit).toBe(200)
     expect((await fetch(`${base}/ai-command/quick-commands?storeId=${tenant}`)).status).toBe(200)
     expect((await fetch(`${base}/ai-command/preferences?storeId=${tenant}`)).status).toBe(200)
+    const history = await fetch(`${base}/ai-command/usage/history?storeId=${tenant}&days=7`)
+    expect(history.status).toBe(200)
+    const historyBody = await history.json() as { data: readonly { usageDate: string; commandsUsed: number }[] }
+    expect(historyBody.data.every((row) => Number.isInteger(row.commandsUsed) && row.commandsUsed >= 0)).toBe(true)
   }))
 
   it('saves commands and refuses extra trial shortcuts', async () => await withServer('trial', async (base) => {

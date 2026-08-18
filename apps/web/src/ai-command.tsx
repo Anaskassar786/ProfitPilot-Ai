@@ -5,22 +5,25 @@ import {
   Archive,
   ArrowUpRight,
   BarChart3,
-  Bot,
   Check,
   CheckCircle2,
+  ChevronRight,
+  Clock3,
   Command,
   Copy,
   History,
   LoaderCircle,
+  Lock,
   Package,
+  Paperclip,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   Send,
   Settings,
+  Share2,
   ShieldCheck,
-  Sparkles,
   Star,
   ThumbsDown,
   ThumbsUp,
@@ -33,23 +36,31 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
+import { AiCommandMark } from './ai-command-logo.js'
 import { useAiCommandWorkspace } from './ai-command-hooks.js'
 import {
+  CATEGORY_TONE,
   GROUP_LABELS,
   cellText,
+  conversationPreview,
+  dailyResetCountdown,
   formatTimestamp,
   groupConversations,
   hoursUntilDailyReset,
+  lastUserQuestion,
   planLabel,
   quickCommandCategory,
+  quickCommandTone,
   remainingUndoSeconds,
   searchConversations,
   tableRows,
+  usageHistoryBars,
   usageLabel,
   usagePercent,
   usageTone,
+  valueStats,
 } from './ai-command-model.js'
-import type { AiCommandMessage, AiCommandPlan, AiCommandQuickCategory } from './ai-command-model.js'
+import type { AiCommandMessage, AiCommandPlan, AiCommandQuickCategory, AiCommandTone, AiCommandUsage } from './ai-command-model.js'
 import type { WorkspaceContext } from './model.js'
 
 type ToastFn = (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
@@ -70,19 +81,38 @@ const QUICK_CATEGORIES: readonly Readonly<{ id: AiCommandQuickCategory; label: s
   { id: 'actions', label: 'Actions', icon: Zap },
 ]
 
-const CAPABILITIES = [
-  { icon: BarChart3, title: 'Store Analytics', prompt: 'What’s my revenue this month?' },
-  { icon: Users, title: 'Customer Insights', prompt: 'Who are my best customers?' },
-  { icon: Package, title: 'Inventory Management', prompt: 'Which products are low stock?' },
-  { icon: TrendingUp, title: 'Business Recommendations', prompt: 'How can I increase sales?' },
-] as const
+const CAPABILITIES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; title: string; sample: string }>[] = [
+  { icon: BarChart3, tone: 'purple', title: 'Store Analytics', sample: 'What’s my revenue this month?' },
+  { icon: Users, tone: 'blue', title: 'Customer Insights', sample: 'Who are my best customers?' },
+  { icon: Package, tone: 'green', title: 'Inventory Management', sample: 'Which products are low stock?' },
+  { icon: TrendingUp, tone: 'orange', title: 'Business Recommendations', sample: 'How can I increase sales?' },
+]
 
-const POPULAR_QUESTIONS = [
-  { icon: BarChart3, label: 'Today’s revenue', prompt: 'What’s my revenue today?' },
-  { icon: Users, label: 'Top customers', prompt: 'Show my top customers' },
-  { icon: Package, label: 'Low stock', prompt: 'Which products are low stock?' },
-  { icon: TrendingUp, label: 'Growth ideas', prompt: 'Help me increase sales' },
-] as const
+const POPULAR_QUESTIONS: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; label: string; prompt: string }>[] = [
+  { icon: BarChart3, tone: 'purple', label: 'Today’s revenue', prompt: 'What’s my revenue today?' },
+  { icon: Users, tone: 'blue', label: 'Top customers', prompt: 'Show my top customers' },
+  { icon: Package, tone: 'green', label: 'Low stock', prompt: 'Which products are low stock?' },
+  { icon: TrendingUp, tone: 'orange', label: 'Growth ideas', prompt: 'Help me increase sales' },
+]
+
+const TEMPLATES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; title: string; command: string }>[] = [
+  { icon: BarChart3, tone: 'purple', title: 'Analyze weekend sales', command: 'Compare weekend vs weekday sales this week' },
+  { icon: Users, tone: 'blue', title: 'Find at-risk customers', command: 'Show inactive customers' },
+  { icon: Package, tone: 'green', title: 'Check inventory alerts', command: 'Which products are low stock?' },
+  { icon: TrendingUp, tone: 'orange', title: 'Show growth opportunities', command: 'Help me increase sales' },
+  { icon: BarChart3, tone: 'purple', title: 'Today’s revenue', command: 'What’s my revenue today?' },
+  { icon: Zap, tone: 'amber', title: 'Recent orders', command: 'Show recent orders' },
+  { icon: ShieldCheck, tone: 'green', title: 'Store health check', command: 'How healthy is my store?' },
+  { icon: RefreshCw, tone: 'blue', title: 'Automation status', command: 'Show automation status' },
+]
+
+const SHOWCASES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; title: string; description: string; sample: string }>[] = [
+  { icon: BarChart3, tone: 'purple', title: 'Live analytics', description: 'Ask for revenue, orders, or average order value and get today’s real numbers — with a comparison to the prior period.', sample: 'What’s my revenue today?' },
+  { icon: Users, tone: 'blue', title: 'Customer intelligence', description: 'Spot your best customers or at-risk segments straight from your synced Shopify customer table.', sample: 'Who are my best customers?' },
+  { icon: Package, tone: 'green', title: 'Inventory control', description: 'Low stock, out of stock, and stockout risk — answered from live inventory levels, not guesses.', sample: 'Which products are low stock?' },
+  { icon: Zap, tone: 'amber', title: 'Store actions', description: 'On Commander, preview and approve real actions: emails, tags, discounts, and automations. Nothing runs without your approval.', sample: 'Show automation status' },
+  { icon: TrendingUp, tone: 'orange', title: 'Growth guidance', description: 'Combine analytics, recommendations, and store health into a single grounded answer about growing sales.', sample: 'Help me increase sales' },
+]
 
 export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigateBilling, initialConversationId = null }: {
   context: WorkspaceContext
@@ -100,6 +130,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
   const [now, setNow] = useState(Date.now())
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const draftRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     if (initialConversationId) void workspace.openConversation(initialConversationId)
@@ -122,9 +153,14 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
   if (!storeId) {
     return (
       <div className="aic-empty">
-        <span className="aic-orb"><Bot size={28} /></span>
+        <span className="aic-empty-orb"><AiCommandMark size={34} variant="badge" /></span>
         <h2>Connect Shopify to open AI Command</h2>
         <p>AI Command answers only from your live store data. Connect a store first — nothing here is ever invented.</p>
+        <div className="aic-empty-steps">
+          <span><CheckCircle2 size={14} /> Install ProfitPilot on your Shopify store</span>
+          <span><CheckCircle2 size={14} /> Approve the data sync (orders, products, customers, inventory)</span>
+          <span><CheckCircle2 size={14} /> Ask your first command — answers come from synced rows</span>
+        </div>
       </div>
     )
   }
@@ -137,7 +173,11 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
     void workspace.send(text)
   }
 
-  const sendText = (text: string) => void workspace.send(text)
+  const sendText = (text: string) => {
+    void workspace.send(text)
+    setHistoryOpen(false)
+    setSettingsOpen(false)
+  }
 
   const grouped = groupConversations(searchConversations(workspace.conversations, search))
   const messages = workspace.conversation?.messages ?? []
@@ -147,7 +187,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
     <div className="aic-shell">
       <header className="aic-header">
         <div className="aic-title">
-          <span className="aic-orb compact"><Sparkles size={18} /></span>
+          <span className="aic-orb"><AiCommandMark size={26} variant="badge" /></span>
           <div>
             <h2>AI Command</h2>
             <p>One command controls everything</p>
@@ -158,35 +198,35 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
             <i />{workspace.busy ? 'Thinking…' : 'Live'}
           </span>
           <button type="button" className="aic-button secondary" onClick={workspace.newChat}><Plus size={15} /> New Chat</button>
-          <button type="button" className="aic-button ghost" onClick={() => setHistoryOpen((value) => !value)} aria-expanded={historyOpen}><History size={15} /> History</button>
-          <button type="button" className="aic-button ghost icon-only" onClick={() => setSettingsOpen((value) => !value)} aria-label="AI Command settings" aria-expanded={settingsOpen}><Settings size={15} /></button>
+          <button type="button" className="aic-button ghost" onClick={() => { setHistoryOpen((value) => !value); setSettingsOpen(false) }} aria-expanded={historyOpen}><History size={15} /> History</button>
+          <button type="button" className="aic-button ghost icon-only" onClick={() => { setSettingsOpen((value) => !value); setHistoryOpen(false) }} aria-label="AI Command settings" aria-expanded={settingsOpen}><Settings size={15} /></button>
         </div>
       </header>
 
-      <PlanStatusBar plan={plan} usage={workspace.usage} onUpgrade={onNavigateBilling} />
+      <PlanStatusBar plan={plan} usage={workspace.usage} now={now} onUpgrade={onNavigateBilling} />
 
-      <div className={`aic-layout ${historyOpen || settingsOpen ? 'with-side' : ''}`}>
+      {workspace.error && workspace.limitReached && (
+        <div className="aic-banner limit" role="alert">
+          <AlertCircle size={16} />
+          <div className="aic-limit-copy">
+            <strong>You&apos;ve used all {workspace.usage?.limit ?? 10} commands for today.</strong>
+            <span>Come back tomorrow for {workspace.usage?.limit ?? 10} more (free) — resets in {hoursUntilDailyReset()} hour{hoursUntilDailyReset() === 1 ? '' : 's'}. Or upgrade for unlimited commands.</span>
+          </div>
+          <UpgradePlanButton plan={plan} onUpgrade={onNavigateBilling} />
+        </div>
+      )}
+      {workspace.error && !workspace.limitReached && (
+        <div className="aic-banner error" role="alert">
+          <AlertCircle size={16} />
+          <span>{workspace.error}</span>
+        </div>
+      )}
+
+      <div className="aic-layout">
         <section className="aic-main" aria-label="AI Command conversation">
-          {workspace.error && workspace.limitReached && (
-            <div className="aic-banner limit" role="alert">
-              <AlertCircle size={16} />
-              <div className="aic-limit-copy">
-                <strong>You&apos;ve used all {workspace.usage?.limit ?? 10} commands for today.</strong>
-                <span>Come back tomorrow for {workspace.usage?.limit ?? 10} more (free) — resets in {hoursUntilDailyReset()} hour{hoursUntilDailyReset() === 1 ? '' : 's'}. Or upgrade for unlimited commands.</span>
-              </div>
-              <UpgradePlanButton plan={plan} onUpgrade={onNavigateBilling} />
-            </div>
-          )}
-          {workspace.error && !workspace.limitReached && (
-            <div className="aic-banner error" role="alert">
-              <AlertCircle size={16} />
-              <span>{workspace.error}</span>
-            </div>
-          )}
-
           <div className="aic-scroll" ref={scrollRef}>
             {messages.length === 0 && !workspace.busy && (
-              <WelcomeScreen plan={plan} usage={workspace.usage} onPrompt={sendText} onUpgrade={onNavigateBilling} />
+              <WelcomeScreen plan={plan} usage={workspace.usage} now={now} onPrompt={sendText} onUpgrade={onNavigateBilling} />
             )}
             {messages.map((item, index) => (
               <MessageBubble
@@ -208,7 +248,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 onToast={onToast}
               />
             ))}
-            {workspace.busy && <ThinkingCard steps={workspace.thinking} streaming={workspace.streaming} />}
+            {workspace.busy && <ThinkingCard steps={workspace.thinking} streaming={workspace.streaming} onCancel={workspace.cancelThinking} />}
           </div>
 
           <form className="aic-composer" onSubmit={submit}>
@@ -219,6 +259,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
             <div className="aic-composer-row">
               <textarea
                 id="aic-input"
+                ref={draftRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={PLACEHOLDER_EXAMPLES[placeholderIndex]}
@@ -228,130 +269,203 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit() }
                 }}
               />
-              <button type="submit" className="aic-send" disabled={workspace.busy || !draft.trim()} aria-label="Send command">
-                {workspace.busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
-              </button>
+              <div className="aic-composer-side">
+                <button type="button" className="aic-tool" disabled title="File attachments are coming soon" aria-label="Attach files (coming soon)"><Paperclip size={16} /></button>
+                <button type="submit" className="aic-send" disabled={workspace.busy || !draft.trim()} aria-label="Send command">
+                  {workspace.busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
+                </button>
+              </div>
             </div>
+            <Suggestions draft={draft} onPick={(value) => { setDraft(value); draftRef.current?.focus() }} />
             <div className="aic-composer-hints">
-              <span>Enter to send · Shift+Enter for a new line</span>
+              <span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span>
               <span>{usageLabel(workspace.usage, plan)}</span>
             </div>
             <QuickCommands commands={commands} disabled={workspace.busy} onSend={sendText} />
           </form>
         </section>
 
-        {(historyOpen || settingsOpen) && (
-          <aside className="aic-sidebar" aria-label="AI Command sidebar">
-            <UsageCard usage={workspace.usage} plan={plan} onUpgrade={onNavigateBilling} />
-            {settingsOpen && workspace.preferences && (
-              <section className="aic-side-block">
-                <h3>Preferences</h3>
-                <label className="aic-toggle">
-                  <input type="checkbox" checked={workspace.preferences.thinkingAnimationEnabled} onChange={(event) => void workspace.patchPreferences({ thinkingAnimationEnabled: event.target.checked })} />
-                  Thinking animation
-                </label>
-                <label className="aic-toggle">
-                  <input type="checkbox" checked={workspace.preferences.quickCommandsEnabled} onChange={(event) => void workspace.patchPreferences({ quickCommandsEnabled: event.target.checked })} />
-                  Quick commands
-                </label>
-              </section>
-            )}
-            <section className="aic-side-block">
-              <div className="aic-side-head">
-                <h3>Conversations</h3>
-                <div className="aic-search"><Search size={13} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" aria-label="Search conversations" /></div>
-              </div>
-              {(Object.keys(GROUP_LABELS) as Array<keyof typeof GROUP_LABELS>).map((key) => (
-                grouped[key].length > 0 && (
-                  <div key={key} className="aic-group">
-                    <span>{GROUP_LABELS[key]} ({grouped[key].length})</span>
-                    {grouped[key].map((item) => (
-                      <div key={item.id} className={`aic-thread ${workspace.conversation?.id === item.id ? 'active' : ''}`}>
-                        <button type="button" onClick={() => void workspace.openConversation(item.id)}>
-                          <strong>{item.title}</strong>
-                          <small>{new Date(item.lastMessageAt).toLocaleString()}</small>
-                        </button>
-                        <button type="button" className="aic-icon" aria-label="Archive conversation" onClick={() => void workspace.archive(item.id)}><Archive size={13} /></button>
-                        <button type="button" className="aic-icon" aria-label="Delete conversation" onClick={() => void workspace.removeConversation(item.id)}><Trash2 size={13} /></button>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ))}
-              {workspace.conversations.length === 0 && <p className="aic-muted">No conversations yet.</p>}
-            </section>
-            <section className="aic-side-block">
-              <h3>Saved commands</h3>
-              {workspace.saved.length === 0 && <p className="aic-muted">Star a command to save it here.</p>}
-              {workspace.saved.map((item) => (
-                <div key={item.id} className="aic-saved">
-                  <button type="button" onClick={() => void workspace.runSaved(item.id)}><Star size={13} /> {item.name}<small>{item.useCount} uses</small></button>
-                  <button type="button" className="aic-icon" aria-label="Delete saved command" onClick={() => void workspace.removeSaved(item.id)}><X size={13} /></button>
-                </div>
-              ))}
-            </section>
-            <ActivityCard usage={workspace.usage} conversations={workspace.conversations.length} saved={workspace.saved.length} />
-          </aside>
-        )}
+        <aside className="aic-rail" aria-label="AI Command dashboard">
+          <UsageRingCard usage={workspace.usage} plan={plan} now={now} onUpgrade={onNavigateBilling} />
+          <RecentCommandsCard conversations={workspace.conversations} onOpen={(id) => void workspace.openConversation(id)} onNewChat={workspace.newChat} />
+          <ValueCard usage={workspace.usage} usageHistory={workspace.usageHistory} conversations={workspace.conversations.length} saved={workspace.saved.length} now={now} />
+          <ShowcaseCard onPrompt={sendText} />
+        </aside>
       </div>
+
+      {(historyOpen || settingsOpen) && (
+        <div className="aic-drawer-wrap">
+          <button type="button" className="aic-drawer-backdrop" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }} aria-label="Close panel" />
+          <aside className="aic-drawer" aria-label={settingsOpen ? 'AI Command settings' : 'AI Command history'}>
+            <div className="aic-drawer-head">
+              <h3>{settingsOpen ? 'Settings' : 'Conversations'}</h3>
+              <button type="button" className="aic-icon" aria-label="Close panel" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }}><X size={16} /></button>
+            </div>
+            <div className="aic-drawer-scroll">
+              {settingsOpen && workspace.preferences && (
+                <section className="aic-side-block">
+                  <h3>Preferences</h3>
+                  <label className="aic-toggle">
+                    <input type="checkbox" checked={workspace.preferences.thinkingAnimationEnabled} onChange={(event) => void workspace.patchPreferences({ thinkingAnimationEnabled: event.target.checked })} />
+                    Thinking animation
+                  </label>
+                  <label className="aic-toggle">
+                    <input type="checkbox" checked={workspace.preferences.quickCommandsEnabled} onChange={(event) => void workspace.patchPreferences({ quickCommandsEnabled: event.target.checked })} />
+                    Quick commands
+                  </label>
+                  <label className="aic-toggle">
+                    <input type="checkbox" checked={workspace.preferences.autoSuggestionsEnabled} onChange={(event) => void workspace.patchPreferences({ autoSuggestionsEnabled: event.target.checked })} />
+                    Auto-suggestions
+                  </label>
+                </section>
+              )}
+              {historyOpen && (
+                <section className="aic-side-block">
+                  <div className="aic-side-head">
+                    <h3>Conversations</h3>
+                    <div className="aic-search"><Search size={13} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" aria-label="Search conversations" /></div>
+                  </div>
+                  {(Object.keys(GROUP_LABELS) as Array<keyof typeof GROUP_LABELS>).map((key) => (
+                    grouped[key].length > 0 && (
+                      <div key={key} className="aic-group">
+                        <span>{GROUP_LABELS[key]} ({grouped[key].length})</span>
+                        {grouped[key].map((item) => {
+                          const preview = conversationPreview(item)
+                          return (
+                            <div key={item.id} className={`aic-thread ${workspace.conversation?.id === item.id ? 'active' : ''}`}>
+                              <button type="button" className="aic-thread-main" onClick={() => void workspace.openConversation(item.id)}>
+                                <strong>{item.title}</strong>
+                                <small>{preview.question}</small>
+                                {preview.answer && <em>{preview.answer}</em>}
+                              </button>
+                              <button type="button" className="aic-icon" aria-label="Save conversation as command" onClick={() => void workspace.saveCurrent(item.title.slice(0, 40), lastUserQuestion(item))}><Star size={13} /></button>
+                              <button type="button" className="aic-icon" aria-label="Archive conversation" onClick={() => void workspace.archive(item.id)}><Archive size={13} /></button>
+                              <button type="button" className="aic-icon" aria-label="Delete conversation" onClick={() => void workspace.removeConversation(item.id)}><Trash2 size={13} /></button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  ))}
+                  {workspace.conversations.length === 0 && (
+                    <div className="aic-inline-empty">
+                      <AiCommandMark size={26} />
+                      <strong>No conversations yet</strong>
+                      <span>Ask your first question above — every answer is grounded in your real store data.</span>
+                    </div>
+                  )}
+                  {workspace.conversations.length > 0 && (
+                    <button type="button" className="aic-text-button danger" onClick={() => { if (window.confirm('Delete all conversations? This cannot be undone.')) { void clearAllConversations(workspace.conversations, workspace.removeConversation) } }}>
+                      <Trash2 size={13} /> Clear all
+                    </button>
+                  )}
+                </section>
+              )}
+              <section className="aic-side-block">
+                <h3>Saved commands</h3>
+                {workspace.saved.length === 0 && <p className="aic-muted">Star a command to save it here.</p>}
+                {workspace.saved.map((item) => (
+                  <div key={item.id} className="aic-saved">
+                    <button type="button" onClick={() => void workspace.runSaved(item.id)}><Star size={13} /> {item.name}<small>{item.useCount} uses</small></button>
+                    <button type="button" className="aic-icon" aria-label="Delete saved command" onClick={() => void workspace.removeSaved(item.id)}><X size={13} /></button>
+                  </div>
+                ))}
+              </section>
+              <ActivityCard usage={workspace.usage} conversations={workspace.conversations.length} saved={workspace.saved.length} />
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }
 
-function PlanStatusBar({ plan, usage, onUpgrade }: { plan: AiCommandPlan; usage: import('./ai-command-model.js').AiCommandUsage | null; onUpgrade: () => void }) {
+async function clearAllConversations(conversations: readonly import('./ai-command-model.js').AiCommandConversation[], remove: (id: string) => Promise<void>): Promise<void> {
+  await Promise.allSettled(conversations.map((item) => remove(item.id)))
+}
+
+function PlanStatusBar({ plan, usage, now, onUpgrade }: { plan: AiCommandPlan; usage: AiCommandUsage | null; now: number; onUpgrade: () => void }) {
   const commander = plan === 'commander'
   const tone = usageTone(usage)
+  const countdown = dailyResetCountdown(new Date(now))
+  const pct = commander ? 100 : usagePercent(usage)
   return (
     <div className={`aic-planbar ${tone}`}>
       <div className="aic-planbar-left">
         <span className="aic-planbar-plan">{planLabel(plan)}</span>
-        <span className="aic-planbar-usage">Commands: {usageLabel(usage, plan)}</span>
+        <span className="aic-planbar-usage">
+          {commander ? <CheckCircle2 size={13} /> : <BarChart3 size={13} />}
+          {usageLabel(usage, plan)}
+        </span>
+        <span className="aic-planbar-reset">
+          <Clock3 size={13} />
+          {commander ? 'No daily limit' : `Resets in ${countdown.hours}h ${countdown.minutes}m`}
+        </span>
         <span className={`aic-planbar-actions ${commander ? 'unlocked' : 'locked'}`}>
           {commander ? <CheckCircle2 size={13} /> : <ShieldCheck size={13} />}
           {commander ? 'Actions enabled' : 'Actions locked'}
         </span>
+        <span className="aic-planbar-track" role="img" aria-label={`${pct}% of daily commands used`}><i style={{ width: `${pct}%` }} /></span>
       </div>
       {!commander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
     </div>
   )
 }
 
-function WelcomeScreen({ plan, usage, onPrompt, onUpgrade }: {
+function WelcomeScreen({ plan, usage, now, onPrompt, onUpgrade }: {
   plan: AiCommandPlan
-  usage: import('./ai-command-model.js').AiCommandUsage | null
+  usage: AiCommandUsage | null
+  now: number
   onPrompt: (value: string) => void
   onUpgrade: () => void
 }) {
   const commander = plan === 'commander'
+  const countdown = dailyResetCountdown(new Date(now))
+  const approachingLimit = usageTone(usage) === 'amber' || usageTone(usage) === 'red'
   return (
     <div className="aic-welcome">
-      <span className="aic-welcome-icon"><Sparkles size={30} /></span>
+      <span className="aic-welcome-icon"><AiCommandMark size={40} variant="badge" /></span>
       <h2>Welcome to AI Command</h2>
-      <p className="aic-welcome-sub">Your intelligent store assistant</p>
-      <p className="aic-welcome-lede">Ask anything about your store. Get instant insights backed by your real data.</p>
+      <p className="aic-welcome-sub">One command controls everything</p>
+      <p className="aic-welcome-lede">Ask anything about your store. Get instant insights backed by your real Shopify data — and on Commander, approve real actions without leaving this page.</p>
+
+      {approachingLimit && !commander && (
+        <div className="aic-welcome-limit">
+          <AlertCircle size={15} />
+          <span><strong>Heads up:</strong> you&apos;re close to today&apos;s command limit ({usageLabel(usage, plan)}). Free commands refresh in {countdown.hours}h {countdown.minutes}m.</span>
+          <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
+        </div>
+      )}
 
       <div className="aic-capabilities">
         <div className="aic-capabilities-head">
-          <Sparkles size={14} /> What I can help you with
+          <AiCommandMark size={14} /> What I can help you with
         </div>
         <div className="aic-capabilities-grid">
           {CAPABILITIES.map((capability) => (
-            <button type="button" key={capability.title} className="aic-capability" onClick={() => onPrompt(capability.prompt)}>
+            <button type="button" key={capability.title} className={`aic-capability tone-${capability.tone}`} onClick={() => onPrompt(capability.sample)}>
               <span className="aic-capability-icon"><capability.icon size={16} /></span>
               <span className="aic-capability-copy">
                 <strong>{capability.title}</strong>
-                <small>{capability.prompt}</small>
+                <small><em>“{capability.sample}”</em></small>
               </span>
               <ArrowUpRight size={14} className="aic-capability-arrow" />
             </button>
           ))}
-          <div className={`aic-capability ${commander ? 'enabled' : 'locked'}`}>
+          <div className={`aic-capability store-actions ${commander ? 'enabled' : 'locked'}`}>
             <span className="aic-capability-icon"><Zap size={16} /></span>
             <span className="aic-capability-copy">
               <strong>Store Actions</strong>
-              <small>{commander ? 'Execute real actions in your store' : 'Available on Commander Plan'}</small>
+              <small>{commander ? 'Execute real actions in your store' : 'Email, tags, discounts & automations'}</small>
             </span>
-            {!commander && <span className="aic-capability-lock"><ShieldCheck size={14} /> Locked</span>}
+            {commander
+              ? <span className="aic-capability-lock unlocked"><CheckCircle2 size={14} /> Enabled</span>
+              : (
+                <span className="aic-capability-lock">
+                  <Lock size={14} /> Locked
+                  <button type="button" className="aic-mini-upgrade" onClick={onUpgrade}>Upgrade Plan</button>
+                </span>
+              )}
           </div>
         </div>
       </div>
@@ -360,8 +474,27 @@ function WelcomeScreen({ plan, usage, onPrompt, onUpgrade }: {
         <span className="aic-popular-label">Or try these popular questions</span>
         <div className="aic-popular-chips">
           {POPULAR_QUESTIONS.map((question) => (
-            <button type="button" key={question.label} onClick={() => onPrompt(question.prompt)}>
-              <question.icon size={14} /> {question.label}
+            <button type="button" key={question.label} className={`tone-${question.tone}`} onClick={() => onPrompt(question.prompt)}>
+              <span className="aic-chip-icon"><question.icon size={13} /></span> {question.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="aic-templates">
+        <div className="aic-templates-head">
+          <span><AiCommandMark size={14} /> Popular command templates</span>
+          <small>Click any template to run it with your live store data</small>
+        </div>
+        <div className="aic-templates-grid">
+          {TEMPLATES.map((template) => (
+            <button type="button" key={template.title} className={`aic-template tone-${template.tone}`} onClick={() => onPrompt(template.command)}>
+              <span className="aic-template-icon"><template.icon size={15} /></span>
+              <span className="aic-template-copy">
+                <strong>{template.title}</strong>
+                <small>{template.command}</small>
+              </span>
+              <ChevronRight size={14} className="aic-template-arrow" />
             </button>
           ))}
         </div>
@@ -406,12 +539,30 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onUndo, onUpgr
     }
   }
 
+  const share = async () => {
+    const payload = `${message.content}\n\n— AI Command (ProfitPilot)`
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'AI Command response', text: payload })
+        return
+      } catch {
+        // User closed the share sheet — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(payload)
+      onToast('Response copied — paste it anywhere to share.', 'success')
+    } catch {
+      onToast('Could not share — your browser blocked clipboard access.', 'warning')
+    }
+  }
+
   return (
     <article className={`aic-bubble ${mine ? 'mine' : 'theirs'} ${message.contentType}`}>
       <div className="aic-bubble-meta">
         {mine
           ? <span className="aic-avatar user">You</span>
-          : <span className="aic-avatar ai"><Sparkles size={12} /> AI Command</span>}
+          : <span className="aic-avatar ai"><AiCommandMark size={12} /> AI Command</span>}
         <time>{formatTimestamp(message.timestamp)}</time>
       </div>
       <div className="aic-bubble-body">
@@ -446,19 +597,22 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onUndo, onUpgr
         {!mine && (
           <div className="aic-bubble-actions">
             {copyable && (
-              <button type="button" className="aic-chip-action" onClick={copy} aria-label="Copy response"><Copy size={13} /></button>
+              <button type="button" className="aic-chip-action" onClick={copy} aria-label="Copy response" title="Copy"><Copy size={13} /></button>
+            )}
+            {copyable && (
+              <button type="button" className="aic-chip-action" onClick={() => void share()} aria-label="Share response" title="Share"><Share2 size={13} /></button>
             )}
             {message.contentType === 'text' || message.contentType === 'structured_data' ? (
-              <button type="button" className="aic-chip-action" onClick={onRegenerate} aria-label="Regenerate response"><RefreshCw size={13} /></button>
+              <button type="button" className="aic-chip-action" onClick={onRegenerate} aria-label="Regenerate response" title="Regenerate"><RefreshCw size={13} /></button>
             ) : null}
             {copyable && (
               <>
-                <button type="button" className="aic-chip-action" onClick={() => onToast('Thanks for the feedback!', 'success')} aria-label="Good response"><ThumbsUp size={13} /></button>
-                <button type="button" className="aic-chip-action" onClick={() => onToast('Thanks for the feedback!', 'info')} aria-label="Poor response"><ThumbsDown size={13} /></button>
+                <button type="button" className="aic-chip-action" onClick={() => onToast('Thanks for the feedback!', 'success')} aria-label="Good response" title="Helpful"><ThumbsUp size={13} /></button>
+                <button type="button" className="aic-chip-action" onClick={() => onToast('Thanks for the feedback!', 'info')} aria-label="Poor response" title="Not helpful"><ThumbsDown size={13} /></button>
               </>
             )}
             {message.contentType === 'text' && (
-              <button type="button" className="aic-chip-action" onClick={() => onSave(message.content)} aria-label="Save this command"><Star size={13} /></button>
+              <button type="button" className="aic-chip-action" onClick={() => onSave(message.content)} aria-label="Save this command" title="Save to knowledge base"><Star size={13} /></button>
             )}
           </div>
         )}
@@ -526,6 +680,7 @@ const STRUCTURED_LABELS: Readonly<Record<string, string>> = {
   inventory_list: 'Inventory',
   recommendation_list: 'Recommendations',
   store_health: 'Store health',
+  workflow_list: 'Automations',
   action_preview: 'Action preview',
   action_result: 'Action result',
 }
@@ -536,6 +691,7 @@ function AnalyticsBlock({ data, source }: { data: Record<string, unknown>; sourc
   const orders = asNumber(data.orders)
   const aov = asNumber(data.aov)
   const change = revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null
+  const maxForBar = Math.max(revenue ?? 0, previous ?? 0, 1)
   return (
     <div className="aic-metrics">
       <div className="aic-metric primary">
@@ -555,6 +711,15 @@ function AnalyticsBlock({ data, source }: { data: Record<string, unknown>; sourc
         <div className="aic-metric">
           <span className="aic-metric-label">Avg. order value</span>
           <strong>{formatMoney(aov)}</strong>
+        </div>
+      )}
+      {revenue !== null && previous !== null && (
+        <div className="aic-compare">
+          <span className="aic-compare-label">This period vs previous</span>
+          <div className="aic-compare-bars">
+            <span className="aic-compare-row"><i>This period</i><em><b style={{ width: `${Math.round((revenue / maxForBar) * 100)}%` }} /><small>{formatMoney(revenue)}</small></em></span>
+            <span className="aic-compare-row"><i>Previous</i><em><b className="dim" style={{ width: `${Math.round((previous / maxForBar) * 100)}%` }} /><small>{formatMoney(previous)}</small></em></span>
+          </div>
         </div>
       )}
       {source && <small className="aic-source">Source: {source}</small>}
@@ -583,18 +748,46 @@ function HealthBlock({ data, source }: { data: Record<string, unknown>; source: 
   )
 }
 
-function ThinkingCard({ steps, streaming }: { steps: readonly string[]; streaming: string }) {
+function ThinkingCard({ steps, streaming, onCancel }: { steps: readonly string[]; streaming: string; onCancel: () => void }) {
+  const STEPS = ['Understanding your request...', 'Fetching store data...', 'Analyzing patterns...', 'Preparing response...']
+  const current = Math.max(0, steps.length - 1)
   return (
     <article className="aic-thinking" aria-live="polite">
       <div className="aic-thinking-head">
         <span className="aic-thinking-dots"><i /><i /><i /></span>
         AI Command is thinking…
+        <span className="aic-thinking-eta">usually under 15 seconds</span>
+        <button type="button" className="aic-thinking-cancel" onClick={onCancel} aria-label="Cancel command">Cancel <X size={12} /></button>
       </div>
-      <ol>
-        {(steps.length ? steps : ['Understanding your request...']).map((step) => <li key={step}>{step}</li>)}
+      <ol className="aic-thinking-steps">
+        {STEPS.map((step, index) => (
+          <li key={step} className={index < current ? 'done' : index === current ? 'active' : 'pending'}>
+            {index < current ? <Check size={12} /> : <i />} {step}
+          </li>
+        ))}
       </ol>
       {streaming && <p className="aic-stream">{streaming}</p>}
     </article>
+  )
+}
+
+function Suggestions({ draft, onPick }: { draft: string; onPick: (value: string) => void }) {
+  const needle = draft.trim().toLowerCase()
+  const matches = useMemo(() => {
+    if (needle.length < 2) return []
+    const pool = [...TEMPLATES.map((item) => item.command), ...POPULAR_QUESTIONS.map((item) => item.prompt)]
+    const unique = [...new Set(pool)]
+    return unique.filter((item) => item.toLowerCase().includes(needle)).slice(0, 3)
+  }, [needle])
+  if (matches.length === 0) return null
+  return (
+    <div className="aic-suggestions" role="listbox" aria-label="Suggestions">
+      {matches.map((item) => (
+        <button key={item} type="button" role="option" onClick={() => onPick(item)}>
+          <Search size={12} /> {item}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -621,7 +814,7 @@ function QuickCommands({ commands, disabled, onSend }: {
             type="button"
             role="tab"
             aria-selected={category.id === current}
-            className={category.id === current ? 'active' : ''}
+            className={category.id === current ? `active tone-${CATEGORY_TONE[category.id]}` : ''}
             onClick={() => setActive(category.id)}
           >
             <category.icon size={13} /> {category.label}
@@ -630,7 +823,7 @@ function QuickCommands({ commands, disabled, onSend }: {
       </div>
       <div className="aic-quick-pills">
         {groups[current].map((command) => (
-          <button key={command.id} type="button" onClick={() => onSend(command.command)} disabled={disabled}>
+          <button key={command.id} type="button" className={`tone-${quickCommandTone(command)}`} onClick={() => onSend(command.command)} disabled={disabled}>
             {command.label}
           </button>
         ))}
@@ -639,25 +832,154 @@ function QuickCommands({ commands, disabled, onSend }: {
   )
 }
 
-function UsageCard({ usage, plan, onUpgrade }: { usage: import('./ai-command-model.js').AiCommandUsage | null; plan: AiCommandPlan; onUpgrade: () => void }) {
+function UsageRingCard({ usage, plan, now, onUpgrade }: { usage: AiCommandUsage | null; plan: AiCommandPlan; now: number; onUpgrade: () => void }) {
+  const commander = plan === 'commander'
   const tone = usageTone(usage)
+  const countdown = dailyResetCountdown(new Date(now))
+  const used = usage?.commandsUsed ?? 0
+  const limit = usage?.limit ?? null
+  const pct = commander || limit === null ? 100 : usagePercent(usage)
+  const ringStyle = { '--ring-pct': `${pct * 3.6}deg` } as CSSProperties
   return (
-    <section className={`aic-usage ${tone}`}>
-      <div className="aic-usage-top"><span>Usage</span><strong>{usageLabel(usage, plan)}</strong></div>
-      <div className="aic-usage-track" role="img" aria-label={usageLabel(usage, plan)}><i style={{ width: `${usagePercent(usage)}%` }} /></div>
-      {tone === 'red' && (
-        <div className="aic-usage-cta">
-          <span>You&apos;ve used all {usage?.limit ?? ''} commands for today — nice work! You get {usage?.limit ?? ''} more free tomorrow (resets in {hoursUntilDailyReset()} hour{hoursUntilDailyReset() === 1 ? '' : 's'}).</span>
-          <span>Or <strong>Upgrade Plan</strong> for unlimited commands.</span>
+    <section className={`aic-usage-ring ${tone}`}>
+      <div className="aic-usage-ring-top">
+        <span>Daily commands</span>
+        <span className="aic-plan-badge">{planLabel(plan)}</span>
+      </div>
+      <div className="aic-usage-ring-body">
+        <div className="aic-ring" style={ringStyle}>
+          <div className="aic-ring-inner">
+            <strong>{commander || limit === null ? '∞' : used}</strong>
+            <small>{commander || limit === null ? 'Unlimited' : `of ${limit} today`}</small>
+          </div>
+        </div>
+        <div className="aic-usage-ring-copy">
+          <strong>{commander || limit === null ? 'Unlimited commands' : `${limit - used} command${limit - used === 1 ? '' : 's'} left today`}</strong>
+          <span><Clock3 size={12} /> {commander ? 'No daily reset' : `Resets in ${countdown.hours}h ${countdown.minutes}m`}</span>
+          {tone === 'red' && <em>All used up — nice work! Fresh commands arrive at the next reset.</em>}
+          {tone === 'amber' && <em>Almost at your limit — plan your next commands wisely.</em>}
+          {tone === 'green' && <em>Every answer is grounded in your real store data.</em>}
+        </div>
+      </div>
+      {!commander && (
+        <div className="aic-usage-ring-cta">
+          <span>Need more? <strong>Upgrade Plan</strong> for higher daily limits — and actions on Commander.</span>
           <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
         </div>
       )}
-      {tone === 'amber' && <div className="aic-usage-cta">Almost at your daily limit. <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} /></div>}
     </section>
   )
 }
 
-function ActivityCard({ usage, conversations, saved }: { usage: import('./ai-command-model.js').AiCommandUsage | null; conversations: number; saved: number }) {
+function RecentCommandsCard({ conversations, onOpen, onNewChat }: {
+  conversations: readonly import('./ai-command-model.js').AiCommandConversation[]
+  onOpen: (id: string) => void
+  onNewChat: () => void
+}) {
+  const recent = [...conversations].sort((left, right) => right.lastMessageAt.localeCompare(left.lastMessageAt)).slice(0, 5)
+  return (
+    <section className="aic-side-block recent">
+      <div className="aic-side-head-row">
+        <h3>Recent commands</h3>
+        <button type="button" className="aic-text-button" onClick={onNewChat}><Plus size={12} /> New</button>
+      </div>
+      {recent.length === 0 && (
+        <div className="aic-inline-empty">
+          <AiCommandMark size={24} />
+          <strong>No commands yet</strong>
+          <span>Ask your first question — recent commands will appear here so you can reload them anytime.</span>
+        </div>
+      )}
+      {recent.map((item) => {
+        const preview = conversationPreview(item)
+        return (
+          <button key={item.id} type="button" className="aic-recent" onClick={() => onOpen(item.id)}>
+            <span className="aic-recent-meta">
+              <time>{new Date(item.lastMessageAt).toLocaleString()}</time>
+              <ChevronRight size={12} />
+            </span>
+            <strong>{preview.question}</strong>
+            {preview.answer && <small>{preview.answer}</small>}
+          </button>
+        )
+      })}
+    </section>
+  )
+}
+
+function ValueCard({ usage, usageHistory, conversations, saved, now }: {
+  usage: AiCommandUsage | null
+  usageHistory: readonly import('./ai-command-model.js').AiCommandUsage[]
+  conversations: number
+  saved: number
+  now: number
+}) {
+  const stats = valueStats(usage, usageHistory, conversations, saved)
+  const bars = usageHistoryBars(usageHistory, 7, new Date(now))
+  const maxBar = Math.max(1, ...bars.map((bar) => bar.value))
+  return (
+    <section className="aic-side-block value">
+      <h3>Your impact</h3>
+      <div className="aic-value-grid">
+        <div className="aic-value-stat"><span>Commands today</span><strong>{stats.commandsToday}</strong></div>
+        <div className="aic-value-stat"><span>Commands this week</span><strong>{stats.commandsWeek}</strong></div>
+        <div className="aic-value-stat"><span>Actions taken</span><strong>{stats.actions}</strong></div>
+        <div className="aic-value-stat"><span>Conversations</span><strong>{stats.conversations}</strong></div>
+        <div className="aic-value-stat"><span>Saved commands</span><strong>{stats.saved}</strong></div>
+        <div className="aic-value-stat estimate"><span>Time saved (est.)</span><strong>{stats.timeSavedLabel}</strong></div>
+      </div>
+      <div className="aic-value-chart">
+        <div className="aic-value-chart-head"><span>Commands per day</span><small>Last 7 days · real usage</small></div>
+        <div className="aic-value-bars">
+          {bars.map((bar) => (
+            <span key={bar.label} className={bar.isToday ? 'today' : ''} title={`${bar.label}: ${bar.value}`}>
+              <i style={{ height: `${Math.max(4, Math.round((bar.value / maxBar) * 100))}%` }} />
+              <small>{bar.label}</small>
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="aic-stats-note">Every figure reflects real AI Command usage — time saved is estimated at ~3 minutes per manual lookup.</p>
+    </section>
+  )
+}
+
+function ShowcaseCard({ onPrompt }: { onPrompt: (value: string) => void }) {
+  const [index, setIndex] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setIndex((current) => (current + 1) % SHOWCASES.length), 6000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const current = SHOWCASES[index] ?? SHOWCASES[0]!
+  return (
+    <section className="aic-side-block showcase">
+      <h3>What AI can do</h3>
+      <div className={`aic-showcase tone-${current.tone}`} key={index}>
+        <span className="aic-showcase-icon"><current.icon size={18} /></span>
+        <strong>{current.title}</strong>
+        <p>{current.description}</p>
+        <button type="button" className="aic-showcase-run" onClick={() => onPrompt(current.sample)}>
+          <Search size={12} /> {current.sample}
+        </button>
+      </div>
+      <div className="aic-showcase-dots" role="tablist" aria-label="Showcase pages">
+        {SHOWCASES.map((item, dotIndex) => (
+          <button
+            key={item.title}
+            type="button"
+            role="tab"
+            aria-selected={dotIndex === index}
+            aria-label={item.title}
+            className={dotIndex === index ? 'active' : ''}
+            onClick={() => setIndex(dotIndex)}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ActivityCard({ usage, conversations, saved }: { usage: AiCommandUsage | null; conversations: number; saved: number }) {
   const stats = [
     { label: 'Commands today', value: String(usage?.commandsUsed ?? 0) },
     { label: 'Actions executed', value: String(usage?.actionsExecuted ?? 0) },
