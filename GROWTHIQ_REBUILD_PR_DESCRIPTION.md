@@ -155,6 +155,17 @@ with token-based styling.
 | Docs | `docs/GROWTHIQ.md` (new), `docs/AI_EXECUTIVE.md` (removed), `README.md` |
 | Screenshots | `docs/screenshots/growthiq-*.png` (9) |
 
+## 📌 Note on a pre-existing typecheck failure on `main`
+
+After merging current `main` (PR #63/#65, the PatternAI rebrand),
+`@profitpilot/api typecheck` reports 3 TS2367 errors in
+`apps/api/src/ai-command-runtime.ts` (action/tool name comparisons with no
+overlap). That file is byte-identical to `origin/main` — the inconsistency
+was introduced by the PatternAI PR's changes to the `@profitpilot/ai` command
+types, not by this PR (which never touches AI Command). Vitest (esbuild, no
+typecheck) is unaffected: **all 1,957 tests pass**. Left in place per this
+PR's scope (GrowthIQ-only); flagged so it can be fixed in an AI Command PR.
+
 ## ⚠️ Intentionally unchanged
 
 - `/ai-executive/*` API paths, `ai_executive_*` table names, migration
