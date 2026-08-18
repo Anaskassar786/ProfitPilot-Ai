@@ -33,6 +33,7 @@ import { ExecutiveRoadmapsPage } from './executive-roadmaps.js'
 import { ExecutiveSettingsPage } from './executive-settings.js'
 import { errorMessageFrom } from './executive-shared.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
+import { AiGrowthCommandWorkspace as StoreCoachWorkspace } from './store-coach.js'
 
 const EXECUTIVE_ROUTE_PREFIX = '#/ai-growth-command/executive'
 
@@ -43,19 +44,33 @@ export type ExecutiveWorkspaceProps = Readonly<{
 }>
 
 export function AiGrowthCommandPage({ context, onToast, onNavigateBilling }: ExecutiveWorkspaceProps) {
-  const [tab, setTab] = useState<'store-coach' | 'executive' | 'insights'>(() => (window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX) ? 'executive' : 'executive'))
-  const navigateTab = (next: 'store-coach' | 'executive' | 'insights') => {
-    setTab(next)
-    if (next === 'executive' && !window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX)) {
-      try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${EXECUTIVE_ROUTE_PREFIX}`) } catch { /* embedded browsers may restrict history */ }
-    }
+  // One AI Growth Command surface, two sections: Store Coach (daily tactical
+  // coaching) and AI Executive (boardroom strategy). The hash selects the
+  // section so #/ai-growth-command/executive deep links still work, and the
+  // tabs cross-link both ways.
+  const [surface, setSurface] = useState<'coach' | 'executive'>(() => (window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX) ? 'executive' : 'coach'))
+  useEffect(() => {
+    const onHash = () => setSurface(window.location.hash.startsWith(EXECUTIVE_ROUTE_PREFIX) ? 'executive' : 'coach')
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const openCoach = () => {
+    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`) } catch { /* restricted history */ }
+    setSurface('coach')
+  }
+  const openExecutive = () => {
+    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${EXECUTIVE_ROUTE_PREFIX}`) } catch { /* restricted history */ }
+    setSurface('executive')
+  }
+
+  if (surface === 'coach') {
+    return <StoreCoachWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} onOpenExecutive={openExecutive} />
   }
   return (
     <div className="exec-page">
-      <GrowthCommandTabs active={tab} onNavigate={navigateTab} />
-      {tab === 'store-coach' && <ComingSoonPanel title="Store Coach" description="Daily tactical coaching for your store operations — personal, actionable guidance arriving in a future release." />}
-      {tab === 'insights' && <ComingSoonPanel title="Insights Hub" description="The cross-module intelligence library is on the roadmap as PR #50. AI Executive and Store Coach will feed it automatically." />}
-      {tab === 'executive' && <ExecutiveWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />}
+      <GrowthCommandTabs active="executive" onNavigate={(tab) => { if (tab === 'store-coach') openCoach() }} />
+      <ExecutiveWorkspace context={context} onToast={onToast} onNavigateBilling={onNavigateBilling} />
     </div>
   )
 }

@@ -56,6 +56,7 @@ The Recommendations page is a dedicated workspace (`apps/web/src/recommendations
 - **Feedback loop** — every decision appends to `ai_calibration_samples`; agent confidence caps hydrate from history at boot, so HIGH confidence is earned after 10+ merchant decisions.
 - **Execution bridge** — `POST /recommendations/:id/execute` runs the idempotent `ActionExecutor` (drafts only — `SEND_EMAIL` creates a reviewable campaign template), records `ai_executions`, and feeds the time-window attribution matcher that populates `ai_attribution_events` for `/billing/roi`.
 
+
 ### AI Executive (PR #49)
 
 AI Executive — **"Your Boardroom in a Box"** — is the strategic half of the AI
@@ -80,17 +81,44 @@ decisions rather than daily operations. It ships with its own
   job/poll generation, 30-day retention, plus a Brevo monthly board-report
   email (PDF attached for Commander).
 - **Industry benchmarks (hybrid)** — curated public Shopify benchmark ladders
-  seeded in migration `0021`; anonymized internal aggregates arrive in Phase 2.
+  seeded in migration `0022`; anonymized internal aggregates arrive in Phase 2.
 - **Modern chart vocabulary** — area/gradient, radial gauge, sparkline,
   stacked bar, waterfall, horizontal bar, bubble map, bullet, percentile bar,
   and heatmap — all theme-adaptive (dark + light) with hover tooltips and
   print-ready output. No line or donut charts.
 
+## Store Coach (PR #48) — AI Growth Command
+
+Store Coach is the merchant's personal AI business advisor and the first
+section of the new **AI Growth Command** module (`/ai-growth-command`). Daily
+huddles, plan-capped priorities, tracked goals, 50-badge achievements, a
+30-day progress dashboard with modern charts, SSE-streamed grounded chat, and
+Sunday Brevo digests. Executive Briefing (PR #49) and Insights Hub (PR #50)
+arrive as tabs in the same page; Campaigns now shows a "Coming Soon"
+placeholder (existing templates are preserved, not deleted).
+
+- **Zero fake data** — every number is read from synced store rows; AI output
+  passes a grounded-number firewall that rejects hallucinated statistics and
+  PII before anything reaches the merchant.
+- **Plan gating** — Trial (2 priorities, 1 goal, 5 chat msgs), Start, Growth,
+  Commander per the matrix in `docs/STORE_COACH.md`; trial expiry blocks the
+  module with a 402 until upgrade. Upgrade CTAs always say "Upgrade Plan".
+- **Infrastructure** — OpenRouter `nvidia/nemotron-3-ultra:free` (fallback
+  `nvidia/nemotron-3-super:free`) via `STORE_COACH_API_KEY`, cost-ledger
+  tracking, 24h huddle caching, RLS-isolated tables (migration 0021), and an
+  hourly scheduler for huddles, Sunday digests, and badge sweeps.
+- **UI** — extracted workspace files (`store-coach.tsx`, `store-coach-panels.tsx`,
+  `coach-widget.tsx`, `store-coach-model.ts`, `store-coach.css`) with area
+  charts, radial gauges, heatmaps, sparklines, stacked bars, skeleton loaders,
+  educational empty states, 5-step onboarding, Start+ floating widget, and
+  Growth+ browser voice. Dark and light themes are fully supported.
+
+
 ### Workspace projects
 
 **Apps**
 
-- `@profitpilot/api` — Express API, Shopify install, F2 data-plane, F4 AI, F5 billing/admin, F6 automation/marketing, F7 hardening, F8 Jarvis/Copilot/forecast/report routes, F9 launch controls/ops, and production hosting for the built web app
+- `@profitpilot/api` — Express API, Shopify install, F2 data-plane, F4 AI, F5 billing/admin, F6 automation/marketing, F7 hardening, F8 Jarvis/Copilot/forecast/report routes, F9 launch controls/ops, F10 Store Coach (PR #48), and production hosting for the built web app
 - `@profitpilot/worker` — queue worker, report tick boundary, graceful runtime, and port-3100 health
 - `@profitpilot/web` — React/Vite shell with real F2–F6 API clients
 
