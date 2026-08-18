@@ -85,7 +85,7 @@ import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCa
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
-import { CopilotWorkspace, JarvisExperience, ReportsWorkspace } from './f8.js'
+import { JarvisExperience, ReportsWorkspace } from './f8.js'
 import { AdminOpsWorkspace } from './f9.js'
 import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
 import { PASSIVE_RECOMMENDATION_INTERVAL_MS, PASSIVE_SNOOZE_MS, passiveRecommendationsAllowed, selectPassiveRecommendation } from './passive-jarvis.js'
@@ -111,6 +111,8 @@ import { InventoryWorkspace } from './inventory.js'
 import { AnalyticsPage as RedesignedAnalyticsPage } from './analytics.js'
 import { RecommendationsWorkspace } from './recommendations.js'
 import { AiGrowthCommandPage } from './executive.js'
+import { AiCommandPage } from './ai-command-page.js'
+import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -131,8 +133,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'ai-growth-command', label: 'AI Growth Command', icon: Landmark, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
-      { id: 'campaigns', label: 'Campaigns', icon: Send, tag: 'Marketing' },
-      { id: 'copilot', label: 'Copilot', icon: Sparkles, tag: 'Ask' },
+      { id: 'ai-command', label: 'AI Command', icon: Sparkles, tag: 'AI', badge: 'NEW' },
     ],
   },
   {
@@ -155,12 +156,13 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   customers: { title: 'Customers', description: 'Customer data stays tenant-scoped and minimized by default.', icon: Users },
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
-  'command-center': { title: 'AI Command Center', description: 'Seven agents explain deterministic store evidence. They never invent numbers.', icon: Bot },
+  'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Evidence-backed decisions from your synced Shopify data.', icon: WandSparkles },
   'ai-growth-command': { title: 'AI Growth Command', description: 'Store Coach for daily tactics, AI Executive for boardroom strategy, and the Insights Hub.', icon: Landmark },
   automation: { title: 'Automation', description: 'Design and activate workflows. High-risk steps still need approval.', icon: Workflow },
-  campaigns: { title: 'Campaigns', description: 'Email customers from your verified merchant address after you approve a send.', icon: Send },
-  copilot: { title: 'Copilot', description: 'A grounded query surface for the evidence packs built by ProfitPilot.', icon: Sparkles },
+  campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: Sparkles },
+  copilot: { title: 'AI Command', description: 'One command controls everything.', icon: Sparkles },
+  'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: Sparkles },
   reports: { title: 'Reports', description: 'Closed-period PDF reports built from your real store data.', icon: FileBarChart },
   exports: { title: 'Exports', description: 'Export real synced records when the data plane has something to deliver.', icon: Download },
   support: { title: 'Support tickets', description: 'A direct, auditable line to the ProfitPilot team.', icon: LifeBuoy },
@@ -169,7 +171,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'admin-ops': { title: 'Admin Ops', description: 'Launch controls, merchant flags, queue inspection, and retries.', icon: ShieldCheck },
 }
 
-type NavItem = Readonly<{ id: SectionId; label: string; icon: LucideIcon; tag?: string }>
+type NavItem = Readonly<{ id: SectionId; label: string; icon: LucideIcon; tag?: string; badge?: string }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 type ToastState = Readonly<{ message: string; kind: ToastKind }>
@@ -182,7 +184,13 @@ export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
   // the user expects instead of resetting to the dashboard.
-  const [activePage, setActivePage] = useState<SectionId>(() => hashSection(window.location.hash) ?? 'dashboard')
+  const [activePage, setActivePage] = useState<SectionId>(() => {
+    if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
+    if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
+    if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
+    if (isCampaignsHash(window.location.hash) || window.location.pathname.startsWith('/campaigns') || window.location.hash.startsWith('#/copilot')) return 'ai-command'
+    return 'dashboard'
+  })
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -348,17 +356,20 @@ export default function App() {
   }, [])
 
   const navigate = (page: SectionId) => {
-    if (page === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
-    else if (page !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
-    setActivePage(page)
+    const next = page === 'campaigns' || page === 'copilot' ? 'ai-command' : page
+    if (page === 'campaigns') showToast('Campaigns has been replaced by AI Command', 'info')
+    if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
+    else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
+    setActivePage(next)
     setMobileOpen(false)
     setCommandOpen(false)
     // Leaving Recommendations clears its hash route so a later refresh does
     // not bounce back; entering it establishes the base route for deep links.
     try {
-      if (page === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
-      else if (page === 'ai-growth-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
-      else if (hashSection(window.location.hash) !== null) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
+      else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
+      else if (next === 'ai-growth-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/executive`)
+      else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     } catch { /* embedded browsers may restrict history access */ }
   }
 
@@ -367,7 +378,9 @@ export default function App() {
   useEffect(() => {
     const onHashNavigation = () => {
       const section = hashSection(window.location.hash)
-      setActivePage((current) => (section !== null ? section : current === 'recommendations' || current === 'ai-growth-command' ? 'dashboard' : current))
+      const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
+      if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -494,7 +507,7 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCol
       <div className="brand-row"><button className="brand-lockup" onClick={() => onNavigate('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><span /></span>{!collapsed && <span className="brand-name">Profit<span>Pilot</span></span>}</button><button className="sidebar-collapse" onClick={onCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><button className="mobile-close" onClick={onClose} aria-label="Close navigation"><X size={18} /></button></div>
       {!collapsed ? <button className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></button> : <button className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></button>}
       {!collapsed && <button className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></button>}
-      <nav className="side-nav" aria-label="Primary navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && item.tag && <span className={`nav-tag ${item.tag === 'AI' ? 'purple' : ''}`}>{item.tag}</span>}{collapsed && item.tag && <i className="collapsed-badge" />}</button> })}</div>)}</nav>
+      <nav className="side-nav" aria-label="Primary navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && item.tag && <span className={`nav-tag ${item.tag === 'AI' ? 'purple' : ''}`}>{item.tag}</span>}{!collapsed && item.badge && <span className="nav-tag new">{item.badge}</span>}{collapsed && (item.tag || item.badge) && <i className="collapsed-badge" />}</button> })}</div>)}</nav>
       <div className="sidebar-footer">{!collapsed && <div className="version-card"><div><span className="live-dot" />Shopify data</div><strong>{context.storeId ? 'Store context ready' : 'Awaiting Shopify'}</strong><small>{context.storeId ? 'API-backed workspace' : 'Use the install flow to connect'}</small>{!context.storeId && <button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button>}</div>}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
     </aside>
   </>
@@ -556,10 +569,9 @@ function PageRouter({
   if (active === 'inventory') return <PageLayout eyebrow="Stock intelligence" title="Inventory" description="Real Shopify stock levels, locations, and value with plan-enforced inventory intelligence."><InventoryWorkspace context={context} onSync={onSync} onNavigate={() => onNavigate('billing')} onToast={onToast} /></PageLayout>
   if (active === 'command-center') return <CommandCenterPage context={context} onToast={onToast} onNavigate={(page) => onNavigate(page as SectionId)} />
   if (active === 'ai-growth-command') return <PageLayout eyebrow="AI employee" title="AI Growth Command" description="Store Coach for daily tactical coaching and AI Executive for CEO-level strategic intelligence."><AiGrowthCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
-  if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} /></PageLayout>
+  if (active === 'recommendations') return <PageLayout eyebrow="AI employee" title="Recommendations" description="Evidence-backed decisions from your synced Shopify data — approve, reject, and watch your AI team learn."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'campaigns') return <CampaignsPage onPhaseGate={onPhaseGate} context={context} onToast={onToast} />
-  if (active === 'copilot') return <PageLayout eyebrow="Grounded questions" title="Copilot" description="A closed ten-intent grammar answers from tenant-scoped evidence packs."><CopilotWorkspace context={context} /></PageLayout>
+  if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'reports') return <PageLayout eyebrow="Closed-period PDFs" title="Reports" description="Closed-period PDF reports, deterministic forecast methods, and honest delivery status."><ReportsWorkspace context={context} /></PageLayout>
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
@@ -664,7 +676,7 @@ function ProductsPage({ context, catalog, analytics, onSync }: { context: Worksp
 function EmptyDataPage({ page, context, onSync }: { page: SectionId; context: WorkspaceContext; onSync: (module: string) => Promise<void> }) { const meta = pageMeta[page]; const Icon = meta.icon; return <PageLayout eyebrow="Store data" title={meta.title} description={meta.description}><EmptyState icon={Icon} title={`No ${meta.title.toLowerCase()} data yet`} description={context.storeId ? 'This section is wired to the foundation and will render once its source module has real rows.' : 'Connect Shopify first. ProfitPilot does not ship demo records.'} action={context.storeId ? `Sync ${meta.title}` : 'Connect Shopify'} onAction={() => void onSync(page)} /></PageLayout> }
 
 function CommandCenterPage({ context, onToast, onNavigate }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigate: (page: string) => void }) {
-  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your intelligent workforce, always on duty. Every number is deterministic evidence — agents only explain, never invent.">
+  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your AI workforce, always working for you. Every insight backed by real data — never invented.">
     <CommandCenterWorkspace context={context} onToast={onToast} onNavigate={onNavigate} />
   </PageLayout>
 }

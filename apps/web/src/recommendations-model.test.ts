@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_DESCRIPTIONS,
   AGENT_LABELS,
+  KPI_TOOLTIPS,
+  RULE_AGENT,
+  RULE_DATA_SOURCES,
+  RULE_DETAILS,
   RULE_LABELS,
+  STATUS_TABS,
+  STATUS_TAB_TOOLTIPS,
   agentLabel,
   agentLockedForPlan,
   applyDecisionLocally,
@@ -12,6 +19,7 @@ import {
   formatImpact,
   formatRelativeTime,
   groupRecommendations,
+  healthTone,
   impactLabelText,
   impactRatio,
   parseRecommendationsHash,
@@ -23,7 +31,7 @@ import {
   unlockedAgents,
   usageState,
 } from './recommendations-model.js'
-import type { RecommendationView } from './recommendations-model.js'
+import type { AgentId, RecommendationView, RuleId } from './recommendations-model.js'
 
 function view(overrides: Partial<RecommendationView> = {}): RecommendationView {
   return { id: 'r1', storeId: 's', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Reorder Hoodie', reason: 'Low cover', impactValue: 100, impactLabel: 'revenue at risk', currency: 'USD', confidence: .75, confidenceLevel: 'MEDIUM', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: {}, explanation: null, explanationStatus: 'AI_UNAVAILABLE', model: null, version: 0, createdAt: '2026-08-01T00:00:00.000Z', entityKey: 'p1', expiresAt: null, decidedAt: null, decidedBy: null, rejectReason: null, snoozedUntil: null, ...overrides }
@@ -139,5 +147,45 @@ describe('deep-link routing', () => {
     expect(parseRecommendationsHash('#/recommendations')).toEqual({ recommendationId: null, evidence: false })
     expect(parseRecommendationsHash('#/recommendations/abc-123?evidence=true')).toEqual({ recommendationId: 'abc-123', evidence: true })
     expect(parseRecommendationsHash('#/other')).toBeNull()
+  })
+})
+
+describe('educational maps (UX refresh completeness)', () => {
+  const allRules = Object.keys(RULE_LABELS) as RuleId[]
+  const allAgents = Object.keys(AGENT_LABELS) as AgentId[]
+  it('describes every agent and covers every rule', () => {
+    for (const agent of allAgents) expect(AGENT_DESCRIPTIONS[agent].length).toBeGreaterThan(10)
+    for (const rule of allRules) {
+      expect(RULE_DATA_SOURCES[rule].length).toBeGreaterThan(0)
+      expect(RULE_DETAILS[rule].trigger).toMatch(/^Fires (when|on)/)
+      expect(RULE_DETAILS[rule].healthy.length).toBeGreaterThan(10)
+      expect(allAgents).toContain(RULE_AGENT[rule])
+    }
+  })
+  it('keeps the educational copy free of raw enum shapes and fake-data language', () => {
+    for (const text of [...Object.values(AGENT_DESCRIPTIONS), ...Object.values(RULE_DATA_SOURCES)]) expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]/)
+    for (const detail of Object.values(RULE_DETAILS)) for (const text of [detail.trigger, detail.impact, detail.healthy]) expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]/)
+  })
+  it('provides a tooltip for every status tab', () => {
+    for (const tab of STATUS_TABS) expect(STATUS_TAB_TOOLTIPS[tab].length).toBeGreaterThan(10)
+  })
+  it('provides tooltips for every KPI', () => {
+    const keys = Object.keys(KPI_TOOLTIPS).sort()
+    expect(keys).toEqual(['approvalRate', 'approvedThisMonth', 'averageDecision', 'monthlyUsage', 'pendingImpact'])
+  })
+})
+
+describe('health tone', () => {
+  it('grades the deterministic score into merchant words', () => {
+    expect(healthTone(null).label).toBe('Learning')
+    expect(healthTone(Number.NaN).label).toBe('Learning')
+    expect(healthTone(95).label).toBe('Excellent')
+    expect(healthTone(80).label).toBe('Excellent')
+    expect(healthTone(61).label).toBe('Good')
+    expect(healthTone(45).label).toBe('Fair')
+    expect(healthTone(12).label).toBe('Needs attention')
+  })
+  it('always pairs the label with a hint', () => {
+    for (const score of [null, 0, 55, 82, 100]) expect(healthTone(score).hint.length).toBeGreaterThan(8)
   })
 })

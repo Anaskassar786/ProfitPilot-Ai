@@ -11,6 +11,7 @@ export type SectionId =
   | 'automation'
   | 'campaigns'
   | 'copilot'
+  | 'ai-command'
   | 'reports'
   | 'exports'
   | 'support'

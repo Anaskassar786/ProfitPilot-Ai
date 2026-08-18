@@ -2529,3 +2529,12 @@
   .ai-summary-growth-row { grid-template-columns: 1fr; }
   .ai-summary-actions button, .category-actions button { flex: 1; }
 }
+
+.app-shell.light-mode .aic-main,
+.app-shell.light-mode .aic-side-block,
+.app-shell.light-mode .aic-usage {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: #E2E8F0 !important;
+}
+.nav-tag.new { color: #0F1117; background: linear-gradient(120deg, #F5C044, #F59E0B); }

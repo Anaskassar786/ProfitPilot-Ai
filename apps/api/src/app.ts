@@ -39,8 +39,10 @@ import { createAnalyticsRouter } from './analytics-routes.js'
 import type { AnalyticsRouteDependencies } from './analytics-routes.js'
 import { createExecutiveRouter } from './executive-routes.js'
 import type { ExecutiveRouteDependencies } from './executive-routes.js'
+import { createAiCommandRouter } from './ai-command-routes.js'
+import type { AiCommandRouteDependencies } from './ai-command-routes.js'
 
-export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; executive?: ExecutiveRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
+export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyCheck[]; logger: Logger; monitor?: ErrorMonitor; productAnalytics?: ProductAnalytics; security?: SecurityOptions; legal?: LegalRouteDependencies; shopify?: ShopifyRouteDependencies; session?: SessionRouteDependencies; embeddedEntry?: Omit<EmbeddedEntryDependencies, 'logger'>; dataPlane?: DataPlaneDependencies; analytics?: AnalyticsRouteDependencies; orders?: OrderRouteDependencies; customers?: CustomerRouteDependencies; inventory?: InventoryRouteDependencies; ai?: AiRouteDependencies; billing?: BillingRouteDependencies; admin?: AdminRouteDependencies; automation?: AutomationRouteDependencies; jarvis?: JarvisRouteDependencies; copilot?: CopilotRouteDependencies; forecasting?: ForecastRouteDependencies; reports?: ReportRouteDependencies; executive?: ExecutiveRouteDependencies; aiCommand?: AiCommandRouteDependencies; f9?: F9RouteDependencies; webDistPath?: string }>
 
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
@@ -86,6 +88,7 @@ export function createApi(dependencies: ApiDependencies): Express {
   if (dependencies.admin) app.use(createAdminRouter(dependencies.admin))
   if (dependencies.f9) app.use(createF9Router(dependencies.f9))
   if (dependencies.automation) app.use(createAutomationRouter(dependencies.automation))
+  if (dependencies.aiCommand) app.use(createAiCommandRouter(dependencies.aiCommand))
   const f8Dependencies = { ...(dependencies.jarvis ? { jarvis: dependencies.jarvis } : {}), ...(dependencies.copilot ? { copilot: dependencies.copilot } : {}), ...(dependencies.forecasting ? { forecasting: dependencies.forecasting } : {}), ...(dependencies.reports ? { reports: dependencies.reports } : {}) }
   app.use(createF8Router(f8Dependencies))
 

@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
+  ArrowRight,
   ArrowUpRight,
+  BarChart3,
   Box,
   Briefcase,
   Check,
@@ -12,25 +15,35 @@ import {
   ChevronDown,
   Clock3,
   Copy,
+  Crosshair,
   Database,
   Eye,
+  FlaskConical,
   Gauge,
+  History,
   Info,
   Layers,
+  ListChecks,
   LockKeyhole,
   MessageSquare,
   MoreHorizontal,
   Package,
   RefreshCw,
+  Repeat,
   RotateCcw,
   Search,
   Send,
   ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
   Sparkles,
   Tag,
   TrendingUp,
+  UserPlus,
   Users,
+  UserX,
   WandSparkles,
+  Workflow,
   X,
   XCircle,
   Zap,
@@ -48,17 +61,23 @@ import {
   undoRecommendationDecision,
   verifyRecommendationEvidence,
 } from './api.js'
-import type { WorkspaceContext } from './model.js'
+import type { SectionId, WorkspaceContext } from './model.js'
 import {
   ACTION_TYPE_PREVIEWS,
+  AGENT_DESCRIPTIONS,
   AGENT_UNLOCK_ORDER,
   EXPLANATION_STATUS_LABELS,
+  KPI_TOOLTIPS,
   PLAN_LABELS,
   REJECT_REASON_LABELS,
   REJECT_REASON_OPTIONS,
+  RULE_AGENT,
+  RULE_DATA_SOURCES,
   RULE_DESCRIPTIONS,
+  RULE_DETAILS,
   RULE_LABELS,
   STATUS_TABS,
+  STATUS_TAB_TOOLTIPS,
   actionTypeLabel,
   agentLabel,
   agentLockedForPlan,
@@ -70,6 +89,7 @@ import {
   formatImpact,
   formatRelativeTime,
   groupRecommendations,
+  healthTone,
   impactLabelText,
   impactRatio,
   parseRecommendationsHash,
@@ -81,11 +101,11 @@ import {
   statusLabel,
   statusTabCount,
   statusTabLabel,
-  unlockedAgents,
   usageState,
 } from './recommendations-model.js'
 import type {
   AgentId,
+  AnalysisReport,
   EvidenceVerification,
   GroupMode,
   RecommendationSort,
@@ -93,6 +113,7 @@ import type {
   RecommendationSummary,
   RecommendationView,
   RejectReason,
+  RuleId,
   StatusTab,
 } from './recommendations-model.js'
 
@@ -103,6 +124,8 @@ type WorkspaceProps = Readonly<{
   context: WorkspaceContext
   onToast: (message: string, kind?: ToastKind) => void
   onNavigateBilling: () => void
+  /** Cross-section navigation for the report panel's follow-up CTAs. */
+  onNavigateSection?: (section: SectionId) => void
 }>
 
 const AGENT_ICONS: Readonly<Record<AgentId, LucideIcon>> = {
@@ -133,10 +156,38 @@ const SORT_OPTIONS: readonly Readonly<{ id: RecommendationSort; direction: 'asc'
   { id: 'decided', direction: 'desc', label: 'Recently decided' },
 ]
 
+const SORT_TOOLTIP = 'How your AI team ranks this list — by modeled money at stake, calibrated confidence, or freshness.'
+
+const RULE_ICONS: Readonly<Record<RuleId, LucideIcon>> = {
+  STOCKOUT_RISK: Box,
+  DEAD_STOCK: Package,
+  CHURN_RISK: UserX,
+  PRICING_UPLIFT: Tag,
+  REPEAT_PURCHASE: Repeat,
+  CART_ABANDONMENT: ShoppingCart,
+  CROSS_SELL: ShoppingBag,
+  NEW_CUSTOMER_WELCOME: UserPlus,
+}
+
+const RULE_ORDER = Object.keys(RULE_LABELS) as readonly RuleId[]
+
+/** Stages of a real analysis run, mirrored in the progress modal while the engine works. */
+export const ANALYSIS_STEPS: readonly Readonly<{ label: string; detail: string }>[] = [
+  { label: 'Scanning products', detail: 'Stock cover, sales velocity, and margins' },
+  { label: 'Analyzing customers', detail: 'Lifetime value and purchase cadence' },
+  { label: 'Checking inventory', detail: 'Dead stock and reorder windows' },
+  { label: 'Reviewing orders', detail: 'Co-purchase pairs and revenue momentum' },
+  { label: 'Applying deterministic rules', detail: 'Fixed formulas — never invented numbers' },
+  { label: 'Composing recommendations', detail: 'Pricing impact and sealing evidence packs' },
+]
+
+/** Sample activity heights (clearly labeled) for the empty 30-day chart preview. */
+const SAMPLE_ACTIVITY_HEIGHTS: readonly number[] = [8, 22, 14, 34, 12, 26, 44, 18, 30, 24, 10, 38, 20, 28, 16, 42, 24, 12, 34, 26, 18, 46, 22, 14, 30, 20, 36, 16, 28, 40]
+
 type PendingConfirm = Readonly<{ kind: 'approve'; recommendation: RecommendationView }> | Readonly<{ kind: 'reject'; recommendation: RecommendationView }>
 type UndoState = Readonly<{ recommendation: RecommendationView; decision: 'approved' | 'rejected'; expiresAt: number }>
 
-export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }: WorkspaceProps) {
+export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, onNavigateSection }: WorkspaceProps) {
   const storeId = context.storeId
   const [phase, setPhase] = useState<LoadPhase>('loading')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -157,6 +208,12 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const [undo, setUndo] = useState<UndoState | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [analysisStep, setAnalysisStep] = useState(0)
+  const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0)
+  const [analysisModalHidden, setAnalysisModalHidden] = useState(false)
+  const [report, setReport] = useState<AnalysisReport | null>(null)
+  const [reportDismissed, setReportDismissed] = useState(false)
+  const [ruleModal, setRuleModal] = useState<RuleId | null>(null)
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null)
   const [howItWorksOpen, setHowItWorksOpen] = useState(false)
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null)
@@ -227,14 +284,38 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
   const plan = summary?.plan ?? null
   const analyzeBlocked = usage.atLimit && usage.limit !== null
 
+  // While an analysis is genuinely in flight, advance the staged progress
+  // display. The final stage holds until the API responds — the bar never
+  // claims completion the request has not earned.
+  useEffect(() => {
+    if (!analyzing) return
+    setAnalysisStep(0)
+    setAnalysisElapsedMs(0)
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      setAnalysisElapsedMs(Date.now() - started)
+      setAnalysisStep((current) => Math.min(ANALYSIS_STEPS.length - 1, current + 1))
+    }, 900)
+    return () => window.clearInterval(timer)
+  }, [analyzing])
+
   const runAnalysis = async () => {
     if (!storeId) { onToast('Connect Shopify before generating recommendations.', 'info'); return }
     if (analyzeBlocked) { onToast(`Your monthly recommendation limit is reached. Upgrade to keep generating.`, 'warning'); return }
     setAnalyzing(true)
+    setAnalysisModalHidden(false)
+    const started = Date.now()
     try {
       const result = await analyzeRecommendations(storeId)
-      setLastAnalyzedAt(new Date().toISOString())
-      onToast(result.recommendations.length > 0 ? `Analysis complete — ${result.recommendations.length} recommendation${result.recommendations.length === 1 ? '' : 's'} generated from your store data.` : 'Analysis complete — no issues detected in your synced data.', result.recommendations.length > 0 ? 'success' : 'info')
+      const received: AnalysisReport = { ...result, receivedAt: new Date().toISOString(), elapsedMs: Date.now() - started }
+      setReport(received)
+      setReportDismissed(false)
+      setLastAnalyzedAt(received.receivedAt)
+      if (result.recommendations.length > 0) {
+        onToast(`Analysis complete — ${result.recommendations.length} recommendation${result.recommendations.length === 1 ? '' : 's'} generated from your store data.`, 'success')
+      }
+      // Zero findings is a rich result, not a toast: the health-check panel
+      // below renders exactly what was analyzed and why nothing fired.
       await load({ silent: true })
     } catch (error: unknown) {
       if (isUpgradeRequired(error)) onToast(errorText(error), 'warning')
@@ -358,11 +439,16 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
       <div className="recs-topline">
         <div className="recs-topline-copy">
           <span className="recs-kicker"><Sparkles size={13} /> AI EMPLOYEE · EVIDENCE-BACKED</span>
-          <p>Every recommendation is computed from your synced store data by deterministic rules, sealed with a verifiable evidence pack, and priced in real impact. You stay in control of every action.</p>
+          <p>Eight deterministic rules read your synced products, customers, checkouts, and orders. Every finding is priced, sealed with verifiable evidence, and waits for your decision.</p>
         </div>
         <div className="recs-topline-actions">
+          {lastAnalyzedAt && (
+            <span className="recs-last-run" title={`Analysis finished ${new Date(lastAnalyzedAt).toLocaleString()}. Re-run anytime for a fresh check.`}>
+              <History size={12} /> Last analysis {formatRelativeTime(lastAnalyzedAt)}
+            </span>
+          )}
           <button className="button secondary" onClick={() => setHowItWorksOpen(true)}><Info size={14} /> How it works</button>
-          <button className={`button primary ${analyzeBlocked ? 'blocked' : ''}`} onClick={() => void runAnalysis()} disabled={analyzing} title={analyzeBlocked ? `Monthly limit reached (${usage.label}). Upgrade to continue.` : lastAnalyzedAt ? `Last run ${formatRelativeTime(lastAnalyzedAt)}` : 'Run the deterministic rule engine on your synced data'}>
+          <button className={`button primary ${analyzeBlocked ? 'blocked' : ''}`} onClick={() => void runAnalysis()} disabled={analyzing} title={analyzeBlocked ? `Monthly limit reached (${usage.label}). Upgrade to continue.` : lastAnalyzedAt ? `Last run ${formatRelativeTime(lastAnalyzedAt)}` : 'Scan your synced store data with eight deterministic rules'}>
             {analyzing ? <RefreshCw size={14} className="spin" /> : analyzeBlocked ? <LockKeyhole size={14} /> : <Zap size={14} />}
             {analyzing ? 'Analyzing your store…' : analyzeBlocked ? 'Limit reached' : 'Run Analysis'}
           </button>
@@ -373,7 +459,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
         <div className="recs-banner warning"><AlertTriangle size={15} /><span><strong>{usage.remaining} recommendation{usage.remaining === 1 ? '' : 's'} left this month</strong> on your {plan ? PLAN_LABELS[plan] : ''} plan ({usage.label}).</span><button className="button secondary compact" onClick={onNavigateBilling}>View plans <ArrowUpRight size={13} /></button></div>
       )}
       {usage.atLimit && usage.limit !== null && (
-        <div className="recs-banner blocked"><LockKeyhole size={15} /><span><strong>Monthly limit reached — {usage.label}.</strong> Your AI team found value {usage.limit} times this month. Upgrade to keep the recommendations coming.</span><button className="button primary compact" onClick={onNavigateBilling}>Upgrade plan <ArrowUpRight size={13} /></button></div>
+        <div className="recs-banner blocked"><LockKeyhole size={15} /><span><strong>Monthly limit reached — {usage.label}.</strong> Your AI team found value {usage.limit} times this month. Upgrade plans to keep the recommendations coming.</span><button className="button primary compact" onClick={onNavigateBilling}>Upgrade plan <ArrowUpRight size={13} /></button></div>
       )}
 
       {phase === 'loading' ? <KpiSkeleton /> : summary && <KpiHero summary={summary} usage={usage} plan={plan} onUpgrade={onNavigateBilling} />}
@@ -383,17 +469,19 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
           <div className="recs-toolbar">
             <div className="recs-tabs" role="tablist" aria-label="Recommendation status">
               {STATUS_TABS.map((tab) => (
-                <button key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab ${statusTab === tab ? 'active' : ''}`} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
+                <button key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab recs-tip-anchor ${statusTab === tab ? 'active' : ''}`} data-tip={STATUS_TAB_TOOLTIPS[tab]} data-tip-align={tab === 'ALL' ? 'left' : tab === 'EXECUTED' ? 'right' : 'center'} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
                   {statusTabLabel(tab)}
                   <span className="recs-tab-count">{statusTabCount(tab, counts)}</span>
                 </button>
               ))}
             </div>
             <div className="recs-toolbar-row">
-              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search recommendations…" aria-label="Search recommendations" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button>}</div>
-              <select className="recs-select" value={sortIndex} onChange={(event) => setSortIndex(Number(event.target.value))} aria-label="Sort recommendations">
-                {SORT_OPTIONS.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}
-              </select>
+              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, product, customer, or rule…" aria-label="Search recommendations by title, product, customer, or rule" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button>}</div>
+              <span className="recs-tip-anchor recs-sort-wrap" data-tip={SORT_TOOLTIP}>
+                <select className="recs-select" value={sortIndex} onChange={(event) => setSortIndex(Number(event.target.value))} aria-label={`Sort recommendations. ${SORT_TOOLTIP}`}>
+                  {SORT_OPTIONS.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}
+                </select>
+              </span>
               <div className="recs-group-toggle" role="group" aria-label="Group recommendations">
                 <button className={groupMode === 'none' ? 'active' : ''} onClick={() => setGroupMode('none')}>List</button>
                 <button className={groupMode === 'agent' ? 'active' : ''} onClick={() => setGroupMode('agent')}>By agent</button>
@@ -439,9 +527,11 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
           )}
           {phase === 'ready' && visibleItems.length === 0 && (
             summary && summary.total === 0
-              ? (usage.used > 0
-                ? <AllClearState summary={summary} />
-                : <FirstRunState onAnalyze={() => void runAnalysis()} analyzing={analyzing} onHow={() => setHowItWorksOpen(true)} />)
+              ? (report && report.recommendations.length === 0 && !reportDismissed
+                ? <AnalysisReportPanel report={report} onDismiss={() => setReportDismissed(true)} onNavigateSection={onNavigateSection} onHow={() => setHowItWorksOpen(true)} onRerun={() => void runAnalysis()} rerunBlocked={analyzing || analyzeBlocked} />
+                : usage.used > 0
+                  ? <AllClearState summary={summary} onAnalyze={() => void runAnalysis()} analyzing={analyzing} />
+                  : <FirstRunState onAnalyze={() => void runAnalysis()} analyzing={analyzing} onHow={() => setHowItWorksOpen(true)} onInspectRule={(rule) => setRuleModal(rule)} hasRun={lastAnalyzedAt !== null} />)
               : <RecsEmptyCard icon={Search} title={statusTab === 'ALL' ? 'Nothing matches these filters' : `No ${statusTabLabel(statusTab).toLowerCase()} recommendations`} description="Try a different status tab, another agent, or clear the search and date filters." action={<button className="button secondary" onClick={() => { setStatusTab('ALL'); setAgentFilter(null); setQuery(''); setDateFrom(''); setDateTo('') }}>Clear filters</button>} />
           )}
           {phase === 'ready' && visibleItems.length > 0 && (
@@ -473,7 +563,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
         </div>
 
         <aside className="recs-sidebar">
-          {phase === 'loading' ? <SidebarSkeleton /> : summary && <InsightsSidebar summary={summary} onFilterAgent={(agent) => setAgentFilter(agent)} />}
+          {phase === 'loading' ? <SidebarSkeleton /> : summary && <InsightsSidebar summary={summary} plan={plan} onFilterAgent={(agent) => setAgentFilter(agent)} onInspectRule={(rule) => setRuleModal(rule)} onUpgrade={onNavigateBilling} />}
         </aside>
       </div>
 
@@ -481,42 +571,69 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling }
       {confirm && confirm.kind === 'approve' && <ApproveConfirmSheet recommendation={confirm.recommendation} onCancel={() => setConfirm(null)} onConfirm={() => { setConfirm(null); void decide(confirm.recommendation, 'approve', null) }} />}
       {confirm && confirm.kind === 'reject' && <RejectReasonSheet recommendation={confirm.recommendation} onCancel={() => setConfirm(null)} onReject={(reason) => { setConfirm(null); void decide(confirm.recommendation, 'reject', reason) }} />}
       {undo && <UndoSnackbar undo={undo} onUndo={() => void performUndo()} onDismiss={() => setUndo(null)} />}
+      {ruleModal && <RuleDetailModal ruleId={ruleModal} plan={plan} onClose={() => setRuleModal(null)} onUpgrade={onNavigateBilling} />}
+      {analyzing && !analysisModalHidden && <AnalysisProgressModal step={analysisStep} elapsedMs={analysisElapsedMs} onHide={() => setAnalysisModalHidden(true)} />}
       {howItWorksOpen && <HowItWorksModal onClose={() => setHowItWorksOpen(false)} />}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// KPI hero
+// Tooltip — a focusable info dot with a CSS bubble (hover + keyboard focus)
+// and an accessible name, so every metric on this page explains itself.
+// ---------------------------------------------------------------------------
+
+function Tip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="recs-tip" tabIndex={0} aria-label={label}>
+      {children}
+      <Info size={11} className="recs-tip-dot" aria-hidden />
+      <span className="recs-tip-bubble" role="tooltip">{label}</span>
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// KPI hero — renamed labels per merchant feedback plus hover explanations and
+// honest empty states (a zero never borrows a currency it doesn't have).
 // ---------------------------------------------------------------------------
 
 function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationSummary; usage: ReturnType<typeof usageState>; plan: RecommendationSummary['plan']; onUpgrade: () => void }) {
   const approvalRate = summary.approvalRate.last30d ?? summary.approvalRate.allTime
   const trendUp = summary.approvalRate.last30d !== null && summary.approvalRate.allTime !== null && summary.approvalRate.last30d >= summary.approvalRate.allTime
+  const pendingCount = summary.counts.PENDING
+  const approvedCount = summary.approvedThisMonth.count
+  // Prefer a currency the store actually uses when formatting an honest zero.
+  const knownCurrency = summary.pendingImpact[0]?.currency ?? summary.approvedThisMonth.impact[0]?.currency ?? summary.recentDecisions[0]?.currency ?? null
+  const zeroImpact = knownCurrency ? formatImpact(0, knownCurrency) : '0'
   return (
     <div className="recs-kpis">
       <div className="recs-kpi">
-        <span className="recs-kpi-label"><Gauge size={13} /> Pending impact</span>
-        <strong className="recs-kpi-value accent">{formatCurrencyAmounts(summary.pendingImpact)}</strong>
-        <small>{summary.counts.PENDING} pending decision{summary.counts.PENDING === 1 ? '' : 's'}</small>
+        <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-label"><Gauge size={13} /> Revenue opportunity pending</span></Tip>
+        <strong className="recs-kpi-value accent">{summary.pendingImpact.length > 0 ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
+        {pendingCount === 0
+          ? <small>No pending recommendations yet</small>
+          : <small>{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
       </div>
       <div className="recs-kpi">
-        <span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span>
-        <strong className="recs-kpi-value">{summary.approvedThisMonth.count}</strong>
-        <small>{summary.approvedThisMonth.impact.length > 0 ? `${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled impact` : 'No approvals yet this month'}</small>
+        <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span></Tip>
+        <strong className="recs-kpi-value">{approvedCount}</strong>
+        {approvedCount === 0
+          ? <small>Approve recommendations to see the impact here</small>
+          : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
       </div>
       <div className="recs-kpi">
-        <span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span>
+        <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span></Tip>
         <strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
-        <small>{summary.approvalRate.last30d !== null ? <>last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : approvalRate === null ? 'Decide recommendations to build this metric' : 'all-time'}</small>
+        <small>{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
       </div>
       <div className="recs-kpi">
-        <span className="recs-kpi-label"><Clock3 size={13} /> Avg time to decide</span>
+        <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-label"><Clock3 size={13} /> Avg time to decide</span></Tip>
         <strong className="recs-kpi-value">{summary.averageDecisionMs === null ? '—' : formatDurationMs(summary.averageDecisionMs)}</strong>
-        <small>{summary.averageDecisionMs === null ? 'Tracked from your first decision' : 'from creation to decision'}</small>
+        <small>{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
       </div>
       <div className="recs-kpi usage">
-        <span className="recs-kpi-label"><WandSparkles size={13} /> Monthly usage</span>
+        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-label"><WandSparkles size={13} /> Monthly usage</span></Tip>
         <div className="recs-usage-row">
           <UsageRing ratio={usage.ratio} atLimit={usage.atLimit} nearLimit={usage.nearLimit} />
           <div className="recs-usage-copy">
@@ -838,50 +955,81 @@ function UndoSnackbar({ undo, onUndo, onDismiss }: { undo: UndoState; onUndo: ()
 // Sidebar
 // ---------------------------------------------------------------------------
 
-function InsightsSidebar({ summary, onFilterAgent }: { summary: RecommendationSummary; onFilterAgent: (agent: AgentId) => void }) {
+function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrade }: { summary: RecommendationSummary; plan: RecommendationSummary['plan']; onFilterAgent: (agent: AgentId) => void; onInspectRule: (rule: RuleId) => void; onUpgrade: () => void }) {
+  const byAgent = new Map(summary.byAgent.map((entry) => [entry.agent, entry]))
+  const hasData = summary.total > 0
   const pendingByAgent = summary.byAgent.filter((entry) => entry.pending > 0)
   const donutData = pendingByAgent.map((entry) => ({ name: agentLabel(entry.agent), value: entry.pending, agent: entry.agent }))
   const totalPending = summary.counts.PENDING
+  const maxPending = pendingByAgent.reduce((max, entry) => Math.max(max, entry.pending), 0)
   const trend = summary.generatedTrend
   const trendMax = trend.reduce((max, day) => Math.max(max, day.generated), 0)
+  const trendGenerated = trend.reduce((sum, day) => sum + day.generated, 0)
+  const trendApproved = trend.reduce((sum, day) => sum + day.approved, 0)
+  const maxRuleTotal = summary.byRule.reduce((max, entry) => Math.max(max, entry.total), 0)
   return (
     <>
       <div className="card recs-side-card">
         <div className="recs-side-title"><WandSparkles size={13} /> Pending by agent</div>
-        {donutData.length > 0 ? (
-          <>
-            <div className="recs-donut-wrap">
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={44} outerRadius={62} paddingAngle={3} strokeWidth={0} onClick={(entry) => { const agent = (entry as unknown as { agent?: AgentId }).agent; if (agent) onFilterAgent(agent) }}>
-                    {donutData.map((entry) => <Cell key={entry.agent} fill={AGENT_COLORS[entry.agent]} cursor="pointer" />)}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${String(value)} pending`, '']} contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="recs-donut-center"><strong>{totalPending}</strong><small>pending</small></div>
-            </div>
-            <div className="recs-donut-legend">
-              {pendingByAgent.map((entry) => (
-                <button key={entry.agent} onClick={() => onFilterAgent(entry.agent)}><i style={{ background: AGENT_COLORS[entry.agent] }} /> {agentLabel(entry.agent)} <strong>{entry.pending}</strong></button>
-              ))}
-            </div>
-          </>
-        ) : <p className="recs-side-empty">No pending recommendations right now.</p>}
+        {donutData.length > 0 && (
+          <div className="recs-donut-wrap">
+            <ResponsiveContainer width="100%" height={150}>
+              <PieChart>
+                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={44} outerRadius={62} paddingAngle={3} strokeWidth={0} onClick={(entry) => { const agent = (entry as unknown as { agent?: AgentId }).agent; if (agent) onFilterAgent(agent) }}>
+                  {donutData.map((entry) => <Cell key={entry.agent} fill={AGENT_COLORS[entry.agent]} cursor="pointer" />)}
+                </Pie>
+                <Tooltip formatter={(value) => [`${String(value)} pending`, '']} contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="recs-donut-center"><strong>{totalPending}</strong><small>pending</small></div>
+          </div>
+        )}
+        {/* Every agent is listed — even idle ones — so the team is visible
+            before the first run. Locked agents keep plan gating intact. */}
+        <div className="recs-agent-roster">
+          {AGENT_UNLOCK_ORDER.map((agent) => {
+            const Icon = AGENT_ICONS[agent]
+            const locked = agentLockedForPlan(agent, plan)
+            const pending = byAgent.get(agent)?.pending ?? 0
+            if (locked) {
+              return (
+                <button key={agent} className="recs-agent-row locked" onClick={onUpgrade} title={`${agentLabel(agent)} unlocks on the ${PLAN_LABELS[planRequiredForAgent(agent)]} plan. ${AGENT_DESCRIPTIONS[agent]}`}>
+                  <span className="recs-agent-row-icon"><LockKeyhole size={12} /></span>
+                  <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
+                  <span className="recs-agent-row-plan">{PLAN_LABELS[planRequiredForAgent(agent)]}</span>
+                </button>
+              )
+            }
+            return (
+              <button key={agent} className="recs-agent-row" onClick={() => onFilterAgent(agent)} title={`${AGENT_DESCRIPTIONS[agent]} — click to filter the list to ${agentLabel(agent)}.`}>
+                <span className="recs-agent-row-icon" style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }}><Icon size={12} /></span>
+                <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
+                <span className="recs-agent-row-count">{pending}<small>pending</small></span>
+                <span className="recs-agent-row-bar" aria-hidden><i style={{ width: `${maxPending > 0 ? Math.max(0, (pending / maxPending) * 100) : 0}%`, background: AGENT_COLORS[agent] }} /></span>
+              </button>
+            )
+          })}
+        </div>
+        {!hasData && <p className="recs-side-empty">No recommendations yet — your team reports here after the first analysis.</p>}
       </div>
 
       <div className="card recs-side-card">
         <div className="recs-side-title"><TrendingUp size={13} /> 30-day activity</div>
         {trend.length > 0 ? (
-          <div className="recs-trend" aria-label="Recommendations generated per day, last 30 days">
-            {trend.map((day) => (
-              <span key={day.day} className="recs-trend-bar" title={`${day.day}: ${day.generated} generated, ${day.approved} approved`}>
-                <i className="generated" style={{ height: `${trendMax > 0 ? Math.max(8, (day.generated / trendMax) * 100) : 8}%` }} />
-                <i className="approved" style={{ height: `${trendMax > 0 ? (day.approved / trendMax) * 100 : 0}%` }} />
-              </span>
-            ))}
-          </div>
-        ) : <p className="recs-side-empty">Activity appears after your first analysis run.</p>}
+          <>
+            <div className="recs-trend" aria-label="Recommendations generated per day, last 30 days">
+              {trend.map((day) => (
+                <span key={day.day} className="recs-trend-bar" title={`${day.day}: ${day.generated} generated, ${day.approved} approved`}>
+                  <i className="generated" style={{ height: `${trendMax > 0 ? Math.max(8, (day.generated / trendMax) * 100) : 8}%` }} />
+                  <i className="approved" style={{ height: `${trendMax > 0 ? (day.approved / trendMax) * 100 : 0}%` }} />
+                </span>
+              ))}
+            </div>
+            <div className="recs-trend-metrics"><span><strong>{trendGenerated}</strong> generated</span><span><strong>{trendApproved}</strong> approved</span><span className="recs-trend-window">last 30 days</span></div>
+          </>
+        ) : (
+          <SampleActivityChart />
+        )}
         {trend.length > 0 && <div className="recs-trend-legend"><span><i className="generated" /> Generated</span><span><i className="approved" /> Approved</span></div>}
       </div>
 
@@ -890,32 +1038,81 @@ function InsightsSidebar({ summary, onFilterAgent }: { summary: RecommendationSu
         {summary.byRule.length > 0 ? (
           <div className="recs-rule-list">
             {summary.byRule.slice(0, 5).map((entry) => (
-              <div key={entry.ruleId} className="recs-rule-row" title={RULE_DESCRIPTIONS[entry.ruleId]}>
+              <button key={entry.ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(entry.ruleId)} title={`${RULE_DESCRIPTIONS[entry.ruleId]} — click for how this rule works.`}>
                 <span>{ruleLabel(entry.ruleId)}</span>
+                <span className="recs-rule-row-share" aria-hidden><i style={{ width: `${maxRuleTotal > 0 ? Math.max(6, (entry.total / maxRuleTotal) * 100) : 0}%` }} /></span>
                 <strong>{entry.total}</strong>
-              </div>
+              </button>
             ))}
           </div>
-        ) : <p className="recs-side-empty">Rules report here once analysis runs.</p>}
+        ) : (
+          <>
+            <div className="recs-rule-list">
+              {RULE_ORDER.map((ruleId) => (
+                <button key={ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click for how this rule works.`}>
+                  <span>{RULE_LABELS[ruleId]}</span>
+                  <strong>0</strong>
+                </button>
+              ))}
+            </div>
+            <p className="recs-side-empty">Rules fire when a pattern in your data crosses its threshold — each trigger shows up here.</p>
+          </>
+        )}
       </div>
 
       <div className="card recs-side-card">
         <div className="recs-side-title"><Clock3 size={13} /> Recent decisions</div>
         {summary.recentDecisions.length > 0 ? (
-          <div className="recs-decision-feed">
-            {summary.recentDecisions.slice(0, 6).map((decision) => (
-              <div key={decision.id} className="recs-decision-row">
-                <i className={`dot ${decision.status === 'REJECTED' ? 'red' : decision.status === 'EXPIRED' ? 'amber' : 'green'}`} />
-                <div>
-                  <strong>{decision.title}</strong>
-                  <small>{statusLabel(decision.status)}{decision.decidedAt ? ` · ${formatRelativeTime(decision.decidedAt)}` : ''}</small>
+          <>
+            <div className="recs-decision-feed">
+              {summary.recentDecisions.slice(0, 6).map((decision) => (
+                <div key={decision.id} className="recs-decision-row">
+                  <i className={`dot ${decision.status === 'REJECTED' ? 'red' : decision.status === 'EXPIRED' ? 'amber' : 'green'}`} />
+                  <div>
+                    <strong>{decision.title}</strong>
+                    <small>{statusLabel(decision.status)}{decision.decidedAt ? ` · ${formatRelativeTime(decision.decidedAt)}` : ''}</small>
+                  </div>
                 </div>
+              ))}
+            </div>
+            <div className="recs-decision-stats">
+              {summary.approvalRate.allTime !== null && <span><strong>{summary.approvalRate.allTime}%</strong> approved</span>}
+              {summary.averageDecisionMs !== null && <span><strong>{formatDurationMs(summary.averageDecisionMs)}</strong> avg to decide</span>}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="recs-side-empty">Approve or reject recommendations to build history — every decision tunes agent confidence.</p>
+            <div className="recs-decision-row sample">
+              <i className="dot green" />
+              <div>
+                <strong>Restock the Everyday Hoodie before stockout <span className="recs-sample-chip">Sample</span></strong>
+                <small>Approved · example of what lands here</small>
               </div>
-            ))}
-          </div>
-        ) : <p className="recs-side-empty">Your decision history builds here.</p>}
+            </div>
+          </>
+        )}
       </div>
     </>
+  )
+}
+
+/** Empty 30-day chart with labeled axes plus an opt-in, clearly-labeled sample overlay. */
+function SampleActivityChart() {
+  const [showSample, setShowSample] = useState(false)
+  return (
+    <div className="recs-trend-empty">
+      <div className="recs-trend-plot" aria-hidden={showSample ? undefined : true} aria-label={showSample ? 'Sample activity preview — not your real data' : undefined}>
+        <span className="recs-trend-axis"><i /><i /><i /></span>
+        {showSample
+          ? <div className="recs-trend sample">{SAMPLE_ACTIVITY_HEIGHTS.map((height, index) => <span key={index} className="recs-trend-bar"><i className="generated" style={{ height: `${height}%` }} /></span>)}</div>
+          : <div className="recs-trend placeholder">{SAMPLE_ACTIVITY_HEIGHTS.map((_, index) => <span key={index} className="recs-trend-bar" />)}</div>}
+        {showSample && <span className="recs-sample-chip floating"><FlaskConical size={9} /> Sample preview</span>}
+      </div>
+      <div className="recs-trend-axis-labels"><span>30 days ago</span><span>today</span></div>
+      <p className="recs-side-empty">Activity appears here as your AI team works — track generated vs approved per day.</p>
+      <button className="text-button" onClick={() => setShowSample((value) => !value)}>{showSample ? 'Hide sample' : 'See sample activity'}</button>
+    </div>
   )
 }
 
@@ -923,44 +1120,273 @@ function InsightsSidebar({ summary, onFilterAgent }: { summary: RecommendationSu
 // Empty / loading / educational states
 // ---------------------------------------------------------------------------
 
-function FirstRunState({ onAnalyze, analyzing, onHow }: { onAnalyze: () => void; analyzing: boolean; onHow: () => void }) {
+function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: { onAnalyze: () => void; analyzing: boolean; onHow: () => void; onInspectRule: (rule: RuleId) => void; hasRun: boolean }) {
   return (
     <div className="recs-first-run">
       <div className="recs-first-hero">
         <span className="recs-first-orb"><WandSparkles size={26} /></span>
-        <h2>Your AI team is ready to work</h2>
-        <p>Run your first analysis and eight deterministic rules will comb your synced products, customers, checkouts, and orders for money-making decisions — each sealed with verifiable evidence.</p>
+        <h2>{hasRun ? 'Nothing crossed a threshold yet' : 'Ready to analyze your store'}</h2>
+        <p>Your AI agents will find opportunities in your synced products, customers, checkouts, and orders — every one priced in real impact and sealed with verifiable evidence.</p>
         <div className="recs-first-actions">
-          <button className="button primary" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />} {analyzing ? 'Analyzing…' : 'Run Analysis'}</button>
+          <button className="button primary recs-cta-primary" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={15} className="spin" /> : <Zap size={15} />} {analyzing ? 'Analyzing your store…' : hasRun ? 'Re-run Analysis' : 'Run First Analysis'}</button>
           <button className="button secondary" onClick={onHow}><Info size={14} /> How it works</button>
         </div>
       </div>
-      <div className="recs-rule-grid">
-        {(Object.keys(RULE_LABELS) as (keyof typeof RULE_LABELS)[]).map((ruleId) => (
-          <div className="recs-rule-card" key={ruleId}>
-            <strong>{RULE_LABELS[ruleId]}</strong>
-            <p>{RULE_DESCRIPTIONS[ruleId]}</p>
-          </div>
-        ))}
+
+      <div className="recs-expect">
+        <div className="recs-expect-title"><ListChecks size={13} /> What to expect after an analysis</div>
+        <div className="recs-expect-grid">
+          <span><strong>Specific actions</strong> Each finding names the exact product, customer, or checkout to act on.</span>
+          <span><strong>Impact estimates</strong> Every card is priced in your store's currency before you commit.</span>
+          <span><strong>Approve / reject</strong> You decide. Customer-facing actions stop at drafts you review.</span>
+          <span><strong>Results tracked</strong> Decisions feed the KPIs and activity chart above — nothing is lost.</span>
+        </div>
       </div>
+
+      <div className="recs-rule-grid">
+        {RULE_ORDER.map((ruleId) => {
+          const Icon = RULE_ICONS[ruleId]
+          return (
+            <button className="recs-rule-card" key={ruleId} onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click to see exactly when this rule fires.`}>
+              <span className="recs-rule-card-head"><span className="recs-rule-card-icon"><Icon size={13} /></span><strong>{RULE_LABELS[ruleId]}</strong></span>
+              <p>{RULE_DESCRIPTIONS[ruleId]}</p>
+              <span className="recs-rule-card-uses"><Database size={10} /> Uses: {RULE_DATA_SOURCES[ruleId]}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <HowRulesWork />
+      <SampleRecommendationPreview />
       <p className="recs-sample-note"><ShieldCheck size={13} /> ProfitPilot never invents a recommendation. If your store data doesn't trigger a rule, you'll see an honest all-clear — not filler.</p>
     </div>
   )
 }
 
-function AllClearState({ summary }: { summary: RecommendationSummary }) {
+/** Expandable "how rules work" strip with the data-flow diagram and trust indicators. */
+function HowRulesWork() {
+  return (
+    <details className="recs-how-strip">
+      <summary><Info size={13} /> How rules work <ChevronDown size={13} className="recs-how-strip-caret" /></summary>
+      <div className="recs-how-strip-body">
+        <p>ProfitPilot's intelligence is <strong>deterministic</strong>: the same eight fixed formulas run against your synced store data on every analysis. No model guesses a number — the AI layer only writes the plain-language explanation, and it is validated against the evidence before you ever see it.</p>
+        <div className="recs-flow" aria-label="Data flow: synced store data, deterministic rules, priced recommendations, your decision">
+          <span><Database size={13} /> Synced store data</span>
+          <ArrowRight size={13} />
+          <span><Layers size={13} /> 8 deterministic rules</span>
+          <ArrowRight size={13} />
+          <span><Gauge size={13} /> Priced recommendations</span>
+          <ArrowRight size={13} />
+          <span><ShieldCheck size={13} /> Your decision</span>
+        </div>
+        <div className="recs-trust-row">
+          <span><CheckCircle2 size={12} /> Never invents numbers</span>
+          <span><Database size={12} /> Grounded in your synced data</span>
+          <span><LockKeyhole size={12} /> You approve every action</span>
+          <span><ShieldCheck size={12} /> Evidence sealed with SHA-256</span>
+        </div>
+      </div>
+    </details>
+  )
+}
+
+/** A clearly-labeled sample card so a fresh merchant sees the anatomy of a real recommendation. */
+function SampleRecommendationPreview() {
+  return (
+    <div className="recs-sample-wrap">
+      <span className="recs-sample-caption"><FlaskConical size={11} /> Preview — this is what a recommendation looks like (sample, not your data)</span>
+      <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
+        <div className="recs-card-main">
+          <div className="recs-card-top">
+            <span className="recs-agent-pill" style={{ ['--chip-color' as never]: AGENT_COLORS.INVENTORY_AGENT }}><Box size={12} /> Inventory Agent</span>
+            <span className="recs-confidence medium"><span className="recs-confidence-bar" aria-hidden><i style={{ width: '62%' }} /></span> 62% · Medium</span>
+            <span className="recs-sample-chip"><FlaskConical size={9} /> Sample</span>
+          </div>
+          <h3 className="recs-card-title">Restock "Everyday Hoodie — Black / M" before it sells out</h3>
+          <p className="recs-card-reason">At the current sales velocity this variant has 5 days of cover left — under your 7-day reorder window. Restocking now protects a steady seller.</p>
+          <div className="recs-card-meta">
+            <span className="recs-rule-chip">Rule: Stockout Risk</span>
+            <span className="recs-action-chip"><Zap size={11} /> Create recommendation · Safe to execute</span>
+            <span className="recs-entity-chip" title="Sample evidence"><Database size={11} /> 4 evidence fields sealed</span>
+          </div>
+        </div>
+        <div className="recs-card-side">
+          <span className="recs-impact-label">Revenue at risk</span>
+          <strong className="recs-impact-value">$1,240</strong>
+          <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
+          <span className="recs-sample-actions">
+            <span className="recs-tip-anchor" data-tip="This is a preview — run an analysis to get real recommendations">
+              <button className="button reject compact" disabled tabIndex={-1}>Reject</button>
+            </span>
+            <span className="recs-tip-anchor" data-tip="This is a preview — run an analysis to get real recommendations">
+              <button className="button approve compact" disabled tabIndex={-1}><Check size={13} /> Approve</button>
+            </span>
+          </span>
+        </div>
+      </article>
+    </div>
+  )
+}
+
+function AllClearState({ summary, onAnalyze, analyzing }: { summary: RecommendationSummary; onAnalyze: () => void; analyzing: boolean }) {
   return (
     <div className="recs-all-clear">
       <span className="recs-all-clear-icon"><CheckCircle2 size={24} /></span>
-      <h2>All clear — no issues detected</h2>
-      <p>Your last analysis ran all eight rules against your synced data and none crossed its threshold. That's a healthy store, not a missing feature.</p>
+      <h2>No urgent issues detected</h2>
+      <p>Latest sessions checked all eight rules against your synced data and nothing crossed a threshold. That's a healthy store, not a missing feature — new openings appear here as your data changes.</p>
       <div className="recs-all-clear-rules">
-        {(Object.keys(RULE_LABELS) as (keyof typeof RULE_LABELS)[]).map((ruleId) => (
+        {RULE_ORDER.map((ruleId) => (
           <span key={ruleId}><Check size={12} /> {RULE_LABELS[ruleId]}</span>
         ))}
       </div>
-      {summary.usage.used !== null && summary.usage.used > 0 && <small>{summary.usage.used} recommendation{summary.usage.used === 1 ? '' : 's'} generated this month across earlier runs.</small>}
+      <div className="recs-all-clear-actions">
+        <button className="button secondary compact" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={13} className="spin" /> : <RefreshCw size={13} />} Run a fresh analysis</button>
+        {summary.usage.used !== null && summary.usage.used > 0 && <small>{summary.usage.used} recommendation{summary.usage.used === 1 ? '' : 's'} generated this month across earlier runs.</small>}
+      </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Rule detail modal — explains exactly when a rule fires, what it reads, and
+// who is accountable for its output. Opened from rule cards and sidebar rows.
+// ---------------------------------------------------------------------------
+
+function RuleDetailModal({ ruleId, plan, onClose, onUpgrade }: { ruleId: RuleId; plan: RecommendationSummary['plan']; onClose: () => void; onUpgrade: () => void }) {
+  const detail = RULE_DETAILS[ruleId]
+  const agent = RULE_AGENT[ruleId]
+  const locked = agentLockedForPlan(agent, plan)
+  const Icon = RULE_ICONS[ruleId]
+  const AgentIcon = AGENT_ICONS[agent]
+  return (
+    <div className="modal-overlay">
+      <div className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
+        <div className="modal-card-top">
+          <span className="recs-rule-modal-icon"><Icon size={17} /></span>
+          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="section-kicker"><Layers size={13} /> DETERMINISTIC RULE</div>
+        <h2>{RULE_LABELS[ruleId]}</h2>
+        <p className="recs-confirm-what">{RULE_DESCRIPTIONS[ruleId]}</p>
+        <div className="recs-rule-modal-facts">
+          <span><Crosshair size={13} /><div><strong>Fires when</strong>{detail.trigger}</div></span>
+          <span><Gauge size={13} /><div><strong>Impact priced as</strong>{detail.impact}</div></span>
+          <span><Database size={13} /><div><strong>Reads</strong>Uses: {RULE_DATA_SOURCES[ruleId]}</div></span>
+          <span><AgentIcon size={13} /><div><strong>Handled by</strong>{agentLabel(agent)}{locked ? ` — locked on your plan (needs ${PLAN_LABELS[planRequiredForAgent(agent)]})` : ''}</div></span>
+          <span><CheckCircle2 size={13} /><div><strong>When it's quiet</strong>{detail.healthy}</div></span>
+        </div>
+        <div className="modal-actions">
+          {locked
+            ? <><button className="button secondary" onClick={onClose}>Close</button><button className="button primary" onClick={onUpgrade}><LockKeyhole size={13} /> Upgrade plan</button></>
+            : <button className="button primary" onClick={onClose}>Got it</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Analysis progress modal — a full, honest progress surface for a genuinely
+// running operation, replacing the old fire-and-forget toast. The final stage
+// holds until the API responds; the bar never lies about completion.
+// ---------------------------------------------------------------------------
+
+function AnalysisProgressModal({ step, elapsedMs, onHide }: { step: number; elapsedMs: number; onHide: () => void }) {
+  const total = ANALYSIS_STEPS.length
+  const bounded = Math.min(step, total - 1)
+  const progress = ((bounded + 1) / (total + 1)) * 100
+  return (
+    <div className="modal-overlay recs-analysis-overlay">
+      <div className="modal-card recs-analysis-modal" role="dialog" aria-label="Analysis in progress" aria-live="polite">
+        <div className="modal-card-top">
+          <div className="section-kicker"><Zap size={13} /> ANALYZING YOUR STORE</div>
+          <span className="recs-analysis-elapsed" title="Elapsed time"><Clock3 size={11} /> {(elapsedMs / 1000).toFixed(0)}s</span>
+        </div>
+        <h2>Reading your synced data…</h2>
+        <p className="recs-confirm-what">The rule engine is working through your real products, customers, checkouts, and orders. No numbers are being invented — only measured.</p>
+        <div className="recs-analysis-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label="Analysis progress">
+          <i style={{ width: `${progress}%` }} />
+        </div>
+        <ol className="recs-analysis-steps">
+          {ANALYSIS_STEPS.map((item, index) => (
+            <li key={item.label} className={index < bounded ? 'done' : index === bounded ? 'active' : ''}>
+              <span className="recs-analysis-step-icon">{index < bounded ? <Check size={12} /> : index === bounded ? <RefreshCw size={12} className="spin" /> : <i className="dot" />}</span>
+              <div><strong>{item.label}{index <= bounded ? '…' : ''}</strong><small>{item.detail}</small></div>
+            </li>
+          ))}
+        </ol>
+        <div className="recs-analysis-foot">
+          <span>Most runs finish in seconds. You can keep browsing — the results will land on this page.</span>
+          <button className="button secondary compact" onClick={onHide}>Keep browsing</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Analysis report panel — the rich "Store Health Check Complete" result that
+// replaces the old tiny toast when an analysis finds no new recommendations.
+// Every number here comes from the API response; nothing is invented.
+// ---------------------------------------------------------------------------
+
+function AnalysisReportPanel({ report, onDismiss, onNavigateSection, onHow, onRerun, rerunBlocked }: { report: AnalysisReport; onDismiss: () => void; onNavigateSection: ((section: SectionId) => void) | undefined; onHow: () => void; onRerun: () => void; rerunBlocked: boolean }) {
+  const stats = report.snapshotStats ?? null
+  const score = report.health?.score ?? null
+  const tone = healthTone(score)
+  const rulesChecked = report.rulesChecked ?? RULE_ORDER.length
+  return (
+    <section className="recs-report" aria-label="Analysis report">
+      <div className="recs-report-head">
+        <span className="recs-report-icon"><CheckCircle2 size={22} /></span>
+        <div className="recs-report-title">
+          <h2>Store Health Check Complete</h2>
+          <p>No urgent issues detected in your synced data.</p>
+        </div>
+        <div className="recs-report-meta">
+          <span title={new Date(report.receivedAt).toLocaleString()}><History size={12} /> Last analysis {formatRelativeTime(report.receivedAt)}</span>
+          <span title="How long the run took"><Clock3 size={12} /> took {report.elapsedMs < 1000 ? 'under a second' : `${(report.elapsedMs / 1000).toFixed(1)}s`}</span>
+          <button className="icon-button compact" onClick={onDismiss} aria-label="Dismiss report" title="Dismiss"><X size={14} /></button>
+        </div>
+      </div>
+
+      <div className="recs-report-stats">
+        {stats ? (
+          <>
+            <span className="recs-report-stat"><Package size={13} /><strong>{stats.products}</strong><small>products</small></span>
+            <span className="recs-report-stat"><Users size={13} /><strong>{stats.customers}</strong><small>customers</small></span>
+            <span className="recs-report-stat"><ShoppingCart size={13} /><strong>{stats.checkouts}</strong><small>checkouts</small></span>
+            <span className="recs-report-stat"><ListChecks size={13} /><strong>{stats.orders}</strong><small>orders</small></span>
+          </>
+        ) : (
+          <span className="recs-report-stat"><Database size={13} /><strong>synced</strong><small>store data analyzed</small></span>
+        )}
+        <span className="recs-report-stat"><Layers size={13} /><strong>{rulesChecked}/{RULE_ORDER.length}</strong><small>rules checked</small></span>
+        <span className={`recs-report-stat health ${score === null ? 'muted' : score >= 80 ? 'good' : score >= 40 ? 'mid' : 'bad'}`} title={tone.hint}>
+          <Activity size={13} /><strong>{tone.label}{score === null ? '' : ` · ${score}/100`}</strong><small>store health</small>
+        </span>
+      </div>
+
+      {report.deduplicated > 0 ? (
+        <p className="recs-report-note"><Info size={13} /> {report.deduplicated} signal{report.deduplicated === 1 ? '' : 's'} matched recommendations already open, so nothing was duplicated.</p>
+      ) : (
+        <div className="recs-report-rules" role="list" aria-label="Per-rule results">
+          {RULE_ORDER.map((ruleId) => (
+            <span key={ruleId} role="listitem"><Check size={12} /> {RULE_DETAILS[ruleId].healthy}</span>
+          ))}
+        </div>
+      )}
+
+      {stats?.dataFreshAt && <p className="recs-report-note"><Database size={13} /> Data snapshot from {formatRelativeTime(stats.dataFreshAt)}. Analysis runs on demand — re-run anytime after new data syncs and rules fire the moment a pattern crosses its threshold.</p>}
+      {!stats?.dataFreshAt && <p className="recs-report-note"><Info size={13} /> Analysis runs on demand — re-run anytime after new data syncs and rules fire the moment a pattern crosses its threshold.</p>}
+
+      <div className="recs-report-actions">
+        {onNavigateSection && <button className="button secondary" onClick={() => onNavigateSection('analytics')}><BarChart3 size={14} /> View analytics</button>}
+        {onNavigateSection && <button className="button secondary" onClick={() => onNavigateSection('automation')}><Workflow size={14} /> Set up automation</button>}
+        <button className="button secondary" onClick={onHow}><Info size={14} /> How it works</button>
+        <button className="button primary" onClick={onRerun} disabled={rerunBlocked} title="Run the eight rules again on the latest synced data"><RefreshCw size={14} /> Re-run analysis</button>
+      </div>
+    </section>
   )
 }
 
@@ -1072,4 +1498,4 @@ function errorText(error: unknown): string {
   return 'The API could not be reached.'
 }
 
-export { RecommendationCard, EvidenceDrawer, FirstRunState, AllClearState, HowItWorksModal, KpiHero, InsightsSidebar, ApproveConfirmSheet, RejectReasonSheet, UndoSnackbar }
+export { RecommendationCard, EvidenceDrawer, FirstRunState, AllClearState, HowItWorksModal, KpiHero, InsightsSidebar, ApproveConfirmSheet, RejectReasonSheet, UndoSnackbar, Tip, RuleDetailModal, AnalysisProgressModal, AnalysisReportPanel, SampleRecommendationPreview }
