@@ -6,9 +6,12 @@ import {
   RULE_AGENT,
   RULE_DATA_SOURCES,
   RULE_DETAILS,
+  RULE_EMOJIS,
   RULE_LABELS,
+  RULE_TAGLINES,
   STATUS_TABS,
   STATUS_TAB_TOOLTIPS,
+  TEAM_FIND_BULLETS,
   agentLabel,
   agentLockedForPlan,
   applyDecisionLocally,
@@ -18,6 +21,7 @@ import {
   formatDurationMs,
   formatImpact,
   formatRelativeTime,
+  greetingForHour,
   groupRecommendations,
   healthTone,
   impactLabelText,
@@ -26,6 +30,7 @@ import {
   planRequiredForAgent,
   recommendationsHash,
   searchRecommendations,
+  shopDisplayName,
   statusTabCount,
   titleCaseEnum,
   unlockedAgents,
@@ -108,7 +113,7 @@ describe('list presentation', () => {
     const byAgent = groupRecommendations(items, 'agent')
     expect(byAgent.map((group) => group.label)).toEqual(['Revenue Agent', 'Inventory Agent'])
     const byRule = groupRecommendations(items, 'rule')
-    expect(byRule.map((group) => group.label).sort()).toEqual(['Churn Risk', 'Stockout Risk'])
+    expect(byRule.map((group) => group.label).sort()).toEqual(['Save At-Risk Customers', 'Stockout Alerts'])
     expect(groupRecommendations(items, 'none')).toHaveLength(1)
   })
   it('searches title and reason', () => {
@@ -172,6 +177,26 @@ describe('educational maps (UX refresh completeness)', () => {
   it('provides tooltips for every KPI', () => {
     const keys = Object.keys(KPI_TOOLTIPS).sort()
     expect(keys).toEqual(['approvalRate', 'approvedThisMonth', 'averageDecision', 'monthlyUsage', 'pendingImpact'])
+  })
+})
+
+describe('greeting helpers', () => {
+  it('greets by time of day', () => {
+    expect(greetingForHour(8)).toBe('Good morning')
+    expect(greetingForHour(13)).toBe('Good afternoon')
+    expect(greetingForHour(20)).toBe('Good evening')
+  })
+  it('turns a shop domain into a human name', () => {
+    expect(shopDisplayName('demo-store.myshopify.com')).toBe('Demo Store')
+    expect(shopDisplayName('acme.myshopify.com')).toBe('Acme')
+    expect(shopDisplayName(null)).toBeNull()
+  })
+  it('covers every rule with a tagline, emoji, and find-bullet list', () => {
+    for (const rule of Object.keys(RULE_LABELS) as (keyof typeof RULE_LABELS)[]) {
+      expect(RULE_TAGLINES[rule].length).toBeGreaterThan(8)
+      expect(RULE_EMOJIS[rule].length).toBeGreaterThan(0)
+    }
+    expect(TEAM_FIND_BULLETS.length).toBeGreaterThanOrEqual(5)
   })
 })
 
