@@ -22,7 +22,6 @@ import {
   InsightsAreaBand,
   InsightsBubbleChart,
   InsightsComparisonBars,
-  InsightsFlowChart,
   InsightsHeatmap,
   InsightsNetworkGraph,
   InsightsRadarChart,
@@ -158,13 +157,12 @@ describe('chart kit — SVG only, no line charts, no donuts', () => {
     expect(html).toContain('<polygon')
     expect(html).not.toContain('<polyline')
   })
-  it('Scatter/WordCloud/Timeline/Network/TreeMap/Flow render their own primitives', () => {
+  it('Scatter/WordCloud/Timeline/Network/TreeMap render their own primitives', () => {
     expect(renderToStaticMarkup(createElement(InsightsScatter, { points: [{ id: 'a', label: 'trend', x: 0.4, y: 0.7 }], xLabel: 'M', yLabel: 'C' }))).toContain('<circle')
     expect(renderToStaticMarkup(createElement(InsightsWordCloud, { words: [{ tag: 'weekend', weight: 3 }] }))).toContain('weekend')
     expect(renderToStaticMarkup(createElement(InsightsTimelineStrip, { events: [{ id: 'e1', at: '2026-08-17T00:00:00.000Z', label: 'Discovery', tone: 'discovery' }] }))).toContain('<circle')
     expect(renderToStaticMarkup(createElement(InsightsNetworkGraph, { nodes: [{ id: 'a', label: 'Alpha', kind: 'NOTE' }, { id: 'b', label: 'Beta', kind: 'DISCOVERY' }], edges: [{ from: 'a', to: 'b' }] }))).toContain('pa-network-edge')
     expect(renderToStaticMarkup(createElement(InsightsTreeMap, { blocks: [{ id: 'x', label: 'Repeat', value: 60 }, { id: 'y', label: 'One-time', value: 40 }] }))).toContain('<rect')
-    expect(renderToStaticMarkup(createElement(InsightsFlowChart, { stages: [{ id: 'n', label: 'New', value: 4 }, { id: 'r', label: 'Reviewed', value: 2 }] }))).toContain('<rect')
     expect(renderToStaticMarkup(createElement(InsightsComparisonBars, { rows: [{ metric: 'revenue', a: 100, b: 50, winner: 'A' }] }))).toContain('pa-compare-bar')
   })
 })
@@ -247,7 +245,7 @@ describe('workspace smoke test', () => {
     expect(html).toMatch(/pa-nav-item[^"]*locked/)
   })
   it('renders the cross-section explorer', () => {
-    const html = renderToStaticMarkup(createElement(ExploreFurther, { go: noop }))
+    const html = renderToStaticMarkup(createElement(ExploreFurther, { go: noop, storeId: null, overview: null, plan: 'trial' as const }))
     expect(html).toContain('Keep exploring')
     expect(html).toContain('Trend watcher')
   })

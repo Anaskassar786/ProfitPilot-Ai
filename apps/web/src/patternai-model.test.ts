@@ -8,6 +8,7 @@ import {
   PATTERN_AI_NAME,
   PATTERN_AI_TAGLINE,
   degradedNotice,
+  discoveryFunnel,
   discoveryTone,
   insightsTabPurpose,
   isPatternAiPath,
@@ -36,7 +37,7 @@ import {
   trendScatter,
   insightsUpgradeMessage,
 } from './patternai-model.js'
-import { discoveryTreemapBlocks, funnelStages, hourHeatCells, knowledgeNetwork, weekdayHeatCells } from './patternai.js'
+import { discoveryTreemapBlocks, hourHeatCells, knowledgeNetwork, navBadgeCount, weekdayHeatCells } from './patternai.js'
 import type { InsightDiscovery, InsightKnowledgeEntry, InsightPattern, InsightsOverview, InsightTrend } from './patternai-model.js'
 
 function discovery(overrides: Partial<InsightDiscovery> = {}): InsightDiscovery {
@@ -244,9 +245,17 @@ describe('chart data derivations (presentation of API values only)', () => {
     expect(points[0]?.up).toBe(true)
     expect(points[0]?.y).toBeCloseTo(0.8)
   })
-  it('buckets discovery funnel stages from visible statuses', () => {
-    const stages = funnelStages([discovery(), discovery({ id: 'd2', status: 'REVIEWED' }), discovery({ id: 'd3', status: 'ACTED_ON' })])
-    expect(stages.map((stage) => stage.value)).toEqual([1, 1, 0, 1])
+  it('builds a cumulative discovery pipeline with a real conversion rate', () => {
+    const funnel = discoveryFunnel([discovery(), discovery({ id: 'd2', status: 'REVIEWED' }), discovery({ id: 'd3', status: 'ACTED_ON' })])
+    expect(funnel.stages.map((stage) => stage.value)).toEqual([3, 2, 1, 1])
+    expect(funnel.conversion).toBeCloseTo(1 / 3)
+    expect(funnel.stages[1]?.share).toBeCloseTo(2 / 3)
+  })
+  it('reports no conversion at all when nothing has been discovered', () => {
+    const funnel = discoveryFunnel([])
+    expect(funnel.conversion).toBeNull()
+    expect(funnel.stages.every((stage) => stage.value === 0)).toBe(true)
+    expect(funnel.hint).toContain('Run a discovery sweep')
   })
   it('extracts weekday heat cells from engine visualization payloads', () => {
     const cells = weekdayHeatCells([discovery({ visualizationData: { chart: 'heatmap', weekdayProfile: [{ name: 'Sun', revenue: 10, share: 0.1 }, { name: 'Sat', revenue: 60, share: 0.6 }] } })])
