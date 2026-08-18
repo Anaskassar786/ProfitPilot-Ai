@@ -1,0 +1,590 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   AI Command Center — LIGHT THEME
+   ═══════════════════════════════════════════════════════════════════════
+   Scope: every selector in this file starts with `.app-shell.light-mode`
+   and targets AI Command Center surfaces only (`.cc-*`, plus the shared
+   page header when it actually wraps a `.cc-workspace`). The dark theme is
+   never matched by anything here, and no other module is touched.
+
+   Loaded last (after final-polish.css) so these light values win without
+   `!important`. Visual only: no layout structure, sizing, or behaviour is
+   changed — colours, borders, shadows, and states.
+
+   Contrast: every text pairing below is >= 4.5:1 (WCAG AA), every border
+   and status dot >= 3:1 against its own surface. See
+   docs/ai-command-center-light-theme.md for the measured table.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Tokens (cc-prefixed: nothing outside this module reads them) ────── */
+.app-shell.light-mode {
+  --cc-l-surface: #FFFFFF;
+  --cc-l-canvas: #F8FAFC;
+  --cc-l-raised: #F1F5F9;
+
+  --cc-l-border: #E2E8F0;
+  --cc-l-border-strong: #CBD5E1;
+
+  --cc-l-text: #0F172A;
+  --cc-l-text-secondary: #475569;
+  --cc-l-text-muted: #64748B;
+
+  --cc-l-purple: #7C3AED;
+  --cc-l-purple-strong: #6D28D9;
+  --cc-l-purple-deep: #5B21B6;
+  --cc-l-purple-bg: #F3E8FF;
+  --cc-l-purple-border: #DDD6FE;
+
+  --cc-l-green: #16A34A;
+  --cc-l-green-text: #166534;
+  --cc-l-green-bg: #DCFCE7;
+  --cc-l-green-border: #86EFAC;
+
+  --cc-l-amber: #D97706;
+  --cc-l-amber-text: #92400E;
+  --cc-l-amber-bg: #FEF3C7;
+  --cc-l-amber-border: #FCD34D;
+
+  --cc-l-red-text: #991B1B;
+  --cc-l-red-bg: #FEE2E2;
+  --cc-l-red-border: #FCA5A5;
+
+  --cc-l-blue-text: #1E40AF;
+  --cc-l-blue-bg: #DBEAFE;
+  --cc-l-blue-border: #93C5FD;
+
+  --cc-l-shadow-sm: 0 1px 3px rgba(15, 23, 42, .07), 0 1px 2px rgba(15, 23, 42, .05);
+  --cc-l-shadow-md: 0 4px 10px rgba(15, 23, 42, .08), 0 2px 4px rgba(15, 23, 42, .05);
+  --cc-l-shadow-lg: 0 12px 28px rgba(15, 23, 42, .12), 0 4px 8px rgba(15, 23, 42, .06);
+  --cc-l-shadow-purple: 0 10px 24px rgba(124, 58, 237, .16), 0 2px 6px rgba(15, 23, 42, .06);
+  --cc-l-shadow-amber: 0 10px 24px rgba(217, 119, 6, .18), 0 2px 6px rgba(15, 23, 42, .06);
+}
+
+/* ── Page header (only when the header belongs to this page) ────────── */
+.app-shell.light-mode .page-content:has(> .cc-workspace) .page-eyebrow,
+.app-shell.light-mode .page-content:has(> .cc-empty) .page-eyebrow {
+  color: var(--cc-l-purple-strong);
+  font-weight: 700;
+}
+.app-shell.light-mode .page-content:has(> .cc-workspace) .page-header h1,
+.app-shell.light-mode .page-content:has(> .cc-empty) .page-header h1 {
+  color: var(--cc-l-text);
+}
+.app-shell.light-mode .page-content:has(> .cc-workspace) .page-header p,
+.app-shell.light-mode .page-content:has(> .cc-empty) .page-header p {
+  color: var(--cc-l-text-secondary);
+}
+
+/* ── Error banner ───────────────────────────────────────────────────── */
+.app-shell.light-mode .cc-error-banner {
+  color: var(--cc-l-red-text);
+  border-color: var(--cc-l-red-border);
+  background: var(--cc-l-red-bg);
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-error-banner svg { color: #DC2626; }
+
+/* ═══════════════ KPI HERO ═══════════════ */
+.app-shell.light-mode .cc-kpi {
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-surface);
+  backdrop-filter: none;
+  box-shadow: var(--cc-l-shadow-sm);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.app-shell.light-mode .cc-kpi:hover {
+  border-color: var(--cc-l-border-strong);
+  box-shadow: var(--cc-l-shadow-md);
+  transform: translateY(-1px);
+}
+.app-shell.light-mode .cc-kpi strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-kpi strong small { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-kpi > span { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-kpi-empty { color: #334155; }
+
+/* Icon tiles: solid tints, saturated glyphs. */
+.app-shell.light-mode .cc-kpi-icon.health { color: #047857; background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-kpi-icon.actions { color: #B45309; background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-kpi-icon.insights { color: var(--cc-l-purple); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-kpi-icon.agents { color: var(--cc-l-blue-text); background: var(--cc-l-blue-bg); }
+
+/* "This week" / "Today" / "Trial plan" period chips. */
+.app-shell.light-mode .cc-kpi-note {
+  padding: 3px 9px;
+  border: 1px solid var(--cc-l-purple-border);
+  border-radius: 999px;
+  color: var(--cc-l-purple-strong);
+  background: var(--cc-l-purple-bg);
+  font-weight: 600;
+}
+
+/* Trend chips. */
+.app-shell.light-mode .cc-kpi-trend { border: 1px solid transparent; }
+.app-shell.light-mode .cc-kpi-trend.up { color: var(--cc-l-green-text); border-color: var(--cc-l-green-border); background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-kpi-trend.down { color: var(--cc-l-red-text); border-color: var(--cc-l-red-border); background: var(--cc-l-red-bg); }
+.app-shell.light-mode .cc-kpi-trend.flat { color: var(--cc-l-text-secondary); border-color: var(--cc-l-border); background: var(--cc-l-raised); }
+
+.app-shell.light-mode .cc-kpi-status.healthy { color: #047857; }
+.app-shell.light-mode .cc-kpi-status.warning { color: #B45309; }
+.app-shell.light-mode .cc-kpi-status.critical { color: #B91C1C; }
+
+.app-shell.light-mode .cc-kpi-week { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-kpi-total { color: var(--cc-l-text); font-weight: 600; }
+
+.app-shell.light-mode .cc-gauge { background: var(--cc-l-raised); }
+.app-shell.light-mode .cc-gauge i { background: linear-gradient(90deg, #16A34A, #D97706); }
+
+/* `fill` must stay none — an earlier light rule filled the polyline, which
+   turned the 7-day sparkline into a solid purple blob. */
+.app-shell.light-mode .cc-sparkline polyline { stroke: var(--cc-l-purple); fill: none; opacity: 1; }
+.app-shell.light-mode .cc-sparkline circle { fill: var(--cc-l-purple); opacity: 1; }
+
+.app-shell.light-mode .cc-agent-dots i.active { background: var(--cc-l-green); box-shadow: 0 0 0 3px rgba(22, 163, 74, .16); }
+.app-shell.light-mode .cc-agent-dots i.locked { background: var(--cc-l-border-strong); box-shadow: none; }
+
+/* ═══════════════ SECTION HEADERS ═══════════════ */
+.app-shell.light-mode .cc-section-header h2 { color: var(--cc-l-text); font-weight: 700; }
+.app-shell.light-mode .cc-section-header p { color: var(--cc-l-text-secondary); }
+
+.app-shell.light-mode .cc-category-label span { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-category-label small {
+  color: var(--cc-l-purple-strong);
+  border: 1px solid var(--cc-l-purple-border);
+  background: var(--cc-l-purple-bg);
+  font-weight: 600;
+}
+.app-shell.light-mode .cc-category-label::before { background: linear-gradient(135deg, #6D28D9, #A855F7); }
+
+/* ═══════════════ AGENT CARDS ═══════════════ */
+.app-shell.light-mode .cc-agent-card {
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-surface);
+  background-image: none;
+  backdrop-filter: none;
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-agent-card:hover {
+  border-color: #A78BFA;
+  box-shadow: var(--cc-l-shadow-purple);
+  transform: translateY(-2px);
+}
+.app-shell.light-mode .cc-agent-card.active { border-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-agent-card.active:hover {
+  border-color: #6EE7B7;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, .16), 0 2px 6px rgba(15, 23, 42, .06);
+}
+.app-shell.light-mode .cc-agent-card.is-running {
+  border-color: #A78BFA;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .12), var(--cc-l-shadow-md);
+}
+
+/* Icon tiles. */
+.app-shell.light-mode .cc-agent-icon.active { color: #047857; background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-agent-icon.active:hover { box-shadow: 0 0 0 3px rgba(22, 163, 74, .18); }
+.app-shell.light-mode .cc-agent-icon.idle,
+.app-shell.light-mode .cc-agent-icon.unconfigured { color: var(--cc-l-purple); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-agent-icon.paused { color: #B45309; background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-agent-icon.dimmed { color: #B45309; background: var(--cc-l-amber-bg); filter: none; }
+
+/* Status pills: filled, bordered, legible. */
+.app-shell.light-mode .cc-status-pill { border: 1px solid transparent; }
+.app-shell.light-mode .cc-status-pill.active {
+  color: var(--cc-l-green-text);
+  border-color: var(--cc-l-green-border);
+  background: var(--cc-l-green-bg);
+}
+.app-shell.light-mode .cc-status-pill.active i { background: var(--cc-l-green); box-shadow: 0 0 0 3px rgba(22, 163, 74, .2); }
+.app-shell.light-mode .cc-status-pill.idle,
+.app-shell.light-mode .cc-status-pill.unconfigured {
+  color: var(--cc-l-purple-deep);
+  border-color: var(--cc-l-purple-border);
+  background: var(--cc-l-purple-bg);
+}
+.app-shell.light-mode .cc-status-pill.paused {
+  color: var(--cc-l-amber-text);
+  border-color: var(--cc-l-amber-border);
+  background: var(--cc-l-amber-bg);
+}
+
+.app-shell.light-mode .cc-plan-badge {
+  color: var(--cc-l-amber-text);
+  border: 1px solid var(--cc-l-amber-border);
+  background: var(--cc-l-amber-bg);
+}
+.app-shell.light-mode .cc-plan-badge.available {
+  color: var(--cc-l-green-text);
+  border-color: var(--cc-l-green-border);
+  background: var(--cc-l-green-bg);
+}
+.app-shell.light-mode .cc-plan-badge.requires {
+  color: var(--cc-l-amber-text);
+  border-color: var(--cc-l-amber-border);
+  background: var(--cc-l-amber-bg);
+}
+
+.app-shell.light-mode .cc-agent-title h3 { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-agent-title:hover:not(.as-text) h3 { color: var(--cc-l-purple-strong); }
+.app-shell.light-mode .cc-agent-version {
+  padding: 2px 7px;
+  border: 1px solid var(--cc-l-border);
+  border-radius: 6px;
+  color: var(--cc-l-text-secondary);
+  background: var(--cc-l-raised);
+}
+.app-shell.light-mode .cc-agent-tagline { color: var(--cc-l-text-secondary); }
+
+.app-shell.light-mode .cc-agent-stats {
+  border-top-color: var(--cc-l-border);
+  border-bottom-color: var(--cc-l-border);
+}
+.app-shell.light-mode .cc-agent-stats strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-agent-stats span { color: var(--cc-l-text-muted); }
+
+.app-shell.light-mode .cc-confidence { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-confidence em { color: var(--cc-l-text); font-weight: 600; }
+.app-shell.light-mode .cc-confidence-bar { background: var(--cc-l-border); }
+.app-shell.light-mode .cc-confidence-bar i { background: linear-gradient(90deg, #7C3AED, #10B981); }
+
+/* Sample insight quote — purple on growth modules, amber on locked agents. */
+.app-shell.light-mode .cc-sample-insight {
+  color: #334155;
+  border: 1px solid var(--cc-l-border);
+  border-left: 3px solid var(--cc-l-purple);
+  background: var(--cc-l-canvas);
+}
+.app-shell.light-mode .cc-sample-insight svg { color: var(--cc-l-purple); }
+.app-shell.light-mode .cc-agent-card.locked .cc-sample-insight,
+.app-shell.light-mode .cc-drawer-locked blockquote {
+  color: var(--cc-l-amber-text);
+  border: 1px solid var(--cc-l-amber-border);
+  border-left: 3px solid #F59E0B;
+  background: #FFFBEB;
+}
+.app-shell.light-mode .cc-agent-card.locked .cc-sample-insight svg { color: #B45309; }
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+.app-shell.light-mode .cc-button { transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease, color .2s ease; }
+.app-shell.light-mode .cc-button:focus-visible { outline: 2px solid var(--cc-l-purple); outline-offset: 2px; }
+
+.app-shell.light-mode .cc-button.primary {
+  color: #FFFFFF;
+  border-color: transparent;
+  background: linear-gradient(135deg, #7C3AED, #6D28D9);
+  box-shadow: 0 2px 6px rgba(109, 40, 217, .28);
+}
+.app-shell.light-mode .cc-button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6D28D9, #5B21B6);
+  box-shadow: 0 6px 16px rgba(109, 40, 217, .34);
+  transform: translateY(-1px);
+}
+.app-shell.light-mode .cc-button.primary:active:not(:disabled) { transform: translateY(0); }
+
+.app-shell.light-mode .cc-button.secondary {
+  color: #334155;
+  border-color: var(--cc-l-border-strong);
+  background: var(--cc-l-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.app-shell.light-mode .cc-button.secondary:hover:not(:disabled) {
+  color: var(--cc-l-purple-strong);
+  border-color: #A78BFA;
+  background: var(--cc-l-purple-bg);
+}
+
+/* "View details" is the single action on an agent card — treat it as primary. */
+.app-shell.light-mode .cc-agent-card:not(.growth):not(.locked) .cc-agent-actions .cc-button.secondary.full {
+  color: #FFFFFF;
+  border-color: transparent;
+  background: linear-gradient(135deg, #7C3AED, #6D28D9);
+  box-shadow: 0 2px 6px rgba(109, 40, 217, .28);
+}
+.app-shell.light-mode .cc-agent-card:not(.growth):not(.locked) .cc-agent-actions .cc-button.secondary.full:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6D28D9, #5B21B6);
+  box-shadow: 0 6px 16px rgba(109, 40, 217, .34);
+  transform: translateY(-1px);
+}
+
+.app-shell.light-mode .cc-button.ghost {
+  color: #334155;
+  border-color: var(--cc-l-border-strong);
+  background: var(--cc-l-surface);
+}
+.app-shell.light-mode .cc-button.ghost:hover:not(:disabled) {
+  color: var(--cc-l-purple-strong);
+  border-color: #A78BFA;
+  background: var(--cc-l-purple-bg);
+}
+
+/* Upgrade CTA: gold gradient with ink text (7.0:1) — vivid without failing AA
+   the way white-on-amber would (2.1:1). */
+.app-shell.light-mode .cc-button.upgrade {
+  color: #1F2937;
+  border: 1px solid #D97706;
+  background: linear-gradient(135deg, #FCD34D, #F59E0B 55%, #EA9A08);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, .3), inset 0 1px 0 rgba(255, 255, 255, .55);
+  font-weight: 700;
+}
+.app-shell.light-mode .cc-button.upgrade:hover:not(:disabled) {
+  color: #171F2B;
+  border-color: #B45309;
+  background: linear-gradient(135deg, #FBBF24, #EA9A08 55%, #D97706);
+  box-shadow: 0 8px 20px rgba(217, 119, 6, .4), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transform: translateY(-1px);
+}
+.app-shell.light-mode .cc-button.upgrade:active:not(:disabled) { transform: translateY(0); }
+
+.app-shell.light-mode .cc-button.approve {
+  color: #FFFFFF;
+  background: #15803D;
+  box-shadow: 0 2px 5px rgba(21, 128, 61, .28);
+}
+.app-shell.light-mode .cc-button.approve:hover:not(:disabled) { background: #166534; }
+.app-shell.light-mode .cc-button.reject {
+  color: #334155;
+  border-color: var(--cc-l-border-strong);
+  background: var(--cc-l-surface);
+}
+.app-shell.light-mode .cc-button.reject:hover:not(:disabled) { color: #B91C1C; border-color: var(--cc-l-red-border); background: #FEF2F2; }
+
+/* ── 3-dot menus ────────────────────────────────────────────────────── */
+.app-shell.light-mode .cc-menu-trigger { color: #64748B; }
+.app-shell.light-mode .cc-menu-trigger:hover,
+.app-shell.light-mode .cc-menu-trigger[aria-expanded="true"] { color: var(--cc-l-text); background: var(--cc-l-raised); }
+.app-shell.light-mode .cc-menu-list {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: var(--cc-l-shadow-lg);
+}
+.app-shell.light-mode .cc-menu-list button { color: #334155; }
+.app-shell.light-mode .cc-menu-list button:hover,
+.app-shell.light-mode .cc-menu-list button:focus-visible { color: var(--cc-l-purple-deep); background: var(--cc-l-purple-bg); }
+
+/* ═══════════════ GROWTH MODULE CARDS ═══════════════ */
+.app-shell.light-mode .cc-agent-card.growth {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  background-image: linear-gradient(180deg, #FAF7FF 0%, #FFFFFF 40%);
+}
+.app-shell.light-mode .cc-agent-card.growth:hover {
+  border-color: #8B5CF6;
+  box-shadow: var(--cc-l-shadow-purple);
+}
+.app-shell.light-mode .cc-agent-card.growth.requires { border-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-agent-card.growth.requires:hover {
+  border-color: #F59E0B;
+  box-shadow: var(--cc-l-shadow-amber);
+}
+.app-shell.light-mode .cc-agent-icon.growth-icon { color: var(--cc-l-purple); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-tier-label { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-module-note { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-category-chip {
+  color: #334155;
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-raised);
+}
+
+/* ═══════════════ LOCKED AGENT CARDS ═══════════════ */
+.app-shell.light-mode .cc-agent-card.locked {
+  border: 1px solid var(--cc-l-border);
+  border-style: solid;
+  background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 46%);
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-agent-card.locked:hover {
+  border-color: #F59E0B;
+  box-shadow: var(--cc-l-shadow-amber);
+  transform: translateY(-2px);
+}
+.app-shell.light-mode .cc-locked-group-title { color: var(--cc-l-text); font-weight: 600; }
+.app-shell.light-mode .cc-locked-group-title svg { color: #B45309; }
+.app-shell.light-mode .cc-locked-group-title em {
+  padding: 2px 8px;
+  border: 1px solid var(--cc-l-amber-border);
+  border-radius: 999px;
+  color: var(--cc-l-amber-text);
+  background: var(--cc-l-amber-bg);
+  font-weight: 700;
+}
+
+/* ═══════════════ RUN-ALL BANNER ═══════════════ */
+.app-shell.light-mode .cc-run-banner {
+  border-color: var(--cc-l-purple-border);
+  background: linear-gradient(135deg, #F5F0FF, #FFFFFF 60%);
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-run-banner.is-done { border-color: var(--cc-l-green-border); }
+.app-shell.light-mode .cc-run-banner.has-error { border-color: var(--cc-l-red-border); }
+.app-shell.light-mode .cc-run-banner-main strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-run-banner-main small { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-run-progress { background: var(--cc-l-border); }
+.app-shell.light-mode .cc-run-progress i { background: linear-gradient(90deg, #7C3AED, #A855F7); }
+
+/* ═══════════════ ACTIVITY FEED ═══════════════ */
+.app-shell.light-mode .cc-feed {
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-feed-row { border-bottom-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-feed-row:hover,
+.app-shell.light-mode .cc-feed-row:focus-visible { background: var(--cc-l-canvas); }
+.app-shell.light-mode .cc-feed-row:focus-visible { outline: 2px solid var(--cc-l-purple); outline-offset: -2px; }
+.app-shell.light-mode .cc-feed-agent { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-feed-title { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-feed-row.is-fresh .cc-feed-title { color: var(--cc-l-purple-strong); font-weight: 600; }
+.app-shell.light-mode .cc-feed-time { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-feed-chevron { color: #94A3B8; }
+.app-shell.light-mode .cc-feed-status { border: 1px solid transparent; }
+.app-shell.light-mode .cc-feed-status.pending { color: var(--cc-l-amber-text); border-color: var(--cc-l-amber-border); background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-feed-status.approved,
+.app-shell.light-mode .cc-feed-status.executed { color: var(--cc-l-green-text); border-color: var(--cc-l-green-border); background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-feed-status.rejected,
+.app-shell.light-mode .cc-feed-status.failed { color: var(--cc-l-red-text); border-color: var(--cc-l-red-border); background: var(--cc-l-red-bg); }
+
+/* Empty state. */
+.app-shell.light-mode .cc-feed-empty { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-feed-empty > svg {
+  box-sizing: content-box;
+  width: 26px;
+  height: 26px;
+  padding: 13px;
+  border-radius: 16px;
+  color: var(--cc-l-purple);
+  background: var(--cc-l-purple-bg);
+}
+.app-shell.light-mode .cc-feed-empty strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-feed-empty span { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-feed-sample {
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-canvas);
+  color: var(--cc-l-text-muted);
+  opacity: 1;
+}
+.app-shell.light-mode .cc-feed-sample svg { color: var(--cc-l-purple); }
+.app-shell.light-mode .cc-feed-sample strong { color: #334155; }
+.app-shell.light-mode .cc-feed-sample span { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-how-it-works li {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.app-shell.light-mode .cc-how-it-works li strong { color: var(--cc-l-purple-strong); }
+.app-shell.light-mode .cc-how-it-works li span { color: var(--cc-l-text-secondary); }
+
+/* ═══════════════ EMPTY / SKELETON STATES ═══════════════ */
+.app-shell.light-mode .cc-empty h2 { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-empty p { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-empty-orb { box-shadow: 0 10px 26px rgba(112, 85, 231, .28); }
+.app-shell.light-mode .cc-getting-started li {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-getting-started li span strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-getting-started li span small { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-skeleton,
+.app-shell.light-mode .cc-skeleton-heading {
+  border-color: var(--cc-l-border);
+  background: linear-gradient(100deg, #F1F5F9 40%, #E2E8F0 50%, #F1F5F9 60%);
+  background-size: 200% 100%;
+}
+
+/* ═══════════════ TOOLTIPS ═══════════════ */
+.app-shell.light-mode .cc-tip { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-tip svg { color: #94A3B8; }
+.app-shell.light-mode .cc-tip:hover { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-tip:hover svg { color: var(--cc-l-purple); }
+.app-shell.light-mode .cc-tip[data-tip]::after {
+  color: var(--cc-l-text);
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: var(--cc-l-shadow-lg);
+}
+
+/* ═══════════════ DETAIL DRAWER ═══════════════ */
+.app-shell.light-mode .cc-drawer-backdrop { background: rgba(15, 23, 42, .38); }
+.app-shell.light-mode .cc-drawer {
+  border-left-color: var(--cc-l-border);
+  background: var(--cc-l-canvas);
+  box-shadow: -24px 0 60px rgba(15, 23, 42, .18);
+}
+.app-shell.light-mode .cc-drawer-header { border-bottom-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-drawer-header h2 { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-drawer-header p { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-drawer-tabs { border-bottom-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-drawer-tabs button { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-drawer-tabs button.is-active { color: var(--cc-l-purple-strong); border-bottom-color: var(--cc-l-purple); }
+.app-shell.light-mode .cc-drawer-tabs button:hover { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-drawer-stats div,
+.app-shell.light-mode .cc-activity-summary div,
+.app-shell.light-mode .cc-rule-row,
+.app-shell.light-mode .cc-activity-item,
+.app-shell.light-mode .cc-setting-row {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.app-shell.light-mode .cc-drawer-stats strong,
+.app-shell.light-mode .cc-activity-summary strong,
+.app-shell.light-mode .cc-rule-row strong,
+.app-shell.light-mode .cc-activity-item-top strong,
+.app-shell.light-mode .cc-setting-row strong,
+.app-shell.light-mode .cc-plan-matrix-row strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-drawer-stats span,
+.app-shell.light-mode .cc-activity-summary span,
+.app-shell.light-mode .cc-setting-row span,
+.app-shell.light-mode .cc-rule-row small,
+.app-shell.light-mode .cc-activity-item-bottom em { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-rule-row span,
+.app-shell.light-mode .cc-activity-item > span,
+.app-shell.light-mode .cc-plan-matrix-row span,
+.app-shell.light-mode .cc-drawer-note,
+.app-shell.light-mode .cc-drawer-meta span,
+.app-shell.light-mode .cc-drawer-loading,
+.app-shell.light-mode .cc-bullet-list li { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-bullet-list li::before { color: #15803D; }
+.app-shell.light-mode .cc-drawer-section h3 { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-rule-row-top code { color: var(--cc-l-purple-strong); }
+.app-shell.light-mode .cc-rule-facts em {
+  color: #334155;
+  border: 1px solid var(--cc-l-border);
+  background: var(--cc-l-raised);
+}
+.app-shell.light-mode .cc-data-chips code {
+  color: var(--cc-l-purple-deep);
+  border: 1px solid var(--cc-l-purple-border);
+  background: var(--cc-l-purple-bg);
+}
+.app-shell.light-mode .cc-setting-muted { color: #64748B; }
+.app-shell.light-mode .cc-drawer-locked strong { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-drawer-locked > svg { color: #B45309; }
+.app-shell.light-mode .cc-drawer-locked-rules h3 { color: var(--cc-l-text-secondary); }
+.app-shell.light-mode .cc-available-banner {
+  color: #14532D;
+  border-color: var(--cc-l-green-border);
+  background: var(--cc-l-green-bg);
+}
+.app-shell.light-mode .cc-available-banner svg { color: #15803D; }
+.app-shell.light-mode .cc-plan-matrix { border-color: var(--cc-l-border); background: var(--cc-l-surface); }
+.app-shell.light-mode .cc-plan-matrix-row { border-bottom-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-plan-matrix-row.current { background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-plan-matrix-row em {
+  color: var(--cc-l-purple-deep);
+  border: 1px solid var(--cc-l-purple-border);
+  background: #FFFFFF;
+}
+
+/* ═══════════════ FOCUS VISIBILITY (keyboard) ═══════════════ */
+.app-shell.light-mode .cc-workspace button:focus-visible,
+.app-shell.light-mode .cc-workspace a:focus-visible,
+.app-shell.light-mode .cc-drawer-root button:focus-visible,
+.app-shell.light-mode .cc-drawer-root a:focus-visible {
+  outline: 2px solid var(--cc-l-purple);
+  outline-offset: 2px;
+}
+
+/* ═══════════════ REDUCED MOTION ═══════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.light-mode .cc-kpi:hover,
+  .app-shell.light-mode .cc-agent-card:hover,
+  .app-shell.light-mode .cc-button:hover:not(:disabled) { transform: none; }
+}
