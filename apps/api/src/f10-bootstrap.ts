@@ -8,6 +8,7 @@ import { createF9Bootstrap } from './f9-bootstrap.js'
 import type { F9Bootstrap } from './f9-bootstrap.js'
 import { StoreCoachService } from './store-coach-service.js'
 import type { CoachMailer, CoachPdfWriter, StoreCoachServiceDependencies } from './store-coach-service.js'
+import { resolveApiKeys } from './ai-keys.js'
 import {
   PostgresAchievementRepository,
   PostgresCoachReportRepository,
@@ -39,8 +40,9 @@ export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string
   const env = rawEnv
 
   const enabled = (env.STORE_COACH_ENABLED ?? 'true').trim().toLowerCase() !== 'false'
+  const resolvedKeys = resolveApiKeys(env)
   const provider = new OpenRouterClient({
-    keys: [env.STORE_COACH_API_KEY ?? ''].filter((key) => key.trim().length > 0),
+    keys: resolvedKeys.keys,
     models: [env.STORE_COACH_MODEL_PRIMARY ?? DEFAULT_COACH_MODELS[0], env.STORE_COACH_MODEL_FALLBACK ?? DEFAULT_COACH_MODELS[1]].filter((model): model is string => Boolean(model?.trim())),
     timeoutMs: positiveNumber(env.AI_TIMEOUT_MS, 25_000),
     maxRetries: nonNegativeNumber(env.AI_MAX_RETRIES, 1),
@@ -160,6 +162,11 @@ export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string
 
   const service = new StoreCoachService(deps)
   void enabled
+  logger.info('Store Coach AI provider', {
+    configured: provider.configured,
+    keySource: resolvedKeys.source ?? 'none',
+    modelCount: provider.models.length,
+  })
   return { ...f9, storeCoach: { service } }
 }
 

@@ -13,6 +13,10 @@ describe('F9 startup environment normalization', () => {
     expect(normalizeEnvironment({ OPENROUTER_API_KEY: 'generic-key' }).OPENROUTER_API_KEY_1).toBe('generic-key')
     expect(normalizeEnvironment({ OPENROUTER_API_KEY_1: 'numbered', OPENROUTER_API_KEY: 'generic' }).OPENROUTER_API_KEY_1).toBe('numbered')
   })
+  it('aliases shared OpenRouter keys onto STORE_COACH_API_KEY', () => {
+    expect(normalizeEnvironment({ OPENROUTER_API_KEY_1: 'shared-key' }).STORE_COACH_API_KEY).toBe('shared-key')
+    expect(normalizeEnvironment({ STORE_COACH_API_KEY: 'coach-key', OPENROUTER_API_KEY_1: 'shared-key' }).STORE_COACH_API_KEY).toBe('coach-key')
+  })
   it('prefers canonical values and reports grouped production gaps', () => {
     const normalized = normalizeEnvironment({ R2_ENDPOINT: 'canonical', CLOUDFLARE_R2_ENDPOINT: 'alias' })
     expect(normalized.R2_ENDPOINT).toBe('canonical')
