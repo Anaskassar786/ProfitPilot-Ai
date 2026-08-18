@@ -3,7 +3,7 @@ import { sha256Hex } from '@profitpilot/crypto'
 import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
 import type { QueryResultRow } from '@profitpilot/db'
-import { OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
+import { AiCommandService, OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
 import type { JarvisActionAuditEntry, JarvisActionTool } from '@profitpilot/ai'
 import { PostgresCopilotRepository, PostgresJarvisRepository, PostgresReportRepository } from './f8-repositories.js'
 import { F8ContextProvider } from './f8-context.js'
@@ -11,6 +11,9 @@ import { computeForecast } from './f8-forecast.js'
 import { createF7Bootstrap } from './f7-bootstrap.js'
 import type { F7Bootstrap } from './f7-bootstrap.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
+import type { AiCommandRouteDependencies } from './ai-command-routes.js'
+import { PostgresAiCommandRepository } from './ai-command-repository.js'
+import { ProductionCommandActions, ProductionCommandTools } from './ai-command-runtime.js'
 import { CloudflareR2ObjectStore, ReportService } from '@profitpilot/reporting'
 import type { ReportDataProvider } from '@profitpilot/reporting'
 import { OrderInsightsService, PostgresOrderInsightAudit, PostgresOrderInsightUsage, PostgresOrderRepository } from './orders.js'
@@ -25,7 +28,7 @@ import { AnalyticsInsightsService, PostgresAnalyticsQueryUsage } from './analyti
 import type { AnalyticsRouteDependencies } from './analytics-routes.js'
 
 export type F8RouteDependencies = Readonly<{ jarvis: JarvisRouteDependencies; copilot: CopilotRouteDependencies; forecasting: ForecastRouteDependencies; reports: ReportRouteDependencies }>
-export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; analyticsInsights: AnalyticsRouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; inventory: InventoryRouteDependencies; jarvisProvider: OpenRouterClient }>
+export type F8Bootstrap = Readonly<F7Bootstrap & { f8: F8RouteDependencies; analyticsInsights: AnalyticsRouteDependencies; orders: OrderRouteDependencies; customers: CustomerRouteDependencies; inventory: InventoryRouteDependencies; jarvisProvider: OpenRouterClient; aiCommand: AiCommandRouteDependencies }>
 
 export function createF8Bootstrap(env: Readonly<Record<string, string | undefined>>, logger?: Logger): F8Bootstrap | null {
   const f7 = createF7Bootstrap(env)
@@ -85,7 +88,77 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     ),
   }
   const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider }
+  const planFor = async (tenant: import('@profitpilot/types').StoreId) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial'
+  const commandTools = new ProductionCommandTools({
+    customers: customerRepository,
+    orders: orderRepository,
+    inventory: inventoryRepository,
+    analytics: f7.dataPlane.analytics,
+    recommendations: f7.ai.recommendations,
+  })
+  const commandActions = new ProductionCommandActions({
+    customers: customerRepository,
+    email: {
+      send: async ({ to, subject, html, storeId: tenant }) => {
+        const config = f7.automation.emailVerifier.get(tenant)
+        if (!config?.verified) throw new Error('Merchant email must be verified in Settings before AI Command can send mail.')
+        if (!env.SMTP_HOST?.trim() || !env.SMTP_USER?.trim() || !env.SMTP_PASSWORD?.trim()) throw new Error('Email could not be sent: SMTP is not configured.')
+        return createBrevoMailer(env).send({ to, from: config.merchantEmail, fromName: config.fromName, subject, html })
+      },
+    },
+    shopify: { directory: f7.storeDirectory, tokens: f7.tokenVault, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10' },
+    recommendations: f7.ai.recommendations,
+    workflows: {
+      trigger: async (tenant, workflowId) => {
+        const execution = f7.automation.execution
+        if (!execution) throw new Error('Workflow execution is not connected.')
+        const workflow = await f7.automation.workflows.get(tenant, workflowId)
+        if (!workflow?.definitionHash || !workflow.activatedAt) throw new Error('That workflow is not active.')
+        const run = await execution.start({ ...workflow, definitionHash: workflow.definitionHash, activatedAt: workflow.activatedAt }, { triggerType: 'MANUAL', triggerEventId: `ai-command:${workflowId}`, context: { source: 'ai-command' } })
+        void execution.execute({ ...workflow, definitionHash: workflow.definitionHash, activatedAt: workflow.activatedAt }, run.id)
+        return { runId: run.id, status: run.status }
+      },
+    },
+    reports: {
+      generate: async (tenant, reportType, _dateRange) => {
+        const frequency = reportType === 'DAILY' || reportType === 'MONTHLY' || reportType === 'QUARTERLY' ? reportType : 'WEEKLY'
+        const end = new Date(); end.setUTCHours(0, 0, 0, 0); end.setUTCDate(end.getUTCDate() - 1)
+        const days = frequency === 'DAILY' ? 1 : frequency === 'WEEKLY' ? 7 : frequency === 'MONTHLY' ? 30 : 90
+        const start = new Date(end); start.setUTCDate(start.getUTCDate() - days + 1)
+        return reports.generate({ storeId: tenant, frequency, period: { start: start.toISOString(), end: end.toISOString() }, email: false })
+      },
+    },
+    notifications: {
+      create: async (tenant, title, message) => {
+        const id = crypto.randomUUID()
+        await f7.database.query(`INSERT INTO merchant_notifications (store_id, kind, title, message) VALUES ($1, 'AI_COMMAND', $2, $3)`, [tenant, title, message])
+        return { id }
+      },
+    },
+  })
+  const commandKeys = [env.AI_COMMAND_API_KEY, env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+  const commandModels = [env.AI_COMMAND_MODEL_PRIMARY, env.AI_COMMAND_MODEL_FALLBACK, env.AI_MODEL_PRIMARY].filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+  const commandProvider = commandModels.length > 0
+    ? new OpenRouterClient({ keys: commandKeys, models: commandModels, maxTokens: 1_200 })
+    : new OpenRouterClient({ keys: commandKeys, maxTokens: 1_200 })
+  const commandConfig = {
+    repository: new PostgresAiCommandRepository(f7.database, planFor),
+    tools: commandTools,
+    actions: commandActions,
+    planFor,
+    shopFor: async (tenant: import('@profitpilot/types').StoreId) => (await f7.storeDirectory.get(tenant))?.shopDomain ?? null,
+    enabled: env.AI_COMMAND_ENABLED !== 'false',
+  }
+  const aiCommand = commandProvider.configured
+    ? new AiCommandService({
+      ...commandConfig,
+      generate: async (input) => {
+        const generation = await commandProvider.generate(input.system, input.user, { maxTokens: 800 })
+        return { text: generation.text, toolCalls: [], tokensUsed: generation.usage.totalTokens, model: generation.model }
+      },
+    })
+    : new AiCommandService(commandConfig)
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand } }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

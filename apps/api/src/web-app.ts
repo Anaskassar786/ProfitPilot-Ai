@@ -8,6 +8,7 @@ const API_PATH_PREFIXES = [
   '/api',
   '/admin',
   '/ai',
+  '/ai-command',
   '/analytics',
   '/automation',
   '/billing',
