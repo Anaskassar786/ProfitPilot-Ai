@@ -766,8 +766,15 @@ function RevenueRing({ hasImpact, pendingCount }: { hasImpact: boolean; pendingC
   return (
     <div className="recs-kpi-visual recs-kpi-radial" aria-hidden>
       <svg width="48" height="48" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="4" />
-        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" stroke="var(--green)" strokeWidth="4" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
+        <defs>
+          <linearGradient id="recs-rev-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#6EE7B7" />
+            <stop offset="55%" stopColor="#10B981" />
+            <stop offset="100%" stopColor="#047857" />
+          </linearGradient>
+        </defs>
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="5" />
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" stroke="url(#recs-rev-grad)" strokeWidth="5" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
       </svg>
       {hasImpact
         ? <strong className="recs-kpi-ring-count">{pendingCount}</strong>
@@ -841,7 +848,7 @@ function DecideSpeedometer({ ms }: { ms: number | null }) {
   const zone = ms === null ? 'idle' : ms <= FAST ? 'fast' : ms <= SLOW ? 'mid' : 'slow'
   if (ms === null) {
     return (
-      <div className="recs-kpi-visual" aria-hidden>
+      <div className="recs-kpi-visual recs-kpi-visual-speedo" aria-hidden>
         <svg className="recs-kpi-speedo" viewBox="0 0 100 56">
           <path d="M 10,46 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
         </svg>
@@ -851,7 +858,7 @@ function DecideSpeedometer({ ms }: { ms: number | null }) {
   }
   const angle = Math.min(90, Math.max(-90, (ms / MAX) * 180 - 90))
   return (
-    <div className="recs-kpi-visual" aria-hidden>
+    <div className="recs-kpi-visual recs-kpi-visual-speedo" aria-hidden>
       <svg className="recs-kpi-speedo" viewBox="0 0 100 56">
         <path d="M 10,46 A 40,40 0 0,1 90,46" fill="none" className="recs-kpi-speedo-track" strokeWidth="6" strokeLinecap="round" />
         <path d={arc(-90, -67.5)} fill="none" className="recs-kpi-speedo-zone-fast" strokeWidth="6" strokeLinecap="round" />
