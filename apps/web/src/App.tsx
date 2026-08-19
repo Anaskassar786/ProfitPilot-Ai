@@ -105,6 +105,7 @@ import {
   workspaceContext,
 } from './model.js'
 import type { ChartPeriod } from './model.js'
+import { greetingForHour } from './recommendations-model.js'
 import { DashboardLayout } from './dashboard.js'
 import { CommandCenterWorkspace } from './command-center.js'
 import { ProductsWorkspace } from './products.js'
@@ -655,10 +656,15 @@ function DashboardPage({
   syncDismissing?: boolean
 }) {
   const displayName = formatStoreDisplayName(context.shop)
-  const greetingTitle = context.storeId ? 'Good morning' : 'Connect your Shopify store'
+  const greeting = greetingForHour(new Date().getHours())
+  const greetingTitle = context.storeId
+    ? displayName
+      ? `${greeting}, ${displayName}`
+      : greeting
+    : 'Connect your Shopify store'
   const greetingDescription = context.storeId
     ? displayName
-      ? `Welcome back, ${displayName} — your workspace is ready for real Shopify data.`
+      ? 'Welcome back — your workspace is ready for real Shopify data.'
       : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.'
     : 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
 
