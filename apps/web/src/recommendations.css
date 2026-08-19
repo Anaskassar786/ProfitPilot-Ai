@@ -1876,3 +1876,96 @@
 .app-shell.light-mode .recs-trend-xlabels { color: #94A3B8; }
 .app-shell.light-mode .recs-trend-conversion { background: #ECFDF5; }
 .app-shell.light-mode .recs-trend-conversion strong { color: #059669; }
+
+/* ------------------------------------------------------------------------- */
+/* Activity Timeline + Top Categories — readability & professional polish.   */
+/* Appended last so it wins the cascade. Nothing here may clip or overflow.  */
+/* ------------------------------------------------------------------------- */
+
+/* Sidebar cards: clearer titles for every insight block */
+.recs-side-card .recs-side-title {
+  font-size: 14px !important;
+  font-weight: 750;
+}
+.recs-side-card { gap: 12px; }
+
+/* Activity Timeline chart — taller canvas, readable axis labels */
+.recs-trend-chart { gap: 6px; min-width: 0; }
+.recs-trend-svg { width: 100%; max-width: 100%; height: auto; display: block; }
+.recs-trend-xlabels { font-size: 11px; }
+
+/* Timeline stats — 2×2 tiles that can never overflow the card */
+.recs-trend-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+.recs-trend-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(139, 92, 246, .055);
+}
+.recs-trend-metric strong {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recs-trend-metric-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recs-trend-metric.recs-trend-conversion {
+  display: flex;
+  align-items: stretch;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, .09);
+  border-color: rgba(16, 185, 129, .22);
+}
+.recs-trend-metric.recs-trend-conversion strong { color: var(--green); font-size: 16px; }
+.recs-trend-metric.recs-trend-window { background: transparent; }
+
+/* Timeline legend — readable swatches */
+.recs-trend-legend { gap: 16px; font-size: 12px; }
+.recs-trend-legend i { width: 9px; height: 9px; }
+
+/* Empty-state sample chart — larger plot and labels */
+.recs-trend-plot { height: 96px; }
+.recs-trend-axis-labels { font-size: 11px; }
+.recs-trend-empty { gap: 8px; }
+
+/* Top Categories — roomier, easier-to-read rows */
+.recs-rule-list { gap: 6px; }
+.recs-rule-row { padding: 8px 10px; gap: 10px; font-size: 13px; border-radius: 9px; }
+.recs-rule-row strong { font-size: 13px; }
+.recs-rule-row-share { flex: 0 0 56px; height: 4px; }
+
+/* Light theme counterparts */
+.app-shell.light-mode .recs-trend-metric {
+  background: #F8FAFC;
+  border-color: #E5E7EB;
+}
+.app-shell.light-mode .recs-trend-metric strong { color: #0F172A; }
+.app-shell.light-mode .recs-trend-metric-label { color: #64748B; }
+.app-shell.light-mode .recs-trend-metric.recs-trend-conversion {
+  background: #ECFDF5;
+  border-color: #BBF7D0;
+}
+.app-shell.light-mode .recs-trend-metric.recs-trend-conversion strong { color: #059669; }
+.app-shell.light-mode .recs-trend-metric.recs-trend-window { background: transparent; }

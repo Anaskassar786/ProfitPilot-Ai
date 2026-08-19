@@ -1052,6 +1052,10 @@ function UsageRingCard({ usage, plan, now, onUpgrade }: { usage: AiCommandUsage 
   const limit = usage?.limit ?? null
   const pct = commander || limit === null ? 100 : usagePercent(usage)
   const ringStyle = { '--ring-pct': `${pct * 3.6}deg` } as CSSProperties
+  // Higher plans raise the daily limit, so the numbers inside the ring grow.
+  // Scale the ring type down by digit count so it can never overflow the circle.
+  const digits = Math.max(String(used).length, limit === null ? 1 : String(limit).length)
+  const ringScale = digits >= 6 ? 'size-xs' : digits >= 4 ? 'size-sm' : ''
   return (
     <section className={`aic-usage-ring ${tone}`}>
       <div className="aic-usage-ring-top">
@@ -1061,8 +1065,8 @@ function UsageRingCard({ usage, plan, now, onUpgrade }: { usage: AiCommandUsage 
       <div className="aic-usage-ring-body">
         <div className="aic-ring" style={ringStyle}>
           <div className="aic-ring-inner">
-            <strong>{commander || limit === null ? '∞' : used}</strong>
-            <small>{commander || limit === null ? 'Unlimited' : `of ${limit} today`}</small>
+            <strong className={ringScale}>{commander || limit === null ? '∞' : used}</strong>
+            <small className={ringScale}>{commander || limit === null ? 'Unlimited' : `of ${limit} today`}</small>
           </div>
         </div>
         <div className="aic-usage-ring-copy">
