@@ -147,6 +147,7 @@
 .recs-confidence.low .recs-confidence-bar i { background: var(--text-tertiary); }
 .recs-expiry { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; background: rgba(245,158,11,.12); color: var(--amber); font-size: 10px; }
 .recs-expiry.expired { background: rgba(239,68,68,.12); color: var(--red); }
+.recs-snoozed-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; background: rgba(87,198,233,.14); color: var(--blue-bright); font-size: 10px; }
 .recs-explanation-badge { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 10px; }
 .recs-card-time { margin-left: auto; color: var(--text-tertiary); font-size: 10.5px; }
 .recs-card-title { margin: 0; font-size: 14.5px; letter-spacing: -.02em; }
@@ -243,6 +244,7 @@
 .recs-decision-row .dot.green, .recs-trail .dot.green { background: var(--green); }
 .recs-decision-row .dot.red, .recs-trail .dot.red { background: var(--red); }
 .recs-decision-row .dot.amber, .recs-trail .dot.amber { background: var(--amber); }
+.recs-decision-row .dot.blue, .recs-trail .dot.blue { background: var(--blue-bright); }
 .recs-decision-row strong { display: block; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
 .recs-decision-row small { color: var(--text-tertiary); font-size: 10px; }
 
@@ -558,6 +560,7 @@
 .recs-workspace .recs-agent-pill,
 .recs-workspace .recs-confidence,
 .recs-workspace .recs-expiry,
+.recs-workspace .recs-snoozed-chip,
 .recs-workspace .recs-rule-chip,
 .recs-workspace .recs-action-chip,
 .recs-workspace .recs-entity-chip,
@@ -1084,6 +1087,7 @@
 .app-shell.light-mode .recs-confidence.low .recs-confidence-bar i { background: #94A3B8; }
 .app-shell.light-mode .recs-expiry { background: #FEF3C7; color: #92400E; }
 .app-shell.light-mode .recs-expiry.expired { background: #FEE2E2; color: #991B1B; }
+.app-shell.light-mode .recs-snoozed-chip { background: #E0F2FE; color: #0369A1; }
 .app-shell.light-mode .recs-urgent-pill { background: #FEE2E2; color: #991B1B; }
 .app-shell.light-mode .recs-card-time { color: #94A3B8; }
 .app-shell.light-mode .recs-entity-chip { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }

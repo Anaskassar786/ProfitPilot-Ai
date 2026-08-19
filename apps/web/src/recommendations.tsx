@@ -108,6 +108,7 @@ import {
   riskLabel,
   ruleLabel,
   searchRecommendations,
+  snoozeBadge,
   statusLabel,
   statusTabCount,
   statusTabLabel,
@@ -846,6 +847,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
   const [menuOpen, setMenuOpen] = useState(false)
   const Icon = AGENT_ICONS[recommendation.agent] ?? Sparkles
   const expiry = recommendation.status === 'PENDING' ? expiryBadge(recommendation.expiresAt) : null
+  const snooze = recommendation.status === 'PENDING' ? snoozeBadge(recommendation.snoozedUntil) : null
   const explanationBadge = EXPLANATION_STATUS_LABELS[recommendation.explanationStatus]
   const decisionDelay = formatDecisionDelay(recommendation.createdAt, recommendation.decidedAt)
   const pending = recommendation.status === 'PENDING'
@@ -861,6 +863,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
           <span className="recs-rule-name">{RULE_EMOJIS[recommendation.ruleId]} {ruleLabel(recommendation.ruleId)}</span>
           <ConfidenceMeter confidence={recommendation.confidence} level={recommendation.confidenceLevel} />
           {expiry && <span className={`recs-expiry ${expiry === 'Expired' ? 'expired' : ''}`}><Clock3 size={12} /> {expiry}</span>}
+          {snooze && <span className="recs-snoozed-chip" title={`Snoozed until ${new Date(recommendation.snoozedUntil ?? '').toLocaleString()}. This recommendation stays in your queue.`}><Clock3 size={12} /> {snooze}</span>}
           {explanationBadge && <span className="recs-explanation-badge" title={recommendation.explanationStatus === 'AI_REJECTED' ? 'The extra explanation was filtered. The numbers below are still real and unaffected.' : 'The numbers are complete — only the optional extra explanation is missing.'}><Info size={12} /> {explanationBadge}</span>}
           <span className="recs-card-time" title={new Date(recommendation.createdAt).toLocaleString()}>{formatRelativeTime(recommendation.createdAt)}</span>
         </div>
@@ -1056,6 +1059,7 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
             <div className="recs-trail">
               <span><i className="dot" /> Created {new Date(recommendation.createdAt).toLocaleString()}</span>
               {recommendation.expiresAt && <span><i className="dot amber" /> {Date.parse(recommendation.expiresAt) > Date.now() ? 'Expires' : 'Expired'} {new Date(recommendation.expiresAt).toLocaleString()}</span>}
+              {recommendation.snoozedUntil && Date.parse(recommendation.snoozedUntil) > Date.now() && <span><i className="dot blue" /> Snoozed until {new Date(recommendation.snoozedUntil).toLocaleString()}</span>}
               {recommendation.decidedAt && <span><i className={`dot ${recommendation.status === 'REJECTED' ? 'red' : 'green'}`} /> {statusLabel(recommendation.status)} {new Date(recommendation.decidedAt).toLocaleString()}{recommendation.decidedBy === 'jarvis' ? ' via Jarvis' : recommendation.decidedBy === 'system' ? ' automatically' : ''}</span>}
               <span><i className="dot" /> Version {recommendation.version} · concurrency-safe decisions</span>
             </div>

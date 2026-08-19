@@ -247,8 +247,13 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
       const decidedAt = input.decidedAt ?? new Date().toISOString()
       const decidedBy = input.decidedBy ?? null
       const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
+      // Every parameter is cast explicitly in each position where it is used.
+      // A parameter shared between a typed column (timestamptz) and a
+      // jsonb_build_object(...) ::text position makes PostgreSQL deduce two
+      // conflicting types ("inconsistent types deduced for parameter $N"),
+      // which surfaced as a 500 on approve/reject in production.
       const result = await executor.query<RecommendationRow>(
-        `UPDATE ai_recommendations SET status = $4, version = version + 1, decided_at = $5, decided_by = $6, reject_reason = $7,
+        `UPDATE ai_recommendations SET status = $4::text, version = version + 1, decided_at = $5::text::timestamptz, decided_by = $6::text, reject_reason = $7::text,
            payload = payload || jsonb_build_object('status', $4::text, 'version', version + 1, 'decidedAt', $5::text, 'decidedBy', $6::text, 'rejectReason', $7::text)
          WHERE store_id = $1 AND id::text = $2 AND version = $3 AND status = 'PENDING' RETURNING payload, status, version`,
         [storeId, id, expectedVersion, status, decidedAt, decidedBy, rejectReason],
@@ -265,7 +270,7 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
       const decidedBy = input.decidedBy ?? null
       const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
       const result = await executor.query<RecommendationRow>(
-        `UPDATE ai_recommendations SET status = $3, version = version + 1, decided_at = $4, decided_by = $5, reject_reason = $6,
+        `UPDATE ai_recommendations SET status = $3::text, version = version + 1, decided_at = $4::text::timestamptz, decided_by = $5::text, reject_reason = $6::text,
            payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1, 'decidedAt', $4::text, 'decidedBy', $5::text, 'rejectReason', $6::text)
          WHERE store_id = $1 AND id::text = $2 AND status = 'PENDING' RETURNING payload, status, version`,
         [storeId, id, status, decidedAt, decidedBy, rejectReason],
@@ -282,7 +287,7 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
       const result = await executor.query<RecommendationRow>(
         `UPDATE ai_recommendations SET status = 'PENDING', version = version + 1, decided_at = NULL, decided_by = NULL, reject_reason = NULL,
            payload = payload || jsonb_build_object('status', 'PENDING'::text, 'version', version + 1) || '{"decidedAt": null, "decidedBy": null, "rejectReason": null}'::jsonb
-         WHERE store_id = $1 AND id::text = $2 AND status IN ('APPROVED', 'REJECTED') AND decided_at IS NOT NULL AND decided_at >= $3 RETURNING payload, status, version`,
+         WHERE store_id = $1 AND id::text = $2 AND status IN ('APPROVED', 'REJECTED') AND decided_at IS NOT NULL AND decided_at >= $3::text::timestamptz RETURNING payload, status, version`,
         [storeId, id, cutoff],
       )
       const row = result.rows[0]
@@ -294,7 +299,7 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
   public async snooze(storeId: StoreId, id: string, until: string): Promise<Recommendation> {
     return this.withTenant(storeId, async (executor) => {
       const result = await executor.query<RecommendationRow>(
-        `UPDATE ai_recommendations SET snoozed_until = $3, payload = payload || jsonb_build_object('snoozedUntil', $3::text)
+        `UPDATE ai_recommendations SET snoozed_until = $3::text::timestamptz, payload = payload || jsonb_build_object('snoozedUntil', $3::text)
          WHERE store_id = $1 AND id::text = $2 AND status = 'PENDING' RETURNING payload, status, version`,
         [storeId, id, until],
       )
@@ -307,7 +312,7 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
   public async markExecution(storeId: StoreId, id: string, status: 'EXECUTED' | 'FAILED'): Promise<Recommendation> {
     return this.withTenant(storeId, async (executor) => {
       const result = await executor.query<RecommendationRow>(
-        `UPDATE ai_recommendations SET status = $3, version = version + 1,
+        `UPDATE ai_recommendations SET status = $3::text, version = version + 1,
            payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1)
          WHERE store_id = $1 AND id::text = $2 AND status = 'APPROVED' RETURNING payload, status, version`,
         [storeId, id, status],
@@ -322,9 +327,9 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
     return this.withTenant(storeId, async (executor) => {
       const at = new Date(now).toISOString()
       const result = await executor.query(
-        `UPDATE ai_recommendations SET status = 'EXPIRED', version = version + 1, decided_at = $2, decided_by = 'system',
+        `UPDATE ai_recommendations SET status = 'EXPIRED', version = version + 1, decided_at = $2::text::timestamptz, decided_by = 'system',
            payload = payload || jsonb_build_object('status', 'EXPIRED'::text, 'version', version + 1, 'decidedAt', $2::text, 'decidedBy', 'system'::text)
-         WHERE store_id = $1 AND status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= $2`,
+         WHERE store_id = $1 AND status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= $2::text::timestamptz`,
         [storeId, at],
       )
       return result.rowCount

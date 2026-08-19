@@ -16,6 +16,7 @@ import {
   agentLockedForPlan,
   applyDecisionLocally,
   expiryBadge,
+  snoozeBadge,
   formatCurrencyAmounts,
   formatDecisionDelay,
   formatDurationMs,
@@ -104,6 +105,14 @@ describe('time helpers', () => {
     expect(formatDecisionDelay('2026-08-15T10:00:00.000Z', '2026-08-15T12:00:00.000Z')).toBe('Decided 2h 0m after creation')
     expect(formatDecisionDelay('2026-08-15T10:00:00.000Z', null)).toBeNull()
     expect(formatDurationMs(90_000)).toBe('1m')
+  })
+  it('badges an active snooze and goes quiet once it passes', () => {
+    expect(snoozeBadge('2026-08-15T14:00:00.000Z', now)).toBe('Snoozed · reminds in 2h')
+    expect(snoozeBadge('2026-08-15T12:45:00.000Z', now)).toBe('Snoozed · reminds in 45m')
+    expect(snoozeBadge('2026-08-16T12:00:00.000Z', now)).toBe('Snoozed · reminds in 1d')
+    expect(snoozeBadge('2026-08-15T11:00:00.000Z', now)).toBeNull()
+    expect(snoozeBadge(null, now)).toBeNull()
+    expect(snoozeBadge('not-a-date', now)).toBeNull()
   })
 })
 

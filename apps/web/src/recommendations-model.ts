@@ -361,6 +361,23 @@ export function expiryBadge(expiresAt: string | null, now = Date.now()): string 
   return `Expires in ${Math.max(1, Math.round(remaining / 60_000))}m`
 }
 
+/**
+ * "Snoozed · reminds in 3h" while a snooze is active; null once it has passed
+ * or when the recommendation was never snoozed. Renders only on pending cards
+ * so a snoozed recommendation stays visibly marked until its reminder arrives.
+ */
+export function snoozeBadge(snoozedUntil: string | null, now = Date.now()): string | null {
+  if (!snoozedUntil) return null
+  const until = Date.parse(snoozedUntil)
+  if (!Number.isFinite(until) || until <= now) return null
+  const remaining = until - now
+  const minutes = Math.max(1, Math.round(remaining / 60_000))
+  if (minutes < 60) return `Snoozed · reminds in ${minutes}m`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `Snoozed · reminds in ${hours}h`
+  return `Snoozed · reminds in ${Math.round(hours / 24)}d`
+}
+
 export function formatDecisionDelay(createdAt: string, decidedAt: string | null): string | null {
   if (!decidedAt) return null
   const from = Date.parse(createdAt)

@@ -282,6 +282,7 @@ export function createAiRouter(dependencies: AiRouteDependencies): Router {
       await requireRole(dependencies, request, tenant, 'recommendations:approve')
       const id = paramId(request)
       const before = await dependencies.recommendations.get(tenant, id)
+      if (!before) throw new AppError('NOT_FOUND', 'Recommendation not found', 404, { id })
       const result = await dependencies.recommendations.undo(tenant, id)
       if (before && dependencies.calibration) {
         // The undone decision no longer represents merchant feedback; append a
