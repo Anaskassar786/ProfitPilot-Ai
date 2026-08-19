@@ -514,6 +514,22 @@
 .coach-review-goal p { font-size: 13px; color: var(--c-text-2); line-height: 1.5; margin: 0 0 4px; }
 .coach-review-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+/* Two-column weekly review — the right column is never empty. */
+.coach-review-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 22px; align-items: start; }
+.coach-review-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.coach-review-col-main { padding-right: 22px; border-right: 1px solid var(--c-border); }
+.coach-review-col-side { padding-left: 2px; }
+
+.coach-review-snapshot { display: flex; flex-direction: column; gap: 8px; padding: 13px 14px; border: 1px solid var(--c-border-strong); border-radius: 10px; background: var(--c-inner); }
+.coach-review-snapshot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.coach-review-snapshot-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.coach-review-snapshot-row strong { font-size: 15px; font-weight: 700; color: var(--c-text); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.coach-review-snapshot-row small { font-size: 11.5px; color: var(--c-text-3); overflow-wrap: anywhere; }
+.coach-review-snapshot-row small.positive { color: var(--c-green); font-weight: 600; }
+.coach-review-snapshot-row small.negative { color: var(--c-red); font-weight: 600; }
+.coach-review-snapshot-note { margin: 4px 0 0; font-size: 11.5px; color: var(--c-text-3); display: flex; align-items: center; gap: 5px; }
+.coach-review-snapshot-note svg { color: var(--c-purple); flex: none; }
+
 /* ── FIX 12 · Plan card ────────────────────────────────────────────────── */
 .coach-plan-card { border-color: color-mix(in srgb, var(--c-purple) 26%, var(--c-border)); }
 .coach-plan-card.commander { border-color: color-mix(in srgb, var(--c-gold) 40%, transparent); }
@@ -780,6 +796,8 @@
   .coach-badge-grid { grid-template-columns: repeat(2, 1fr); }
   .coach-goals-layout, .coach-settings-grid { grid-template-columns: 1fr; }
   .coach-review-metrics { grid-template-columns: repeat(2, 1fr); }
+  .coach-review-body { grid-template-columns: 1fr; }
+  .coach-review-col-main { padding-right: 0; border-right: none; border-bottom: 1px solid var(--c-border); padding-bottom: 14px; }
 }
 @media (max-width: 720px) {
   .coach-hero { flex-direction: column; align-items: flex-start; }

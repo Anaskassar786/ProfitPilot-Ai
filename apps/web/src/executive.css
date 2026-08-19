@@ -945,6 +945,34 @@
   .gq-trajectory-plot { animation: none; }
 }
 
+/* Slope / projection-cone chart */
+.gq-slope { position: relative; }
+.gq-slope-guide { stroke: var(--exec-border); stroke-width: 1; stroke-dasharray: 2 5; opacity: .8; }
+.gq-slope-guide.current { stroke: var(--exec-purple); opacity: .5; }
+.gq-slope-guide.projected { stroke: var(--exec-purple); opacity: .5; }
+.gq-slope-line { stroke: var(--exec-purple); }
+.gq-slope-line.positive { stroke: var(--exec-positive); }
+.gq-slope-line.danger { stroke: var(--exec-danger); }
+.gq-slope-line.muted { stroke: var(--exec-muted); }
+.gq-slope-whisker { stroke: var(--exec-purple); opacity: .5; }
+.gq-slope-whisker-cap { stroke: var(--exec-purple); opacity: .7; }
+.gq-slope-dot { stroke: var(--exec-surface); stroke-width: 2.5; }
+.gq-slope-dot.current { fill: var(--exec-purple); }
+.gq-slope-dot-core.current { fill: var(--exec-surface); }
+.gq-slope-dot.projected { fill: var(--exec-purple-deep); }
+.gq-slope-dot-ring.projected { fill: color-mix(in srgb, var(--exec-purple) 22%, transparent); }
+.gq-slope-value { font: 700 12.5px var(--exec-sans); fill: var(--exec-heading); letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+.gq-slope-value.current { fill: var(--exec-purple); }
+.gq-slope-value.projected { fill: var(--exec-purple-deep); }
+.gq-slope-growth { font: 700 11px var(--exec-sans); letter-spacing: .02em; }
+.gq-slope-growth.positive { fill: var(--exec-positive); }
+.gq-slope-growth.danger { fill: var(--exec-danger); }
+.gq-slope-growth.muted { fill: var(--exec-muted); }
+.gq-slope-col-label { font: 700 10px var(--exec-sans); fill: var(--exec-faint); letter-spacing: .08em; }
+.gq-slope-swatch.current { background: var(--exec-purple); height: 6px; border-radius: 2px; }
+.gq-slope-swatch.projected { background: var(--exec-purple-deep); height: 6px; border-radius: 2px; }
+.gq-slope-whisker-swatch { display: inline-block; width: 14px; height: 8px; border-left: 1px solid var(--exec-purple); border-right: 1px solid var(--exec-purple); opacity: .7; }
+
 .gq-trajectory-tooltip {
   position: absolute;
   top: 10px;

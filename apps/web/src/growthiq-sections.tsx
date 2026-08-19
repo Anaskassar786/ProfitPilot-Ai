@@ -16,7 +16,7 @@ import { ArrowUpRight, Crosshair, DollarSign, FileBarChart, Flag, Gem, Globe, Li
 import type { PlanTier } from '@profitpilot/types'
 import { formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import type { GrowthMilestonesResult, ImpactPreview, StrategicPosition, TrajectoryProjection, WeeklyDigest } from './growthiq-strategic.js'
-import { ExecutivePositionMatrix, ExecutiveTrajectoryChart } from './executive-charts.js'
+import { ExecutivePositionMatrix, ExecutiveSlopeChart } from './executive-charts.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 
 function SectionHead({ kicker, title, note, action }: { kicker: string; title: string; note?: string | undefined; action?: ReactNode | undefined }) {
@@ -52,7 +52,7 @@ export function GrowthIqTrajectorySection({ projection, currency, daysSynced, on
       <SectionHead
         kicker="Your business trajectory"
         title="Revenue — last 30 days vs the next 30"
-        note="The solid line is your real synced revenue; the dashed line extends your measured trend. The band widens with distance because the future is genuinely less certain."
+        note="Your current 30-day run-rate slopes toward the projected next 30 days. The whisker on the projection shows the likely range from your measured trend — the future is genuinely less certain."
       />
       {projection === null ? (
         <GrowthIqNotYet
@@ -61,7 +61,19 @@ export function GrowthIqTrajectorySection({ projection, currency, daysSynced, on
         />
       ) : (
         <>
-          <ExecutiveTrajectoryChart data={projection} currency={currency} formatValue={(value) => formatExecutiveMoney(value, currency, 0)} label="Revenue trajectory with 30-day trend projection" />
+          <ExecutiveSlopeChart
+            datum={{
+              current: projection.currentMonthlyRunRate,
+              projected: projection.projectedMonthlyRevenue,
+              growthRatePct: projection.growthRatePct,
+              confidencePct: projection.confidencePct,
+              direction: projection.direction,
+              bandLow: projection.band.at(-1)?.low ?? projection.projectedMonthlyRevenue,
+              bandHigh: projection.band.at(-1)?.high ?? projection.projectedMonthlyRevenue,
+            }}
+            currency={currency}
+            formatValue={(value) => formatExecutiveMoney(value, currency, 0)}
+          />
           <div className="gq-trajectory-insight">
             <p>
               Based on your current trend, the business is on a <strong className={`gq-direction ${projection.direction}`}>{projection.direction}</strong> trajectory.

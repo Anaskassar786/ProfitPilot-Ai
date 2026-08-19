@@ -249,6 +249,8 @@ export type InsightsOverview = Readonly<{
     investigations: Readonly<{ used: number; limit: number | null; remaining: number | null }>
   }>
   counts: Readonly<{ newDiscoveries: number; totalDiscoveries: number; patterns: number; lessons: number; lessonsRead: number; personas: number; investigations: number; trends: number; predictions: number; comparisons: number; knowledge: number }>
+  /** Real 8-week activity trend per hero metric, from stored timestamps. */
+  countsTrends?: Readonly<{ discoveries: InsightCountTrend; patterns: InsightCountTrend; personas: InsightCountTrend; investigations: InsightCountTrend; trends: InsightCountTrend; predictions: InsightCountTrend }>
   readiness: InsightsDataReadiness
   preferences: InsightsPreferences
   autoDiscoveryRan: boolean
@@ -741,6 +743,19 @@ export const DISCOVERY_TYPE_HEADLINES: Readonly<Record<DiscoveryType, string>> =
  */
 export type PatternAiStatVisual = 'bubbles' | 'network' | 'cohort' | 'answers' | 'arrows' | 'wave'
 
+/** Real 8-week activity trend for a hero tile (from stored timestamps). */
+export type InsightCountTrend = Readonly<{
+  series: readonly number[]
+  direction: 'up' | 'down' | 'flat' | 'none'
+  windowLabel: string
+}>
+
+/** True direction of a trend series, or null when there is no activity. */
+export function trendDirection(trend: InsightCountTrend | undefined): 'up' | 'down' | 'flat' | 'none' {
+  if (!trend || trend.direction === 'none') return 'none'
+  return trend.direction
+}
+
 export type PatternAiStat = Readonly<{
   id: string
   label: string
@@ -751,25 +766,39 @@ export type PatternAiStat = Readonly<{
   visual: PatternAiStatVisual
   /** What the tile is doing while it is still empty (never a fake number). */
   pending: string
+  /** Real 8-week activity series for this tile; undefined before it loads. */
+  trend: InsightCountTrend | undefined
 }>
+
+const TREND_KEYS: Readonly<Record<string, keyof NonNullable<InsightsOverview['countsTrends']>>> = {
+  discoveries: 'discoveries',
+  patterns: 'patterns',
+  personas: 'personas',
+  investigations: 'investigations',
+  trends: 'trends',
+  predictions: 'predictions',
+}
 
 /**
  * The six hero tiles. Values come straight from the API's counts — this
  * function only formats, it never derives a number of its own. Each tile also
- * names the micro-visualization it renders and the honest "still working"
- * caption used while the count is zero.
+ * names the micro-visualization it renders, the honest "still working"
+ * caption used while the count is zero, and a real 8-week activity trend
+ * computed by the server from stored timestamps (undefined before it loads).
  */
 export function patternAiStats(overview: InsightsOverview | null): readonly PatternAiStat[] {
   const value = (count: number | undefined): string => (overview ? formatInsightNumber(count ?? 0) : '—')
   const raw = (count: number | undefined): number | null => (overview ? count ?? 0 : null)
   const counts = overview?.counts
+  const trends = overview?.countsTrends
+  const trendFor = (id: string): InsightCountTrend | undefined => trends ? trends[TREND_KEYS[id] as keyof typeof trends] : undefined
   return [
-    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread', count: raw(counts?.newDiscoveries), visual: 'bubbles', pending: 'waiting…' },
-    { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now', count: raw(counts?.patterns), visual: 'network', pending: 'discovering…' },
-    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified', count: raw(counts?.personas), visual: 'cohort', pending: 'analysing…' },
-    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered', count: raw(counts?.investigations), visual: 'answers', pending: 'ask first' },
-    { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch', count: raw(counts?.trends), visual: 'arrows', pending: 'monitoring…' },
-    { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live', count: raw(counts?.predictions), visual: 'wave', pending: 'learning…' },
+    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread', count: raw(counts?.newDiscoveries), visual: 'bubbles', pending: 'waiting…', trend: trendFor('discoveries') },
+    { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now', count: raw(counts?.patterns), visual: 'network', pending: 'discovering…', trend: trendFor('patterns') },
+    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified', count: raw(counts?.personas), visual: 'cohort', pending: 'analysing…', trend: trendFor('personas') },
+    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered', count: raw(counts?.investigations), visual: 'answers', pending: 'ask first', trend: trendFor('investigations') },
+    { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch', count: raw(counts?.trends), visual: 'arrows', pending: 'monitoring…', trend: trendFor('trends') },
+    { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live', count: raw(counts?.predictions), visual: 'wave', pending: 'learning…', trend: trendFor('predictions') },
   ]
 }
 

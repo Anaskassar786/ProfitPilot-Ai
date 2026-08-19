@@ -8,7 +8,7 @@ import type { PlanTier, StoreId } from '@profitpilot/types'
 import type { BillingState } from '@profitpilot/billing'
 import type { StoreSnapshot } from '@profitpilot/ai'
 import { createApi } from './app.js'
-import { InMemoryInsightsHubRepository, InsightsHubService, InsightsRateLimiter } from './insights-hub.js'
+import { buildInsightTrend, InMemoryInsightsHubRepository, InsightsHubService, InsightsRateLimiter } from './insights-hub.js'
 
 const STORE = 'store-insights'
 const LAST_DAY = '2026-08-17'
@@ -564,4 +564,29 @@ describe('Insights Hub — rate limiting and kill switch', () => {
   it('503s every endpoint when INSIGHTS_HUB_ENABLED=false', async () => withServer('growth', async ({ base }) => {
     expect((await getJson(base, `/insights/overview?storeId=${STORE}`)).status).toBe(503)
   }, { env: { INSIGHTS_HUB_ENABLED: 'false' } }))
+})
+
+describe('buildInsightTrend — real weekly activity, honest direction', () => {
+  const week = (n: number): string => new Date(Date.UTC(2026, 6, 1) + n * 7 * 86_400_000).toISOString()
+  it('buckets real timestamps into weekly counts, oldest → newest', () => {
+    const trend = buildInsightTrend([
+      { ts: week(1) },
+      { ts: week(1) },
+      { ts: week(3) },
+      { ts: week(5) },
+      { ts: week(6) },
+    ], week(7), 8)
+    expect(trend.series).toHaveLength(8)
+    expect(trend.series.reduce((a, b) => a + b, 0)).toBe(5)
+    expect(trend.direction).toBe('up') // recent 3 weeks beat the prior 3
+  })
+  it('reports none instead of inventing movement for an empty store', () => {
+    const trend = buildInsightTrend([], week(7), 8)
+    expect(trend.direction).toBe('none')
+    expect(trend.series.every((value) => value === 0)).toBe(true)
+  })
+  it('ignores malformed timestamps so they never skew a real count', () => {
+    const trend = buildInsightTrend([{ ts: 'not-a-date' }, { ts: week(2) }], week(7), 8)
+    expect(trend.series.reduce((a, b) => a + b, 0)).toBe(1)
+  })
 })

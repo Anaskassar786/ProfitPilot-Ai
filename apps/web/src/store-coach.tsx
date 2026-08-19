@@ -66,6 +66,7 @@ import {
   paceLabel,
   planFeatureSummary,
   relativeTimeLabel,
+  reviewSnapshot,
   streakStatusCopy,
   weekCelebration,
   whyPriorityMatters,
@@ -83,6 +84,7 @@ import type {
   CoachPriority,
   CoachPrioritiesView,
   CoachProgressSummary,
+  CoachReviewSnapshot,
   CoachReviewView,
   CoachStreakView,
   CoachUsageView,
@@ -1485,6 +1487,54 @@ function asReviewMetrics(value: unknown): readonly ReviewMetric[] {
     .map((item) => ({ label: String(item.label), value: String(item.value ?? ''), change: String(item.change ?? '') }))
 }
 
+function ReviewMetricChip({ metric }: { metric: ReviewMetric }) {
+  const positive = /^\+|↑|up|higher|growth|increased/i.test(metric.change)
+  const negative = /^-|↓|down|lower|drop|decreased/i.test(metric.change)
+  return (
+    <div className="coach-review-metric">
+      <span>{metric.label}</span>
+      <strong>{metric.value}</strong>
+      {metric.change && <small className={positive ? 'positive' : negative ? 'negative' : ''}>{metric.change}</small>}
+    </div>
+  )
+}
+
+/** A single real figure from the review's deterministic snapshot. */
+function ReviewSnapshotRow({ label, value, change, changeLabel }: { label: string; value: string; change?: number | null; changeLabel?: string | undefined }) {
+  const hasChange = change !== null && change !== undefined && Number.isFinite(change) && change !== 0
+  const positive = hasChange && (change as number) > 0
+  const negative = hasChange && (change as number) < 0
+  return (
+    <div className="coach-review-snapshot-row">
+      <span className="coach-review-snapshot-label">{label}</span>
+      <strong>{value}</strong>
+      {hasChange && <small className={positive ? 'positive' : negative ? 'negative' : ''}>{positive ? '↑' : negative ? '↓' : ''}{Math.abs(change as number).toFixed(1)}%{changeLabel ? ` ${changeLabel}` : ''}</small>}
+      {!hasChange && changeLabel && <small className="neutral">vs {changeLabel}</small>}
+    </div>
+  )
+}
+
+/** Right-hand "week in numbers" panel built purely from the real snapshot. */
+function ReviewSnapshotPanel({ snapshot }: { snapshot: CoachReviewSnapshot }) {
+  const rows = [
+    { label: '7-day revenue', value: formatMoney(snapshot.revenue7d, snapshot.currency), change: snapshot.revenue7dChangePct, changeLabel: 'vs prior 7' },
+    { label: '7-day orders', value: formatNumber(snapshot.orders7d), change: snapshot.orders7dChangePct, changeLabel: 'vs prior 7' },
+    { label: 'Avg order value', value: formatMoney(snapshot.aov30d, snapshot.currency), change: null },
+    { label: 'Best single day', value: formatMoney(snapshot.bestDayRevenue, snapshot.currency), change: null },
+    { label: 'New customers (yesterday)', value: formatNumber(snapshot.yesterdayNewCustomers), change: null },
+    { label: 'Huddle streak', value: `${snapshot.streakDays} day${snapshot.streakDays === 1 ? '' : 's'}`, change: null },
+  ]
+  return (
+    <div className="coach-review-snapshot">
+      <div className="coach-review-block-label"><Gauge size={13} /> Your week in numbers</div>
+      <div className="coach-review-snapshot-grid">
+        {rows.map((row) => <ReviewSnapshotRow key={row.label} label={row.label} value={row.value} change={row.change} changeLabel={row.changeLabel} />)}
+      </div>
+      <p className="coach-review-snapshot-note"><Sparkles size={12} /> Real figures from your synced store — never estimated.</p>
+    </div>
+  )
+}
+
 function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, onSetGoal }: { storeId: string; review: CoachReviewView; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void; onSetGoal: () => void }) {
   const content = review.content
   const wins = asStringArray(content.weekWins).slice(0, 4)
@@ -1492,6 +1542,7 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
   const learnings = asStringArray(content.learnings).slice(0, 3)
   const focus = asStringArray(content.nextWeekFocus).slice(0, 3)
   const suggestedGoal = typeof content.suggestedGoal === 'object' && content.suggestedGoal !== null ? content.suggestedGoal as Readonly<Record<string, unknown>> : null
+  const snapshot = reviewSnapshot(content)
   const [emailing, setEmailing] = useState(false)
   const emailReview = () => {
     setEmailing(true)
@@ -1512,38 +1563,39 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
           <small>Generated from your real weekly numbers — wins, metrics, learnings, and next week's focus.</small>
         </div>
       </div>
-      {wins.length > 0 && (
-        <div className="coach-review-block">
-          <div className="coach-review-block-label"><Trophy size={13} /> Week highlights</div>
-          <ul className="coach-review-wins">{wins.map((win, index) => <li key={index}><CheckCircle2 size={13} />{win}</li>)}</ul>
-        </div>
-      )}
-      {metrics.length > 0 && (
-        <div className="coach-review-block">
-          <div className="coach-review-block-label"><BarChart3 size={13} /> Metrics vs last week</div>
-          <div className="coach-review-metrics">
-            {metrics.map((metric, index) => (
-              <div className="coach-review-metric" key={index}>
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-                {metric.change && <small className={/^\+|↑|up|higher|growth/i.test(metric.change) ? 'positive' : /^-|↓|down|lower|drop/i.test(metric.change) ? 'negative' : ''}>{metric.change}</small>}
+      <div className="coach-review-body">
+        <div className="coach-review-col coach-review-col-main">
+          {wins.length > 0 && (
+            <div className="coach-review-block">
+              <div className="coach-review-block-label"><Trophy size={13} /> Week highlights</div>
+              <ul className="coach-review-wins">{wins.map((win, index) => <li key={index}><CheckCircle2 size={13} />{win}</li>)}</ul>
+            </div>
+          )}
+          {metrics.length > 0 && (
+            <div className="coach-review-block">
+              <div className="coach-review-block-label"><BarChart3 size={13} /> Metrics vs last week</div>
+              <div className="coach-review-metrics">
+                {metrics.map((metric, index) => <ReviewMetricChip metric={metric} key={index} />)}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
-      )}
-      {learnings.length > 0 && (
-        <div className="coach-review-block">
-          <div className="coach-review-block-label"><Lightbulb size={13} /> Key learnings</div>
-          <ol className="coach-review-learnings">{learnings.map((learning, index) => <li key={index}>{learning}</li>)}</ol>
+        <div className="coach-review-col coach-review-col-side">
+          {snapshot && <ReviewSnapshotPanel snapshot={snapshot} />}
+          {learnings.length > 0 && (
+            <div className="coach-review-block">
+              <div className="coach-review-block-label"><Lightbulb size={13} /> Key learnings</div>
+              <ol className="coach-review-learnings">{learnings.map((learning, index) => <li key={index}>{learning}</li>)}</ol>
+            </div>
+          )}
+          {focus.length > 0 && (
+            <div className="coach-review-block">
+              <div className="coach-review-block-label"><Target size={13} /> Next week's focus</div>
+              <ul className="coach-review-focus">{focus.map((item, index) => <li key={index}><ChevronRight size={13} />{item}</li>)}</ul>
+            </div>
+          )}
         </div>
-      )}
-      {focus.length > 0 && (
-        <div className="coach-review-block">
-          <div className="coach-review-block-label"><Target size={13} /> Next week's focus</div>
-          <ul className="coach-review-focus">{focus.map((item, index) => <li key={index}><ChevronRight size={13} />{item}</li>)}</ul>
-        </div>
-      )}
+      </div>
       {suggestedGoal && (
         <div className="coach-review-goal">
           <div className="coach-review-block-label"><Sparkles size={13} /> Suggested goal for next week</div>
