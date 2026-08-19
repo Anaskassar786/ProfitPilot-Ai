@@ -68,7 +68,7 @@ export function GrowthIqTrajectorySection({ projection, currency, daysSynced, on
             </p>
             <div className="gq-trajectory-figures">
               <div className="gq-figure"><strong>{formatExecutiveMoney(projection.currentMonthlyRunRate, currency, 0)}</strong><span>current monthly run-rate</span></div>
-              <div className="gq-figure"><strong>{formatExecutiveMoney(projection.projectedMonthlyRevenue, currency, 0)}{projection.growthRatePct !== null && <em className={`gq-direction ${projection.direction}`}> {projection.growthRatePct >= 0 ? '+' : ''}{projection.growthRatePct.toFixed(1)}%</em>}</strong><span>projected next 30 days</span></div>
+              <div className="gq-figure"><strong>{formatExecutiveMoney(projection.projectedMonthlyRevenue, currency, 0)}{projection.growthRatePct !== null && Number.isFinite(projection.growthRatePct) && <em className={`gq-direction ${projection.direction}`}> {projection.growthRatePct >= 0 ? '+' : ''}{projection.growthRatePct.toFixed(1)}%</em>}</strong><span>projected next 30 days</span></div>
               <div className="gq-figure"><strong>{projection.confidencePct}%</strong><span>projection confidence · {projection.dataDays} real days</span></div>
             </div>
             <div className="gq-card-footer">
@@ -227,8 +227,8 @@ export function GrowthIqDigestSection({ digest, daysSynced, currency, plan, canR
           <div className="gq-digest-block">
             <h4>Business snapshot</h4>
             <div className="gq-digest-grid">
-              <div className="gq-fact"><span>Revenue · 7d</span><strong>{formatExecutiveMoney(digest.revenue7, currency, 0)}{digest.revenueWowPct !== null && <em className={`gq-direction ${digest.revenueWowPct > 0.5 ? 'growing' : digest.revenueWowPct < -0.5 ? 'declining' : 'stable'}`}> {digest.revenueWowPct >= 0 ? '+' : ''}{digest.revenueWowPct.toFixed(1)}%</em>}</strong></div>
-              <div className="gq-fact"><span>Orders · 7d</span><strong>{formatExecutiveNumber(digest.orders7, 0)}{digest.ordersWowPct !== null && <em className={`gq-direction ${digest.ordersWowPct > 0.5 ? 'growing' : digest.ordersWowPct < -0.5 ? 'declining' : 'stable'}`}> {digest.ordersWowPct >= 0 ? '+' : ''}{digest.ordersWowPct.toFixed(1)}%</em>}</strong></div>
+              <div className="gq-fact"><span>Revenue · 7d</span><strong>{formatExecutiveMoney(digest.revenue7, currency, 0)}{digest.revenueWowPct !== null && Number.isFinite(digest.revenueWowPct) && <em className={`gq-direction ${digest.revenueWowPct > 0.5 ? 'growing' : digest.revenueWowPct < -0.5 ? 'declining' : 'stable'}`}> {digest.revenueWowPct >= 0 ? '+' : ''}{digest.revenueWowPct.toFixed(1)}%</em>}</strong></div>
+              <div className="gq-fact"><span>Orders · 7d</span><strong>{formatExecutiveNumber(digest.orders7, 0)}{digest.ordersWowPct !== null && Number.isFinite(digest.ordersWowPct) && <em className={`gq-direction ${digest.ordersWowPct > 0.5 ? 'growing' : digest.ordersWowPct < -0.5 ? 'declining' : 'stable'}`}> {digest.ordersWowPct >= 0 ? '+' : ''}{digest.ordersWowPct.toFixed(1)}%</em>}</strong></div>
               <div className="gq-fact"><span>Best product</span><strong>{digest.bestProduct ?? 'No product sales synced yet'}</strong></div>
             </div>
           </div>
@@ -317,7 +317,7 @@ export function GrowthIqInsightsSidebar({ metrics, currency, tipIndex = 0, onNav
         <dl className="gq-stat-list">
           <div>
             <dt>Revenue growth · MoM</dt>
-            <dd>{metrics.revenueGrowthPct === null ? 'Needs a prior 30-day window' : <span className={`gq-direction ${metrics.revenueGrowthPct > 0.5 ? 'growing' : metrics.revenueGrowthPct < -0.5 ? 'declining' : 'stable'}`}>{metrics.revenueGrowthPct >= 0 ? '▲' : '▼'} {Math.abs(metrics.revenueGrowthPct).toFixed(1)}%</span>}</dd>
+            <dd>{metrics.revenueGrowthPct === null || !Number.isFinite(metrics.revenueGrowthPct) ? 'Needs a prior 30-day window' : <span className={`gq-direction ${metrics.revenueGrowthPct > 0.5 ? 'growing' : metrics.revenueGrowthPct < -0.5 ? 'declining' : 'stable'}`}>{metrics.revenueGrowthPct >= 0 ? '▲' : '▼'} {Math.abs(metrics.revenueGrowthPct).toFixed(1)}%</span>}</dd>
           </div>
           <div>
             <dt>Repeat purchase</dt>
@@ -325,7 +325,7 @@ export function GrowthIqInsightsSidebar({ metrics, currency, tipIndex = 0, onNav
           </div>
           <div>
             <dt>Average order value</dt>
-            <dd>{metrics.aov ? <>{formatExecutiveMoney(metrics.aov.value, currency)}{metrics.aov.deltaPct !== null && <small> {metrics.aov.deltaPct >= 0 ? '↗' : '↘'} {Math.abs(metrics.aov.deltaPct).toFixed(1)}% MoM</small>}</> : 'Needs 30 days of orders'}</dd>
+            <dd>{metrics.aov ? <>{formatExecutiveMoney(metrics.aov.value, currency)}{metrics.aov.deltaPct !== null && Number.isFinite(metrics.aov.deltaPct) && <small> {metrics.aov.deltaPct >= 0 ? '↗' : '↘'} {Math.abs(metrics.aov.deltaPct).toFixed(1)}% MoM</small>}</> : 'Needs 30 days of orders'}</dd>
           </div>
         </dl>
       </div>

@@ -234,6 +234,11 @@ export type ExecutivePdfJob = Readonly<{ jobId: string; status: 'QUEUED' | 'GENE
 // Display helpers (formatting only)
 // ────────────────────────────────────────────────────────────────────────────
 
+// Helper to check if a number is valid (not null, undefined, NaN, or Infinity)
+export function isValidNumber(value: number | null | undefined): value is number {
+  return value !== null && value !== undefined && Number.isFinite(value)
+}
+
 export const EXECUTIVE_FEATURE_NAMES: Readonly<Record<string, string>> = {
   reports: 'Board reports',
   scenarios: 'Scenario planning',
@@ -258,17 +263,17 @@ export const EXECUTIVE_FEATURE_NAMES: Readonly<Record<string, string>> = {
 }
 
 export function formatExecutiveMoney(value: number | null, currency: string | null, digits = 0): string {
-  if (value === null) return '—'
+  if (value === null || !isValidNumber(value)) return '—'
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency ?? 'USD', maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value)
 }
 
 export function formatExecutiveNumber(value: number | null, digits = 1): string {
-  if (value === null) return '—'
+  if (value === null || !isValidNumber(value)) return '—'
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(value)
 }
 
 export function formatExecutivePct(value: number | null, digits = 0): string {
-  if (value === null) return '—'
+  if (value === null || !isValidNumber(value)) return '—'
   return `${value >= 0 && digits === 0 ? '' : ''}${value.toFixed(digits)}%`
 }
 
