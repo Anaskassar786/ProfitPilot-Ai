@@ -1094,6 +1094,75 @@ export function patternStrengthRows(readiness: InsightsDataReadiness | null): re
   ]
 }
 
+/* ── Signal quality + review backlog (fill the empty KPI slots) ────────── */
+
+export type SignalQualitySummary = Readonly<{
+  total: number
+  avgConfidence: number
+  avgPercent: number
+  highCount: number
+  mediumCount: number
+  lowCount: number
+  highShare: number
+  strongest: Readonly<{ title: string; confidence: number }> | null
+}>
+
+export function signalQualitySummary(discoveries: readonly InsightDiscovery[]): SignalQualitySummary {
+  const total = discoveries.length
+  if (total === 0) return { total: 0, avgConfidence: 0, avgPercent: 0, highCount: 0, mediumCount: 0, lowCount: 0, highShare: 0, strongest: null }
+  const high = discoveries.filter((d) => d.confidenceScore >= 0.7).length
+  const medium = discoveries.filter((d) => d.confidenceScore >= 0.5 && d.confidenceScore < 0.7).length
+  const low = total - high - medium
+  const avg = discoveries.reduce((sum, d) => sum + d.confidenceScore, 0) / total
+  const strongest = [...discoveries].sort((a, b) => b.confidenceScore - a.confidenceScore)[0] ?? null
+  return {
+    total,
+    avgConfidence: avg,
+    avgPercent: Math.round(avg * 100),
+    highCount: high,
+    mediumCount: medium,
+    lowCount: low,
+    highShare: Math.round((high / total) * 100),
+    strongest: strongest ? { title: strongest.title, confidence: strongest.confidenceScore } : null,
+  }
+}
+
+export type ReviewBacklogSummary = Readonly<{
+  total: number
+  newCount: number
+  reviewedCount: number
+  actedOn: number
+  conversion: number | null
+  oldestNewLabel: string | null
+  oldestNewDays: number | null
+  urgent: boolean
+  hint: string
+}>
+
+export function reviewBacklogSummary(discoveries: readonly InsightDiscovery[], funnel: DiscoveryFunnel): ReviewBacklogSummary {
+  const total = discoveries.length
+  const newCount = discoveries.filter((d) => d.status === 'NEW').length
+  const reviewedCount = funnel.stages.find((s) => s.id === 'reviewed')?.value ?? 0
+  const oldestNew = [...discoveries].filter((d) => d.status === 'NEW').sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt))[0] ?? null
+  let oldestNewDays: number | null = null
+  let oldestNewLabel: string | null = null
+  let urgent = false
+  if (oldestNew) {
+    const ageMs = Date.now() - Date.parse(oldestNew.discoveredAt)
+    oldestNewDays = Math.floor(ageMs / 86_400_000)
+    oldestNewLabel = formatRelativeTime(oldestNew.discoveredAt)
+    urgent = oldestNewDays >= 3
+  }
+  const hint = total === 0
+    ? 'Signals appear here after your first sweep.'
+    : newCount === 0
+      ? 'All caught up — every signal has been reviewed.'
+      : urgent
+        ? `${newCount} need review — oldest waiting ${oldestNewLabel}.`
+        : `${newCount} new signal${newCount === 1 ? '' : 's'} ready to review.`
+  return { total, newCount, reviewedCount, actedOn: funnel.actedOn, conversion: funnel.conversion, oldestNewLabel, oldestNewDays, urgent, hint }
+}
+
 /* ── Monthly discovery allowance ───────────────────────────────────────── */
 
 export type MonthlyDiscoveryProgress = Readonly<{
