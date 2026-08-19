@@ -350,6 +350,17 @@ describe('discovery feed', () => {
     expect(text()).not.toContain('gid://shopify')
   })
 
+  it('fills the two lead-row gaps with deadline and explicit-outcome KPIs', async () => {
+    await mount()
+    const leadRow = document.querySelector('.pa-discovery-feature-row')
+    expect(leadRow).not.toBeNull()
+    expect(leadRow?.children).toHaveLength(3)
+    expect(leadRow?.querySelector('.pa-decision-window')?.textContent).toContain('Only deadlines recorded on real discoveries')
+    expect(leadRow?.querySelector('.pa-feedback-card')?.textContent).toContain('real signal currently classified')
+    expect(leadRow?.querySelector('.pa-feedback-balance')).not.toBeNull()
+    expect(leadRow?.textContent).toContain('reports choices, not model training')
+  })
+
   it('saves, acts on and dismisses a discovery through the API', async () => {
     await mount()
     const card = document.querySelector('.pa-discovery-card')!

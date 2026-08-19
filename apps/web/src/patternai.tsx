@@ -8,9 +8,9 @@
  * (AI Command Center) — it explains.
  *
  * The UI is a thin renderer over `/patternai/*` (served alongside the original
- * `/insights/*` prefix): every number on screen was computed server-side from
- * real synced data; locked plans see the generic "Upgrade Plan" CTA; trial
- * explores through clearly labelled samples.
+ * `/insights/*` prefix): source values come from the API and client summaries
+ * only count or group those returned rows; locked plans see the generic
+ * "Upgrade Plan" CTA; trial explores through clearly labelled samples.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -61,6 +61,7 @@ import type { CatalogProduct, WorkspaceContext } from './model.js'
 import { PatternAiDiscoverGlyph, PatternAiMark } from './patternai-logo.js'
 import {
   DiscoveryPipelineFunnel,
+  FeedbackBalance,
   MiniCauseWeb,
   MiniDivergingBars,
   MiniProbabilityWave,
@@ -109,6 +110,7 @@ import {
   insightsTabPurpose,
   isPatternAiPath,
   degradedNotice,
+  decisionWindowSummary,
   discoveryFunnel,
   discoveryHeadline,
   discoveryImpactSummary,
@@ -122,6 +124,7 @@ import {
   personaRadarAverage,
   predictionWavePoints,
   reviewBacklogSummary,
+  signalFeedbackSummary,
   signalQualitySummary,
   trendDivergingRows,
   parseInsightsRoute,
@@ -813,7 +816,7 @@ function DiscoveryWorkflowGuide() {
   const steps = [
     { title: 'Discover', body: 'A signal clears the evidence threshold.' },
     { title: 'Review', body: 'Open it and inspect the source numbers.' },
-    { title: 'Save or dismiss', body: 'Keep useful patterns; teach PatternAI what is noise.' },
+    { title: 'Save or dismiss', body: 'Keep useful patterns or mark noise in your own review record.' },
     { title: 'Close the loop', body: 'Mark acted on to measure discovery conversion.' },
   ] as const
   return (
@@ -901,11 +904,100 @@ function ActionBacklogKpi({ discoveries, funnel, onReview }: { discoveries: read
             <button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</button>
           )}
           {summary.newCount === 0 && summary.total > 0 && (
-            <p className="pa-muted" style={{ fontSize: '11px' }}>Tip: mark useful finds as “Saved” — PatternAI learns what you value.</p>
+            <p className="pa-muted" style={{ fontSize: '11px' }}>Saved discoveries remain available from the Saved status filter.</p>
           )}
         </>
       )}
     </div>
+  )
+}
+
+function decisionTimeLabel(remainingMs: number): string {
+  if (remainingMs <= 0) return 'Window passed'
+  const hours = Math.ceil(remainingMs / 3_600_000)
+  if (hours < 24) return `${hours}h left`
+  return `${Math.ceil(hours / 24)}d left`
+}
+
+/** Explicit expiresAt only; samples and inferred deadlines never enter this card. */
+export function DecisionWindowKpi({ discoveries, onOpen }: { discoveries: readonly InsightDiscovery[]; onOpen: (id: string) => void }) {
+  const summary = useMemo(() => decisionWindowSummary(discoveries), [discoveries])
+  const headline = summary.overdue > 0
+    ? `${formatInsightNumber(summary.overdue)} overdue`
+    : summary.dueSoon > 0
+      ? `${formatInsightNumber(summary.dueSoon)} due soon`
+      : summary.next
+        ? decisionTimeLabel(summary.next.remainingMs)
+        : 'No deadline'
+  return (
+    <article className={`pa-card pa-merchant-kpi-card pa-decision-window ${summary.overdue > 0 ? 'urgent' : ''}`}>
+      <div className="pa-card-head">
+        <span className="section-kicker"><Clock3 size={11} /> DECISION WINDOW</span>
+        <small>Only deadlines recorded on real discoveries</small>
+      </div>
+      <div className="pa-merchant-kpi-hero">
+        <strong>{headline}</strong>
+        <span>{summary.overdue > 0 ? 'real signals past their recorded window' : summary.dueSoon > 0 ? 'real signals closing within 7 days' : summary.next ? 'until the next recorded deadline' : 'attached to active real signals'}</span>
+      </div>
+      <dl className="pa-window-facts">
+        <div><dt>With a deadline</dt><dd>{formatInsightNumber(summary.withDeadline)}</dd></div>
+        <div><dt>Due in 7 days</dt><dd>{formatInsightNumber(summary.dueSoon)}</dd></div>
+        <div><dt>Past window</dt><dd>{formatInsightNumber(summary.overdue)}</dd></div>
+      </dl>
+      {summary.next ? (
+        <div className="pa-next-window">
+          <span className="pa-eyebrow">Next recorded window</span>
+          <strong>{summary.next.title}</strong>
+          <time dateTime={summary.next.expiresAt}>{decisionTimeLabel(summary.next.remainingMs)}</time>
+        </div>
+      ) : (
+        <div className="pa-kpi-empty-note">
+          <Clock3 size={18} />
+          <p>{summary.excludedSamples > 0 ? 'This sample is excluded. A live deadline appears only when a real discovery carries an expiry date.' : 'No active real discovery currently carries an expiry date.'}</p>
+        </div>
+      )}
+      {summary.urgentImpact.length > 0 && (
+        <div className="pa-window-impact">
+          <span className="pa-eyebrow">Measured impact on urgent signals</span>
+          <div>{summary.urgentImpact.map((impact) => <strong key={impact.currency}>{formatInsightMoney(impact.amount, impact.currency)}</strong>)}</div>
+        </div>
+      )}
+      <footer className="pa-merchant-kpi-footer">
+        <p>Missing or invalid dates are never guessed. Different currencies are never combined.</p>
+        {summary.next && <button className="pa-button secondary compact" onClick={() => onOpen(summary.next!.id)}><Search size={12} /> Review this signal</button>}
+      </footer>
+    </article>
+  )
+}
+
+/** Current Save / Acted on / Dismissed statuses only — no inferred learning score. */
+export function SignalFeedbackKpi({ discoveries }: { discoveries: readonly InsightDiscovery[] }) {
+  const summary = useMemo(() => signalFeedbackSummary(discoveries), [discoveries])
+  return (
+    <article className="pa-card pa-merchant-kpi-card pa-feedback-card">
+      <div className="pa-card-head">
+        <span className="section-kicker"><Scale size={11} /> YOUR SIGNAL DECISIONS</span>
+        <small>A factual record of current outcomes</small>
+      </div>
+      <div className="pa-merchant-kpi-hero">
+        <strong>{formatInsightNumber(summary.classified)}</strong>
+        <span>real signal{summary.classified === 1 ? '' : 's'} currently classified</span>
+      </div>
+      <FeedbackBalance kept={summary.kept} dismissed={summary.dismissed} />
+      <dl className="pa-feedback-facts">
+        <div><dt>Kept share</dt><dd>{summary.keptShare === null ? '—' : `${Math.round(summary.keptShare * 100)}%`}</dd></div>
+        <div><dt>Most kept category</dt><dd>{summary.topKeptCategory?.label ?? '—'}</dd></div>
+      </dl>
+      {summary.classified === 0 && (
+        <div className="pa-kpi-empty-note">
+          <Scale size={18} />
+          <p>{summary.excludedSamples > 0 ? 'Sample cards do not count. This record starts only after a real signal is Saved, Acted on or Dismissed.' : 'No real signal has a Saved, Acted on or Dismissed outcome yet.'}</p>
+        </div>
+      )}
+      <footer className="pa-merchant-kpi-footer">
+        <p>Kept means currently Saved or Acted on. Views and samples never imply a preference; this card reports choices, not model training.</p>
+      </footer>
+    </article>
   )
 }
 
@@ -1074,9 +1166,19 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
         </div>
       )}
 
-      <div className="pa-masonry">
-        {discoveries.map((discovery) => <DiscoveryCard key={discovery.id} discovery={discovery} storeId={storeId} onOpen={() => go('discoveries', discovery.id)} onChanged={() => list.reload()} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
-      </div>
+      {discoveries[0] && (
+        <div className="pa-discovery-feature-row">
+          <DiscoveryCard discovery={discoveries[0]} storeId={storeId} onOpen={() => go('discoveries', discoveries[0]!.id)} onChanged={() => { list.reload(); feed.reload() }} onToast={onToast} onNavigateBilling={onNavigateBilling} />
+          <DecisionWindowKpi discoveries={allDiscoveries} onOpen={(id) => go('discoveries', id)} />
+          <SignalFeedbackKpi discoveries={allDiscoveries} />
+        </div>
+      )}
+
+      {discoveries.length > 1 && (
+        <div className="pa-masonry pa-masonry-continuation">
+          {discoveries.slice(1).map((discovery) => <DiscoveryCard key={discovery.id} discovery={discovery} storeId={storeId} onOpen={() => go('discoveries', discovery.id)} onChanged={() => { list.reload(); feed.reload() }} onToast={onToast} onNavigateBilling={onNavigateBilling} />)}
+        </div>
+      )}
 
       {allDiscoveries.length > 0 && <DiscoveryReadingGuide />}
 
@@ -1254,7 +1356,7 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
     setBusy(true)
     try {
       await api.setInsightDiscoveryStatus(storeId, discovery.id, status)
-      onToast(status === 'DISMISSED' ? 'Dismissed — PatternAI will weight this kind of finding lower.' : `Discovery ${DISCOVERY_STATUS_LABELS[status].toLowerCase()}.`, 'success')
+      onToast(status === 'DISMISSED' ? 'Dismissed — this signal is now recorded with a dismissed outcome.' : `Discovery ${DISCOVERY_STATUS_LABELS[status].toLowerCase()}.`, 'success')
       onChanged()
     } catch (error: unknown) {
       if (error instanceof ApiClientError && error.status === 402) { onToast('Discovery actions unlock with a plan upgrade.', 'warning'); onNavigateBilling() }
@@ -1453,7 +1555,7 @@ function LessonReader({ storeId, id, onBack, onToast }: { storeId: string; id: s
           </div>
         )}
         <footer className="pa-detail-actions">
-          <RatingStars value={lesson.rating} onRate={async (rating) => { try { await api.rateInsightLesson(storeId, id, rating); onToast('Thanks — ratings tune future lessons.', 'success'); state.reload() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Rating failed.', 'error') } }} />
+          <RatingStars value={lesson.rating} onRate={async (rating) => { try { await api.rateInsightLesson(storeId, id, rating); onToast('Thanks — your lesson rating was recorded.', 'success'); state.reload() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Rating failed.', 'error') } }} />
           <button className="button ghost compact" onClick={async () => { try { await api.bookmarkInsightLesson(storeId, id, !lesson.bookmarked); state.reload() } catch { onToast('Bookmark failed.', 'error') } }}><Star size={12} fill={lesson.bookmarked ? 'currentColor' : 'none'} /> {lesson.bookmarked ? 'Bookmarked' : 'Bookmark'}</button>
         </footer>
       </article>
@@ -1719,7 +1821,7 @@ function InvestigationDetail({ storeId, id, onBack, onToast }: { storeId: string
         </div>
         {item.whatToDo.length > 0 && <div className="pa-actions-list"><h4><Lightbulb size={13} /> What to do</h4><ul>{item.whatToDo.map((tip) => <li key={tip}><CheckCircle2 size={12} /> {tip}</li>)}</ul></div>}
         {item.preventionTips.length > 0 && <div className="pa-actions-list"><h4>Prevent the repeat</h4><ul>{item.preventionTips.map((tip) => <li key={tip}>{tip}</li>)}</ul></div>}
-        <footer className="pa-detail-actions"><span className="pa-muted">Was this answer useful?</span><RatingStars value={null} onRate={async (rating) => { try { await api.rateInsightInvestigation(storeId, id, rating); onToast('Thanks — this tunes future investigations.', 'success') } catch { onToast('Rating failed.', 'error') } }} /></footer>
+        <footer className="pa-detail-actions"><span className="pa-muted">Was this answer useful?</span><RatingStars value={null} onRate={async (rating) => { try { await api.rateInsightInvestigation(storeId, id, rating); onToast('Thanks — your investigation rating was recorded.', 'success') } catch { onToast('Rating failed.', 'error') } }} /></footer>
       </article>
     </section>
   )

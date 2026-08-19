@@ -123,7 +123,7 @@ function installMock(scenario: Scenario) {
 }
 
 function Harness() {
-  const [scenario, setScenario] = useState<Scenario>('empty')
+  const [scenario, setScenario] = useState<Scenario>('populated')
   const [light, setLight] = useState(false)
   const [mountKey, setMountKey] = useState(0)
   const [toasts, setToasts] = useState<string[]>([])
@@ -187,7 +187,7 @@ function Harness() {
   )
 }
 
-installMock('empty')
+installMock('populated')
 const root = document.getElementById('root')
 if (!root) throw new Error('verify root missing')
 createRoot(root).render(<StrictMode><Harness /></StrictMode>)
