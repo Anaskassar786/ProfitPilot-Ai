@@ -7,17 +7,21 @@ import {
   InMemoryCommandActions,
   InMemoryCommandTools,
   actionPreviewCopy,
+  applyResponseStyle,
   applyUsageLimits,
   buildSystemPrompt,
   collectNumbers,
   contextualFollowUps,
+  detectGrowthIntent,
   contextualQuickCommands,
   conversationGroups,
+  conversationMemoryAvailable,
   defaultQuickCommands,
   detectBlockedAction,
   detectOffTopic,
   detectWriteTool,
   emptyUsage,
+  formatGrowthAnswer,
   formatToolAnswer,
   groundCommandText,
   limitsForPlan,
@@ -37,7 +41,7 @@ import type { AiCommandActionRecord, ToolOutcome } from './command.js'
 const tenant = storeId('store-1')
 
 const liveTools = new InMemoryCommandTools({
-  get_analytics: { revenue: 8940, previousRevenue: 7240, orders: 42, aov: 213 },
+  get_analytics: { currency: 'USD', revenue: 8940, previousRevenue: 7240, orders: 42, aov: 213 },
   search_customers: { count: 2, items: [{ id: 'c1', displayName: 'Ada', email: 'ada@example.com', totalSpent: 400 }, { id: 'c2', displayName: 'Lin', email: 'lin@example.com', totalSpent: 220 }] },
   search_products: { count: 1, items: [{ id: 'p1', title: 'Mug', price: 18 }] },
   search_orders: { count: 1, items: [{ id: 'o1', orderNumber: '#1001', totalPrice: 42 }] },
@@ -66,6 +70,7 @@ function service(plan: 'trial' | 'start' | 'growth' | 'commander' = 'trial', ext
     planFor: extras.planFor ?? (async () => plan),
     now: extras.now ?? (() => Date.parse('2026-08-18T12:00:00.000Z')),
     ...(extras.enabled !== undefined ? { enabled: extras.enabled } : {}),
+    ...(extras.actionsEnabled !== undefined ? { actionsEnabled: extras.actionsEnabled } : {}),
     ...(extras.generate ? { generate: extras.generate } : {}),
   })
 }
@@ -95,6 +100,15 @@ describe('AI Command conversation enhancements', () => {
     await expect(command.quickInsights(tenant)).resolves.toMatchObject({ revenueToday: 8940, lowStockCount: 3, healthScore: 81 })
     expect(contextualFollowUps('Who are my best customers?').map((item) => item.command)).toContain('Show repeat customers')
     expect(contextualFollowUps('Which products are low stock?').map((item) => item.command)).toContain('Show products to reorder')
+  })
+
+  it('expires cross-command references after the Growth memory window', async () => {
+    const now = Date.parse('2026-08-18T12:00:00.000Z')
+    const chat = await service('growth', { now: () => now }).chat({ storeId: tenant, text: 'Show my top customers' })
+    expect(conversationMemoryAvailable(true, 'growth', chat.conversation, now + 23 * 3_600_000)).toBe(true)
+    expect(conversationMemoryAvailable(true, 'growth', chat.conversation, now + 25 * 3_600_000)).toBe(false)
+    expect(conversationMemoryAvailable(true, 'commander', chat.conversation, now + 365 * 86_400_000)).toBe(true)
+    expect(conversationMemoryAvailable(false, 'commander', chat.conversation, now)).toBe(false)
   })
 
   it('does not persist or consume quota for an already-cancelled command', async () => {
@@ -166,6 +180,56 @@ describe('AI Command safety parsers', () => {
 })
 
 describe('AI Command info answers', () => {
+  it('routes growth requests to a multi-signal plan before the sales keyword can collapse them to analytics', () => {
+    for (const query of ['Help me increase sales', 'Help me increasing sale', 'Show growth opportunities', 'How can I grow revenue?']) {
+      expect(detectGrowthIntent(query)).toBe(true)
+      expect(parseInfoTools(query).map((call) => call.name)).toEqual(['get_analytics', 'get_recommendations', 'get_store_health', 'get_inventory_status'])
+    }
+    expect(detectGrowthIntent('What is my revenue?')).toBe(false)
+    expect(parseInfoTools('What is my revenue?').map((call) => call.name)).toEqual(['get_analytics'])
+  })
+
+  it('does not repeat the revenue reply when the next question asks for growth', async () => {
+    const command = service('growth')
+    const revenue = await command.chat({ storeId: tenant, text: "What's my revenue this month?" })
+    const growth = await command.chat({ storeId: tenant, text: 'Help me increase sales', conversationId: revenue.conversation.id })
+    expect(revenue.message.structuredData?.type).toBe('analytics')
+    expect(growth.message.structuredData?.type).toBe('growth_plan')
+    expect(growth.message.content).toContain('growth plan')
+    expect(growth.message.content).toContain('Priorities:')
+    expect(growth.message.content).not.toBe(revenue.message.content)
+    const data = growth.message.structuredData?.data as { actionsEnabled: boolean; nextCommands: readonly { kind: string }[] }
+    expect(data.actionsEnabled).toBe(false)
+    expect(data.nextCommands.every((item) => item.kind === 'info')).toBe(true)
+  })
+
+  it('makes the same grounded growth plan action-ready only on Commander', async () => {
+    const growth = await service('start').chat({ storeId: tenant, text: 'Help me increasing sale' })
+    const commander = await service('commander').chat({ storeId: tenant, text: 'Help me increasing sale' })
+    expect(growth.message.content).toContain('insight-only')
+    expect(commander.message.content).toContain('Commander action mode is ready')
+    const data = commander.message.structuredData?.data as { actionsEnabled: boolean; nextCommands: readonly { command: string; kind: string }[] }
+    expect(data.actionsEnabled).toBe(true)
+    expect(data.nextCommands.some((item) => item.kind === 'action')).toBe(true)
+    const emailCommand = data.nextCommands.find((item) => /email/i.test(item.command))
+    expect(emailCommand).toBeDefined()
+    const preview = await service('commander').chat({ storeId: tenant, text: emailCommand!.command })
+    expect(preview.message.contentType).toBe('action_preview')
+    expect(preview.message.content).toContain('Nothing has been executed')
+  })
+
+  it('formats growth priorities only from supplied outcomes', () => {
+    const outcomes: readonly ToolOutcome[] = [
+      { ok: true, name: 'get_analytics', data: { currency: 'USD', revenue: 100, previousRevenue: 120, orders: 4, aov: 25 }, source: 'analytics', numbers: [100, 120, 4, 25] },
+      { ok: true, name: 'get_inventory_status', data: { lowStockCount: 2, outOfStockCount: 1, items: [] }, source: 'inventory', numbers: [2, 1] },
+    ]
+    const answer = formatGrowthAnswer(outcomes, false)
+    expect(answer.content).toContain('$100')
+    expect(answer.content).toContain('2 low-stock')
+    expect(answer.content).toContain('1 out-of-stock')
+    expect(answer.content).not.toContain('$999')
+  })
+
   it('answers revenue from tool results and never invents extra figures', async () => {
     const result = await service().chat({ storeId: tenant, text: "What's my revenue this month?" })
     expect(result.message.content).toContain('$8,940')
@@ -175,6 +239,18 @@ describe('AI Command info answers', () => {
     expect(result.message.structuredData?.type).toBe('analytics')
     expect(groundCommandText(result.message.content, collectNumbers({ revenue: 8940, previousRevenue: 7240, orders: 42, aov: 213, change: 23 }))).toContain('$8,940')
   })
+  it('uses the synced store currency and never silently assumes USD', async () => {
+    const euroTools = new InMemoryCommandTools({ get_analytics: { currency: 'EUR', revenue: 120, previousRevenue: 100, orders: 2, aov: 60 } })
+    const euro = await service('trial', { tools: euroTools }).chat({ storeId: tenant, text: 'Show revenue' })
+    expect(euro.message.content).toContain('€120')
+    expect(euro.message.content).not.toContain('$120')
+
+    const unknownTools = new InMemoryCommandTools({ get_analytics: { revenue: 120, previousRevenue: 100, orders: 2, aov: 60 } })
+    const unknown = await service('trial', { tools: unknownTools }).chat({ storeId: tenant, text: 'Show revenue' })
+    expect(unknown.message.content).toContain('currency unavailable')
+    expect(unknown.message.content).not.toContain('$120')
+  })
+
   it('says no data instead of fabricating an empty catalog', async () => {
     const empty = new InMemoryCommandTools({ search_products: { count: 0, items: [] } })
     const result = await service('trial', { tools: empty }).chat({ storeId: tenant, text: 'Show me products' })
@@ -187,6 +263,14 @@ describe('AI Command info answers', () => {
     expect(result.message.content).toContain("I'm not sure")
     expect(result.message.content).toContain('analytics table is empty')
   })
+  it('enforces the daily cap atomically across concurrent requests', async () => {
+    const command = service('trial')
+    const results = await Promise.allSettled(Array.from({ length: 12 }, () => command.chat({ storeId: tenant, text: 'Show store health' })))
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(10)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(2)
+    expect((await command.usage(tenant)).commandsUsed).toBe(10)
+  })
+
   it('enforces the daily command cap with Upgrade Plan copy', async () => {
     const command = service('trial')
     for (let index = 0; index < 10; index += 1) await command.chat({ storeId: tenant, text: 'Show store health' })
@@ -223,9 +307,82 @@ describe('AI Command action approval', () => {
     expect(confirmed.message.contentType).toBe('action_result')
     expect(confirmed.message.content).toContain('Tagged 2 customers')
   })
+  it('persists direct Approve results into the conversation and counts a successful action once', async () => {
+    const command = service('commander')
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    const executed = await command.approveAction(tenant, preview.message.action!.id!)
+    expect(executed.executionStatus).toBe('SUCCESS')
+    const refreshed = await command.conversation(tenant, preview.conversation.id)
+    expect(refreshed.messages.some((item) => item.contentType === 'action_result' && item.action?.status === 'SUCCESS')).toBe(true)
+    const storedPreview = refreshed.messages.find((item) => item.contentType === 'action_preview')
+    expect(storedPreview?.action?.status).toBe('SUCCESS')
+    expect((await command.usage(tenant)).actionsExecuted).toBe(1)
+  })
+
+  it('atomically claims approval so concurrent clicks execute only once', async () => {
+    let executions = 0
+    const command = service('commander', { actions: new InMemoryCommandActions(async () => {
+      executions += 1
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return { status: 'SUCCESS', result: { updated: 1, failed: 0 }, rollbackAvailable: true }
+    }) })
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    const results = await Promise.allSettled([
+      command.approveAction(tenant, preview.message.action!.id!),
+      command.approveAction(tenant, preview.message.action!.id!),
+    ])
+    expect(executions).toBe(1)
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+  })
+
+  it('uses explicit conversation references only when memory is enabled', async () => {
+    const command = service('commander')
+    const customers = await command.chat({ storeId: tenant, text: 'Show my top customers' })
+    const preview = await command.chat({ storeId: tenant, text: 'Send email to those customers', conversationId: customers.conversation.id })
+    expect(preview.message.contentType).toBe('action_preview')
+    expect(preview.message.action?.params.recipient_ids).toEqual(['c1', 'c2'])
+
+    const withoutMemory = service('commander')
+    const first = await withoutMemory.chat({ storeId: tenant, text: 'Show my top customers' })
+    await withoutMemory.updatePreferences(tenant, { conversationMemoryEnabled: false })
+    const blocked = await withoutMemory.chat({ storeId: tenant, text: 'Send email to those customers', conversationId: first.conversation.id })
+    expect(blocked.message.contentType).toBe('error')
+    expect(blocked.message.action).toBeNull()
+  })
+
+  it('does not offer approval for an action with no real target', async () => {
+    const noCustomers = new InMemoryCommandTools({ search_customers: { count: 0, items: [] } })
+    const result = await service('commander', { tools: noCustomers }).chat({ storeId: tenant, text: 'Send email to VIP customers' })
+    expect(result.message.contentType).toBe('error')
+    expect(result.message.content).toContain('No eligible email recipients')
+    expect(result.message.action).toBeNull()
+  })
+
+  it('honors the global action kill switch even for Commander', async () => {
+    const command = service('commander', { actionsEnabled: false })
+    expect((await command.usage(tenant)).actionsEnabled).toBe(false)
+    const result = await command.chat({ storeId: tenant, text: 'Send email to VIP customers' })
+    expect(result.message.contentType).toBe('error')
+    expect(result.message.content).toContain('temporarily unavailable')
+    expect(result.message.action).toBeNull()
+  })
+
+  it('persists a confirmed side effect even if the streaming client disconnects during execution', async () => {
+    const controller = new AbortController()
+    const command = service('commander', { actions: new InMemoryCommandActions(async () => {
+      controller.abort()
+      return { status: 'SUCCESS', result: { updated: 1, failed: 0 }, rollbackAvailable: true }
+    }) })
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    const confirmed = await command.chat({ storeId: tenant, text: 'confirm', conversationId: preview.conversation.id, signal: controller.signal })
+    expect(confirmed.message.action?.status).toBe('SUCCESS')
+    expect((await command.conversation(tenant, preview.conversation.id)).messages.some((item) => item.action?.status === 'SUCCESS')).toBe(true)
+  })
+
   it('reports partial email failure instead of fake success', async () => {
     const command = service('commander')
-    const preview = await command.chat({ storeId: tenant, text: 'Send email to those customers' })
+    const preview = await command.chat({ storeId: tenant, text: 'Send email to VIP customers' })
     const result = await command.approveAction(tenant, preview.message.action!.id!)
     expect(result.executionStatus).toBe('PARTIAL_SUCCESS')
     expect(summarizeActionResult(result)).toContain('Sent 1 of 2 emails')
@@ -251,6 +408,18 @@ describe('AI Command action approval', () => {
     now += 31_000
     await expect(command.rollbackAction(tenant, executed.id)).rejects.toMatchObject({ status: 400 })
   })
+  it('consumes the undo window atomically so rollback runs only once', async () => {
+    const command = service('commander')
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    const executed = await command.approveAction(tenant, preview.message.action!.id!)
+    const attempts = await Promise.allSettled([
+      command.rollbackAction(tenant, executed.id),
+      command.rollbackAction(tenant, executed.id),
+    ])
+    expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    expect(attempts.filter((result) => result.status === 'rejected')).toHaveLength(1)
+  })
+
   it('rolls back a reversible action inside the window', async () => {
     const command = service('commander')
     const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
@@ -271,11 +440,16 @@ describe('AI Command saved commands, prefs, and history', () => {
     expect(ran.message.content.length).toBeGreaterThan(0)
     expect((await command.savedCommands(tenant)).some((item) => item.useCount === 1)).toBe(true)
   })
-  it('updates preferences and archives conversations', async () => {
+  it('updates preferences, persists feedback, and hides archived conversations', async () => {
     const command = service('growth')
     const chat = await command.chat({ storeId: tenant, text: 'Show recent orders' })
+    await expect(command.rateMessage(tenant, chat.conversation.id, chat.message.id, 'HELPFUL')).resolves.toEqual({ saved: true })
+    const rated = await command.conversation(tenant, chat.conversation.id)
+    expect((rated.context.messageFeedback as Record<string, { rating: string }>)[chat.message.id]?.rating).toBe('HELPFUL')
     const archived = await command.archiveConversation(tenant, chat.conversation.id)
     expect(archived.status).toBe('ARCHIVED')
+    expect(await command.conversations(tenant)).toHaveLength(0)
+    await expect(command.chat({ storeId: tenant, text: 'Continue', conversationId: chat.conversation.id })).rejects.toMatchObject({ status: 409 })
     const prefs = await command.updatePreferences(tenant, { defaultResponseStyle: 'DETAILED', thinkingAnimationEnabled: false })
     expect(prefs.defaultResponseStyle).toBe('DETAILED')
     expect(prefs.thinkingAnimationEnabled).toBe(false)
@@ -283,9 +457,24 @@ describe('AI Command saved commands, prefs, and history', () => {
     expect(exported.rows.length).toBeGreaterThan(0)
     await expect(service('start').exportConversation(tenant, 'missing')).rejects.toMatchObject({ status: 402 })
   })
+
+  it('rejects blank saved commands at the service boundary', async () => {
+    const command = service('growth')
+    await expect(command.saveCommand(tenant, { name: ' ', commandText: 'Show revenue' })).rejects.toMatchObject({ status: 400 })
+    await expect(command.saveCommand(tenant, { name: 'Revenue', commandText: ' ' })).rejects.toMatchObject({ status: 400 })
+  })
 })
 
 describe('AI Command helpers', () => {
+  it('never returns an unsupported figure while claiming it was removed', () => {
+    const safe = groundCommandText('Revenue is $10.', [10])
+    const blocked = groundCommandText('Revenue will become $999.', [10])
+    expect(safe).toContain('$10')
+    expect(blocked).not.toContain('$999')
+    expect(blocked).toContain('not supported')
+    expect(blocked).not.toContain('I removed unsupported figures')
+  })
+
   it('builds grounded system prompt and thinking steps', () => {
     const prompt = buildSystemPrompt({ storeId: tenant, shop: 'demo.myshopify.com', plan: 'growth', actionsEnabled: false })
     expect(prompt).toContain('AI Command')
@@ -311,9 +500,16 @@ describe('AI Command helpers', () => {
     expect(defaultQuickCommands('commander').some((item) => item.kind === 'action')).toBe(true)
     expect(contextualQuickCommands('growth', { lowStock: 4 })[2]?.label).toContain('4 low-stock')
   })
+  it('applies the saved response style without inventing data', () => {
+    const outcomes: readonly ToolOutcome[] = [{ ok: true, name: 'get_analytics', data: { revenue: 10 }, source: 'analytics_revenue_daily', numbers: [10] }]
+    expect(applyResponseStyle('Revenue is $10.', 'CONCISE', outcomes)).toBe('Revenue is $10.')
+    expect(applyResponseStyle('Revenue is $10.', 'DETAILED', outcomes)).toContain('Data coverage: Analytics')
+    expect(applyResponseStyle('Revenue is $10.', 'TECHNICAL', outcomes)).toContain('get_analytics → analytics_revenue_daily')
+  })
+
   it('formats mixed tool outcomes without claiming full success', () => {
     const outcomes: readonly ToolOutcome[] = [
-      { ok: true, name: 'get_analytics', data: { revenue: 10, previousRevenue: 5, orders: 2, aov: 5 }, source: 'analytics', numbers: [10, 5, 2] },
+      { ok: true, name: 'get_analytics', data: { currency: 'USD', revenue: 10, previousRevenue: 5, orders: 2, aov: 5 }, source: 'analytics', numbers: [10, 5, 2] },
       { ok: false, name: 'search_orders', error: 'orders sync missing', source: 'orders' },
     ]
     const rendered = formatToolAnswer('how are sales', outcomes)

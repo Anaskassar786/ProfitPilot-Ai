@@ -73,6 +73,20 @@ describe('AI Command fixes (empty space / activity timeline)', () => {
   })
 })
 
+describe('AI Command button wiring', () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), 'ai-command.tsx')
+  const source = readFileSync(root, 'utf8')
+
+  it('wires Edit, feedback, export, and preference controls to real handlers', () => {
+    expect(source).toContain('onClick={() => onEdit(message.action!.id!)}')
+    expect(source).toContain("onClick={() => onFeedback('HELPFUL')}")
+    expect(source).toContain('workspace.exportConversation(item.id)')
+    expect(source).toContain('workspace.patchPreferences({ conversationMemoryEnabled: event.target.checked })')
+    expect(source).not.toMatch(/className="aic-button secondary" disabled=\{busy\}><Pencil/)
+    expect(source).not.toContain("onToast('Thanks for the feedback!'")
+  })
+})
+
 describe('AI Command light theme stays scoped to light mode', () => {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), 'ai-command.css')
   const css = readFileSync(root, 'utf8')

@@ -56,6 +56,11 @@ export function createAiCommandRouter(dependencies: AiCommandRouteDependencies):
   }))
   router.post('/ai-command/conversations/:id/archive', asyncRoute(async (request) => service.archiveConversation(bodyStore(requireRecord(request.body)), param(request.params.id, 'conversation id'))))
   router.get('/ai-command/conversations/:id/export', asyncRoute(async (request) => service.exportConversation(queryStore(request), param(request.params.id, 'conversation id'))))
+  router.post('/ai-command/conversations/:id/messages/:messageId/feedback', asyncRoute(async (request) => {
+    const body = requireRecord(request.body)
+    if (body.rating !== 'HELPFUL' && body.rating !== 'NOT_HELPFUL') throw new AppError('VALIDATION_ERROR', 'rating must be HELPFUL or NOT_HELPFUL', 400)
+    return service.rateMessage(bodyStore(body), param(request.params.id, 'conversation id'), param(request.params.messageId, 'message id'), body.rating)
+  }))
 
   router.post('/ai-command/actions/:id/approve', asyncRoute(async (request) => service.approveAction(bodyStore(requireRecord(request.body)), param(request.params.id, 'action id'))))
   router.post('/ai-command/actions/:id/cancel', asyncRoute(async (request) => service.cancelAction(bodyStore(requireRecord(request.body)), param(request.params.id, 'action id'))))

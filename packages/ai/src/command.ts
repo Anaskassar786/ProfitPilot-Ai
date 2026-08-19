@@ -166,6 +166,7 @@ export type AiCommandQuickCommand = Readonly<{
 /** Live snapshot values. Null means the backing store has no synced data; it is
  * deliberately not replaced with a demo value. */
 export type AiCommandQuickInsights = Readonly<{
+  currency: string | null
   revenueToday: number | null
   revenueYesterday: number | null
   ordersToday: number | null
@@ -226,11 +227,20 @@ export interface AiCommandRepository {
   getAction(storeId: StoreId, id: string): Promise<AiCommandActionRecord | null>
   listActions(storeId: StoreId, limit?: number): Promise<readonly AiCommandActionRecord[]>
   saveAction(action: AiCommandActionRecord): Promise<AiCommandActionRecord>
+  /** Atomically moves one pending action into EXECUTING. A null result means
+   * another request already approved or cancelled it. */
+  claimAction(storeId: StoreId, id: string, approvedAt: string): Promise<AiCommandActionRecord | null>
+  /** Atomically cancels one pending action. */
+  cancelPendingAction(storeId: StoreId, id: string, completedAt: string): Promise<AiCommandActionRecord | null>
+  /** Atomically consumes the rollback window so undo runs at most once. */
+  claimRollback(storeId: StoreId, id: string, now: string): Promise<AiCommandActionRecord | null>
   listSaved(storeId: StoreId): Promise<readonly AiCommandSavedCommand[]>
   saveCommand(command: AiCommandSavedCommand): Promise<AiCommandSavedCommand>
   deleteSaved(storeId: StoreId, id: string): Promise<boolean>
   getSaved(storeId: StoreId, id: string): Promise<AiCommandSavedCommand | null>
   incrementUsage(storeId: StoreId, usageDate: string, delta: Readonly<{ commands?: number; actions?: number; tokens?: number; costMicroDollars?: number }>): Promise<AiCommandUsage>
+  /** Atomically reserves one command slot and returns null at the plan cap. */
+  reserveCommand(storeId: StoreId, usageDate: string, limit: number | null): Promise<AiCommandUsage | null>
   getUsage(storeId: StoreId, usageDate: string): Promise<AiCommandUsage>
   listUsage(storeId: StoreId, days: number): Promise<readonly AiCommandUsage[]>
   getPreferences(storeId: StoreId): Promise<AiCommandPreferences>
@@ -344,14 +354,33 @@ export function detectWriteTool(query: string): AiCommandWriteTool | null {
   return null
 }
 
+const GROWTH_INTENT = /(?:\b(?:help|how|ways?|ideas?|opportunit(?:y|ies)|strategy|plan|tips?)\b.{0,32}\b(?:grow|growth|sales?|revenue|conversion)\b)|(?:\b(?:increas(?:e|ing)|grow|growing|boost|improve|improving)\b.{0,20}\b(?:sales?|revenue|conversion)\b)|(?:\b(?:sales?|revenue|conversion)\b.{0,20}\b(?:increas(?:e|ing)|grow|growth|boost|improve|improving)\b)|(?:\bgrowth\b.{0,20}\b(?:ideas?|opportunit(?:y|ies)|plan|strategy|tips?)\b)/i
+
+/** Distinguishes a request for growth guidance from a plain revenue lookup. */
+export function detectGrowthIntent(query: string): boolean {
+  return GROWTH_INTENT.test(query)
+}
+
 export function parseInfoTools(query: string): readonly ToolCall[] {
   const normalized = query.toLowerCase()
   const calls: ToolCall[] = []
   const push = (name: AiCommandToolName, params: Readonly<Record<string, unknown>> = {}) => {
     if (!calls.some((call) => call.name === name)) calls.push({ name, params })
   }
-  if (/\b(customers?|vips?|churn|inactive)\b/.test(normalized)) push('search_customers', { query, limit: 20 })
-  if (/\b(products?|catalog|skus?|best sellers?|top products?)\b/.test(normalized)) push('search_products', { query, limit: 20 })
+
+  // Growth is intentionally resolved first. Previously "Help me increase
+  // sales" matched the word "sales", selected analytics only, and returned
+  // the same revenue answer as the merchant's previous question.
+  if (detectGrowthIntent(query)) {
+    push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
+    push('get_recommendations', { status: 'PENDING', limit: 5 })
+    push('get_store_health', {})
+    push('get_inventory_status', { filter: 'low', limit: 10 })
+    return calls
+  }
+
+  if (/\b(customers?|vips?|churn|inactive|repeat buyers?|subscribers?)\b/.test(normalized)) push('search_customers', { query, limit: 20 })
+  if (/\b(products?|catalog|skus?|best[ -]?sellers?|top products?|underperform)/.test(normalized)) push('search_products', { query, limit: 20 })
   if (/\b(orders?|fulfil|fulfill|cancel)\b/.test(normalized)) push('search_orders', { query, limit: 20 })
   if (/\b(revenue|sales|aov|analytics|this month|today)\b/.test(normalized)) push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
   if (/\brecommend/.test(normalized)) push('get_recommendations', { status: 'PENDING', limit: 10 })
@@ -359,14 +388,8 @@ export function parseInfoTools(query: string): readonly ToolCall[] {
   if (/\b(health|how is my store|store status)\b/.test(normalized)) push('get_store_health', {})
   if (/\b(automations?|workflows?)\b/.test(normalized)) push('list_workflows', {})
   if (calls.length === 0) {
-    if (/\bhelp me grow|grow sales|increase sales\b/.test(normalized)) {
-      push('get_analytics', { metric: 'summary', date_range: '30d' })
-      push('get_recommendations', { status: 'PENDING', limit: 5 })
-      push('get_store_health', {})
-    } else {
-      push('get_store_health', {})
-      push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
-    }
+    push('get_store_health', {})
+    push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
   }
   return calls
 }
@@ -591,7 +614,8 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
   if (successes.length === 0) {
     const reason = failures[0]?.error ?? 'The requested store data is not available.'
-    return { content: `I'm not sure I can answer that from live store data yet. ${reason}`, structuredData: null, numbers: [] }
+    const content = `I'm not sure I can answer that from live store data yet. ${reason}`
+    return { content, structuredData: null, numbers: extractNumbers(content) }
   }
   const lines: string[] = []
   let structuredData: AiCommandStructuredData | null = null
@@ -607,7 +631,111 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   }
   lines.push(`Source: ${successes.map((outcome) => outcome.source).join(', ')}.`)
   if (!query.trim()) lines.unshift('Here is what I found from your store.')
-  return { content: lines.join('\n\n'), structuredData, numbers }
+  const content = lines.join('\n\n')
+  // renderOutcome is deterministic application code, so formula-derived
+  // figures (for example period-over-period change) are grounded too.
+  return { content, structuredData, numbers: [...numbers, ...extractNumbers(content)] }
+}
+
+/** Builds a decision-oriented growth plan instead of concatenating the normal
+ * revenue answer. Every signal and priority is derived from the supplied tool
+ * outcomes; action commands are proposals that still enter the approval flow. */
+export function formatGrowthAnswer(outcomes: readonly ToolOutcome[], actionsEnabled: boolean): Readonly<{ content: string; structuredData: AiCommandStructuredData | null; numbers: readonly number[] }> {
+  const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
+  const failures = outcomes.filter((outcome): outcome is ToolFailure => !outcome.ok)
+  if (successes.length === 0) {
+    const reason = failures[0]?.error ?? 'The requested store data is not available.'
+    const content = `I can't build a grounded growth plan until store signals are available. ${reason}`
+    return { content, structuredData: null, numbers: extractNumbers(content) }
+  }
+
+  const analytics = outcomeData(successes, 'get_analytics')
+  const recommendations = outcomeData(successes, 'get_recommendations')
+  const health = outcomeData(successes, 'get_store_health')
+  const inventory = outcomeData(successes, 'get_inventory_status')
+  const revenue = numberish(analytics?.revenue)
+  const previousRevenue = numberish(analytics?.previousRevenue)
+  const orders = numberish(analytics?.orders)
+  const aov = numberish(analytics?.aov)
+  const currency = currencyCode(analytics?.currency)
+  const healthScore = numberish(health?.score)
+  const healthLabel = typeof health?.label === 'string' ? health.label : null
+  const lowStockCount = numberish(inventory?.lowStockCount)
+  const outOfStockCount = numberish(inventory?.outOfStockCount)
+  const recommendationRows = arrayOfRecords(recommendations?.items ?? recommendations?.recommendations)
+  const priorities: string[] = []
+
+  if (recommendationRows.length > 0) {
+    const title = typeof recommendationRows[0]?.title === 'string' ? recommendationRows[0].title : 'the top pending recommendation'
+    priorities.push(`Review ${title}; it is the highest available recommendation from the recommendation ledger.`)
+  }
+  if ((outOfStockCount ?? 0) > 0) priorities.push(`Recover availability on ${outOfStockCount} out-of-stock tracked variant${outOfStockCount === 1 ? '' : 's'} before sending more demand to them.`)
+  if ((lowStockCount ?? 0) > 0) priorities.push(`Protect sales on ${lowStockCount} low-stock tracked variant${lowStockCount === 1 ? '' : 's'} by checking replenishment first.`)
+  if (revenue !== null && previousRevenue !== null) {
+    if (revenue < previousRevenue) priorities.push('Focus the next campaign on retention or proven products because revenue is below the previous comparison period.')
+    else if (revenue > previousRevenue) priorities.push('Build on the current positive revenue direction with a targeted, measurable campaign rather than a store-wide change.')
+    else priorities.push('Revenue is flat against the comparison period, so test one targeted offer and measure the result before expanding it.')
+  }
+  if (priorities.length === 0) priorities.push('Sync more analytics, recommendation, and inventory history before choosing a growth intervention.')
+
+  const nextCommands = actionsEnabled
+    ? [
+        ...(recommendationRows.length > 0 ? [{ label: 'Prepare recommendation approval', command: 'Approve the top pending recommendation', kind: 'action' }] : []),
+        { label: 'Prepare a VIP email', command: 'Draft an email to VIP customers', kind: 'action' },
+        { label: 'Prepare a discount', command: 'Create a 10% growth discount with a 100 use limit that expires in 3 days', kind: 'action' },
+      ]
+    : [
+        { label: 'Inspect top customers', command: 'Show my top customers', kind: 'info' },
+        { label: 'Inspect best sellers', command: 'Show my best-selling products', kind: 'info' },
+        { label: 'Review recommendations', command: 'Show pending recommendations', kind: 'info' },
+      ]
+
+  const signalLines = [
+    revenue === null ? null : `Revenue signal: ${formatMoney(revenue, currency)}${previousRevenue === null ? '' : ` versus ${formatMoney(previousRevenue, currency)} in the previous comparison period`}.`,
+    orders === null ? null : `Order signal: ${orders} orders${aov === null ? '' : ` at an average order value of ${formatMoney(aov, currency)}`}.`,
+    healthScore === null ? null : `Store health signal: ${healthScore}/100${healthLabel ? ` (${healthLabel})` : ''}.`,
+  ].filter((line): line is string => Boolean(line))
+  const lines = [
+    'Here is a growth plan built from your live store signals — not a repeat of the revenue lookup:',
+    ...(signalLines.length > 0 ? signalLines : ['The available modules did not return a revenue or health figure.']),
+    `Priorities:\n${priorities.map((priority) => `• ${priority}`).join('\n')}`,
+    actionsEnabled
+      ? 'Commander action mode is ready. Choose an action below and I will prepare a preview; nothing executes until you approve it.'
+      : 'Your plan is insight-only in AI Command, so the next steps below are data checks rather than store changes.',
+    ...(failures.length > 0 ? [`Unavailable signals: ${failures.map((failure) => `${failure.name} (${failure.error})`).join('; ')}.`] : []),
+    `Source: ${successes.map((outcome) => outcome.source).join(', ')}.`,
+  ]
+  const content = lines.join('\n\n')
+  return {
+    content,
+    structuredData: {
+      type: 'growth_plan',
+      data: {
+        signals: { currency, revenue, previousRevenue, orders, aov, healthScore, healthLabel, lowStockCount, outOfStockCount },
+        priorities,
+        nextCommands,
+        actionsEnabled,
+      },
+      source: successes.map((outcome) => outcome.source).join(', '),
+      actions: nextCommands.map((item) => item.command),
+    },
+    numbers: [...successes.flatMap((outcome) => outcome.numbers), ...extractNumbers(content)],
+  }
+}
+
+function outcomeData(outcomes: readonly ToolSuccess[], name: AiCommandToolName): Record<string, unknown> | null {
+  const outcome = outcomes.find((item) => item.name === name)
+  return outcome && isRecord(outcome.data) ? outcome.data : null
+}
+
+export function applyResponseStyle(content: string, style: AiCommandResponseStyle, outcomes: readonly ToolOutcome[]): string {
+  if (style === 'CONCISE') return content
+  const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
+  if (successes.length === 0) return content
+  if (style === 'TECHNICAL') {
+    return `${content}\n\nTool trace: ${successes.map((outcome) => `${outcome.name} → ${outcome.source}`).join('; ')}.`
+  }
+  return `${content}\n\nData coverage: ${successes.map((outcome) => moduleLabel(outcome.name)).join(', ')} returned live results.`
 }
 
 function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: string; structured: AiCommandStructuredData | null }> {
@@ -617,11 +745,12 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const previous = numberish(data.previousRevenue)
     const orders = numberish(data.orders)
     const aov = numberish(data.aov)
+    const currency = currencyCode(data.currency)
     const change = revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null
     const parts = [
-      revenue === null ? 'Revenue for the requested period is not available.' : `Your store's revenue for this period is ${formatMoney(revenue)}${change === null || previous === null ? '' : `, which is ${change}% ${change >= 0 ? 'higher' : 'lower'} than the previous period (${formatMoney(previous)})`}.`,
+      revenue === null ? 'Revenue for the requested period is not available.' : `Your store's revenue for this period is ${formatMoney(revenue, currency)}${change === null || previous === null ? '' : `, which is ${change}% ${change >= 0 ? 'higher' : 'lower'} than the previous period (${formatMoney(previous, currency)})`}.`,
       orders === null ? null : `Orders: ${orders}.`,
-      aov === null ? null : `Average order value: ${formatMoney(aov)}.`,
+      aov === null ? null : `Average order value: ${formatMoney(aov, currency)}.`,
     ].filter(Boolean)
     return { text: parts.join(' '), structured: { type: 'analytics', data, source: outcome.source, actions: ['export'] } }
   }
@@ -713,7 +842,9 @@ export function groundCommandText(text: string, allowedNumbers: readonly number[
   allowed.add(normalizeNumber(100))
   const extras = extractNumbers(text).filter((value) => !allowed.has(normalizeNumber(value)))
   if (extras.length === 0) return text.trim()
-  return `${text.trim()}\n\nI removed unsupported figures from this reply because they were not present in the tool results.`
+  // Never claim a figure was removed while still returning it. Structured data
+  // remains available to the UI, and the merchant can retry the narrative.
+  return 'I could not safely present this narrative because it contained a figure that was not supported by the live tool results. Review the grounded data card below or try the command again.'
 }
 
 export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: string | null; plan: PlanTier; actionsEnabled: boolean }>): string {
@@ -797,7 +928,7 @@ export function parseConfirmIntent(query: string): 'confirm' | 'cancel' | 'undo'
   return null
 }
 
-export function validateDiscountParams(params: Readonly<Record<string, unknown>>): Readonly<{ ok: true; value: number; usageLimit: number; expiresAt: string; title: string }> | Readonly<{ ok: false; error: string }> {
+export function validateDiscountParams(params: Readonly<Record<string, unknown>>, now = Date.now()): Readonly<{ ok: true; value: number; usageLimit: number; expiresAt: string; title: string }> | Readonly<{ ok: false; error: string }> {
   const value = Number(params.value)
   const usageLimit = Number(params.usage_limit ?? params.usageLimit)
   const title = typeof params.title === 'string' && params.title.trim() ? params.title.trim() : 'AI Command discount'
@@ -805,8 +936,25 @@ export function validateDiscountParams(params: Readonly<Record<string, unknown>>
   if (!Number.isFinite(value) || value <= 0 || value > 50) return { ok: false, error: 'Discount value must be between 1 and 50 percent.' }
   if (!Number.isInteger(usageLimit) || usageLimit < 1 || usageLimit > 1000) return { ok: false, error: 'Usage limit must be an integer between 1 and 1000.' }
   if (!expiresAt || !Number.isFinite(Date.parse(expiresAt))) return { ok: false, error: 'A valid expiry date at least 1 day from now is required.' }
-  if (Date.parse(expiresAt) < Date.now() + 86_400_000 - 60_000) return { ok: false, error: 'Discount expiry must be at least 1 day from now.' }
+  if (Date.parse(expiresAt) < now + 86_400_000 - 60_000) return { ok: false, error: 'Discount expiry must be at least 1 day from now.' }
   return { ok: true, value, usageLimit, expiresAt, title }
+}
+
+/** Rejects action previews that cannot possibly succeed. This keeps the UI
+ * from offering an Approve button for an empty recipient list or unresolved
+ * workflow/recommendation. */
+export function validateActionPreview(tool: AiCommandWriteTool, params: Readonly<Record<string, unknown>>, now = Date.now()): string | null {
+  if (tool === 'create_discount') {
+    const validated = validateDiscountParams(params, now)
+    return validated.ok ? null : validated.error
+  }
+  if (tool === 'send_email' && stringArray(params.recipient_ids).length === 0) return 'No eligible email recipients matched this command. Ask me to show a customer segment first, then send to those customers.'
+  if (tool === 'tag_customers' && stringArray(params.customer_ids).length === 0) return 'No customers matched this command, so there is nothing to tag.'
+  if (tool === 'tag_customers' && stringArray(params.tags).length === 0) return 'Add a tag name before I prepare this action.'
+  if (tool === 'approve_recommendation' && !nonEmptyString(params.recommendation_id)) return 'There is no pending recommendation available to approve.'
+  if ((tool === 'trigger_workflow' || tool === 'pause_workflow' || tool === 'resume_workflow') && !nonEmptyString(params.workflow_id)) return 'I could not identify an automation. Name the workflow you want me to use.'
+  if (tool === 'send_notification' && !nonEmptyString(params.message)) return 'A notification message is required.'
+  return null
 }
 
 export class InMemoryAiCommandRepository implements AiCommandRepository {
@@ -849,6 +997,27 @@ export class InMemoryAiCommandRepository implements AiCommandRepository {
     return [...this.actions.values()].filter((item) => item.storeId === storeId).sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, limit)
   }
   public async saveAction(action: AiCommandActionRecord): Promise<AiCommandActionRecord> { this.actions.set(action.id, action); return action }
+  public async claimAction(storeId: StoreId, id: string, approvedAt: string): Promise<AiCommandActionRecord | null> {
+    const action = this.actions.get(id)
+    if (!action || action.storeId !== storeId || action.executionStatus !== 'PENDING') return null
+    const claimed = { ...action, merchantApproved: true, approvedAt, executionStatus: 'EXECUTING' as const }
+    this.actions.set(id, claimed)
+    return claimed
+  }
+  public async cancelPendingAction(storeId: StoreId, id: string, completedAt: string): Promise<AiCommandActionRecord | null> {
+    const action = this.actions.get(id)
+    if (!action || action.storeId !== storeId || action.executionStatus !== 'PENDING') return null
+    const cancelled = { ...action, executionStatus: 'CANCELLED' as const, completedAt }
+    this.actions.set(id, cancelled)
+    return cancelled
+  }
+  public async claimRollback(storeId: StoreId, id: string, now: string): Promise<AiCommandActionRecord | null> {
+    const action = this.actions.get(id)
+    if (!action || action.storeId !== storeId || !action.rollbackAvailable || !action.rollbackDeadline || action.rollbackDeadline < now) return null
+    const claimed = { ...action, rollbackAvailable: false }
+    this.actions.set(id, claimed)
+    return claimed
+  }
   public async listSaved(storeId: StoreId): Promise<readonly AiCommandSavedCommand[]> {
     return [...this.saved.values()].filter((item) => item.storeId === storeId).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   }
@@ -873,6 +1042,14 @@ export class InMemoryAiCommandRepository implements AiCommandRepository {
       tokensUsed: current.tokensUsed + (delta.tokens ?? 0),
       costMicroDollars: current.costMicroDollars + (delta.costMicroDollars ?? 0),
     }, this.plan)
+    this.usage.set(key, next)
+    return next
+  }
+  public async reserveCommand(storeId: StoreId, usageDate: string, limit: number | null): Promise<AiCommandUsage | null> {
+    const key = `${storeId}:${usageDate}`
+    const current = this.usage.get(key) ?? emptyUsage(storeId, usageDate, this.plan)
+    if (limit !== null && current.commandsUsed >= limit) return null
+    const next = applyUsageLimits({ ...current, commandsUsed: current.commandsUsed + 1 }, this.plan)
     this.usage.set(key, next)
     return next
   }
@@ -920,6 +1097,7 @@ export class AiCommandService {
   private readonly generate: ((input: AiCommandGenerateInput) => Promise<AiCommandGenerateResult>) | null
   private readonly now: () => number
   private readonly enabled: boolean
+  private readonly actionsEnabled: boolean
   private readonly shopFor: ((storeId: StoreId) => Promise<string | null>) | null
 
   public constructor(input: Readonly<{
@@ -931,6 +1109,7 @@ export class AiCommandService {
     shopFor?: (storeId: StoreId) => Promise<string | null>
     now?: () => number
     enabled?: boolean
+    actionsEnabled?: boolean
   }>) {
     this.repository = input.repository
     this.tools = input.tools
@@ -940,11 +1119,17 @@ export class AiCommandService {
     this.shopFor = input.shopFor ?? null
     this.now = input.now ?? (() => Date.now())
     this.enabled = input.enabled !== false
+    this.actionsEnabled = input.actionsEnabled !== false
+  }
+
+  private actionAccess(plan: PlanTier): boolean {
+    return this.actionsEnabled && limitsForPlan(plan).actionsEnabled
   }
 
   public async usage(storeId: StoreId): Promise<AiCommandUsage> {
     const plan = await this.planFor(storeId)
-    return applyUsageLimits(await this.repository.getUsage(storeId, usageDateKey(this.now())), plan)
+    const usage = applyUsageLimits(await this.repository.getUsage(storeId, usageDateKey(this.now())), plan)
+    return { ...usage, actionsEnabled: this.actionAccess(plan) }
   }
 
   public async usageHistory(storeId: StoreId, days = 30): Promise<readonly AiCommandUsage[]> {
@@ -953,7 +1138,7 @@ export class AiCommandService {
 
   public async conversations(storeId: StoreId, limit = 20): Promise<readonly AiCommandConversation[]> {
     const plan = await this.planFor(storeId)
-    const all = await this.repository.listConversations(storeId, limit)
+    const all = (await this.repository.listConversations(storeId, limit)).filter((item) => item.status === 'ACTIVE')
     const days = limitsForPlan(plan).historyDays
     if (days === null) return all
     const cutoff = this.now() - days * 86_400_000
@@ -991,11 +1176,34 @@ export class AiCommandService {
     return this.repository.savePreferences(next)
   }
 
+  public async rateMessage(storeId: StoreId, conversationId: string, messageId: string, rating: 'HELPFUL' | 'NOT_HELPFUL'): Promise<Readonly<{ saved: true }>> {
+    const conversation = await this.conversation(storeId, conversationId)
+    const target = conversation.messages.find((item) => item.id === messageId && item.role === 'assistant')
+    if (!target) throw new AppError('NOT_FOUND', 'Assistant message not found', 404)
+    const existing = isRecord(conversation.context.messageFeedback) ? conversation.context.messageFeedback : {}
+    await this.repository.saveConversation({
+      ...conversation,
+      context: {
+        ...conversation.context,
+        messageFeedback: {
+          ...existing,
+          [messageId]: { rating, createdAt: new Date(this.now()).toISOString() },
+        },
+      },
+      updatedAt: new Date(this.now()).toISOString(),
+    })
+    return { saved: true }
+  }
+
   public async savedCommands(storeId: StoreId): Promise<readonly AiCommandSavedCommand[]> {
     return this.repository.listSaved(storeId)
   }
 
   public async saveCommand(storeId: StoreId, input: Readonly<{ name: string; commandText: string; category?: string }>): Promise<AiCommandSavedCommand> {
+    const name = input.name.trim()
+    const commandText = input.commandText.trim()
+    if (!name) throw new AppError('VALIDATION_ERROR', 'Saved command name is required', 400)
+    if (!commandText) throw new AppError('VALIDATION_ERROR', 'Saved command text is required', 400)
     const plan = await this.planFor(storeId)
     const limit = limitsForPlan(plan).savedCommands
     const existing = await this.repository.listSaved(storeId)
@@ -1004,8 +1212,8 @@ export class AiCommandService {
     return this.repository.saveCommand({
       id: randomUUID(),
       storeId,
-      name: input.name.trim().slice(0, 80) || 'Saved command',
-      commandText: input.commandText.trim().slice(0, 500),
+      name: name.slice(0, 80),
+      commandText: commandText.slice(0, 500),
       category: (input.category ?? 'general').trim().slice(0, 40) || 'general',
       useCount: 0,
       lastUsedAt: null,
@@ -1045,6 +1253,7 @@ export class AiCommandService {
     const inventoryData = inventory.ok && isRecord(inventory.data) ? inventory.data : null
     const healthData = health.ok && isRecord(health.data) ? health.data : null
     return {
+      currency: analyticsData ? currencyCode(analyticsData.currency) : null,
       revenueToday: analyticsData ? numberish(analyticsData.revenue) : null,
       revenueYesterday: analyticsData ? numberish(analyticsData.previousRevenue) : null,
       ordersToday: analyticsData ? numberish(analyticsData.orders) : null,
@@ -1073,7 +1282,8 @@ export class AiCommandService {
       const pending = numberish(recs.data.count)
       if (pending !== null) snapshot.pendingRecommendations = pending
     }
-    return contextualQuickCommands(plan, snapshot)
+    const commands = contextualQuickCommands(plan, snapshot)
+    return this.actionAccess(plan) ? commands : commands.filter((command) => command.kind !== 'action')
   }
 
   public async chat(input: Readonly<{ storeId: StoreId; text: string; conversationId?: string; signal?: AbortSignal }>, listener?: ChatListener): Promise<AiCommandChatResult> {
@@ -1085,72 +1295,82 @@ export class AiCommandService {
     const plan = await this.planFor(input.storeId)
     const limits = limitsForPlan(plan)
     const date = usageDateKey(this.now())
-    const usage = applyUsageLimits(await this.repository.getUsage(input.storeId, date), plan)
-    if (limits.commandsPerDay !== null && usage.commandsUsed >= limits.commandsPerDay) {
+    const reservation = await this.repository.reserveCommand(input.storeId, date, limits.commandsPerDay)
+    if (!reservation) {
+      const usage = applyUsageLimits(await this.repository.getUsage(input.storeId, date), plan)
       throw new AppError('PAYMENT_REQUIRED', 'You have reached today\'s command limit. Upgrade Plan for more.', 402, { reason: 'UPGRADE_REQUIRED', feature: 'ai_command_daily', used: usage.commandsUsed, limit: limits.commandsPerDay })
     }
 
-    const conversation = await this.loadOrCreateConversation(input.storeId, input.conversationId, text)
-    const userMessage = message('user', text, 'text', this.now())
-    const confirm = parseConfirmIntent(text)
-    emit(listener, 'thinking', { step: 'Understanding your request...' })
+    try {
+      const conversation = await this.loadOrCreateConversation(input.storeId, input.conversationId, text)
+      const userMessage = message('user', text, 'text', this.now())
+      const confirm = parseConfirmIntent(text)
+      emit(listener, 'thinking', { step: 'Understanding your request...' })
 
-    let resultMessage: AiCommandMessage
-    if (confirm === 'confirm') resultMessage = await this.confirmLatest(input.storeId, conversation, plan, listener)
-    else if (confirm === 'cancel') resultMessage = await this.cancelLatest(input.storeId, conversation)
-    else if (confirm === 'undo') resultMessage = await this.undoLatest(input.storeId, conversation, plan)
-    else resultMessage = await this.answer(input.storeId, conversation, text, plan, listener)
+      let resultMessage: AiCommandMessage
+      if (confirm === 'confirm') resultMessage = await this.confirmLatest(input.storeId, conversation, plan, listener)
+      else if (confirm === 'cancel') resultMessage = await this.cancelLatest(input.storeId, conversation)
+      else if (confirm === 'undo') resultMessage = await this.undoLatest(input.storeId, conversation, plan)
+      else resultMessage = await this.answer(input.storeId, conversation, text, plan, listener)
 
-    // A disconnected streaming client means the merchant pressed Cancel. Do
-    // not persist the conversation or consume quota after that point.
-    throwIfCommandAborted(input.signal)
-    const nextMessages = [...conversation.messages, userMessage, resultMessage]
-    const nextConversation = await this.repository.saveConversation({
-      ...conversation,
-      messages: nextMessages,
-      context: { lastActionId: resultMessage.action?.id ?? conversation.context.lastActionId ?? null, lastEntities: extractEntityHint(resultMessage) },
-      updatedAt: resultMessage.timestamp,
-      lastMessageAt: resultMessage.timestamp,
-    })
-    const nextUsage = await this.repository.incrementUsage(input.storeId, date, {
-      commands: 1,
-      actions: resultMessage.contentType === 'action_result' ? 1 : 0,
-    })
-    emit(listener, 'message', resultMessage)
-    emit(listener, 'usage', nextUsage)
-    emit(listener, 'done', { ok: true })
-    return { conversation: nextConversation, message: resultMessage, usage: nextUsage, thinkingSteps: resultMessage.thinkingSteps ?? [] }
+      // Information requests can be discarded safely when the client cancels.
+      // Action previews/results already have durable lifecycle state, so they
+      // must still be linked into history even if the SSE connection closes.
+      if (!mustPersistActionState(resultMessage)) throwIfCommandAborted(input.signal)
+      const settledMessages = settleActionMessages(conversation.messages, resultMessage)
+      const nextMessages = [...settledMessages, userMessage, resultMessage]
+      const entityHint = extractEntityHint(resultMessage)
+      const nextConversation = await this.repository.saveConversation({
+        ...conversation,
+        messages: nextMessages,
+        context: {
+          ...conversation.context,
+          lastActionId: resultMessage.action?.id ?? conversation.context.lastActionId ?? null,
+          lastEntities: entityHint ?? conversation.context.lastEntities ?? null,
+        },
+        updatedAt: resultMessage.timestamp,
+        lastMessageAt: resultMessage.timestamp,
+      })
+      const persistedUsage = successfulActionResult(resultMessage)
+        ? await this.repository.incrementUsage(input.storeId, date, { actions: 1 })
+        : reservation
+      const nextUsage = { ...persistedUsage, actionsEnabled: this.actionAccess(plan) }
+      emit(listener, 'message', resultMessage)
+      emit(listener, 'usage', nextUsage)
+      emit(listener, 'done', { ok: true })
+      return { conversation: nextConversation, message: resultMessage, usage: nextUsage, thinkingSteps: resultMessage.thinkingSteps ?? [] }
+    } catch (error: unknown) {
+      try { await this.repository.incrementUsage(input.storeId, date, { commands: -1 }) } catch { /* preserve the original failure */ }
+      throw error
+    }
   }
 
   public async approveAction(storeId: StoreId, actionId: string, listener?: ChatListener): Promise<AiCommandActionRecord> {
     const plan = await this.planFor(storeId)
-    if (!limitsForPlan(plan).actionsEnabled) throw new AppError('PAYMENT_REQUIRED', 'Action execution requires Commander plan. Upgrade Plan to continue.', 402, { reason: 'UPGRADE_REQUIRED', feature: 'ai_command_actions' })
+    if (!this.actionAccess(plan)) {
+      if (plan === 'commander') throw new AppError('DEPENDENCY_ERROR', 'Action execution is temporarily unavailable. No store change was attempted.', 503)
+      throw new AppError('PAYMENT_REQUIRED', 'Action execution requires Commander plan. Upgrade Plan to continue.', 402, { reason: 'UPGRADE_REQUIRED', feature: 'ai_command_actions' })
+    }
     const action = await this.action(storeId, actionId)
     if (action.executionStatus !== 'PENDING') throw new AppError('CONFLICT', 'This action is no longer pending approval', 409, { status: action.executionStatus })
-    return this.executeApproved(storeId, action, plan, listener)
+    const executed = await this.executeApproved(storeId, action, plan, listener)
+    await this.recordDirectActionResult(executed)
+    if (executed.executionStatus === 'SUCCESS' || executed.executionStatus === 'PARTIAL_SUCCESS') {
+      await this.repository.incrementUsage(storeId, usageDateKey(this.now()), { actions: 1 })
+    }
+    return executed
   }
 
   public async cancelAction(storeId: StoreId, actionId: string): Promise<AiCommandActionRecord> {
-    const action = await this.action(storeId, actionId)
-    if (action.executionStatus !== 'PENDING') throw new AppError('CONFLICT', 'Only pending actions can be cancelled', 409)
-    return this.repository.saveAction({ ...action, executionStatus: 'CANCELLED', completedAt: new Date(this.now()).toISOString() })
+    const cancelled = await this.cancelPending(storeId, actionId)
+    await this.recordDirectActionResult(cancelled)
+    return cancelled
   }
 
   public async rollbackAction(storeId: StoreId, actionId: string): Promise<AiCommandActionRecord> {
-    const plan = await this.planFor(storeId)
-    const action = await this.action(storeId, actionId)
-    if (!action.rollbackAvailable || !action.rollbackDeadline) throw new AppError('VALIDATION_ERROR', 'This action cannot be undone', 400)
-    if (Date.parse(action.rollbackDeadline) < this.now()) throw new AppError('VALIDATION_ERROR', 'The 30-second undo window has expired', 400)
-    if (!limitsForPlan(plan).actionsEnabled) throw new AppError('PAYMENT_REQUIRED', 'Upgrade Plan to use undo.', 402, { reason: 'UPGRADE_REQUIRED' })
-    const rolled = this.actions.rollback ? await this.actions.rollback(storeId, action) : { status: 'FAILED' as const, result: { message: 'Rollback is not connected.' }, rollbackAvailable: false }
-    return this.repository.saveAction({
-      ...action,
-      executionStatus: rolled.status === 'SUCCESS' ? 'ROLLED_BACK' : 'FAILED',
-      executionResult: rolled.result,
-      rollbackAvailable: false,
-      rolledBackAt: rolled.status === 'SUCCESS' ? new Date(this.now()).toISOString() : null,
-      completedAt: new Date(this.now()).toISOString(),
-    })
+    const rolled = await this.rollback(storeId, actionId)
+    await this.recordDirectActionResult(rolled)
+    return rolled
   }
 
   public async exportConversation(storeId: StoreId, id: string): Promise<Readonly<{ filename: string; rows: readonly Readonly<Record<string, string>>[] }>> {
@@ -1175,35 +1395,47 @@ export class AiCommandService {
     const write = detectWriteTool(text)
     if (write) {
       emit(listener, 'thinking', { step: 'Checking permissions...' })
-      if (!limitsForPlan(plan).actionsEnabled) {
+      if (!this.actionAccess(plan)) {
         const infoTools = parseInfoTools(text)
         const outcomes = await this.runTools(storeId, infoTools, listener)
         const formatted = formatToolAnswer(text, outcomes)
+        if (plan === 'commander') {
+          return message('assistant', `${formatted.content}\n\nAction execution is temporarily unavailable. No store change was attempted.`, 'error', this.now(), {
+            structuredData: formatted.structuredData,
+            thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
+          })
+        }
         return message('assistant', renderUpgradeResponse(humanAction(write), formatted.content), 'upgrade', this.now(), {
           structuredData: formatted.structuredData,
           thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
         })
       }
-      return this.previewWrite(storeId, conversation, text, write, listener)
+      return this.previewWrite(storeId, conversation, text, write, plan, listener)
     }
-    const infoTools = await this.resolveInfoTools(storeId, conversation, text, plan)
+    const preferences = await this.repository.getPreferences(storeId)
+    const memoryEnabled = conversationMemoryAvailable(preferences.conversationMemoryEnabled, plan, conversation, this.now())
+    const infoTools = await this.resolveInfoTools(storeId, conversation, text, plan, memoryEnabled)
     const outcomes = await this.runTools(storeId, infoTools, listener)
     emit(listener, 'thinking', { step: 'Preparing response...' })
-    const formatted = formatToolAnswer(text, outcomes)
-    const grounded = groundCommandText(formatted.content, formatted.numbers)
+    const formatted = detectGrowthIntent(text)
+      ? formatGrowthAnswer(outcomes, this.actionAccess(plan))
+      : formatToolAnswer(text, outcomes)
+    const styled = applyResponseStyle(formatted.content, preferences.defaultResponseStyle, outcomes)
+    const grounded = groundCommandText(styled, formatted.numbers)
     return message('assistant', grounded, formatted.structuredData ? 'structured_data' : 'text', this.now(), {
       structuredData: formatted.structuredData,
       thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
     })
   }
 
-  private async resolveInfoTools(storeId: StoreId, conversation: AiCommandConversation, text: string, plan: PlanTier): Promise<readonly ToolCall[]> {
-    const parsed = parseInfoTools(resolveReferences(text, conversation))
+  private async resolveInfoTools(storeId: StoreId, conversation: AiCommandConversation, text: string, plan: PlanTier, memoryEnabled: boolean): Promise<readonly ToolCall[]> {
+    const resolvedText = memoryEnabled ? resolveReferences(text, conversation) : text
+    const parsed = parseInfoTools(resolvedText)
     if (!this.generate) return parsed
     try {
       const shop = this.shopFor ? await this.shopFor(storeId) : null
       const generated = await this.generate({
-        system: buildSystemPrompt({ storeId, shop, plan, actionsEnabled: limitsForPlan(plan).actionsEnabled }),
+        system: buildSystemPrompt({ storeId, shop, plan, actionsEnabled: this.actionAccess(plan) }),
         user: text,
         tools: AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => !tool.commanderOnly),
       })
@@ -1214,13 +1446,13 @@ export class AiCommandService {
     }
   }
 
-  private async previewWrite(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool, listener?: ChatListener): Promise<AiCommandMessage> {
+  private async previewWrite(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
     emit(listener, 'thinking', { step: 'Preparing action preview...' })
-    const params = await this.previewParams(storeId, conversation, text, tool)
-    if (tool === 'create_discount') {
-      const valid = validateDiscountParams(params)
-      if (!valid.ok) return message('assistant', valid.error, 'error', this.now())
-    }
+    const preferences = await this.repository.getPreferences(storeId)
+    const memoryEnabled = conversationMemoryAvailable(preferences.conversationMemoryEnabled, plan, conversation, this.now())
+    const params = await this.previewParams(storeId, conversation, text, tool, memoryEnabled)
+    const validationError = validateActionPreview(tool, params, this.now())
+    if (validationError) return message('assistant', validationError, 'error', this.now())
     const type = toolToActionType(tool)
     const nowIso = new Date(this.now()).toISOString()
     const action = await this.repository.createAction({
@@ -1249,28 +1481,34 @@ export class AiCommandService {
     })
   }
 
-  private async previewParams(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool): Promise<Record<string, unknown>> {
+  private async previewParams(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool, memoryEnabled: boolean): Promise<Record<string, unknown>> {
     if (tool === 'send_email') {
-      const customers = await this.tools.run(storeId, { name: 'search_customers', params: { query: text, limit: 10 } })
-      const items = customers.ok && isRecord(customers.data) ? arrayOfRecords(customers.data.items ?? customers.data.customers) : []
+      const usesReference = /\b(them|those|these|that list)\b/i.test(text)
+      const rememberedIds = memoryEnabled && usesReference ? rememberedEntityIds(conversation, 'customer_list') : []
+      const customers = rememberedIds.length === 0 && !usesReference ? await this.tools.run(storeId, { name: 'search_customers', params: { query: text, limit: 10 } }) : null
+      const items = customers?.ok && isRecord(customers.data) ? arrayOfRecords(customers.data.items ?? customers.data.customers) : []
+      const ids = rememberedIds.length > 0 ? rememberedIds : items.map((item) => String(item.id ?? '')).filter(Boolean)
       return {
-        recipient_ids: items.map((item) => String(item.id ?? '')).filter(Boolean),
+        recipient_ids: ids,
         recipients: items.map((item) => ({ id: item.id, name: item.displayName ?? item.name ?? null, email: item.email ?? null })),
         subject: /subject[:\s]+([^.\n]+)/i.exec(text)?.[1]?.trim() ?? 'A note from your store',
         body: 'Hi {first_name}, we prepared this draft from your live customer list. Nothing has been sent.',
       }
     }
     if (tool === 'tag_customers') {
-      const customers = await this.tools.run(storeId, { name: 'search_customers', params: { query: text, limit: 10 } })
-      const items = customers.ok && isRecord(customers.data) ? arrayOfRecords(customers.data.items ?? customers.data.customers) : []
-      const tag = /tag(?:ged)?(?: as)? ([a-z0-9_-]+)/i.exec(text)?.[1] ?? 'ai-command'
-      return { customer_ids: items.map((item) => String(item.id ?? '')).filter(Boolean), tags: [tag], action: /remove|untag/i.test(text) ? 'remove' : 'add' }
+      const usesReference = /\b(them|those|these|that list)\b/i.test(text)
+      const rememberedIds = memoryEnabled && usesReference ? rememberedEntityIds(conversation, 'customer_list') : []
+      const customers = rememberedIds.length === 0 && !usesReference ? await this.tools.run(storeId, { name: 'search_customers', params: { query: text, limit: 10 } }) : null
+      const items = customers?.ok && isRecord(customers.data) ? arrayOfRecords(customers.data.items ?? customers.data.customers) : []
+      const tag = /\bas\s+([a-z0-9_-]+)/i.exec(text)?.[1] ?? /\btag\s+([a-z0-9_-]+)\s+customers?/i.exec(text)?.[1] ?? 'ai-command'
+      return { customer_ids: rememberedIds.length > 0 ? rememberedIds : items.map((item) => String(item.id ?? '')).filter(Boolean), tags: [tag], action: /remove|untag/i.test(text) ? 'remove' : 'add' }
     }
     if (tool === 'create_discount') {
       const value = Number(/(\d{1,2})\s*%/.exec(text)?.[1] ?? 10)
       const uses = Number(/(\d{1,4})\s*(uses|use)/i.exec(text)?.[1] ?? 100)
       const days = Number(/(\d+)\s*day/i.exec(text)?.[1] ?? 3)
-      return { title: /discount(?: called)? ["']?([^"'\n]+)["']?/i.exec(text)?.[1] ?? 'Weekend discount', type: 'percentage', value, usage_limit: uses, expires_at: new Date(this.now() + Math.max(1, days) * 86_400_000).toISOString() }
+      const named = /discount\s+(?:called|named)\s+["']?([^"'\n]+?)["']?(?:\s+with|\s+for|$)/i.exec(text)?.[1]?.trim()
+      return { title: named || 'AI Command discount', type: 'percentage', value, usage_limit: uses, expires_at: new Date(this.now() + Math.max(1, days) * 86_400_000).toISOString() }
     }
     if (tool === 'approve_recommendation') {
       const recs = await this.tools.run(storeId, { name: 'get_recommendations', params: { status: 'PENDING', limit: 1 } })
@@ -1310,7 +1548,7 @@ export class AiCommandService {
   private async confirmLatest(storeId: StoreId, conversation: AiCommandConversation, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
     const pendingId = latestPendingId(conversation)
     if (!pendingId) return message('assistant', 'There is no pending action to approve.', 'text', this.now())
-    if (!limitsForPlan(plan).actionsEnabled) {
+    if (!this.actionAccess(plan)) {
       return message('assistant', 'Action execution requires Commander plan. Upgrade Plan to continue.', 'upgrade', this.now())
     }
     const executed = await this.executeApproved(storeId, await this.action(storeId, pendingId), plan, listener)
@@ -1320,10 +1558,8 @@ export class AiCommandService {
   private async cancelLatest(storeId: StoreId, conversation: AiCommandConversation): Promise<AiCommandMessage> {
     const pendingId = latestPendingId(conversation)
     if (!pendingId) return message('assistant', 'There is no pending action to cancel.', 'text', this.now())
-    const cancelled = await this.cancelAction(storeId, pendingId)
-    return message('assistant', 'Cancelled. Nothing was executed.', 'action_result', this.now(), {
-      action: { id: cancelled.id, type: cancelled.actionType, status: 'CANCELLED', params: cancelled.actionParams, result: { cancelled: true } },
-    })
+    const cancelled = await this.cancelPending(storeId, pendingId)
+    return resultMessage(cancelled, this.now())
   }
 
   private async undoLatest(storeId: StoreId, conversation: AiCommandConversation, _plan: PlanTier): Promise<AiCommandMessage> {
@@ -1331,16 +1567,64 @@ export class AiCommandService {
     const actionId = last?.action?.id ?? (typeof conversation.context.lastActionId === 'string' ? conversation.context.lastActionId : null)
     if (!actionId) return message('assistant', 'There is no completed action to undo.', 'text', this.now())
     try {
-      const rolled = await this.rollbackAction(storeId, actionId)
-      return resultMessage(rolled, this.now(), 'The action was rolled back.')
+      const rolled = await this.rollback(storeId, actionId)
+      return resultMessage(rolled, this.now(), rolled.executionStatus === 'ROLLED_BACK' ? 'The action was rolled back.' : undefined)
     } catch (error: unknown) {
       return message('assistant', error instanceof Error ? error.message : 'Undo is not available for this action.', 'error', this.now())
     }
   }
 
+  private async cancelPending(storeId: StoreId, actionId: string): Promise<AiCommandActionRecord> {
+    const current = await this.action(storeId, actionId)
+    const cancelled = await this.repository.cancelPendingAction(storeId, actionId, new Date(this.now()).toISOString())
+    if (!cancelled) throw new AppError('CONFLICT', 'Only pending actions can be cancelled', 409, { status: current.executionStatus })
+    return cancelled
+  }
+
+  private async rollback(storeId: StoreId, actionId: string): Promise<AiCommandActionRecord> {
+    const plan = await this.planFor(storeId)
+    const action = await this.action(storeId, actionId)
+    if (!action.rollbackAvailable || !action.rollbackDeadline) throw new AppError('VALIDATION_ERROR', 'This action cannot be undone', 400)
+    if (Date.parse(action.rollbackDeadline) < this.now()) throw new AppError('VALIDATION_ERROR', 'The 30-second undo window has expired', 400)
+    if (!this.actionAccess(plan)) throw new AppError('PAYMENT_REQUIRED', 'Upgrade Plan to use undo.', 402, { reason: 'UPGRADE_REQUIRED' })
+    const claimed = await this.repository.claimRollback(storeId, actionId, new Date(this.now()).toISOString())
+    if (!claimed) throw new AppError('CONFLICT', 'This action is already being undone or its undo window expired', 409)
+    const rolled = this.actions.rollback ? await this.actions.rollback(storeId, claimed) : { status: 'FAILED' as const, result: { message: 'Rollback is not connected.' }, rollbackAvailable: false }
+    return this.repository.saveAction({
+      ...claimed,
+      executionStatus: rolled.status === 'SUCCESS' ? 'ROLLED_BACK' : 'FAILED',
+      executionResult: rolled.result,
+      errorDetails: rolled.errorDetails ?? null,
+      rollbackAvailable: false,
+      rolledBackAt: rolled.status === 'SUCCESS' ? new Date(this.now()).toISOString() : null,
+      completedAt: new Date(this.now()).toISOString(),
+    })
+  }
+
+  private async recordDirectActionResult(action: AiCommandActionRecord, prefix?: string): Promise<void> {
+    if (!action.conversationId) return
+    const conversation = await this.repository.getConversation(action.storeId, action.conversationId)
+    if (!conversation) return
+    const alreadyRecorded = conversation.messages.some((item) => item.contentType === 'action_result' && item.action?.id === action.id && item.action.status === action.executionStatus)
+    if (alreadyRecorded) return
+    const result = resultMessage(action, this.now(), prefix)
+    await this.repository.saveConversation({
+      ...conversation,
+      messages: [...settleActionMessages(conversation.messages, result), result],
+      context: { ...conversation.context, lastActionId: action.id },
+      updatedAt: result.timestamp,
+      lastMessageAt: result.timestamp,
+    })
+  }
+
   private async executeApproved(storeId: StoreId, action: AiCommandActionRecord, plan: PlanTier, listener?: ChatListener): Promise<AiCommandActionRecord> {
     emit(listener, 'thinking', { step: 'Executing action...' })
-    const executing = await this.repository.saveAction({ ...action, merchantApproved: true, approvedAt: new Date(this.now()).toISOString(), executionStatus: 'EXECUTING' })
+    const approvedAt = new Date(this.now()).toISOString()
+    const executing = await this.repository.claimAction(storeId, action.id, approvedAt)
+    if (!executing) {
+      const current = await this.repository.getAction(storeId, action.id)
+      throw new AppError('CONFLICT', 'This action is no longer pending approval', 409, { status: current?.executionStatus ?? 'NOT_FOUND' })
+    }
     let executed: ActionExecutionResult
     try {
       executed = await this.actions.execute(storeId, executing)
@@ -1378,6 +1662,7 @@ export class AiCommandService {
     if (conversationId) {
       const existing = await this.repository.getConversation(storeId, conversationId)
       if (!existing) throw new AppError('NOT_FOUND', 'Conversation not found', 404)
+      if (existing.status === 'ARCHIVED') throw new AppError('CONFLICT', 'Archived conversations are read-only. Start a new chat to continue.', 409)
       return existing
     }
     const nowIso = new Date(this.now()).toISOString()
@@ -1397,6 +1682,11 @@ export class AiCommandService {
 
 function resultMessage(action: AiCommandActionRecord, now: number, prefix?: string): AiCommandMessage {
   const summary = summarizeActionResult(action)
+  const thinkingSteps = action.executionStatus === 'CANCELLED'
+    ? ['Cancelling pending action...']
+    : action.executionStatus === 'ROLLED_BACK'
+      ? ['Reversing action...', 'Verifying rollback...']
+      : ['Executing action...', 'Verifying results...']
   return message('assistant', prefix ? `${prefix}\n\n${summary}` : summary, 'action_result', now, {
     action: {
       id: action.id,
@@ -1409,7 +1699,7 @@ function resultMessage(action: AiCommandActionRecord, now: number, prefix?: stri
       rollbackDeadline: action.rollbackDeadline,
     },
     structuredData: { type: 'action_result', data: action.executionResult, actions: action.rollbackAvailable ? ['undo'] : [] },
-    thinkingSteps: ['Executing action...', 'Verifying results...'],
+    thinkingSteps,
   })
 }
 
@@ -1452,18 +1742,67 @@ function latestPendingId(conversation: AiCommandConversation): string | null {
     const item = conversation.messages[index]
     if (item?.action?.id && item.action.status === 'PENDING') return item.action.id
   }
-  return typeof conversation.context.lastActionId === 'string' ? conversation.context.lastActionId : null
+  return null
+}
+
+export function conversationMemoryAvailable(enabled: boolean, plan: PlanTier, conversation: AiCommandConversation, now = Date.now()): boolean {
+  if (!enabled) return false
+  const hours = limitsForPlan(plan).memoryHours
+  // Zero means the current open session; a supplied conversation id is the
+  // session boundary for Trial/Start. Commander is unlimited.
+  if (hours === 0 || hours === null) return true
+  const last = Date.parse(conversation.lastMessageAt)
+  return Number.isFinite(last) && last >= now - hours * 3_600_000
 }
 
 function resolveReferences(text: string, conversation: AiCommandConversation): string {
   if (!/\b(them|those|these|that list)\b/i.test(text)) return text
   const hint = conversation.context.lastEntities
-  return typeof hint === 'string' && hint ? `${text} (referring to ${hint})` : text
+  if (typeof hint === 'string' && hint) return `${text} (referring to ${hint})`
+  if (!isRecord(hint) || typeof hint.type !== 'string') return text
+  const ids = stringArray(hint.ids).slice(0, 20)
+  return `${text} (referring to ${hint.type}${ids.length > 0 ? ` ids ${ids.join(', ')}` : ''})`
 }
 
-function extractEntityHint(message: AiCommandMessage): string | null {
-  if (message.structuredData?.type) return message.structuredData.type
-  return null
+function extractEntityHint(message: AiCommandMessage): Readonly<{ type: string; ids: readonly string[] }> | null {
+  if (!message.structuredData?.type) return null
+  const rows = arrayOfRecords(message.structuredData.data)
+  const ids = rows.map((item) => String(item.id ?? item.customerId ?? item.productId ?? item.variantId ?? '')).filter(Boolean).slice(0, 50)
+  return { type: message.structuredData.type, ids }
+}
+
+function rememberedEntityIds(conversation: AiCommandConversation, type: string): readonly string[] {
+  const hint = conversation.context.lastEntities
+  if (!isRecord(hint) || hint.type !== type) return []
+  return stringArray(hint.ids)
+}
+
+function settleActionMessages(messages: readonly AiCommandMessage[], result: AiCommandMessage): readonly AiCommandMessage[] {
+  const resultAction = result.action
+  if (result.contentType !== 'action_result' || !resultAction?.id) return messages
+  return messages.map((item): AiCommandMessage => {
+    const current = item.action
+    if (!current || current.id !== resultAction.id) return item
+    return {
+      ...item,
+      action: {
+        ...current,
+        status: resultAction.status,
+        result: resultAction.result,
+        executedAt: resultAction.executedAt ?? null,
+        rollbackAvailable: resultAction.rollbackAvailable ?? false,
+        rollbackDeadline: resultAction.rollbackDeadline ?? null,
+      },
+    }
+  })
+}
+
+function successfulActionResult(result: AiCommandMessage): boolean {
+  return result.contentType === 'action_result' && (result.action?.status === 'SUCCESS' || result.action?.status === 'PARTIAL_SUCCESS')
+}
+
+function mustPersistActionState(result: AiCommandMessage): boolean {
+  return Boolean(result.action?.id && (result.contentType === 'action_preview' || result.contentType === 'action_result'))
 }
 
 function message(role: AiCommandMessageRole, content: string, contentType: AiCommandContentType, now: number, extras: Partial<Pick<AiCommandMessage, 'structuredData' | 'action' | 'thinkingSteps'>> = {}): AiCommandMessage {
@@ -1491,7 +1830,7 @@ function pickPreference(patch: Partial<AiCommandPreferences>): Partial<{ default
 }
 
 function emit(listener: ChatListener | undefined, event: 'thinking' | 'message' | 'usage' | 'done', payload: unknown): void {
-  listener?.(event, payload)
+  try { listener?.(event, payload) } catch { /* a disconnected stream must not roll back completed business work */ }
 }
 
 function humanAction(tool: AiCommandWriteTool): string {
@@ -1514,8 +1853,9 @@ function workflowName(params: Readonly<Record<string, unknown>>): string {
   return '(no workflow selected)'
 }
 
-function formatMoney(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+function formatMoney(value: number, currency: string | null = null): string {
+  if (!currency) return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} (currency unavailable)`
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
 }
 
 function normalizeNumber(value: number): string {
@@ -1524,6 +1864,12 @@ function normalizeNumber(value: number): string {
 
 function numberish(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function currencyCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const code = value.trim().toUpperCase()
+  return /^[A-Z]{3}$/.test(code) ? code : null
 }
 
 function throwIfCommandAborted(signal: AbortSignal | undefined): void {
@@ -1541,4 +1887,8 @@ function arrayOfRecords(value: unknown): readonly Record<string, unknown>[] {
 function stringArray(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return []
   return value.map((item) => typeof item === 'string' ? item : typeof item === 'number' ? String(item) : '').filter(Boolean)
+}
+
+function nonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
 }

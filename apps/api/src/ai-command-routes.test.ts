@@ -12,7 +12,7 @@ function commandService(plan: 'trial' | 'start' | 'growth' | 'commander') {
   return new AiCommandService({
     repository: new InMemoryAiCommandRepository(plan),
     tools: new InMemoryCommandTools({
-      get_analytics: { revenue: 500, previousRevenue: 400, orders: 10, aov: 50 },
+      get_analytics: { currency: 'USD', revenue: 500, previousRevenue: 400, orders: 10, aov: 50 },
       search_customers: { count: 1, items: [{ id: 'c1', displayName: 'Ada', email: 'ada@example.com' }] },
       get_store_health: { score: 70, label: 'Needs attention' },
       get_inventory_status: { lowStockCount: 2, outOfStockCount: 0, items: [] },
@@ -49,6 +49,17 @@ describe('AI Command API', () => {
     expect(body).not.toContain('Successfully sent')
   }))
 
+  it('returns a distinct multi-signal growth plan after a revenue question', async () => await withServer('growth', async (base) => {
+    const first = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'What is my revenue?' }) })
+    const revenue = await first.json() as { data: { conversation: { id: string }; message: { content: string; structuredData: { type: string } } } }
+    const second = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, conversationId: revenue.data.conversation.id, text: 'Help me increasing sale' }) })
+    const growth = await second.json() as { data: { message: { content: string; structuredData: { type: string; data: { actionsEnabled: boolean } } } } }
+    expect(growth.data.message.structuredData.type).toBe('growth_plan')
+    expect(growth.data.message.structuredData.data.actionsEnabled).toBe(false)
+    expect(growth.data.message.content).toContain('growth plan')
+    expect(growth.data.message.content).not.toBe(revenue.data.message.content)
+  }))
+
   it('enforces trial command limits with Upgrade Plan', async () => await withServer('trial', async (base) => {
     for (let index = 0; index < 10; index += 1) {
       const response = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Store health check' }) })
@@ -69,14 +80,20 @@ describe('AI Command API', () => {
   }))
 
   it('requires approval then reports partial email failure honestly', async () => await withServer('commander', async (base) => {
-    const preview = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Send email to those customers' }) })
-    const previewBody = await preview.json() as { data: { message: { action: { id: string }; contentType: string } } }
+    const preview = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Send email to VIP customers' }) })
+    const previewBody = await preview.json() as { data: { conversation: { id: string }; message: { action: { id: string }; contentType: string } } }
     expect(previewBody.data.message.contentType).toBe('action_preview')
     const approved = await fetch(`${base}/ai-command/actions/${previewBody.data.message.action.id}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant }) })
     const action = (await approved.json() as { data: { executionStatus: string; executionResult: { sent: number; failed: number } } }).data
     expect(action.executionStatus).toBe('PARTIAL_SUCCESS')
     expect(action.executionResult.sent).toBe(1)
     expect(action.executionResult.failed).toBe(1)
+    const conversation = await fetch(`${base}/ai-command/conversations/${previewBody.data.conversation.id}?storeId=${tenant}`)
+    const conversationBody = await conversation.json() as { data: { messages: readonly { id: string; role: string; contentType: string; action?: { status: string } }[] } }
+    const resultMessage = conversationBody.data.messages.find((item) => item.contentType === 'action_result')
+    expect(resultMessage?.action?.status).toBe('PARTIAL_SUCCESS')
+    const feedback = await fetch(`${base}/ai-command/conversations/${previewBody.data.conversation.id}/messages/${resultMessage!.id}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, rating: 'HELPFUL' }) })
+    expect(feedback.status).toBe(200)
   }))
 
   it('blocks refunds and lists conversations, usage, and quick commands', async () => await withServer('growth', async (base) => {
@@ -129,6 +146,40 @@ describe('AI Command API', () => {
       expect(response.status).toBe(400)
       expect((await response.json() as { error: { message: string } }).error.message).toMatch(/empty|2,000/i)
     }
+  }))
+
+  it('sweeps every conversation, action, saved-command, usage, and preference endpoint without a 500', async () => await withServer('commander', async (base) => {
+    const post = (path: string, body: Record<string, unknown>) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+
+    const chat = await post('/ai-command/chat', { storeId: tenant, text: 'Tag new customers as vip' })
+    const chatBody = await chat.json() as { data: { conversation: { id: string }; message: { action: { id: string } } } }
+    const conversationId = chatBody.data.conversation.id
+    const actionId = chatBody.data.message.action.id
+    expect((await fetch(`${base}/ai-command/actions/${actionId}?storeId=${tenant}`)).status).toBe(200)
+    expect((await fetch(`${base}/ai-command/actions?storeId=${tenant}`)).status).toBe(200)
+    expect((await post(`/ai-command/actions/${actionId}/cancel`, { storeId: tenant })).status).toBe(200)
+
+    const reversiblePreview = await post('/ai-command/chat', { storeId: tenant, text: 'Tag new customers as loyal' })
+    const reversibleId = ((await reversiblePreview.json()) as { data: { message: { action: { id: string } } } }).data.message.action.id
+    const approved = await post(`/ai-command/actions/${reversibleId}/approve`, { storeId: tenant })
+    expect(approved.status).toBe(200)
+    expect((await post(`/ai-command/actions/${reversibleId}/rollback`, { storeId: tenant })).status).toBe(200)
+
+    const saved = await post('/ai-command/saved', { storeId: tenant, name: 'Revenue', commandText: 'Show revenue' })
+    const savedId = ((await saved.json()) as { data: { id: string } }).data.id
+    expect((await fetch(`${base}/ai-command/saved?storeId=${tenant}`)).status).toBe(200)
+    expect((await post(`/ai-command/saved/${savedId}/execute`, { storeId: tenant })).status).toBe(200)
+    expect((await fetch(`${base}/ai-command/saved/${savedId}?storeId=${tenant}`, { method: 'DELETE' })).status).toBe(200)
+
+    const patched = await fetch(`${base}/ai-command/preferences`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, quickCommandsEnabled: false, conversationMemoryEnabled: false }) })
+    expect(patched.status).toBe(200)
+    expect((await fetch(`${base}/ai-command/conversations/${conversationId}/export?storeId=${tenant}`)).status).toBe(200)
+    expect((await post(`/ai-command/conversations/${conversationId}/archive`, { storeId: tenant })).status).toBe(200)
+    expect((await fetch(`${base}/ai-command/conversations/${conversationId}?storeId=${tenant}`, { method: 'DELETE' })).status).toBe(200)
+
+    const invalid = await fetch(`${base}/ai-command/actions`)
+    expect(invalid.status).toBe(400)
+    expect(invalid.status).not.toBe(500)
   }))
 
   it('saves commands and refuses extra trial shortcuts', async () => await withServer('trial', async (base) => {

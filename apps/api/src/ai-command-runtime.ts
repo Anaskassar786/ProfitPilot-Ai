@@ -70,19 +70,36 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     const dataset = await this.deps.customers.list(storeId)
     const query = String(call.params.query ?? '').toLowerCase()
     const limit = boundedLimit(call.params.limit)
-    const matched = dataset.customers.filter((customer) => {
-      if (!query) return true
-      return [customer.displayName, customer.email, customer.id, customer.primarySegment, ...customer.tags].some((value) => value?.toLowerCase().includes(query.replace(/show|my|top|customers?/g, '').trim()) || query.includes('vip') && customer.primarySegment === 'vip' || query.includes('inactive') && customer.activity === 'inactive')
-    }).slice(0, limit)
-    const items = matched.map((customer) => ({
+    const asksVip = /\b(vip|best|top spending|highest[ -]?value)\b/.test(query)
+    const asksInactive = /\b(inactive|at[ -]?risk|churn)\b/.test(query)
+    const asksRepeat = /\b(repeat|returning)\b/.test(query)
+    const asksNew = /\bnew (customers?|buyers?)\b/.test(query)
+    const explicitIds = idsFromResolvedReference(query)
+    const searchTerm = customerSearchTerm(query)
+    let matched = dataset.customers.filter((customer) => {
+      if (explicitIds.length > 0) return explicitIds.includes(customer.id)
+      if (asksVip && customer.primarySegment !== 'vip') return false
+      if (asksInactive && customer.activity !== 'inactive' && customer.primarySegment !== 'churn_risk') return false
+      if (asksRepeat && customer.lifetimeOrders < 2) return false
+      if (asksNew && customer.primarySegment !== 'new_buyer') return false
+      if (!searchTerm) return true
+      return [customer.displayName, customer.email, customer.id, customer.primarySegment, ...customer.tags]
+        .some((value) => value?.toLowerCase().includes(searchTerm))
+    })
+    if (asksVip || /\b(best|top)\b/.test(query)) matched = [...matched].sort((left, right) => (right.totalSpent ?? 0) - (left.totalSpent ?? 0) || right.lifetimeOrders - left.lifetimeOrders)
+    else if (asksNew) matched = [...matched].sort((left, right) => String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? '')))
+    const items = matched.slice(0, limit).map((customer) => ({
       id: customer.id,
       displayName: customer.displayName,
       email: customer.email,
       totalSpent: customer.totalSpent,
+      currency: customer.currency,
       lifetimeOrders: customer.lifetimeOrders,
+      lastOrderAt: customer.lastOrderAt,
       activity: customer.activity,
       tags: customer.tags,
       primarySegment: customer.primarySegment,
+      canEmail: customer.canEmail,
     }))
     const data = { count: items.length, total: dataset.customers.length, items, coverage: dataset.coverage.explanation }
     return ok(call.name, data, 'sync_records.customers')
@@ -90,14 +107,27 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
 
   private async products(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
     if (!this.deps.analytics) return missing(call.name, 'The product catalog has not been synced yet.')
-    const catalog = await this.deps.analytics.readCatalog(storeId)
+    const [catalog, snapshot] = await Promise.all([this.deps.analytics.readCatalog(storeId), this.deps.analytics.read(storeId)])
     const query = String(call.params.query ?? '').toLowerCase()
     const limit = boundedLimit(call.params.limit)
-    const items = catalog
-      .map((product) => ({ id: product.productId, title: typeof product.payload.title === 'string' ? product.payload.title : product.productId, status: product.payload.status ?? null, vendor: product.payload.vendor ?? null }))
-      .filter((product) => !query || product.title.toLowerCase().includes(query.replace(/show|my|products?|catalog/g, '').trim()) || query.includes('product'))
-      .slice(0, limit)
-    return ok(call.name, { count: items.length, items }, 'catalog_products')
+    const cutoff = utcDayOffset(-(rangeDaysFromQuery(query) - 1))
+    const sales = new Map<string, { unitsSold: number; grossRevenue: number }>()
+    for (const row of snapshot.productSales.filter((item) => item.day >= cutoff)) {
+      const current = sales.get(row.productId) ?? { unitsSold: 0, grossRevenue: 0 }
+      sales.set(row.productId, { unitsSold: current.unitsSold + row.unitsSold, grossRevenue: current.grossRevenue + row.grossRevenue })
+    }
+    const asksTop = /\b(best[ -]?sell(?:er|ing)?s?|top|highest|most sold)\b/.test(query)
+    const asksUnderperforming = /\b(underperform(?:ing)?|no sales|slow|worst)\b/.test(query)
+    const searchTerm = productSearchTerm(query)
+    let items = catalog
+      .map((product) => {
+        const performance = sales.get(product.productId) ?? { unitsSold: 0, grossRevenue: 0 }
+        return { id: product.productId, title: typeof product.payload.title === 'string' ? product.payload.title : product.productId, status: product.payload.status ?? null, vendor: product.payload.vendor ?? null, ...performance }
+      })
+      .filter((product) => !searchTerm || product.title.toLowerCase().includes(searchTerm) || String(product.vendor ?? '').toLowerCase().includes(searchTerm))
+    if (asksTop) items = items.sort((left, right) => right.grossRevenue - left.grossRevenue || right.unitsSold - left.unitsSold)
+    else if (asksUnderperforming) items = items.sort((left, right) => left.unitsSold - right.unitsSold || left.grossRevenue - right.grossRevenue)
+    return ok(call.name, { count: Math.min(items.length, limit), total: items.length, items: items.slice(0, limit), days: rangeDaysFromQuery(query) }, 'catalog_products + analytics_product_sales_daily')
   }
 
   private async orders(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -105,29 +135,40 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     const rows = await this.deps.orders.list(storeId)
     const query = String(call.params.query ?? '').toLowerCase()
     const limit = boundedLimit(call.params.limit)
-    const items = rows
-      .filter((order) => !query || [order.orderNumber, order.customer.name, order.status, order.id].some((value) => value?.toLowerCase().includes(query.replace(/show|recent|orders?/g, '').trim()) || query.includes('order')))
-      .slice(0, limit)
-      .map((order) => ({ id: order.id, orderNumber: order.orderNumber, totalPrice: order.totalPrice, currency: order.currency, status: order.status, createdAt: order.createdAt }))
-    return ok(call.name, { count: items.length, items }, 'sync_records.orders')
+    const rawTerm = query.replace(/\b(show|me|my|recent|today'?s?|highest|value|top|orders?|please)\b/g, ' ').replace(/[^a-z0-9#._-]+/g, ' ').trim()
+    const explicitTerm = /^[#._-]*$/.test(rawTerm) ? '' : rawTerm
+    const cutoff = /\btoday\b/.test(query) ? Date.now() - 86_400_000 : /\bweek\b/.test(query) ? Date.now() - 7 * 86_400_000 : null
+    let matched = rows.filter((order) => {
+      if (cutoff !== null && (!order.createdAt || Date.parse(order.createdAt) < cutoff)) return false
+      if (!explicitTerm) return true
+      return [order.orderNumber, order.customer.name, order.status, order.id].some((value) => value?.toLowerCase().includes(explicitTerm))
+    })
+    if (/\b(highest|top|largest|most valuable)\b/.test(query)) matched = [...matched].sort((left, right) => (right.totalPrice ?? 0) - (left.totalPrice ?? 0))
+    const items = matched.slice(0, limit).map((order) => ({ id: order.id, orderNumber: order.orderNumber, totalPrice: order.totalPrice, currency: order.currency, status: order.status, createdAt: order.createdAt }))
+    return ok(call.name, { count: items.length, total: matched.length, items }, 'sync_records.orders')
   }
 
   private async analytics(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
     if (!this.deps.analytics) return missing(call.name, 'Analytics have not been synced yet.')
-    const snapshot = await this.deps.analytics.read(storeId)
+    const [snapshot, syncedOrders] = await Promise.all([
+      this.deps.analytics.read(storeId),
+      this.deps.orders ? this.deps.orders.list(storeId).catch(() => []) : Promise.resolve([]),
+    ])
     if (snapshot.revenue.length === 0 && snapshot.orders.length === 0) return missing(call.name, 'No closed-period analytics rows are available yet.')
     const days = rangeDays(String(call.params.date_range ?? '30d'))
-    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
-    const previousCutoff = new Date(Date.now() - days * 2 * 86_400_000).toISOString().slice(0, 10)
-    const current = snapshot.revenue.filter((row) => row.day >= cutoff)
-    const previous = snapshot.revenue.filter((row) => row.day >= previousCutoff && row.day < cutoff)
-    const orders = snapshot.orders.filter((row) => row.day >= cutoff)
-    const previousOrders = snapshot.orders.filter((row) => row.day >= previousCutoff && row.day < cutoff)
+    const currentStart = utcDayOffset(-(days - 1))
+    const previousStart = utcDayOffset(-(days * 2 - 1))
+    const current = snapshot.revenue.filter((row) => row.day >= currentStart)
+    const previous = snapshot.revenue.filter((row) => row.day >= previousStart && row.day < currentStart)
+    const orders = snapshot.orders.filter((row) => row.day >= currentStart)
+    const previousOrders = snapshot.orders.filter((row) => row.day >= previousStart && row.day < currentStart)
     const revenue = current.reduce((sum, row) => sum + row.grossRevenue, 0)
     const previousRevenue = previous.reduce((sum, row) => sum + row.grossRevenue, 0)
     const orderCount = orders.reduce((sum, row) => sum + row.orderCount, 0)
     const previousOrderCount = previousOrders.reduce((sum, row) => sum + row.orderCount, 0)
+    const currencies = [...new Set(syncedOrders.map((order) => order.currency).filter((currency): currency is string => typeof currency === 'string' && /^[A-Za-z]{3}$/.test(currency)))]
     const data = {
+      currency: currencies.length === 1 ? currencies[0]!.toUpperCase() : null,
       revenue,
       previousRevenue,
       orders: orderCount,
@@ -395,6 +436,43 @@ function rangeDays(value: string): number {
   if (value === '7d') return 7
   if (value === '365d') return 365
   return 30
+}
+function utcDayOffset(offset: number, now = Date.now()): string {
+  const day = new Date(now)
+  day.setUTCHours(0, 0, 0, 0)
+  day.setUTCDate(day.getUTCDate() + offset)
+  return day.toISOString().slice(0, 10)
+}
+function rangeDaysFromQuery(query: string): number {
+  if (/\btoday\b/.test(query)) return 1
+  if (/\bweek\b/.test(query)) return 7
+  if (/\byear\b/.test(query)) return 365
+  return 30
+}
+function customerSearchTerm(query: string): string {
+  const term = query
+    .replace(/\([^)]*referring to[^)]*\)/g, '')
+    .replace(/\bat[ -]?risk\b/g, ' ')
+    .replace(/\b(who|what|are|is|find|show|list|me|my|the|best|top|spending|highest|value|customers?|buyers?|vips?|inactive|active|churn|repeat|returning|new|in|this|today|week|month|please|send|email|mail|draft|tag|as|those|these|them)\b/g, ' ')
+    .replace(/[^a-z0-9@._-]+/g, ' ')
+    .trim()
+  return /^[._-]*$/.test(term) ? '' : term
+}
+function productSearchTerm(query: string): string {
+  const term = query
+    .replace(/\bwhat'?s\b/g, ' ')
+    .replace(/\bbest[ -]?sellers?\b/g, ' ')
+    .replace(/\bbest[ -]?selling\b/g, ' ')
+    .replace(/\brunning low\b/g, ' ')
+    .replace(/\bno sales\b/g, ' ')
+    .replace(/\b(what|which|are|is|find|show|list|me|my|the|best|selling|bestselling|top|highest|most|sold|products?|catalog|skus?|underperforming|underperform|slow|worst|in|this|today|week|month|year|please)\b/g, ' ')
+    .replace(/[^a-z0-9._-]+/g, ' ')
+    .trim()
+  return /^[._-]*$/.test(term) ? '' : term
+}
+function idsFromResolvedReference(query: string): readonly string[] {
+  const match = /\bids\s+([a-z0-9_, -]+)/i.exec(query)
+  return match?.[1]?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
 }
 function stringArray(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : []

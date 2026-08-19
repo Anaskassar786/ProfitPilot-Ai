@@ -5,12 +5,15 @@ AI Command replaces Copilot as the merchant command surface. One command can que
 ## What merchants can do
 
 - Ask questions about customers, products, orders, inventory, analytics, recommendations, and store health.
+- Ask for growth help and receive a distinct multi-signal growth plan built from analytics, recommendations, health, and inventory (never a repeated revenue response).
 - Receive structured tables grounded in live Shopify sync data.
-- On Commander: preview emails, tags, discounts, recommendation approvals, workflow triggers, notifications, and reports.
-- Approve, cancel, or undo reversible actions within 30 seconds.
-- Save frequent commands and reopen conversation history.
+- On Trial, Start, and Growth: receive insight-only growth next steps.
+- On Commander: use action-ready growth controls to preview emails, tags, discounts, recommendation approvals, workflow triggers, notifications, and reports.
+- Approve, edit, cancel, or undo reversible actions within 30 seconds. Action results are appended to the conversation and duplicate approval clicks are rejected atomically.
+- Save frequent commands, export eligible conversations, archive history, and persist helpful/not-helpful feedback.
+- Configure response style, quick commands, suggestions, thinking animation, conversation references, and action-completion notifications.
 
-Nothing is invented. If a backend call fails, AI Command reports the failure with the real error.
+Nothing is invented. Empty action targets never get an Approve button. If a backend call fails, AI Command reports the failure with the real error. `AI_COMMAND_ACTIONS_ENABLED=false` is a production kill switch that disables action mode even for Commander without misrepresenting the merchant's plan.
 
 ## Plans
 
@@ -58,6 +61,8 @@ Email send requires a verified merchant sender and a live SMTP (Brevo) response.
 - `GET /ai-command/conversations/:id`
 - `DELETE /ai-command/conversations/:id`
 - `POST /ai-command/conversations/:id/archive`
+- `GET /ai-command/conversations/:id/export`
+- `POST /ai-command/conversations/:id/messages/:messageId/feedback`
 - `POST /ai-command/actions/:id/approve|cancel|rollback`
 - `GET /ai-command/actions`
 - `GET|POST|DELETE /ai-command/saved`
@@ -75,7 +80,7 @@ AI_COMMAND_MODEL_FALLBACK=nvidia/nemotron-3-nano-omni:free
 AI_COMMAND_ACTIONS_ENABLED=true
 ```
 
-If the command model is unavailable, AI Command still answers from deterministic tool results. It never fills gaps with invented numbers.
+The production command path is deterministic and answers directly from tool results. Provider configuration is reserved for a future metered narration layer; AI Command does not make a discarded/unmetered model call before answering. It never fills gaps with invented numbers.
 
 ## Campaigns
 

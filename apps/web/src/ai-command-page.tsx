@@ -12,8 +12,13 @@ export function AiCommandPage({ context, onToast, onNavigateBilling }: {
 }) {
   const [plan, setPlan] = useState<AiCommandPlan>('trial')
   useEffect(() => {
-    if (!context.storeId) return
-    void fetchBilling(context.storeId).then((account) => setPlan(resolveAiCommandPlan(account.subscription?.plan ?? 'trial'))).catch(() => setPlan('trial'))
+    let active = true
+    setPlan('trial')
+    if (!context.storeId) return () => { active = false }
+    void fetchBilling(context.storeId)
+      .then((account) => { if (active) setPlan(resolveAiCommandPlan(account.subscription?.plan ?? 'trial')) })
+      .catch(() => { if (active) setPlan('trial') })
+    return () => { active = false }
   }, [context.storeId])
   return (
     <div className="page-content">

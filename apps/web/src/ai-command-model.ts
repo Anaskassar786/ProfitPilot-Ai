@@ -85,6 +85,7 @@ export type AiCommandQuickCommand = Readonly<{
 }>
 
 export type AiCommandQuickInsights = Readonly<{
+  currency: string | null
   revenueToday: number | null
   revenueYesterday: number | null
   ordersToday: number | null
