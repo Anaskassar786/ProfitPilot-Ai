@@ -121,6 +121,8 @@ import {
   patternStrengthRows,
   personaRadarAverage,
   predictionWavePoints,
+  reviewBacklogSummary,
+  signalQualitySummary,
   trendDivergingRows,
   parseInsightsRoute,
   patternAiPlanSummary,
@@ -835,6 +837,78 @@ function DiscoveryReadingGuide() {
   )
 }
 
+function SignalQualityKpi({ discoveries }: { discoveries: readonly InsightDiscovery[] }) {
+  const summary = useMemo(() => signalQualitySummary(discoveries), [discoveries])
+  const empty = summary.total === 0
+  return (
+    <div className="pa-card pa-kpi-card pa-kpi-quality">
+      <div className="pa-card-head">
+        <span className="section-kicker"><ShieldCheck size={11} /> SIGNAL QUALITY</span>
+        <small>Confidence distribution of your discoveries</small>
+      </div>
+      {empty ? (
+        <p className="pa-muted">No signals yet — quality metrics appear after your first discovery sweep.</p>
+      ) : (
+        <>
+          <div className="pa-kpi-hero">
+            <strong>{summary.avgPercent}%</strong>
+            <span>average confidence</span>
+            <em className={`pa-confidence tone-${summary.avgConfidence >= 0.7 ? 'high' : summary.avgConfidence >= 0.5 ? 'medium' : 'low'}`}>{summary.highCount} high · {summary.mediumCount} medium · {summary.lowCount} early</em>
+          </div>
+          <div className="pa-kpi-dist" role="img" aria-label={`${summary.highCount} high, ${summary.mediumCount} medium, ${summary.lowCount} early signals`}>
+            <span className="pa-kpi-dist-track">
+              {summary.highCount > 0 && <i className="seg high" style={{ width: `${Math.round((summary.highCount / summary.total) * 100)}%` }} />}
+              {summary.mediumCount > 0 && <i className="seg medium" style={{ width: `${Math.round((summary.mediumCount / summary.total) * 100)}%` }} />}
+              {summary.lowCount > 0 && <i className="seg low" style={{ width: `${Math.round((summary.lowCount / summary.total) * 100)}%` }} />}
+            </span>
+            <span className="pa-kpi-dist-labels"><b>{summary.highShare}% high confidence</b><span>{summary.total} total signals</span></span>
+          </div>
+          {summary.strongest && (
+            <p className="pa-kpi-foot">Strongest: <strong>{summary.strongest.title}</strong> · {confidencePercent(summary.strongest.confidence)}%</p>
+          )}
+          <p className="pa-muted" style={{ fontSize: '11px' }}>High means ≥70% confidence — these are the signals worth acting on first.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ActionBacklogKpi({ discoveries, funnel, onReview }: { discoveries: readonly InsightDiscovery[]; funnel: ReturnType<typeof discoveryFunnel>; onReview: () => void }) {
+  const summary = useMemo(() => reviewBacklogSummary(discoveries, funnel), [discoveries, funnel])
+  const empty = summary.total === 0
+  return (
+    <div className={`pa-card pa-kpi-card pa-kpi-backlog ${summary.urgent ? 'urgent' : ''}`}>
+      <div className="pa-card-head">
+        <span className="section-kicker"><Clock3 size={11} /> ACTION BACKLOG</span>
+        <small>What needs your review next</small>
+      </div>
+      {empty ? (
+        <p className="pa-muted">Your backlog fills as PatternAI publishes discoveries — run a sweep to start.</p>
+      ) : (
+        <>
+          <div className="pa-kpi-hero">
+            <strong>{formatInsightNumber(summary.newCount)}</strong>
+            <span>new signal{summary.newCount === 1 ? '' : 's'} to review</span>
+            {summary.oldestNewLabel && <em className={summary.urgent ? 'urgent' : ''}>Oldest waiting {summary.oldestNewLabel}{summary.urgent ? ' · needs attention' : ''}</em>}
+          </div>
+          <div className="pa-kpi-stats">
+            <span><b>{formatInsightNumber(summary.reviewedCount)}</b><small>reviewed</small></span>
+            <span><b>{summary.conversion === null ? '—' : `${Math.round(summary.conversion * 100)}%`}</b><small>acted → conversion</small></span>
+            <span><b>{formatInsightNumber(summary.actedOn)}</b><small>acted on</small></span>
+          </div>
+          <p className="pa-kpi-foot">{summary.hint}</p>
+          {summary.newCount > 0 && (
+            <button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</button>
+          )}
+          {summary.newCount === 0 && summary.total > 0 && (
+            <p className="pa-muted" style={{ fontSize: '11px' }}>Tip: mark useful finds as “Saved” — PatternAI learns what you value.</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ── Discoveries ───────────────────────────────────────────────────────── */
 
 function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
@@ -965,13 +1039,19 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
         </div>
       )}
 
-      {strengthRows.length > 0 && (
-        <div className="pa-card pa-strength-card">
-          <div className="pa-card-head">
-            <span className="section-kicker"><Radar size={11} /> PATTERN CONFIDENCE</span>
-            <small>How much evidence your store has for each family of pattern</small>
-          </div>
-          <PatternStrengthMeter rows={strengthRows} tip="More synced orders mean stronger patterns — every bar is your real count against the engine's own threshold." />
+      {(strengthRows.length > 0 || allDiscoveries.length > 0) && (
+        <div className="pa-kpi-row">
+          {strengthRows.length > 0 && (
+            <div className="pa-card pa-strength-card">
+              <div className="pa-card-head">
+                <span className="section-kicker"><Radar size={11} /> PATTERN CONFIDENCE</span>
+                <small>How much evidence your store has for each family of pattern</small>
+              </div>
+              <PatternStrengthMeter rows={strengthRows} tip="More synced orders mean stronger patterns — every bar is your real count against the engine's own threshold." />
+            </div>
+          )}
+          <SignalQualityKpi discoveries={allDiscoveries} />
+          <ActionBacklogKpi discoveries={allDiscoveries} funnel={funnel} onReview={() => setStatusFilter('NEW')} />
         </div>
       )}
 
