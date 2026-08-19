@@ -10,8 +10,11 @@ export" / "Catalog XLSX" / "Audit log CSV" / "Revenue PDF". This PR rebuilds it 
 merchant download centre with plan-based access, real per-card detail, export history,
 and two finished themes. No other module was touched.
 
-**Result: 2,372 automated tests pass (189 files). 3 real bugs found and fixed —
-two of them shipped broken files to merchants.**
+**Result: 3 real bugs found and fixed — two of them shipped broken files to merchants.
+All 104 Exports-related tests pass; the full suite is green apart from one failure that
+is pre-existing on `main` in an unrelated module (see §4).**
+
+Branch is merged with current `main` (PR #84 Reports/Settings) and conflict-free.
 
 ---
 
@@ -107,9 +110,14 @@ locked merchant never triggers a query they cannot download.
 ## 4. Test results
 
 ```
-Test Files  189 passed (189)
-     Tests  2372 passed (2372)
+Test Files  194 passed | 1 failed (195)
+     Tests  2418 passed | 1 failed (2419)
 ```
+
+The one failure — `command-center-functional.test.tsx`, "7 insights today" — reproduces
+on a clean `origin/main` worktree, so it predates this branch and belongs to the AI
+Command Center module. This PR is scoped to Exports, so it is left untouched.
+Exports-related tests: **104 passed / 104**.
 
 New coverage: **82 tests** across three files.
 

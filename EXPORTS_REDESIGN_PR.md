@@ -7,6 +7,10 @@ only** — no other module is touched.
 Along the way, testing the actual downloaded files surfaced **two pre-existing bugs that
 shipped broken files to merchants**. Both are fixed with regression tests.
 
+> Rebased on current `main` (includes PR #84 Reports/Settings). The two overlapping
+> wiring conflicts in `App.tsx` were resolved keeping **both** sides: main's Reports
+> copy and this PR's Data Exports page. Branch is conflict-free.
+
 📄 Full testing report: [`EXPORTS_FUNCTIONAL_TEST_REPORT.md`](./EXPORTS_FUNCTIONAL_TEST_REPORT.md)
 
 ---
@@ -93,9 +97,15 @@ below 12px and `prefers-reduced-motion` is respected.
 ## FIX 6 — Complete testing
 
 ```
-Test Files  189 passed (189)
-     Tests  2372 passed (2372)
+Test Files  194 passed | 1 failed (195)
+     Tests  2418 passed | 1 failed (2419)
 ```
+
+The single failure is `command-center-functional.test.tsx` ("7 insights today"), which
+**fails identically on `main`** — verified in a clean worktree at `origin/main`. It is a
+pre-existing issue in the AI Command Center module and is deliberately left untouched,
+since this PR is scoped to Exports. Every Exports-related test passes: **104/104** across
+the four new/updated files.
 
 **82 new tests.** Beyond unit coverage, the page was driven in a real Chromium browser
 against a live dev server in both themes and across all four plans: downloads were
