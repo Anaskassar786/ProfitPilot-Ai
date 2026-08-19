@@ -284,10 +284,26 @@ function emptyMessage(dataset: ExportDataset, range: ExportDateRange): string {
 function normalizeDay(value: string | null, field: string): string | null {
   if (value === null || value.trim() === '') return null
   const text = value.trim().slice(0, 10)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(text))) {
-    throw new AppError('VALIDATION_ERROR', `The ${field} date must look like YYYY-MM-DD.`, 400, { [field]: value })
+  // Bug fix: the pattern + Date.parse check is not enough. Date.parse
+  // normalises impossible calendar days instead of failing — '2026-02-30'
+  // parses as March 2nd — so a mistyped date passed validation and then
+  // silently matched no rows, leaving the merchant with a confusing
+  // "nothing to export in these dates" message. The round-trip check below
+  // rejects Feb 30 / Apr 31 while keeping real leap days.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || !isCalendarDay(text)) {
+    throw new AppError('VALIDATION_ERROR', `The ${field} date must be a real calendar date in YYYY-MM-DD format.`, 400, { [field]: value })
   }
   return text
+}
+
+/** True only for dates that actually exist on the calendar (UTC round-trip). */
+function isCalendarDay(text: string): boolean {
+  const [yearText, monthText, dayText] = text.split('-')
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 }
 
 export function planLabel(plan: PlanTier): string {

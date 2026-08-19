@@ -128,6 +128,25 @@ describe('F7 API security suite', () => {
     })
   })
 
+  it('answers 400 instead of 500 when a request value breaks a typed database column', async () => {
+    const direct = createApi({ logger: new Logger(), readinessChecks: [], dataPlane: dataPlane(async () => { throw Object.assign(new Error('invalid input syntax for type uuid: "demo-shop"'), { code: '22P02' }) }) })
+    await withServer(direct, async (base) => {
+      const response = await fetch(`${base}/analytics?storeId=demo-shop`)
+      expect(response.status).toBe(400)
+      const payload = await response.json() as { error: { code: string; message: string; details: Readonly<Record<string, unknown>> } }
+      expect(payload.error.code).toBe('VALIDATION_ERROR')
+      expect(payload.error.details.reason).toBe('INVALID_VALUE_FORMAT')
+      expect(JSON.stringify(payload)).not.toContain('invalid input syntax')
+    })
+    // The same error wrapped as a cause chain must map the same way.
+    const wrapped = createApi({ logger: new Logger(), readinessChecks: [], dataPlane: dataPlane(async () => { throw new Error('read failed', { cause: Object.assign(new Error('invalid input syntax for type uuid'), { code: '22P02' }) }) }) })
+    await withServer(wrapped, async (base) => {
+      const response = await fetch(`${base}/analytics?storeId=demo-shop`)
+      expect(response.status).toBe(400)
+      expect((await response.json() as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR')
+    })
+  })
+
   it('protects cookie-authenticated writes with CSRF', async () => {
     const app = createApi({ logger: new Logger(), readinessChecks: [], dataPlane: dataPlane() })
     await withServer(app, async (base) => {
