@@ -14,7 +14,7 @@ import './analytics.css'
 import './upgrade-overrides.css'
 import './final-polish.css'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
-import { AnalyticsHero, RevenueTrendChart, OrdersAOVCorrelation, SalesByChannel, CategoryDistribution } from './analytics.js'
+import { AnalyticsHero, RevenueTrendChart, OrdersAOVCorrelation, SalesByChannel, CategoryDistribution, DiscountLeakage, StockoutRisk } from './analytics.js'
 import { InventoryStatsGrid, InventoryHealthCard, StockDistributionChart, InventoryValueSummary } from './inventory.js'
 import { CancellationRateCard, FulfillmentRateCard, OrderHealthInsight, TopProductInsight } from './orders.js'
 import { DashboardLayout } from './dashboard.js'
@@ -135,6 +135,10 @@ function Harness() {
             <section className="analytics-split analytics-trends-row">
               <RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />
               <OrdersAOVCorrelation trend={trend} />
+            </section>
+            <section className="analytics-split">
+              <DiscountLeakage snapshot={snapshot} trend={trend} />
+              <StockoutRisk inventory={invPage} loading={false} onUpgrade={() => {}} />
             </section>
             <section className="analytics-split">
               <SalesByChannel channels={channels} />

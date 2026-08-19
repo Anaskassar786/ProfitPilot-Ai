@@ -1,10 +1,12 @@
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, Percent, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
-import { fetchAnalyticsInsights, fetchCustomers, queryAnalyticsInsights } from './api.js'
+import { fetchAnalyticsInsights, fetchCustomers, fetchInventory, queryAnalyticsInsights } from './api.js'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
+import { revenueLeakage, revenuePacing, stockRisk } from './analytics-widgets-model.js'
+import type { InventoryPageResult } from './inventory-model.js'
 import { safeAddDays, safeDate, safeDayKey, safeShortDay, todayDayKey } from './safe-date.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { AnalyticsInsights, AnalyticsPeriod, Kpi, TrendPoint } from './analytics-model.js'
@@ -17,6 +19,8 @@ type PageProps = { context: WorkspaceContext; snapshot: AnalyticsSnapshot | null
 export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: PageProps) {
   const [insights, setInsights] = useState<AnalyticsInsights | null>(null)
   const [customerCountFallback, setCustomerCountFallback] = useState<number | null>(null)
+  const [inventory, setInventory] = useState<InventoryPageResult | null>(null)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [period, setPeriodValue] = useState<AnalyticsPeriod>(30)
@@ -24,8 +28,15 @@ export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: 
   const setPeriod = (value: AnalyticsPeriod) => { setCustomRange(null); setPeriodValue(value) }
   const refresh = () => {
     const storeId = context.storeId
-    if (!storeId) { setInsights(null); setCustomerCountFallback(null); setLoading(false); return }
+    if (!storeId) { setInsights(null); setCustomerCountFallback(null); setInventory(null); setLoading(false); setInventoryLoading(false); return }
     setLoading(true)
+    setInventoryLoading(true)
+    // Stock-out risk reads the same measured inventory rows the Inventory
+    // workspace uses; nothing is estimated when the sync has not run yet.
+    void fetchInventory(storeId, { sort: 'days_of_cover', direction: 'asc', limit: 50 })
+      .then((page) => setInventory(page))
+      .catch(() => setInventory(null))
+      .finally(() => setInventoryLoading(false))
     void fetchAnalyticsInsights(storeId)
       .then((value) => {
         const norm = normalizeInsights(value)
@@ -66,8 +77,8 @@ export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: 
       <Boundary label="orders and AOV"><OrdersAOVCorrelation trend={trend} /></Boundary>
     </section>
     <section className="analytics-split">
-      <Boundary label="sales channels"><SalesByChannel channels={insights?.channels ?? []} /></Boundary>
-      <Boundary label="category distribution"><CategoryDistribution categories={insights?.categories ?? []} /></Boundary>
+      <Boundary label="discount leakage"><DiscountLeakage snapshot={snapshot} trend={trend} /></Boundary>
+      <Boundary label="stock-out risk"><StockoutRisk inventory={inventory} loading={inventoryLoading} onUpgrade={onNavigateBilling} /></Boundary>
     </section>
     <Boundary label="AI business intelligence"><AIIntelligence insights={insights} trend={trend} loading={loading} onUpgrade={onNavigateBilling} /></Boundary>
     <section className="analytics-split">
@@ -164,16 +175,53 @@ function KpiTooltip({ active, payload, format, label, total }: { active?: boolea
   return <div className="kpi-tooltip"><span>{label}</span><strong>{formatKpiValue(point.value, format)}</strong><small>day {point.point + 1} of {total}</small></div>
 }
 
+/**
+ * Revenue momentum — cumulative pacing view.
+ *
+ * Instead of repeating the daily bar-and-line shape used by Orders & AOV, this
+ * chart answers the question merchants actually ask mid-period: "am I ahead of
+ * last period, and where do I land if nothing changes?" Every series is real —
+ * banked revenue, the previous period's running total on the same elapsed days,
+ * and the AI forecast continuation. No series is drawn when its source is
+ * missing.
+ */
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
-  const real = trend.some((row) => row.revenue > 0)
-  const realRows = trend.filter((row) => row.forecast === null)
-  const now = realRows.reduce((sum, row) => sum + row.revenue, 0)
-  const before = trend.reduce((sum, row) => sum + (row.previous ?? 0), 0)
-  const growth = before > 0 ? (now - before) / before * 100 : null
-  // Real revenue peak — only marked when the period contains actual sales rows.
-  const peak = realRows.filter((row) => row.revenue > 0).sort((a, b) => b.revenue - a.revenue)[0] ?? null
-  return <Widget className="revenue-trend" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div>}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...trend]} margin={{ top: 16, right: 14, left: -8 }}><defs><linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(37, 99, 235, .25)"/><stop offset="1" stopColor="rgba(37, 99, 235, .02)"/></linearGradient><linearGradient id="confidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".22"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".02"/></linearGradient></defs><CartesianGrid stroke="#374151" strokeDasharray="3 7" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/><YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/><Tooltip content={<RevenueTooltip/>} cursor={{ stroke:'#475569', strokeDasharray:'3 3' }}/><Bar dataKey="revenue" fill="#60A5FA" opacity={.08} barSize={12}/><Area type="monotone" dataKey="revenue" fill="url(#revFill)" stroke="none"/><Line type="monotone" dataKey="previous" name="Previous" stroke="#64748b" strokeDasharray="5 6" dot={false}/><Area type="monotone" dataKey="upper" fill="url(#confidence)" stroke="none"/><Line type="monotone" dataKey="revenue" name="Current" stroke="#60A5FA" strokeWidth={2.5} dot={{r:2.4,fill:'#60A5FA',strokeWidth:0}} activeDot={{r:4.5,strokeWidth:2.5,fill:'#ffffff',stroke:'#60A5FA'}}/><Line type="monotone" dataKey="forecast" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" dot={false}/>{peak && <ReferenceLine x={peak.day} stroke="#f59e0b" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak: ${money(peak.revenue)}`} /> }} />}</ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend current"/>Current</span><span><i className="legend previous"/>Previous</span><span><i className="legend forecast"/>AI forecast</span><b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗' : '↘'} ${Math.abs(growth).toFixed(1)}% period change`}</b></div><div className="chart-summary"><div><small>Total</small><strong>{money(now)}</strong></div><i/><div><small>Average</small><strong>{money(now / Math.max(1, realRows.length))}</strong></div><i/><div><small>Peak Day</small><strong title={peak ? `${shortDay(peak.day)} — best revenue day of the period` : 'Awaiting sales data'}>{peak ? `${shortDay(peak.day)} · ${money(peak.revenue)}` : '—'}</strong></div><i/><div><small>Growth</small><strong className={growth === null ? '' : growth < 0 ? 'negative' : 'positive'} title={growth === null ? 'A previous-period baseline is still building' : 'Change vs the previous period'}>{growth === null ? '—' : `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`}</strong></div></div></> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a current-vs-previous revenue narrative." progress={0} goal="First revenue day" />}
+  const pacing = useMemo(() => revenuePacing(trend), [trend])
+  const growth = pacing.pace
+  const peak = pacing.peak
+  const closing = pacing.projectedClose ?? (pacing.daysTotal > pacing.daysElapsed ? pacing.runRateClose : null)
+  const closeSource = pacing.projectedClose !== null ? 'AI forecast' : 'current run rate'
+  return <Widget className="revenue-trend pacing" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="widget-actions">{pacing.hasData ? <span className="scope-pill" title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}><Zap size={12} />{money(pacing.total)} banked</span> : null}<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div></div>}>
+    {pacing.hasData ? <>
+      <div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...pacing.rows]} margin={{ top: 18, right: 16, left: -8 }}>
+        <defs>
+          <linearGradient id="pacingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563EB" stopOpacity=".34"/><stop offset="1" stopColor="#2563EB" stopOpacity=".02"/></linearGradient>
+          <linearGradient id="pacingProjection" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".18"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".01"/></linearGradient>
+        </defs>
+        <CartesianGrid stroke="#374151" strokeDasharray="3 7" vertical={false}/>
+        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/>
+        <YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <Tooltip content={<PacingTooltip/>} cursor={{ stroke:'#475569', strokeDasharray:'3 3' }}/>
+        {pacing.previousTotal !== null && pacing.previousTotal > 0 && <ReferenceLine y={pacing.previousTotal} stroke="#64748b" strokeDasharray="2 6" strokeWidth={1} label={{ position: 'insideTopLeft', offset: 6, content: <PeakLabel value={`Last period close ${money(pacing.previousTotal)}`} /> }} />}
+        <Line type="monotone" dataKey="previousCumulative" name="Previous" stroke="#64748b" strokeDasharray="5 6" strokeWidth={1.8} dot={false} connectNulls/>
+        <Area type="monotone" dataKey="projected" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" fill="url(#pacingProjection)" dot={false} connectNulls/>
+        <Area type="monotone" dataKey="cumulative" name="Current" stroke="#60A5FA" strokeWidth={2.6} fill="url(#pacingFill)" dot={false} activeDot={{ r:4.5, strokeWidth:2.5, fill:'#ffffff', stroke:'#60A5FA' }}/>
+        {peak && <ReferenceLine x={peak.day} stroke="#f59e0b" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak day ${money(peak.revenue)}`} /> }} />}
+      </ComposedChart></ResponsiveContainer></div>
+      <div className="chart-caption">
+        <span><i className="legend current"/>Current</span>
+        <span><i className="legend previous"/>Previous</span>
+        <span><i className="legend forecast"/>AI forecast</span>
+        <b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗ Ahead of' : '↘ Behind'} last period by ${Math.abs(growth).toFixed(1)}%`}</b>
+      </div>
+      <div className="chart-summary">
+        <div><small>Total</small><strong title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}>{money(pacing.total)}</strong></div><i/>
+        <div><small>Average / day</small><strong title="Run rate across the synced days in this period">{money(pacing.runRate)}</strong></div><i/>
+        <div><small>Peak Day</small><strong title={peak ? `${shortDay(peak.day)} — best revenue day of the period` : 'Awaiting sales data'}>{peak ? `${shortDay(peak.day)} · ${money(peak.revenue)}` : '—'}</strong></div><i/>
+        <div><small>Growth</small><strong className={growth === null ? '' : growth < 0 ? 'negative' : 'positive'} title={growth === null ? 'A previous-period baseline is still building' : 'Pace against the same elapsed days of the previous period'}>{growth === null ? '—' : `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`}</strong></div>
+      </div>
+      <div className="insight-strip"><Brain size={14}/><span>This period has banked <b>{money(pacing.total)}</b> across {pacing.daysElapsed} {pacing.daysElapsed === 1 ? 'day' : 'days'}, a run rate of <b>{money(pacing.runRate)}</b> per day{closing !== null ? <> — on the {closeSource} this period tracks to close near <b>{money(closing)}</b></> : null}. {growth === null ? 'A previous-period baseline is still building, so pacing appears once comparable days exist.' : growth >= 0 ? `You are ${Math.abs(growth).toFixed(1)}% ahead of the same point last period — protect what is working.` : `You are ${Math.abs(growth).toFixed(1)}% behind the same point last period — close the gap while days remain.`}</span></div>
+    </> : <RichEmpty icon={LineChart} title="Your revenue story starts here" message="Sync your first orders to turn this canvas into a period-pacing narrative: banked revenue, last period's pace, and the projected close." progress={0} goal="First revenue day" />}
   </Widget>
 }
 
@@ -273,6 +321,141 @@ export function CategoryDistribution({ categories }: { categories: AnalyticsInsi
       />
     )}
   </Widget>
+}
+
+/**
+ * Discount & revenue leakage.
+ *
+ * Shopify's daily revenue rows carry the collected order total and the discount
+ * amount that was taken off, so the waterfall (merchandise value → discounts →
+ * collected) is measured, not modelled. Cancellations are shown as counts
+ * because the daily aggregate does not carry a cancelled-order value.
+ */
+export function DiscountLeakage({ snapshot, trend }: { snapshot: AnalyticsSnapshot | null; trend: readonly TrendPoint[] }) {
+  const days = useMemo(() => trend.filter((point) => point.forecast === null).map((point) => point.day), [trend])
+  const data = useMemo(() => revenueLeakage(snapshot, days), [snapshot, days])
+  const rate = data.discountRate
+  const share = data.merchandiseValue > 0 ? (data.collected / data.merchandiseValue) * 100 : null
+  return <Widget className="leakage-widget" eyebrow="Margin Protection" title="Discount & revenue leakage" action={data.hasData ? <span className={`scope-pill ${rate !== null && rate >= 15 ? 'warn' : ''}`} title="Share of merchandise value given away as discounts"><Percent size={12} />{rate === null ? 'No discounts' : `${rate.toFixed(1)}% discount rate`}</span> : undefined}>
+    {data.hasData ? <>
+      <div className="chart-mid"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...data.rows]} margin={{ top: 14, right: 6, left: -18 }}>
+        <defs><linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".55"/><stop offset="1" stopColor="#38bdf8" stopOpacity=".12"/></linearGradient></defs>
+        <CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/>
+        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={30}/>
+        <YAxis yAxisId="money" tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(value: number) => `${Math.round(safe(value))}%`} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <Tooltip content={<LeakageTooltip average={rate} />} cursor={{ fill:'rgba(148,163,184,.06)' }}/>
+        <Bar yAxisId="money" stackId="value" dataKey="collected" name="Collected" fill="url(#collectedFill)" radius={[0, 0, 0, 0]} maxBarSize={22}/>
+        <Bar yAxisId="money" stackId="value" dataKey="discounts" name="Discounts" fill="#f59e0b" fillOpacity={.85} radius={[4, 4, 0, 0]} maxBarSize={22}/>
+        {data.discounts > 0 && <Line yAxisId="rate" type="monotone" dataKey="discountRate" name="Discount rate" stroke="#fb923c" strokeWidth={2.2} dot={false} activeDot={{ r:4, strokeWidth:2, fill:'#ffffff', stroke:'#fb923c' }} connectNulls/>}
+      </ComposedChart></ResponsiveContainer></div>
+      <div className="chart-caption">
+        <span><i className="legend collected"/>Collected</span>
+        <span><i className="legend discounts"/>Discounts</span>
+        {data.discounts > 0 ? <span><i className="legend rate"/>Discount rate</span> : null}
+        <b className={data.cancelledOrders > 0 ? 'negative' : 'positive'}>{data.cancelledOrders > 0 ? `${data.cancelledOrders} cancelled of ${data.orders} orders (${(data.cancelRate ?? 0).toFixed(1)}%)` : `${data.orders} orders · none cancelled`}</b>
+      </div>
+      <div className="chart-summary">
+        <div><small>Merchandise value</small><strong title="Collected revenue plus every discount given in this period">{money(data.merchandiseValue)}</strong></div><i/>
+        <div><small>Discounts given</small><strong className={data.discounts > 0 ? 'negative' : ''} title="Shopify discount totals across the period">{data.discounts > 0 ? `−${money(data.discounts)}` : money(0)}</strong></div><i/>
+        <div><small>Collected</small><strong className="positive" title="Order totals actually captured">{money(data.collected)}{share !== null ? ` · ${share.toFixed(0)}%` : ''}</strong></div><i/>
+        <div><small>Discount days</small><strong title="Days in this period where at least one discount was applied">{data.discountDays} of {data.rows.length}</strong></div>
+      </div>
+      <div className="insight-strip"><Brain size={14}/><span>{data.discounts > 0
+        ? <>Discounts absorbed <b>{money(data.discounts)}</b> ({(rate ?? 0).toFixed(1)}% of merchandise value){data.heaviestDay ? <>, heaviest on {shortDay(data.heaviestDay.day)} at <b>{money(data.heaviestDay.discounts)}</b></> : null}. Trimming the discount rate by one point would return roughly <b>{money(data.onePointValue)}</b> over the same volume.</>
+        : <>No discount leakage in this period — <b>{money(data.collected)}</b> was collected at full merchandise value. Keep promotions targeted so margin stays intact.</>}{data.cancelledOrders > 0 ? <> {data.cancelledOrders} cancelled {data.cancelledOrders === 1 ? 'order' : 'orders'} also left the funnel; review fulfilment friction.</> : null}</span></div>
+    </> : <RichEmpty icon={Percent} title="Protect your margin" message="Once orders sync, this card separates the money you collected from the money handed back through discounts, and flags cancellations that quietly drain revenue." progress={0} goal="Sync orders to measure leakage" />}
+  </Widget>
+}
+
+function LeakageTooltip({ active, payload, label, average }: { active?: boolean; payload?: Array<{ payload?: { day: string; collected: number; discounts: number; discountRate: number | null } }>; label?: string; average?: number | null }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  const merchandise = point.collected + point.discounts
+  return <div className="analytics-tooltip">
+    <strong>{formatDateLabel(label ?? point.day)}</strong>
+    <div className="tooltip-metrics">
+      <div className="tooltip-row"><i style={{ background:'#38bdf8' }} /><span>Collected:</span><strong>{money(point.collected)}</strong></div>
+      <div className="tooltip-row"><i style={{ background:'#f59e0b' }} /><span>Discounts:</span><strong>{point.discounts > 0 ? `−${money(point.discounts)}` : money(0)}</strong></div>
+      <div className="tooltip-row"><i style={{ background:'#94a3b8' }} /><span>Merchandise:</span><strong>{money(merchandise)}</strong></div>
+      {point.discountRate !== null && <div className="tooltip-row"><i style={{ background:'#fb923c' }} /><span>Discount rate:</span><strong className={average != null && point.discountRate > average ? 'negative' : 'positive'}>{point.discountRate.toFixed(1)}%</strong></div>}
+    </div>
+  </div>
+}
+
+/**
+ * Stock-out risk & days of cover.
+ *
+ * Quantities come from Shopify inventory levels and the velocity/days-of-cover
+ * figures are the same measured values the Inventory workspace shows. When the
+ * plan does not include days of cover, the card falls back to honest stock
+ * counts rather than inventing a runway.
+ */
+export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: InventoryPageResult | null; loading: boolean; onUpgrade: () => void }) {
+  const risk = useMemo(() => stockRisk(inventory), [inventory])
+  const chartRows = risk.items.filter((item) => item.days !== null).map((item) => ({ ...item, days: item.days ?? 0, short: item.label.length > 22 ? `${item.label.slice(0, 21)}…` : item.label }))
+  const worst = risk.items[0] ?? null
+  const colorFor = (days: number, status: string) => (status === 'out' || days <= 3 ? '#f43f5e' : days <= risk.reorderWindowDays ? '#f59e0b' : '#34d399')
+  return <Widget className="stockout-widget" eyebrow="Inventory Risk" title="Stock-out risk & cover" action={risk.hasInventory ? <span className={`scope-pill ${risk.urgentCount > 0 ? 'warn' : ''}`} title="SKUs out of stock or inside the reorder window"><PackageSearch size={12} />{risk.urgentCount > 0 ? `${risk.urgentCount} need action` : 'All SKUs covered'}</span> : undefined}>
+    {loading ? <div className="stock-risk-loading"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line short" /></div>
+      : !risk.hasInventory ? <RichEmpty icon={PackageSearch} title="Protect your bestsellers" message={risk.explanation} progress={0} goal="Sync products to measure stock cover" />
+      : <>
+        {chartRows.length ? <div className="chart-mid risk-chart"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart layout="vertical" data={chartRows} margin={{ top: 10, right: 22, left: 4, bottom: 4 }}>
+          <CartesianGrid stroke="rgba(148,163,184,.08)" horizontal={false}/>
+          <XAxis type="number" tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${Math.round(safe(value))}d`} />
+          <YAxis type="category" dataKey="short" width={104} tick={{ fill:'#8fa3bc', fontSize:9 }} axisLine={false} tickLine={false} />
+          <Tooltip content={<StockRiskTooltip window={risk.reorderWindowDays} />} cursor={{ fill:'rgba(148,163,184,.06)' }}/>
+          <ReferenceLine x={risk.reorderWindowDays} stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={1.2} label={{ position:'top', offset: 6, content: <PeakLabel value={`Reorder point ${risk.reorderWindowDays}d`} /> }} />
+          <Bar dataKey="days" name="Days of cover" radius={[0, 5, 5, 0]} maxBarSize={17}>
+            {chartRows.map((row) => <Cell key={row.variantId} fill={colorFor(row.days, row.status)} />)}
+          </Bar>
+        </ComposedChart></ResponsiveContainer></div> : (
+          <div className="risk-list">
+            {risk.items.slice(0, 5).map((item) => (
+              <div className="risk-row" key={item.variantId}>
+                <span className={`risk-dot ${item.status}`} />
+                <div><b>{item.label}</b><small>{item.sku ? `${item.sku} · ` : ''}{item.status === 'out' ? 'Out of stock' : item.status === 'low' ? 'Low stock' : 'Tracked'}</small></div>
+                <strong>{item.quantity === null ? '—' : `${item.quantity.toLocaleString()} left`}</strong>
+              </div>
+            ))}
+            {!risk.items.length ? <p className="risk-empty">Every tracked SKU is above the low-stock threshold right now.</p> : null}
+          </div>
+        )}
+        <div className="chart-summary">
+          <div><small>Out of stock</small><strong className={risk.outCount > 0 ? 'negative' : 'positive'}>{risk.outCount}</strong></div><i/>
+          <div><small>Low stock</small><strong className={risk.lowCount > 0 ? 'warn' : ''}>{risk.lowCount}</strong></div><i/>
+          <div><small>Healthy SKUs</small><strong className="positive">{risk.healthyCount}</strong></div><i/>
+          <div><small>30-day exposure</small><strong className={risk.exposure ? 'negative' : ''} title={risk.exposure === null ? 'Needs measured velocity and a price on the at-risk SKUs' : `Revenue at risk over 30 days across ${risk.exposureItems} SKU${risk.exposureItems === 1 ? '' : 's'} at their measured sales velocity`}>{risk.exposure === null ? '—' : `≈ ${money(risk.exposure)}`}</strong></div>
+        </div>
+        <div className="insight-strip"><Brain size={14}/><span>{worst
+          ? <>{worst.status === 'out'
+              ? <><b>{worst.label}</b> is out of stock{worst.velocity ? <> while selling <b>{worst.velocity.toFixed(1)}</b> units/day</> : null}{worst.exposure ? <> — roughly <b>{money(worst.exposure)}</b> of demand is exposed over the next 30 days</> : null}.</>
+              : worst.days !== null
+                ? <><b>{worst.label}</b> has <b>{worst.days.toFixed(1)} days</b> of cover left at its measured velocity{worst.exposure ? <>, putting about <b>{money(worst.exposure)}</b> at risk this month</> : null}.</>
+                : <><b>{worst.label}</b> is flagged {worst.status === 'low' ? 'low' : 'at risk'}{worst.quantity !== null ? <> with <b>{worst.quantity}</b> units left</> : null}.</>}
+            {' '}Reorder before the {risk.reorderWindowDays}-day window closes to keep the revenue you already earn.</>
+          : <>No SKU is inside the {risk.reorderWindowDays}-day reorder window — stock cover is healthy across {risk.trackedCount || risk.healthyCount} tracked {(risk.trackedCount || risk.healthyCount) === 1 ? 'SKU' : 'SKUs'}.</>}</span></div>
+        {!risk.coverAvailable && risk.hasInventory ? <div className="risk-note"><LockKeyhole size={12} /><span>{risk.explanation}</span><button type="button" onClick={onUpgrade}>Upgrade <ArrowUpRight size={12} /></button></div> : null}
+        {risk.untrackedCount > 0 ? <p className="risk-footnote">{risk.untrackedCount} SKU{risk.untrackedCount === 1 ? '' : 's'} are not tracked in Shopify, so they carry no stock signal.</p> : null}
+      </>}
+  </Widget>
+}
+
+function StockRiskTooltip({ active, payload, window }: { active?: boolean; payload?: Array<{ payload?: { label: string; sku: string | null; days: number; velocity: number | null; quantity: number | null; exposure: number | null; status: string } }>; window: number }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  return <div className="analytics-tooltip">
+    <strong>{point.label}</strong>
+    <div className="tooltip-metrics">
+      <div className="tooltip-row"><i style={{ background: point.days <= window ? '#f59e0b' : '#34d399' }} /><span>Days of cover:</span><strong>{point.days.toFixed(1)}</strong></div>
+      {point.quantity !== null && <div className="tooltip-row"><i style={{ background:'#38bdf8' }} /><span>Units left:</span><strong>{point.quantity.toLocaleString()}</strong></div>}
+      {point.velocity !== null && <div className="tooltip-row"><i style={{ background:'#818cf8' }} /><span>Sells / day:</span><strong>{point.velocity.toFixed(2)}</strong></div>}
+      {point.exposure !== null && <div className="tooltip-row"><i style={{ background:'#f43f5e' }} /><span>30-day exposure:</span><strong className="negative">≈ {money(point.exposure)}</strong></div>}
+      {point.sku ? <div className="tooltip-row"><i style={{ background:'#94a3b8' }} /><span>SKU:</span><strong>{point.sku}</strong></div> : null}
+    </div>
+  </div>
 }
 
 export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insights: AnalyticsInsights | null; trend: readonly TrendPoint[]; loading: boolean; onUpgrade: () => void }) {
@@ -565,7 +748,40 @@ function PeakLabel({ value, x = 0 }: { value: string; x?: number }) {
   return <g className="rev-peak-label" transform={`translate(${x}, 14)`}><circle r={2.5} /><text x={6} y={-5}>{value}</text></g>
 }
 
-function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
+/** Pacing tooltip: banked-to-date, that day's revenue, and the previous-period pace. */
+function PacingTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: { day: string; cumulative: number | null; previousCumulative: number | null; projected: number | null; revenue: number; forecast: number | null } }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  const banked = point.cumulative
+  const previous = point.previousCumulative
+  const delta = banked !== null && previous !== null && previous > 0 ? ((banked - previous) / previous) * 100 : null
+  return (
+    <div className="analytics-tooltip revenue-tooltip">
+      <div className="tooltip-primary-value">
+        <span>{banked !== null ? 'Banked to date' : 'Projected to date'}</span>
+        <strong>{money(banked ?? point.projected ?? 0)}</strong>
+      </div>
+      <time className="tooltip-date">{formatDateLabel(label ?? point.day)}</time>
+      <div className="tooltip-metrics">
+        {point.revenue > 0 && (
+          <div className="tooltip-row"><i style={{ background: '#2563EB' }} /><span>That day</span><strong>{money(point.revenue)}</strong></div>
+        )}
+        {previous !== null && previous > 0 && (
+          <div className="tooltip-row"><i style={{ background: '#64748b' }} /><span>Previous pace</span><strong>{money(previous)}</strong></div>
+        )}
+        {delta !== null && (
+          <div className="tooltip-row"><i style={{ background: delta >= 0 ? '#34d399' : '#fb7185' }} /><span>vs previous</span><strong className={delta >= 0 ? 'positive' : 'negative'}>{delta >= 0 ? '+' : ''}{delta.toFixed(1)}%</strong></div>
+        )}
+        {point.forecast !== null && (
+          <div className="tooltip-row"><i style={{ background: '#a78bfa' }} /><span>AI forecast day</span><strong>{money(point.forecast)}</strong></div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; color?: string; dataKey?: string; payload?: TrendPoint }>; label?: string }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
   const formattedDate = formatDateLabel(label ?? point?.day)

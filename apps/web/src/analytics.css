@@ -343,3 +343,70 @@
 .light-mode .orders-aov .chart-caption span { color: #374151 !important; }
 .app-shell.light-mode .orders-aov .chart-caption .legend.aov,
 .light-mode .orders-aov .chart-caption .legend.aov { background: #0D9488 !important; }
+
+
+/* ─── Analytics rebuild: pacing momentum, discount leakage, stock-out risk ─── */
+.widget-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.scope-pill.warn { color: #fbbf24; border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.1); }
+.chart-mid { height: 236px; padding: 0 7px; }
+.revenue-trend.pacing .insight-strip { border-color: rgba(96,165,250,.16); background: rgba(96,165,250,.06); }
+.revenue-trend.pacing .insight-strip svg { color: #60a5fa; }
+
+/* Discount & revenue leakage */
+.chart-caption .legend.collected { width: 15px; height: 6px; border-radius: 2px; background: linear-gradient(180deg, #38bdf8, rgba(56,189,248,.3)) !important; }
+.chart-caption .legend.discounts { width: 15px; height: 6px; border-radius: 2px; background: #f59e0b !important; }
+.chart-caption .legend.rate { background: #fb923c !important; }
+.leakage-widget .chart-caption b { margin-left: auto; color: var(--text-secondary); font-weight: 700; }
+.leakage-widget .insight-strip { border-color: rgba(245,158,11,.16); background: rgba(245,158,11,.05); }
+.leakage-widget .insight-strip svg { color: #f59e0b; }
+.chart-summary strong.warn { color: #fbbf24; }
+
+/* Stock-out risk & cover */
+.stockout-widget .risk-chart { padding-right: 4px; }
+.stockout-widget .insight-strip { border-color: rgba(244,63,94,.14); background: rgba(244,63,94,.05); }
+.stockout-widget .insight-strip svg { color: #fb7185; }
+.stock-risk-loading { display: flex; flex-direction: column; gap: 12px; padding: 26px 18px; }
+.stock-risk-loading .skeleton-line { height: 12px; border-radius: 6px; background: rgba(148,163,184,.12); }
+.stock-risk-loading .skeleton-line.short { width: 55%; }
+.risk-list { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 4px; }
+.risk-row { display: flex; align-items: center; gap: 10px; }
+.risk-row > div { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.risk-row b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.risk-row small { color: var(--text-tertiary); font-size: 10px; }
+.risk-row > strong { font-family: var(--font-mono); font-size: 12px; }
+.risk-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #34d399; }
+.risk-dot.out { background: #f43f5e; }
+.risk-dot.low { background: #f59e0b; }
+.risk-dot.untracked { background: rgba(148,163,184,.6); }
+.risk-empty { color: var(--text-tertiary); font-size: 12px; }
+.risk-note { display: flex; align-items: center; gap: 8px; margin: 0 14px 12px; padding: 9px 11px; color: #c4b5fd; border: 1px solid rgba(139,92,246,.18); border-radius: 9px; background: rgba(139,92,246,.07); font-size: 11px; }
+.risk-note svg { flex: none; }
+.risk-note span { flex: 1; }
+.risk-note button { padding: 4px 9px; color: #ede9fe; border: 1px solid rgba(139,92,246,.35); border-radius: 99px; background: rgba(139,92,246,.2); font-size: 10px; display: inline-flex; align-items: center; gap: 4px; }
+.risk-footnote { margin: 0 17px 14px; color: var(--text-tertiary); font-size: 10.5px; }
+
+/* Light theme parity */
+.app-shell.light-mode .chart-mid .recharts-cartesian-grid line,
+.light-mode .chart-mid .recharts-cartesian-grid line { stroke: #E5E7EB !important; }
+.app-shell.light-mode .chart-mid .recharts-cartesian-axis-tick-value,
+.light-mode .chart-mid .recharts-cartesian-axis-tick-value { fill: #4B5563 !important; }
+.app-shell.light-mode .leakage-widget .chart-caption span,
+.light-mode .leakage-widget .chart-caption span,
+.app-shell.light-mode .stockout-widget .chart-caption span,
+.light-mode .stockout-widget .chart-caption span { color: #374151 !important; }
+.app-shell.light-mode .leakage-widget .insight-strip,
+.light-mode .leakage-widget .insight-strip { color: #4B5563 !important; background: #FFFBEB !important; border-color: #FDE68A !important; }
+.app-shell.light-mode .stockout-widget .insight-strip,
+.light-mode .stockout-widget .insight-strip { color: #4B5563 !important; background: #FEF2F2 !important; border-color: #FECACA !important; }
+.app-shell.light-mode .revenue-trend.pacing .insight-strip,
+.light-mode .revenue-trend.pacing .insight-strip { color: #374151 !important; background: #EFF6FF !important; border-color: #BFDBFE !important; }
+.app-shell.light-mode .risk-note,
+.light-mode .risk-note { color: #5B21B6 !important; background: #F5F3FF !important; border-color: #DDD6FE !important; }
+.app-shell.light-mode .risk-note button,
+.light-mode .risk-note button { color: #FFFFFF !important; background: #7C3AED !important; border-color: #7C3AED !important; }
+.app-shell.light-mode .risk-row small,
+.light-mode .risk-row small { color: #6B7280 !important; }
+.app-shell.light-mode .scope-pill.warn,
+.light-mode .scope-pill.warn { color: #B45309 !important; background: #FFFBEB !important; border-color: #FDE68A !important; }
+.app-shell.light-mode .chart-summary strong.warn,
+.light-mode .chart-summary strong.warn { color: #B45309 !important; }
