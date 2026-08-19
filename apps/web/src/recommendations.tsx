@@ -192,6 +192,9 @@ export const ANALYSIS_STEPS: readonly Readonly<{ label: string; detail: string }
   { label: 'Preparing your wins', detail: 'Pricing the impact so you can decide with confidence' },
 ]
 
+/** Day-of-week letters for the mini weekly bars (0=Sunday). */
+const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const
+
 /** Sample activity heights (clearly labeled) for the empty 30-day chart preview. */
 const SAMPLE_ACTIVITY_HEIGHTS: readonly number[] = [8, 22, 14, 34, 12, 26, 44, 18, 30, 24, 10, 38, 20, 28, 16, 42, 24, 12, 34, 26, 18, 46, 22, 14, 30, 20, 36, 16, 28, 40]
 
@@ -648,17 +651,29 @@ function Tip({ label, children }: { label: string; children: ReactNode }) {
 function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationSummary; usage: ReturnType<typeof usageState>; plan: RecommendationSummary['plan']; onUpgrade: () => void }) {
   const approvalRate = summary.approvalRate.last30d ?? summary.approvalRate.allTime
   const trendUp = summary.approvalRate.last30d !== null && summary.approvalRate.allTime !== null && summary.approvalRate.last30d >= summary.approvalRate.allTime
+  const rateDelta = summary.approvalRate.last30d !== null && summary.approvalRate.allTime !== null ? summary.approvalRate.last30d - summary.approvalRate.allTime : null
   const pendingCount = summary.counts.PENDING
   const approvedCount = summary.approvedThisMonth.count
   // Prefer a currency the store actually uses when formatting an honest zero.
   const knownCurrency = summary.pendingImpact[0]?.currency ?? summary.approvedThisMonth.impact[0]?.currency ?? summary.recentDecisions[0]?.currency ?? null
   const zeroImpact = knownCurrency ? formatImpact(0, knownCurrency) : '0'
   // Last 7 days of approved activity from the trend data (real backend values).
-  const last7DaysApproved = summary.generatedTrend.slice(-7).map((day) => day.approved)
+  const last7Days = summary.generatedTrend.slice(-7)
+  const last7DaysApproved = last7Days.map((day) => day.approved)
+  const last7DayCodes = last7Days.map((day) => dayOfWeekCode(day.day))
+  // Who holds the money waiting — real pending counts from the summary, tinted per agent.
+  const pendingAgents = summary.byAgent.filter((entry) => entry.pending > 0)
+  const totalPending = pendingAgents.reduce((sum, entry) => sum + entry.pending, 0)
+  // Calendar honesty for "this month": computed from the merchant's local clock.
+  const today = new Date()
+  const monthDay = today.getDate()
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const monthElapsed = Math.round((monthDay / daysInMonth) * 100)
+  const monthName = today.toLocaleString('en-US', { month: 'long' }).toUpperCase()
   return (
     <div className="recs-kpis">
-      <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-label"><Gauge size={13} /> Revenue opportunity pending</span></Tip>
+      <div className="recs-kpi recs-kpi-hero">
+        <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--green)' }}><Gauge size={14} /></span><span className="recs-kpi-label">Revenue opportunity pending</span></span></Tip>
         <div className="recs-kpi-row">
           <RevenueRing hasImpact={pendingCount > 0} pendingCount={pendingCount} />
           <div className="recs-kpi-value-stack">
@@ -668,27 +683,52 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
               : <small>{pendingCount} pending recommendation{pendingCount === 1 ? '' : 's'} awaiting your call</small>}
           </div>
         </div>
+        {pendingAgents.length > 0 && (
+          <div className="recs-kpi-foot">
+            <span className="recs-kpi-foot-title"><Users size={12} /> Across {pendingAgents.length} teammate{pendingAgents.length === 1 ? '' : 's'}</span>
+            <span className="recs-kpi-share" aria-hidden title={`Pending by teammate: ${pendingAgents.map((entry) => `${agentShortName(entry.agent)} ${entry.pending}`).join(', ')}`}>
+              {pendingAgents.map((entry) => <i key={entry.agent} style={{ width: `${(entry.pending / totalPending) * 100}%`, background: AGENT_COLORS[entry.agent] }} />)}
+            </span>
+            <span className="recs-kpi-share-legend">
+              {pendingAgents.slice(0, 4).map((entry) => <span key={entry.agent} title={`${agentLabel(entry.agent)} — ${entry.pending} pending`}><i style={{ background: AGENT_COLORS[entry.agent] }} />{agentShortName(entry.agent)}<b>{entry.pending}</b></span>)}
+              {pendingAgents.length > 4 && <span className="recs-kpi-share-more">+{pendingAgents.length - 4} more</span>}
+            </span>
+          </div>
+        )}
       </div>
       <div className="recs-kpi recs-kpi-approved">
-        <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span></Tip>
+        <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--green)' }}><CheckCircle2 size={14} /></span><span className="recs-kpi-label">Approved this month</span></span></Tip>
         <div className="recs-kpi-row">
-          <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvedCount}</strong>
+          <div className="recs-kpi-value-stack">
+            <strong className="recs-kpi-value">{approvedCount}</strong>
             {approvedCount === 0
               ? <small>Approve recommendations to see the impact here</small>
-              : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+              : <>
+                  <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month</small>
+                  {summary.approvedThisMonth.impact.length > 0 && <span className="recs-kpi-impact-pill">≈ {formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled</span>}
+                </>}
           </div>
-          <ApprovedBars values={last7DaysApproved} />
+          <ApprovedBars values={last7DaysApproved} dayCodes={last7DayCodes} />
+        </div>
+        <div className="recs-kpi-month">
+          <span className="recs-kpi-month-label">{monthName} · DAY {monthDay}</span>
+          <span className="recs-kpi-month-track" aria-hidden><i style={{ width: `${monthElapsed}%` }} /></span>
+          <span className="recs-kpi-month-caption">{monthElapsed}% of month elapsed</span>
         </div>
       </div>
       <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span></Tip>
-        <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
-          <small>{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? <>of decisions approved · last 30 days {summary.approvalRate.allTime !== null && <span className={trendUp ? 'trend-up' : 'trend-down'}>{trendUp ? '▲' : '▼'} vs all-time</span>}</> : 'of all-time decisions approved'}</small>
+        <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--purple)' }}><TrendingUp size={14} /></span><span className="recs-kpi-label">Approval rate</span></span></Tip>
+        <div className="recs-kpi-rate-stack">
+          <strong className="recs-kpi-value">{approvalRate === null ? '—' : `${approvalRate}%`}</strong>
+          {rateDelta !== null && rateDelta !== 0 && approvalRate !== null && (
+            <span className={`recs-kpi-delta ${trendUp ? 'up' : 'down'}`} title={`Last 30 days vs all-time approval rate`}>{trendUp ? '▲' : '▼'} {formatRateDelta(Math.abs(rateDelta))}% vs all-time</span>
+          )}
         </div>
+        <small className="recs-kpi-rate-caption">{approvalRate === null ? 'Need decisions to calculate' : summary.approvalRate.last30d !== null ? 'of decisions approved · last 30 days' : 'of all-time decisions approved'}</small>
         <ApprovalRateBar rate={approvalRate} />
       </div>
       <div className="recs-kpi">
-        <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-label"><Clock3 size={13} /> Avg time to decide</span></Tip>
+        <Tip label={KPI_TOOLTIPS.averageDecision}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--blue-bright)' }}><Clock3 size={14} /></span><span className="recs-kpi-label">Avg time to decide</span></span></Tip>
         <div className="recs-kpi-row">
           <DecideSpeedometer ms={summary.averageDecisionMs} />
           <div className="recs-kpi-value-stack">
@@ -696,9 +736,10 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
             <small>{summary.averageDecisionMs === null ? 'Decide recommendations to track this' : 'How fast you review new findings'}</small>
           </div>
         </div>
+        <div className="recs-kpi-speedo-legend" aria-hidden><span><i className="fast" /> Fast &lt;1h</span><span><i className="mid" /> OK 1–4h</span><span><i className="slow" /> Slow &gt;4h</span></div>
       </div>
       <div className="recs-kpi usage">
-        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-label"><WandSparkles size={13} /> Monthly usage</span></Tip>
+        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--purple)' }}><WandSparkles size={14} /></span><span className="recs-kpi-label">Monthly usage</span></span></Tip>
         <div className="recs-usage-row">
           <UsageRing ratio={usage.ratio} atLimit={usage.atLimit} nearLimit={usage.nearLimit} />
           <div className="recs-usage-copy">
@@ -717,7 +758,8 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
 function RevenueRing({ hasImpact, pendingCount }: { hasImpact: boolean; pendingCount: number }) {
   // The ring fills proportionally to the pending count against a 5-item
   // friendly scale, capped at full. Zero pending shows an empty ring with a
-  // checkmark so empty states still feel intentional, not broken.
+  // checkmark so empty states still feel intentional, not broken. The count
+  // sits inside the ring so the number and the ring read as one unit.
   const radius = 18
   const circumference = 2 * Math.PI * radius
   const ratio = hasImpact ? Math.min(1, pendingCount / 5) : 0
@@ -727,19 +769,25 @@ function RevenueRing({ hasImpact, pendingCount }: { hasImpact: boolean; pendingC
         <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="4" />
         <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" stroke="var(--green)" strokeWidth="4" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
       </svg>
-      {hasImpact ? <TrendingUp size={14} style={{ position: 'absolute', color: 'var(--green)' }} /> : <CheckCircle2 size={14} style={{ position: 'absolute', color: 'var(--text-tertiary)' }} />}
+      {hasImpact
+        ? <strong className="recs-kpi-ring-count">{pendingCount}</strong>
+        : <CheckCircle2 size={14} style={{ position: 'absolute', color: 'var(--text-tertiary)' }} />}
     </div>
   )
 }
 
-function ApprovedBars({ values }: { values: readonly number[] }) {
+function ApprovedBars({ values, dayCodes }: { values: readonly number[]; dayCodes: readonly number[] }) {
   const days = values.length === 0 ? [0, 0, 0, 0, 0, 0, 0] : values
+  const codes = dayCodes.length === days.length ? dayCodes : [1, 2, 3, 4, 5, 6, 0]
   const max = Math.max(1, ...days)
   return (
-    <div className="recs-kpi-visual" aria-hidden>
+    <div className="recs-kpi-visual recs-kpi-week" aria-hidden>
       <div className="recs-kpi-bars">
         {days.map((value, index) => (
-          <span key={index} className={`bar ${value > 0 ? 'filled' : ''}`} style={{ height: `${Math.max(4, (value / max) * 36)}px` }} title={`${value} approved`} />
+          <span key={index} className="recs-kpi-bar-col">
+            <i className={`bar ${value > 0 ? 'filled' : ''}`} style={{ height: `${Math.max(4, (value / max) * 30)}px` }} title={`${value} approved`} />
+            <span className="recs-kpi-bar-letter">{DAY_LETTERS[codes[index]! % 7]!}</span>
+          </span>
         ))}
       </div>
     </div>
@@ -756,7 +804,8 @@ function ApprovalRateBar({ rate }: { rate: number | null }) {
       </div>
     )
   }
-  // With data: red/amber/green zones plus a marker pinned to the current rate.
+  // With data: red/amber/green zones, a green fill up to the current rate and
+  // a marker that floats on the fill — padded so it never hugs the card edge.
   const value = Math.min(100, Math.max(0, rate))
   return (
     <div className="recs-kpi-progress" aria-hidden>
@@ -764,7 +813,9 @@ function ApprovalRateBar({ rate }: { rate: number | null }) {
         <span className="recs-kpi-progress-zone low" />
         <span className="recs-kpi-progress-zone mid" />
         <span className="recs-kpi-progress-zone good" />
+        <span className="recs-kpi-progress-fill" style={{ width: `${value}%` }} />
         <span className="recs-kpi-progress-marker" style={{ left: `${value}%` }} title={`${value}% approval rate`} />
+        <span className="recs-kpi-target" style={{ left: '80%' }} title="Target approval rate (80%)"><i />80%</span>
       </div>
       <div className="recs-kpi-progress-axis"><span>Low</span><span>Medium</span><span>Good</span></div>
     </div>
@@ -1148,7 +1199,6 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
   const pendingByAgent = summary.byAgent.filter((entry) => entry.pending > 0)
   const maxPending = pendingByAgent.reduce((max, entry) => Math.max(max, entry.pending), 0)
   const trend = summary.generatedTrend
-  const trendMax = trend.reduce((max, day) => Math.max(max, day.generated), 0)
   const trendGenerated = trend.reduce((sum, day) => sum + day.generated, 0)
   const trendApproved = trend.reduce((sum, day) => sum + day.approved, 0)
   const maxRuleTotal = summary.byRule.reduce((max, entry) => Math.max(max, entry.total), 0)
@@ -1191,15 +1241,13 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
         <div className="recs-side-title"><Activity size={14} /> Your Activity Timeline</div>
         {trend.length > 0 ? (
           <>
-            <div className="recs-trend" aria-label="Recommendations generated per day, last 30 days">
-              {trend.map((day) => (
-                <span key={day.day} className="recs-trend-bar" title={`${day.day}: ${day.generated} found, ${day.approved} approved`}>
-                  <i className="generated" style={{ height: `${trendMax > 0 ? Math.max(8, (day.generated / trendMax) * 100) : 8}%` }} />
-                  <i className="approved" style={{ height: `${trendMax > 0 ? (day.approved / trendMax) * 100 : 0}%` }} />
-                </span>
-              ))}
+            <ActivityAreaChart trend={trend} />
+            <div className="recs-trend-metrics">
+              <span><strong>{trendGenerated}</strong> found</span>
+              <span><strong>{trendApproved}</strong> approved</span>
+              <span className="recs-trend-conversion" title="Approved as a share of everything found this month"><strong>{trendGenerated > 0 ? Math.round((trendApproved / trendGenerated) * 100) : 0}%</strong> conversion</span>
+              <span className="recs-trend-window">last 30 days</span>
             </div>
-            <div className="recs-trend-metrics"><span><strong>{trendGenerated}</strong> found</span><span><strong>{trendApproved}</strong> approved</span><span className="recs-trend-window">last 30 days</span></div>
           </>
         ) : (
           <SampleActivityChart />
@@ -1269,6 +1317,64 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
       </div>
     </>
   )
+}
+
+/** Analytics-style area chart for the sidebar timeline — "Found" as a gradient
+ *  area, "Approved" as a line. Pure SVG (recharts-free, SSR-safe): every value
+ *  comes from summary.generatedTrend, nothing is invented. */
+function ActivityAreaChart({ trend }: { trend: readonly Readonly<{ day: string; generated: number; approved: number }>[] }) {
+  const W = 264
+  const H = 84
+  const pad = 3
+  const n = trend.length
+  if (n === 0) return null
+  const maxV = Math.max(1, ...trend.map((day) => Math.max(day.generated, day.approved)))
+  const step = n === 1 ? 0 : (W - pad * 2) / (n - 1)
+  const X = (i: number) => pad + i * step
+  const Y = (value: number) => pad + (H - pad * 2) - (value / maxV) * (H - pad * 2)
+  const line = (pick: (day: { day: string; generated: number; approved: number }) => number) => trend.map((day, i) => `${i === 0 ? 'M' : 'L'} ${X(i).toFixed(1)} ${Y(pick(day)).toFixed(1)}`).join(' ')
+  const first = trend[0]!
+  const last = trend[n - 1]!
+  const mid = trend[Math.floor(n / 2)]!
+  const label = (day: string) => new Date(`${day}T00:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return (
+    <div className="recs-trend-chart">
+      <svg viewBox={`0 0 ${W} ${H}`} className="recs-trend-svg" role="img" aria-label={`Recommendations generated versus approved, last ${n} days`}>
+        <defs>
+          <linearGradient id="recs-trend-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--purple)" stopOpacity=".45" />
+            <stop offset="100%" stopColor="var(--purple)" stopOpacity=".04" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((fraction) => <line key={fraction} className="recs-trend-grid" x1={pad} x2={W - pad} y1={pad + (H - pad * 2) * fraction} y2={pad + (H - pad * 2) * fraction} />)}
+        <path d={`${line((day) => day.generated)} L ${X(n - 1).toFixed(1)} ${H - pad} L ${X(0).toFixed(1)} ${H - pad} Z`} className="recs-trend-area" />
+        <path d={line((day) => day.approved)} className="recs-trend-line" />
+        <circle className="recs-trend-dot generated" cx={X(n - 1)} cy={Y(last.generated)} r="3"><title>{`${last.day}: ${last.generated} found, ${last.approved} approved`}</title></circle>
+        <circle className="recs-trend-dot approved" cx={X(n - 1)} cy={Y(last.approved)} r="3"><title>{`${last.day}: ${last.generated} found, ${last.approved} approved`}</title></circle>
+      </svg>
+      <div className="recs-trend-xlabels" aria-hidden>
+        <span>{label(first.day)}</span>
+        {n > 2 && <span>{label(mid.day)}</span>}
+        <span>{label(last.day)}</span>
+      </div>
+    </div>
+  )
+}
+
+/** Day-of-week code (0=Sunday … 6=Saturday) from a YYYY-MM-DD trend day. */
+function dayOfWeekCode(day: string): number {
+  const parsed = Date.parse(`${day}T00:00:00.000Z`)
+  return Number.isFinite(parsed) ? new Date(parsed).getUTCDay() : 0
+}
+
+/** "Inventory Agent" → "Inventory" for the compact teammate legend. */
+function agentShortName(agent: string): string {
+  return agentLabel(agent).replace(/ Agent$/, '')
+}
+
+/** Whole percentages stay bare; fractional deltas get one decimal. */
+function formatRateDelta(delta: number): string {
+  return Number.isInteger(delta) ? String(delta) : delta.toFixed(1)
 }
 
 /** Empty 30-day chart with labeled axes plus an opt-in, clearly-labeled sample overlay. */

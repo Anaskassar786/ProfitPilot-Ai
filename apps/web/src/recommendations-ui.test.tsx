@@ -297,6 +297,32 @@ describe('KPI hero micro-visualizations', () => {
   })
 })
 
+  it('renders the redesigned hero foot: teammates strip + month progress', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('Across 1 teammate')
+    expect(html).toContain('recs-kpi-share')
+    expect(html).toContain('recs-kpi-bar-letter')
+    expect(html).toContain('recs-kpi-month-track')
+    expect(html).toContain('of month elapsed')
+    // Every card uses the shared icon-chip header anatomy
+    expect(html).toContain('recs-kpi-chip')
+  })
+  it('shows a real last-30-days vs all-time delta pill on approval rate', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('▲ 5% vs all-time') // 80 − 75
+    expect(html).toContain('recs-kpi-delta up')
+  })
+  it('shows a downward delta and a fractional rate honestly', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary({ approvalRate: { allTime: 80, last30d: 71.4 } }), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('71.4%')
+    expect(html).toContain('▼ 8.6% vs all-time')
+    expect(html).toContain('recs-kpi-delta down')
+  })
+  it('keeps the 80% target notch on the approval-rate track', () => {
+    const html = renderToStaticMarkup(createElement(KpiHero, { summary: summary(), usage: usageState(4, 10), plan: 'trial', onUpgrade: noop }))
+    expect(html).toContain('recs-kpi-target')
+    expect(html).toContain('Target approval rate')
+  })
 describe('analysis progress modal', () => {
   it('shows staged progress with the real engine steps', () => {
     const html = renderToStaticMarkup(createElement(AnalysisProgressModal, { step: 2, elapsedMs: 2600, onHide: noop }))
@@ -429,6 +455,18 @@ describe('insights sidebar', () => {
   })
 })
 
+  it('renders the analytics-style area chart with a conversion stat', () => {
+    const trend = Array.from({ length: 30 }, (_, index) => ({ day: `2026-08-${String(index + 1).padStart(2, '0')}`, generated: 10, approved: 4 }))
+    const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary({ generatedTrend: trend }), plan: 'growth', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
+    expect(html).toContain('recs-trend-chart')
+    expect(html).toContain('recs-trend-area')
+    expect(html).toContain('recs-trend-line')
+    expect(html).toContain('recs-trend-xlabels')
+    expect(html).toContain('>300</strong> found')
+    expect(html).toContain('>120</strong> approved')
+    expect(html).toContain('40%') // 120 approved / 300 found
+    expect(html).toContain('conversion')
+  })
 describe('how-it-works modal', () => {
   it('explains rules, evidence, calibration, and the FAQ', () => {
     const html = renderToStaticMarkup(createElement(HowItWorksModal, { onClose: noop }))
