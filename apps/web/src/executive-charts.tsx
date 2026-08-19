@@ -8,7 +8,7 @@
  * (risk) maps, bullet (goal vs actual) charts, and heatmaps. No line and no
  * donut charts.
  */
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Radial health gauge
@@ -352,15 +352,52 @@ export function formatTrajectoryDay(day: string): string {
   return `${months[Number(match[2]) - 1]} ${Number(match[3])}, ${match[1]}`
 }
 
+/** Short axis form of a chart day — "Jul 21" — for x-axis ticks. */
+export function formatTrajectoryAxisDay(day: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(day)
+  if (!match) return day
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[Number(match[2]) - 1]} ${Number(match[3])}`
+}
+
+/** Compact currency for y-axis ticks — $2.5K · ₹1.2L — locale aware. */
+export function formatTrajectoryAxisMoney(value: number, currency = 'USD'): string {
+  if (!Number.isFinite(value)) return '—'
+  try {
+    return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  } catch {
+    return String(Math.round(value))
+  }
+}
+
+/**
+ * Rounds a raw data maximum to a "nice" 0-based axis scale (1 / 2 / 2.5 / 5 ×
+ * 10^k steps) so gridlines land on human-readable values. Revenue axes start
+ * at zero so the projection can never visually exaggerate growth.
+ */
+export function niceTrajectoryTicks(maxValue: number, steps = 4): readonly number[] {
+  if (!Number.isFinite(maxValue) || maxValue <= 0) return [0, 1]
+  const rawStep = maxValue / steps
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+  const normalized = rawStep / magnitude
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10
+  const step = nice * magnitude
+  const top = Math.ceil(maxValue / step) * step
+  const ticks: number[] = []
+  for (let value = 0; value <= top + step / 2; value += step) ticks.push(Number(value.toFixed(6)))
+  return ticks
+}
+
+
 /**
  * Builds the hoverable plot points for the trajectory chart. Historical days
  * are labeled Real; the 30-day trend extension is labeled Projected.
  */
-export function buildTrajectoryHoverPoints(data: TrajectoryChartData, height = 200, padX = 10, padTop = 16, padBottom = 22, width = TRAJECTORY_CHART_WIDTH): readonly TrajectoryHoverPoint[] {
+export function buildTrajectoryHoverPoints(data: TrajectoryChartData, height = 200, padX = 10, padTop = 16, padBottom = 22, width = TRAJECTORY_CHART_WIDTH, options: Readonly<{ padEnd?: number; yMax?: number }> = {}): readonly TrajectoryHoverPoint[] {
   const all = [...data.historical, ...data.projected]
   if (all.length < 2) return []
-  const max = Math.max(...all.map((point) => point.value), ...data.band.map((point) => point.high), 1)
-  const step = (width - padX * 2) / (all.length - 1)
+  const max = options.yMax ?? Math.max(...all.map((point) => point.value), ...data.band.map((point) => point.high), 1)
+  const step = (width - padX - (options.padEnd ?? padX)) / (all.length - 1)
   const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / max) * (height - padTop - padBottom)
   return all.map((point, index) => ({
     index,
@@ -389,24 +426,46 @@ export function nearestTrajectoryPoint(points: readonly TrajectoryHoverPoint[], 
 
 /**
  * Renders REAL synced revenue as a solid area, the measured trend extension
- * as a dashed line, and the residual-based confidence band as a soft wash.
- * Pointer/touch tracking shows a crosshair + tooltip (date, value, Real /
- * Projected) so the chart is interactive in both themes.
+ * as a dashed line, and the residual-based confidence band as a soft wash —
+ * on a proper labeled axis system: compact currency y-ticks on nice-value
+ * gridlines, weekly date x-ticks, a labeled "Today" divider with a subtly
+ * shaded future zone, and a legend that separates Real / Projected / Range.
+ * The svg renders at its measured pixel width (ResizeObserver) so geometry
+ * never stretches. Pointer/touch tracking shows a crosshair + tooltip
+ * (date, value, Real / Projected, likely range) in both themes.
  */
-export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, label }: { data: TrajectoryChartData; height?: number; formatValue?: (value: number) => string; label: string }) {
+export function ExecutiveTrajectoryChart({ data, height = 236, formatValue, label, currency = 'USD' }: { data: TrajectoryChartData; height?: number; formatValue?: (value: number) => string; label: string; currency?: string }) {
   const gradientId = useId()
   const bandId = useId()
+  const futureId = useId()
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null)
   const [hover, setHover] = useState<TrajectoryHoverPoint | null>(null)
-  const width = TRAJECTORY_CHART_WIDTH
-  const padX = 10
-  const padTop = 16
-  const padBottom = 22
-  const all = [...data.historical, ...data.projected]
-  const highs = data.band.map((point) => point.high)
-  const max = Math.max(...all.map((point) => point.value), ...highs, 1)
+  const width = measuredWidth ?? TRAJECTORY_CHART_WIDTH
+  const padLeft = 46
+  const padRight = 14
+  const padTop = 18
+  const padBottom = 28
+  const all = useMemo(() => [...data.historical, ...data.projected], [data])
+  const bandByDay = useMemo(() => new Map(data.band.map((point) => [point.day, point])), [data.band])
+  const yMaxRaw = Math.max(...all.map((point) => point.value), ...data.band.map((point) => point.high), 1)
+  const yTicks = niceTrajectoryTicks(yMaxRaw, 4)
+  const yMax = yTicks[yTicks.length - 1]!
   const n = all.length
-  const hoverPoints = useMemo(() => buildTrajectoryHoverPoints(data, height, padX, padTop, padBottom, width), [data, height])
+
+  useEffect(() => {
+    const element = wrapRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const observed = entries[0]?.contentRect.width
+      if (observed && observed > 320) setMeasuredWidth(Math.round(observed))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  const hoverPoints = useMemo(() => buildTrajectoryHoverPoints(data, height, padLeft, padTop, padBottom, width, { padEnd: padRight, yMax }), [data, height, width, yMax])
   const pointFromClient = useCallback((clientX: number): TrajectoryHoverPoint | null => {
     const svg = svgRef.current
     if (!svg) return nearestTrajectoryPoint(hoverPoints, clientX)
@@ -418,51 +477,96 @@ export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, labe
   const onPointer = useCallback((event: { clientX: number }) => {
     setHover(pointFromClient(event.clientX))
   }, [pointFromClient])
+
+  // Weekly-ish x ticks (≤6 labels), always anchored on the first day.
+  const xTickIndices = useMemo(() => {
+    if (n < 2) return []
+    const count = Math.min(6, n)
+    const stride = (n - 1) / (count - 1)
+    return Array.from({ length: count }, (_, k) => Math.round(k * stride))
+  }, [n])
+
   if (n < 2) return null
-  const step = (width - padX * 2) / (n - 1)
-  const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / max) * (height - padTop - padBottom)
-  const xAt = (index: number): number => padX + index * step
+  const plotWidth = width - padLeft - padRight
+  const step = plotWidth / (n - 1)
+  const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / yMax) * (height - padTop - padBottom)
+  const xAt = (index: number): number => padLeft + index * step
   const histCount = data.historical.length
   const histLine = data.historical.map((point, index) => `${xAt(index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ')
   // The projection stroke starts at the last REAL point so the dashed line
   // reads as a continuation, not a separate series.
-  const projectionPoints = [{ day: data.historical.at(-1)!.day, value: data.historical.at(-1)!.value }, ...data.projected]
+  const lastHistorical = data.historical.at(-1)!
+  const projectionPoints = [{ day: lastHistorical.day, value: lastHistorical.value }, ...data.projected]
   const projLine = projectionPoints.map((point, index) => `${xAt(histCount - 1 + index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ')
   const bandTop = data.band.map((point, index) => `${xAt(histCount + index).toFixed(1)},${yAt(point.high).toFixed(1)}`)
   const bandBottom = data.band.map((point, index) => `${xAt(histCount + index).toFixed(1)},${yAt(point.low).toFixed(1)}`).reverse()
+  const bandPath = `M ${xAt(histCount).toFixed(1)},${yAt(data.projected[0]!.value).toFixed(1)} L ${bandTop.join(' L ')} L ${bandBottom.join(' L ')} Z`
   const todayX = xAt(histCount - 1)
+  const endX = xAt(n - 1)
   const lastProjected = data.projected.at(-1)
+  const hoverBand = hover && hover.kind === 'Projected' ? bandByDay.get(hover.day) ?? null : null
+  const tooltipLeft = hover ? Math.min(Math.max((hover.x / width) * 100, 11), 89) : 50
 
   return (
-    <div className="exec-area-chart gq-trajectory" role="img" aria-label={label}>
-      <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
+    <div className="exec-area-chart gq-trajectory" ref={wrapRef} role="img" aria-label={label}>
+      <div className="gq-trajectory-legend" aria-hidden="true">
+        <span className="gq-trajectory-chip"><i className="gq-trajectory-swatch gq-trajectory-swatch-real" />Real revenue</span>
+        <span className="gq-trajectory-chip"><i className="gq-trajectory-swatch gq-trajectory-swatch-proj" />Trend projection</span>
+        <span className="gq-trajectory-chip"><i className="gq-trajectory-swatch gq-trajectory-swatch-band" />Likely range</span>
+      </div>
+      <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ width: '100%', height, display: 'block' }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--exec-accent)" stopOpacity="0.3" />
+            <stop offset="0%" stopColor="var(--exec-accent)" stopOpacity="0.26" />
             <stop offset="100%" stopColor="var(--exec-accent)" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id={bandId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--exec-purple-deep)" stopOpacity="0.16" />
+          <linearGradient id={bandId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--exec-purple-deep)" stopOpacity="0.14" />
             <stop offset="100%" stopColor="var(--exec-purple-deep)" stopOpacity="0.05" />
           </linearGradient>
+          <linearGradient id={futureId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--exec-purple)" stopOpacity="0.05" />
+            <stop offset="100%" stopColor="var(--exec-purple)" stopOpacity="0.02" />
+          </linearGradient>
         </defs>
-        {[0.25, 0.5, 0.75].map((fraction) => <line key={fraction} x1={padX} x2={width - padX} y1={padTop + fraction * (height - padTop - padBottom)} y2={padTop + fraction * (height - padTop - padBottom)} className="exec-chart-gridline" />)}
-        {/* Confidence band (projection only — history is fact, not a range). */}
-        {bandTop.length > 1 && <polygon points={`${xAt(histCount).toFixed(1)},${yAt(data.projected[0]!.value).toFixed(1)} ${bandTop.join(' ')} ${bandBottom.join(' ')}`} fill={`url(#${bandId})`} />}
-        {/* Real history: gradient area + solid stroke. */}
-        <polygon points={`${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} ${histLine} ${xAt(histCount - 1).toFixed(1)},${yAt(0).toFixed(1)}`} fill={`url(#${gradientId})`} />
-        {histCount > 1 && <polyline points={histLine} fill="none" className="exec-area-stroke" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-        {/* Trend extension: clearly dashed so it can never pass for fact. */}
-        <polyline points={projLine} fill="none" className="gq-trajectory-projection" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 5" vectorEffect="non-scaling-stroke" />
-        {/* "Today" divider and endpoint markers. */}
+        {/* Future zone wash — "the next 30" reads instantly next to real history. */}
+        <rect x={todayX} y={padTop} width={Math.max(endX - todayX, 0)} height={height - padTop - padBottom} fill={`url(#${futureId})`} />
+        {/* Y axis: nice-value gridlines with compact currency labels, zero baseline. */}
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={padLeft} x2={width - padRight} y1={yAt(tick)} y2={yAt(tick)} className={tick === 0 ? 'gq-axis-baseline' : 'gq-axis-gridline'} />
+            <text x={padLeft - 8} y={yAt(tick) + 3.5} textAnchor="end" className="gq-axis-label">{tick === 0 ? '0' : formatTrajectoryAxisMoney(tick, currency)}</text>
+          </g>
+        ))}
+        {/* X axis: weekly date ticks. */}
+        {xTickIndices.map((index) => (
+          <g key={index}>
+            <line x1={xAt(index)} x2={xAt(index)} y1={height - padBottom} y2={height - padBottom + 4} className="gq-axis-tick" />
+            <text x={xAt(index)} y={height - padBottom + 16} textAnchor="middle" className="gq-axis-label">{formatTrajectoryAxisDay(all[index]!.day)}</text>
+          </g>
+        ))}
+        <g className="gq-trajectory-plot">
+          {/* Confidence band (projection only — history is fact, not a range). */}
+          {bandTop.length > 1 && <path d={bandPath} fill={`url(#${bandId})`} />}
+          {/* Real history: gradient area + solid stroke. */}
+          <polygon points={`${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} ${histLine} ${xAt(histCount - 1).toFixed(1)},${yAt(0).toFixed(1)}`} fill={`url(#${gradientId})`} />
+          {histCount > 1 && <polyline points={histLine} fill="none" className="exec-area-stroke" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+          {/* Trend extension: clearly dashed so it can never pass for fact. */}
+          <polyline points={projLine} fill="none" className="gq-trajectory-projection" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />
+        </g>
+        {/* "Today" divider with a pill label, and endpoint markers. */}
         <line x1={todayX} x2={todayX} y1={padTop} y2={height - padBottom} className="gq-trajectory-today" />
-        <circle cx={todayX} cy={yAt(data.historical.at(-1)!.value)} r={4} className="exec-area-dot" />
-        {lastProjected ? <circle cx={xAt(n - 1)} cy={yAt(lastProjected.value)} r={4} className="gq-trajectory-end" /> : null}
+        <g transform={`translate(${Math.min(Math.max(todayX, padLeft + 22), width - padRight - 22) - 22}, ${padTop - 15})`}>
+          <rect width="44" height="16" rx="8" className="gq-trajectory-today-pill" />
+          <text x="22" y="11.5" textAnchor="middle" className="gq-trajectory-today-text">Today</text>
+        </g>
+        <circle cx={todayX} cy={yAt(lastHistorical.value)} r={3.5} className="exec-area-dot" />
+        {lastProjected ? <circle cx={endX} cy={yAt(lastProjected.value)} r={3.5} className="gq-trajectory-end" /> : null}
         {hover && (
           <g className="gq-trajectory-hover" pointerEvents="none">
             <line x1={hover.x} x2={hover.x} y1={padTop} y2={height - padBottom} className="exec-chart-cursor gq-trajectory-cursor" />
-            <circle cx={hover.x} cy={hover.y} r={6} className="gq-trajectory-active-ring" />
-            <circle cx={hover.x} cy={hover.y} r={4.2} className="gq-trajectory-active-dot" />
+            <circle cx={hover.x} cy={hover.y} r={7} className="gq-trajectory-active-ring" />
+            <circle cx={hover.x} cy={hover.y} r={3.8} className="gq-trajectory-active-dot" />
           </g>
         )}
         <rect
@@ -488,18 +592,14 @@ export function ExecutiveTrajectoryChart({ data, height = 200, formatValue, labe
           data-testid="gq-trajectory-tooltip"
           data-kind={hover.kind}
           role="status"
-          style={{ left: `${(hover.x / width) * 100}%` }}
+          style={{ left: `${tooltipLeft}%` }}
         >
           <span className="gq-trajectory-tooltip-kind">{hover.kind}</span>
-          <strong>{formatValue ? formatValue(hover.value) : String(Math.round(hover.value))}</strong>
+          <strong>{formatValue ? formatValue(hover.value) : String(Math.round(hover.value))}<small>/day</small></strong>
           <em>{formatTrajectoryDay(hover.day)}</em>
+          {hoverBand && <small className="gq-trajectory-tooltip-range">range {formatValue ? formatValue(hoverBand.low) : String(Math.round(hoverBand.low))} – {formatValue ? formatValue(hoverBand.high) : String(Math.round(hoverBand.high))}</small>}
         </div>
       )}
-      <div className="exec-chart-legend">
-        <span>{data.historical[0]?.day.slice(5) ?? ''}</span>
-        <span className="gq-trajectory-legend-mid">{lastProjected && formatValue ? `Projected ${formatValue(lastProjected.value)} / day in 30d` : 'today'}</span>
-        <span>{lastProjected ? `+30d` : ''}</span>
-      </div>
     </div>
   )
 }

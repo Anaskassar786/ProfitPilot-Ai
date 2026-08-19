@@ -2,12 +2,16 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildTrajectoryHoverPoints,
   ExecutiveTrajectoryChart,
+  formatTrajectoryAxisDay,
+  formatTrajectoryAxisMoney,
   formatTrajectoryDay,
   nearestTrajectoryPoint,
+  niceTrajectoryTicks,
   type TrajectoryChartData,
 } from './executive-charts.js'
 import { projectTrajectory } from './growthiq-strategic.js'
@@ -47,6 +51,49 @@ describe('GrowthIQ trajectory hover math', () => {
   it('formats chart days without timezone drift', () => {
     expect(formatTrajectoryDay('2026-08-18')).toBe('Aug 18, 2026')
     expect(formatTrajectoryDay('not-a-date')).toBe('not-a-date')
+  })
+})
+
+describe('GrowthIQ trajectory axis system', () => {
+  it('formats compact axis money for USD and INR', () => {
+    expect(formatTrajectoryAxisMoney(2500, 'USD')).toBe('$2.5K')
+    expect(formatTrajectoryAxisMoney(120000, 'INR')).toBe('₹1.2L')
+    expect(formatTrajectoryAxisMoney(Number.NaN)).toBe('—')
+  })
+
+  it('formats short axis days', () => {
+    expect(formatTrajectoryAxisDay('2026-08-18')).toBe('Aug 18')
+    expect(formatTrajectoryAxisDay('not-a-date')).toBe('not-a-date')
+  })
+
+  it('builds a nice zero-based axis scale with human steps', () => {
+    expect(niceTrajectoryTicks(470)).toEqual([0, 200, 400, 600])
+    expect(niceTrajectoryTicks(8.3)).toEqual([0, 2.5, 5, 7.5, 10])
+    expect(niceTrajectoryTicks(0)).toEqual([0, 1])
+  })
+
+  it('renders labeled axes, legend chips, and the Today marker', () => {
+    const html = renderToStaticMarkup(createElement(ExecutiveTrajectoryChart, {
+      data: chartData(),
+      label: 'Revenue trajectory with 30-day trend projection',
+      formatValue: (value: number) => `$${Math.round(value)}`,
+    }))
+    // Legend separates Real / Projected / Range honestly.
+    expect(html).toContain('Real revenue')
+    expect(html).toContain('Trend projection')
+    expect(html).toContain('Likely range')
+    // Y axis carries compact currency labels on nice-value gridlines.
+    expect(html).toContain('gq-axis-gridline')
+    expect(html).toContain('gq-axis-baseline')
+    expect(html).toContain('gq-axis-label')
+    expect(html).toContain('$200') // nice scale of a 100–470 range
+    // X axis carries date ticks spanning real history into the projection.
+    expect(html).toContain('Aug 11')
+    expect(html).toContain('Sep 17')
+    // The last-30 vs next-30 split is labeled.
+    expect(html).toContain('Today')
+    expect(html).toContain('gq-trajectory-today-pill')
+    expect(html).toContain('gq-trajectory-projection') // dashed trend extension
   })
 })
 
@@ -109,6 +156,8 @@ describe('GrowthIQ trajectory chart interaction', () => {
     const projected = container.querySelector('[data-testid="gq-trajectory-tooltip"]') as HTMLElement
     expect(projected.getAttribute('data-kind')).toBe('Projected')
     expect(projected.textContent).toContain('Projected')
+    // Projected days carry the honest likely-range from the residual band.
+    expect(projected.textContent).toContain('range $')
 
     await act(async () => {
       hit.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, clientX: 750, clientY: 80 }))

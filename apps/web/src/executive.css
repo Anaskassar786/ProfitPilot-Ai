@@ -909,14 +909,40 @@
 
 /* Trajectory */
 .gq-trajectory-projection { stroke: var(--exec-purple-deep); }
-.gq-trajectory-today { stroke: var(--exec-muted); stroke-width: 1; stroke-dasharray: 3 4; opacity: .65; }
+.gq-trajectory-today { stroke: var(--exec-muted); stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
+.gq-trajectory-today-pill { fill: var(--exec-surface-3); stroke: var(--exec-border); stroke-width: 1; }
+.gq-trajectory-today-text { font: 700 9px var(--exec-sans); fill: var(--exec-muted); letter-spacing: .04em; }
 .gq-trajectory-end { fill: var(--exec-purple-deep); stroke: var(--exec-surface); stroke-width: 1.5; }
-.gq-trajectory-legend-mid { color: var(--exec-purple); font-weight: 650; }
 .gq-trajectory { touch-action: none; }
 .gq-trajectory-hit { cursor: crosshair; touch-action: none; }
 .gq-trajectory-cursor { stroke: var(--exec-purple); stroke-dasharray: 3 4; opacity: .75; }
 .gq-trajectory-active-ring { fill: color-mix(in srgb, var(--exec-purple) 22%, transparent); }
 .gq-trajectory-active-dot { fill: var(--exec-purple); stroke: var(--exec-surface); stroke-width: 2; }
+
+/* Trajectory legend chips — Real / Projected / Range separation at a glance */
+.gq-trajectory-legend { display: flex; gap: 14px; justify-content: flex-end; margin: 2px 0 6px; flex-wrap: wrap; }
+.gq-trajectory-chip { display: inline-flex; align-items: center; gap: 6px; font: 600 11px var(--exec-sans); color: var(--exec-muted); letter-spacing: .01em; }
+.gq-trajectory-swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+.gq-trajectory-swatch-real { background: var(--exec-purple); }
+.gq-trajectory-swatch-proj { background: repeating-linear-gradient(90deg, var(--exec-purple-deep) 0 4px, transparent 4px 7px); height: 2.5px; }
+.gq-trajectory-swatch-band { background: var(--exec-purple-deep); opacity: .18; height: 9px; border-radius: 3px; }
+
+/* Trajectory axes — labeled nice-value gridlines + weekly date ticks */
+.gq-axis-gridline { stroke: var(--exec-grid); stroke-width: 1; stroke-dasharray: 3 5; }
+.gq-axis-baseline { stroke: var(--exec-border); stroke-width: 1; }
+.gq-axis-tick { stroke: var(--exec-border); stroke-width: 1; }
+.gq-axis-label { font: 550 10.5px var(--exec-sans); fill: var(--exec-faint); font-variant-numeric: tabular-nums; }
+
+/* Plot entrance — soft fade so the chart settles without theatrics */
+.gq-trajectory-plot { animation: gq-trajectory-in 500ms ease both; }
+@keyframes gq-trajectory-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gq-trajectory-plot { animation: none; }
+}
+
 .gq-trajectory-tooltip {
   position: absolute;
   top: 10px;
@@ -953,6 +979,19 @@
   font-style: normal;
   font-size: 11px;
   color: var(--exec-muted);
+  font-family: var(--exec-sans);
+}
+.gq-trajectory-tooltip strong small {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--exec-muted);
+  margin-left: 2px;
+}
+.gq-trajectory-tooltip-range {
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--exec-faint);
+  font-variant-numeric: tabular-nums;
   font-family: var(--exec-sans);
 }
 @keyframes gq-tooltip-in {
@@ -1169,6 +1208,15 @@
 .app-shell.light-mode .gq-section-note { color: #475569; }
 .app-shell.light-mode .exec-area-stroke { stroke: #7C3AED; }
 .app-shell.light-mode .gq-trajectory-projection { stroke: #A78BFA; }
+.app-shell.light-mode .gq-axis-gridline { stroke: rgba(15, 23, 42, .1); }
+.app-shell.light-mode .gq-axis-baseline { stroke: #CBD5E1; }
+.app-shell.light-mode .gq-axis-tick { stroke: #CBD5E1; }
+.app-shell.light-mode .gq-axis-label { fill: #64748B; }
+.app-shell.light-mode .gq-trajectory-chip { color: #475569; }
+.app-shell.light-mode .gq-trajectory-today { stroke: #64748B; }
+.app-shell.light-mode .gq-trajectory-today-pill { fill: #F1F5F9; stroke: #E2E8F0; }
+.app-shell.light-mode .gq-trajectory-today-text { fill: #475569; }
+.app-shell.light-mode .gq-trajectory-tooltip-range { color: #64748B; }
 .app-shell.light-mode .exec-chart-label { fill: #64748B; }
 .app-shell.light-mode .exec-chart-legend { color: #64748B; }
 .app-shell.light-mode .gq-direction.declining { color: #DC2626; }
