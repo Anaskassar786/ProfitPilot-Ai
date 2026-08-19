@@ -96,7 +96,9 @@ describe('page wiring', () => {
     expect(source).not.toContain('<select')
     expect(source).not.toContain('<option')
     expect(source.match(/<CustomSelect/g) ?? []).toHaveLength(4)
-    for (const label of ['All categories', 'All vendors', 'All locations', "label: 'Name'", "label=\"Sort\""]) expect(source).toContain(label)
+    for (const label of ['All categories', 'All vendors', 'All locations', "label: 'Product name'", 'label="Sort by"']) expect(source).toContain(label)
+    expect(source).toContain('inventory-toolbar-primary')
+    expect(source).toContain('inventory-toolbar-filters')
     expect(source).not.toContain('triggerLabel="Sort"')
   })
 

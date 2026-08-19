@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { BasicInsightsCard, DaysOfCoverCell, InventoryEmptyState, InventoryHealthCard, InventoryStatsGrid, InventoryTable, StockDistributionChart, StockLevelBadge, inventorySortOptions } from './inventory.js'
+import { BasicInsightsCard, DaysOfCoverCell, InventoryEmptyState, InventoryHealthCard, InventoryStatsGrid, InventoryTable, InventoryToolbar, StockDistributionChart, StockLevelBadge, inventorySortOptions } from './inventory.js'
 import { EMPTY_INVENTORY_PAGE, distributionSegments, daysOfCoverLabel, formatMoney, formatUnits, locationBreakdown, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
 import type { InventoryPageResult, InventoryRowItem } from './inventory-model.js'
 
@@ -82,6 +82,66 @@ describe('Inventory KPI and health rendering', () => {
   it('renders the stock distribution legend from real counts and nothing when empty', () => {
     expect(renderToStaticMarkup(createElement(StockDistributionChart, { data: page(), loading: false }))).toContain('Stock Distribution')
     expect(renderToStaticMarkup(createElement(StockDistributionChart, { data: EMPTY_INVENTORY_PAGE, loading: false }))).toContain('No stock levels to chart yet.')
+  })
+})
+
+describe('Inventory toolbar', () => {
+  const toolbarProps = {
+    query: '',
+    onQuery: vi.fn(),
+    sort: 'name' as const,
+    direction: 'asc' as const,
+    onSort: vi.fn(),
+    onDirection: vi.fn(),
+    filters: { category: '', vendor: '', locationId: '' },
+    onFilters: vi.fn(),
+    onClear: vi.fn(),
+    categories: ['Apparel', 'Home'],
+    vendors: ['Real Vendor'],
+    locations: [
+      { id: '61', name: 'Morādābād Warehouse', city: null, province: null, country: null, active: true, levelsQueried: true },
+      { id: '62', name: 'Delhi Retail', city: null, province: null, country: null, active: true, levelsQueried: true },
+    ],
+    sortOptions: inventorySortOptions(false),
+  }
+
+  it('keeps search and sort on the primary row so Name/Sort no longer wrap under the filters', () => {
+    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    expect(html).toContain('inventory-toolbar-primary')
+    expect(html).toContain('inventory-sort-control')
+    expect(html).toContain('Sort by')
+    expect(html).toContain('Product name')
+    expect(html).toContain('aria-label="Sort inventory"')
+    expect(html).toContain('aria-label="Sort inventory by"')
+    expect(html).toContain('Search by product name or SKU')
+    const primary = html.slice(html.indexOf('inventory-toolbar-primary'), html.indexOf('inventory-toolbar-filters'))
+    expect(primary).toContain('inventory-search')
+    expect(primary).toContain('inventory-sort-control')
+    expect(primary).not.toContain('All categories')
+  })
+
+  it('places category, vendor, and location filters on their own row', () => {
+    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    expect(html).toContain('inventory-toolbar-filters')
+    expect(html).toContain('All categories')
+    expect(html).toContain('All vendors')
+    expect(html).toContain('All locations')
+    const filters = html.slice(html.indexOf('inventory-toolbar-filters'))
+    expect(filters).not.toContain('Sort by')
+    expect(filters).not.toContain('Product name')
+  })
+
+  it('offers readable sort fields and a direction toggle', () => {
+    expect(inventorySortOptions(false).map((option) => option.label)).toEqual(['Product name', 'Stock level', 'Stock value', 'Category', 'Last updated'])
+    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    expect(html).toContain('aria-label="Sort descending"')
+    expect(html).toContain('Currently ascending')
+  })
+
+  it('shows a clear-filters action only when a filter or search is active', () => {
+    expect(renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))).not.toContain('Clear filters')
+    const html = renderToStaticMarkup(createElement(InventoryToolbar, { ...toolbarProps, query: 'shirt' }))
+    expect(html).toContain('Clear filters')
   })
 })
 

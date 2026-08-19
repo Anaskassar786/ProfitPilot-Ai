@@ -178,6 +178,7 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
           onDirection={() => { setDirection((value) => value === 'asc' ? 'desc' : 'asc'); setPage(1) }}
           filters={filters}
           onFilters={(value) => { setFilters(value); setPage(1) }}
+          onClear={() => { setQuery(''); setFilters(EMPTY_FILTERS); setPage(1) }}
           categories={data.categories}
           vendors={data.vendors}
           locations={data.locations}
@@ -538,16 +539,16 @@ function InventoryTabs({ counts, active, onSelect }: { counts: InventoryPageResu
 /** Sort choices. Days of cover only appears when the plan actually computes it. */
 export function inventorySortOptions(daysOfCoverUnlocked: boolean): readonly SelectOption<InventorySort>[] {
   const base: readonly SelectOption<InventorySort>[] = [
-    { value: 'name', label: 'Name' },
-    { value: 'stock', label: 'Stock' },
-    { value: 'value', label: 'Value' },
+    { value: 'name', label: 'Product name' },
+    { value: 'stock', label: 'Stock level' },
+    { value: 'value', label: 'Stock value' },
     { value: 'category', label: 'Category' },
-    { value: 'updated', label: 'Updated' },
+    { value: 'updated', label: 'Last updated' },
   ]
   return daysOfCoverUnlocked ? [...base, { value: 'days_of_cover', label: 'Days of cover' }] : base
 }
 
-function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection, filters, onFilters, categories, vendors, locations, sortOptions }: {
+export function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection, filters, onFilters, onClear, categories, vendors, locations, sortOptions }: {
   query: string
   onQuery: (value: string) => void
   sort: InventorySort
@@ -556,6 +557,7 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
   onDirection: () => void
   filters: FilterState
   onFilters: (value: FilterState) => void
+  onClear?: () => void
   categories: readonly string[]
   vendors: readonly string[]
   locations: InventoryPageResult['locations']
@@ -564,21 +566,42 @@ function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDirection
   const categoryOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All categories' }, ...categories.map((category) => ({ value: category, label: category }))]
   const vendorOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All vendors' }, ...vendors.map((vendor) => ({ value: vendor, label: vendor }))]
   const locationOptions: readonly SelectOption<string>[] = [{ value: '', label: 'All locations' }, ...locations.map((location) => ({ value: location.id, label: locationLabel(location) }))]
+  const showFilters = categories.length > 0 || vendors.length > 0 || locations.length > 1
+  const hasActiveFilters = Boolean(query || filters.category || filters.vendor || filters.locationId)
+  const nextDirection = direction === 'asc' ? 'descending' : 'ascending'
   return <div className="inventory-toolbar">
-    <label className="inventory-search">
-      <Search size={16} />
-      <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search by product name or SKU" aria-label="Search inventory" />
-      {query && <button onClick={() => onQuery('')} aria-label="Clear search"><X size={14} /></button>}
-    </label>
-    <div className="inventory-toolbar-actions">
+    <div className="inventory-toolbar-primary">
+      <label className="inventory-search">
+        <Search size={16} />
+        <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search by product name or SKU" aria-label="Search inventory" />
+        {query && <button type="button" onClick={() => onQuery('')} aria-label="Clear search"><X size={14} /></button>}
+      </label>
+      <div className="inventory-sort-control" role="group" aria-label="Sort inventory">
+        <CustomSelect
+          className="inventory-select inventory-sort-select"
+          ariaLabel="Sort inventory by"
+          value={sort}
+          options={sortOptions}
+          onChange={onSort}
+          icon={<ArrowUpDown size={14} />}
+          label="Sort by"
+        />
+        <button
+          type="button"
+          onClick={onDirection}
+          aria-label={`Sort ${nextDirection}`}
+          title={`Currently ${direction === 'asc' ? 'ascending' : 'descending'}. Switch to ${nextDirection}.`}
+        >
+          {direction === 'asc' ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+        </button>
+      </div>
+    </div>
+    {showFilters && <div className="inventory-toolbar-filters">
       {categories.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by category" value={filters.category} options={categoryOptions} onChange={(value) => onFilters({ ...filters, category: value })} icon={<Tag size={13} />} />}
       {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
       {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
-      <div className="inventory-sort-control">
-        <CustomSelect ariaLabel="Sort inventory" value={sort} options={sortOptions} onChange={onSort} label="Sort" />
-        <button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button>
-      </div>
-    </div>
+      {hasActiveFilters && onClear && <button type="button" className="inventory-clear-filters" onClick={onClear}>Clear filters</button>}
+    </div>}
   </div>
 }
 
