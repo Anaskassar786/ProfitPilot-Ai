@@ -195,7 +195,14 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       fetchCoachAchievements(storeId),
       fetchCoachAvailableAchievements(storeId),
       fetchCoachStreak(storeId),
-      fetchCoachReview(storeId),
+      // A 404 here is an expected absence (no weekly review generated yet),
+      // not a failure — the home view already renders the card conditionally.
+      // Counting it as a failure would flag every fresh store as 'partial'
+      // and false-trigger the partial-load banner.
+      fetchCoachReview(storeId).catch((error: unknown) => {
+        if (error instanceof ApiClientError && error.status === 404) return null
+        throw error
+      }),
       fetchCoachPreferences(storeId),
       fetchCoachUsage(storeId),
       fetchCoachHealthScore(storeId),
@@ -406,13 +413,14 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
 
   return (
     <div className="coach-main">
+      {loadState === 'partial' && <CoachPartialBanner onRetry={onReload} />}
       <section className="coach-sections">
         <TodayBriefingCard storeId={context.storeId!} huddle={data.huddle} plan={plan} onToast={onToast} onReload={onReload} onOpenTour={onOpenOnboarding} />
         <CoachValueStrip data={data} onFocusGoals={() => onNavigate('goals')} onFocusDays={() => onNavigate('progress')} />
         <PrioritiesSection storeId={context.storeId!} priorities={data.priorities} plan={plan} onToast={onToast} onReload={onReload} onNavigate={() => onNavigate('goals')} onNavigateBilling={onNavigateBilling} />
         <GoalSection storeId={context.storeId!} goals={data.goals} plan={plan} onToast={onToast} onNavigate={() => onNavigate('goals')} onNavigateBilling={onNavigateBilling} />
-        <ProgressDashboard summary={data.summary} plan={plan} onNavigate={() => onNavigate('progress')} onNavigateBilling={onNavigateBilling} />
-        <BestDaysSection heatmap={data.heatmap} onNavigate={() => onNavigate('progress')} />
+        <ProgressDashboard summary={data.summary} plan={plan} onNavigate={() => onNavigate('progress')} onNavigateBilling={onNavigateBilling} onRetry={onReload} />
+        <BestDaysSection heatmap={data.heatmap} onNavigate={() => onNavigate('progress')} onRetry={onReload} />
         <AchievementsSection achievements={data.achievements} badgeCatalog={data.badgeCatalog} streak={data.streak} plan={plan} onNavigate={() => onNavigate('achievements')} onViewHuddle={() => { void onHuddleClick(context.storeId!, onToast, onReload) }} />
         <CoachStyleSection storeId={context.storeId!} preferences={data.preferences} plan={plan} onToast={onToast} onReload={onReload} onNavigateBilling={onNavigateBilling} />
         {data.review && context.storeId && <WeeklyReviewCard storeId={context.storeId} review={data.review} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onSetGoal={() => onNavigate('goals')} />}
@@ -918,9 +926,32 @@ export function LockedFeatureNote({ feature, onUpgrade }: { feature: string; pla
 // 4. Progress dashboard (window = what the API actually returned)
 // ---------------------------------------------------------------------------
 
-function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling }: { summary: CoachProgressSummary | null; plan: CoachPlan; onNavigate: () => void; onNavigateBilling: () => void }) {
+function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling, onRetry }: { summary: CoachProgressSummary | null; plan: CoachPlan; onNavigate: () => void; onNavigateBilling: () => void; onRetry: () => void }) {
   const planHistoryDays = COACH_LIMITS[plan].progressHistoryDays as number
-  if (!summary) return <CoachSkeletonRow />
+  // FIX (permanent blank boxes): on the coach home this section renders only
+  // after every fetch has settled, so a null summary means the request
+  // FAILED — three forever-blank skeleton boxes must not stand in for it.
+  if (!summary) {
+    return (
+      <section className="coach-card coach-progress-dashboard">
+        <div className="coach-section-head">
+          <CoachCardHeading kicker={`${planHistoryDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
+          <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+        </div>
+        <div className="coach-section-unavailable">
+          <span className="coach-section-unavailable-icon blue"><BarChart3 size={22} /></span>
+          <div className="coach-section-unavailable-copy">
+            <strong>I couldn’t pull your progress numbers this time</strong>
+            <p>Every other card on this page is live — only your revenue trend failed to arrive. Retry re-reads your synced orders from scratch; nothing here is ever a placeholder line.</p>
+            <div className="coach-section-unavailable-actions">
+              <button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry loading progress</button>
+              <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
   // Label the window the server actually served, so the heading can never
   // promise 90 days while the payload only covers 30.
   const historyDays = Number.isFinite(summary.window) && summary.window > 0 ? summary.window : planHistoryDays
@@ -980,12 +1011,29 @@ export function Sparkline({ values }: { values: readonly number[] }) {
 // 5. Activity heatmap (FIX 6 — real rhythm, derived patterns)
 // ---------------------------------------------------------------------------
 
-function HeatmapSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | null; onNavigate: () => void }) {
+function HeatmapSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatmapView | null; onNavigate: () => void; onRetry: () => void }) {
   // Hooks must run on every render: compute before any early return so the
   // hook order stays stable when `heatmap` flips between null and loaded.
   const cells = heatmap?.cells ?? EMPTY_HEATMAP_CELLS
   const patterns = useMemo(() => heatmapPatterns(cells), [cells])
-  if (!heatmap) return <CoachSkeletonRow />
+  // FIX (permanent blank boxes): null here means the heatmap request FAILED
+  // (the progress view's own loading screen covers the in-flight window), so
+  // render an honest, retryable state instead of three dead skeleton boxes.
+  if (!heatmap) {
+    return (
+      <section className="coach-card coach-heatmap-section">
+        <div className="coach-section-head">
+          <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
+          <button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></button>
+        </div>
+        <div className="coach-tempo-unavailable">
+          <span className="coach-tempo-unavailable-icon"><CalendarDays size={16} /></span>
+          <p><strong>Your weekly heatmap didn’t load this time.</strong> Reload patterns rebuilds the grid from your real synced order days — every cell stays a true day of orders.</p>
+          <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Reload patterns</button>
+        </div>
+      </section>
+    )
+  }
   const { bestDay, busiestWeek } = heatmap
   const bestWeekdayName = patterns.bestWeekday !== null ? WEEKDAY_LABELS_SHORT[patterns.bestWeekday] : null
   return (
@@ -1202,11 +1250,28 @@ function CoachValueStrip({ data, onFocusGoals, onFocusDays }: { data: CoachData;
   )
 }
 
-function BestDaysSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | null; onNavigate: () => void }) {
+function BestDaysSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatmapView | null; onNavigate: () => void; onRetry: () => void }) {
   // Same rule as HeatmapSection: hooks before the early return.
   const cells = heatmap?.cells ?? EMPTY_HEATMAP_CELLS
   const patterns = useMemo(() => heatmapPatterns(cells), [cells])
-  if (!heatmap) return <CoachSkeletonRow />
+  // FIX (permanent blank boxes): on the coach home a null heatmap means the
+  // request FAILED — show a distinct, honest recovery strip with a working
+  // retry instead of three identical blank shimmer boxes.
+  if (!heatmap) {
+    return (
+      <section className="coach-card coach-bestdays-section">
+        <div className="coach-section-head">
+          <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
+          <button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></button>
+        </div>
+        <div className="coach-tempo-unavailable">
+          <span className="coach-tempo-unavailable-icon"><CalendarDays size={16} /></span>
+          <p><strong>Your day-by-day rhythm didn’t arrive with the rest of the page.</strong> Once it loads, this card names your strongest weekday and your peak week — measured from real orders only, never guessed.</p>
+          <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Check again</button>
+        </div>
+      </section>
+    )
+  }
   const bestName = patterns.bestWeekday !== null ? WEEKDAY_LABELS[patterns.bestWeekday] : null
   return (
     <section className="coach-card coach-bestdays-section">
@@ -1574,9 +1639,9 @@ export function CoachProgressView({ context, plan, onToast, onNavigateBilling }:
   return (
     <div className="coach-subview">
       <CoachSubHeader eyebrow="Store Coach" title="Progress" description={description} onBack={goBack} />
-      {summary ? <ProgressDashboard summary={summary} plan={plan} onNavigate={goBack} onNavigateBilling={onNavigateBilling} /> : <CoachErrorState error="Progress data could not be loaded." onRetry={load} onNavigateBilling={onNavigateBilling} />}
+      {summary ? <ProgressDashboard summary={summary} plan={plan} onNavigate={goBack} onNavigateBilling={onNavigateBilling} onRetry={load} /> : <CoachErrorState error="Progress data could not be loaded." onRetry={load} onNavigateBilling={onNavigateBilling} />}
       {comparisons && <ComparisonsSection comparisons={comparisons} />}
-      <HeatmapSection heatmap={heatmap} onNavigate={goBack} />
+      <HeatmapSection heatmap={heatmap} onNavigate={goBack} onRetry={load} />
       <WeeklyPatternBars storeId={storeId} onToast={onToast} />
     </div>
   )
@@ -1634,15 +1699,21 @@ export function CoachChatView({ context }: { context: WorkspaceContext; plan?: C
 
 export function CoachAchievementsView({ context, achievements, plan, onToast, onNavigateBilling }: { context: WorkspaceContext; achievements: readonly CoachAchievement[]; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void }) {
   const [catalog, setCatalog] = useState<readonly import('./store-coach-model.js').CoachBadgeCatalogEntry[] | null>(null)
+  const [catalogFailed, setCatalogFailed] = useState(false)
+  const [catalogRetryTick, setCatalogRetryTick] = useState(0)
   const [streak, setStreak] = useState<CoachStreakView | null>(null)
   const storeId = context.storeId
   useEffect(() => {
     if (!storeId) return
+    setCatalogFailed(false)
     void Promise.allSettled([import('./api.js').then(({ fetchCoachAvailableAchievements }) => fetchCoachAvailableAchievements(storeId)), fetchCoachStreak(storeId)]).then(([catalogResult, streakResult]) => {
+      // FIX (permanent blank boxes): distinguish "still loading" (skeleton)
+      // from "fetch failed" (honest retryable state) instead of skeletons forever.
       setCatalog(catalogResult.status === 'fulfilled' ? catalogResult.value.catalog : null)
+      setCatalogFailed(catalogResult.status === 'rejected')
       setStreak(streakResult.status === 'fulfilled' ? streakResult.value : null)
     })
-  }, [storeId])
+  }, [storeId, catalogRetryTick])
   const visibleCap = COACH_LIMITS[plan].badgesVisible as number
   return (
     <div className="coach-subview">
@@ -1662,7 +1733,18 @@ export function CoachAchievementsView({ context, achievements, plan, onToast, on
       </section>
       <section className="coach-card">
         <CoachCardHeading kicker={`BADGE CATALOG · ${achievements.length} EARNED`} dot="gold" title="All badges" />
-        {catalog === null ? <CoachSkeletonRow /> : (
+        {catalog === null && catalogFailed ? (
+          <div className="coach-section-unavailable slim">
+            <span className="coach-section-unavailable-icon gold"><Trophy size={20} /></span>
+            <div className="coach-section-unavailable-copy">
+              <strong>The badge catalog didn’t load</strong>
+              <p>Your earned badges are safe — only the list of what’s still unlockable failed to arrive. Retry pulls the live catalog again.</p>
+              <div className="coach-section-unavailable-actions">
+                <button className="button secondary" onClick={() => setCatalogRetryTick((tick) => tick + 1)}><RefreshCw size={14} /> Retry loading badges</button>
+              </div>
+            </div>
+          </div>
+        ) : catalog === null ? <CoachSkeletonRow /> : (
           <div className="coach-badge-grid">
             {catalog.map((badge) => (
               <div className={`coach-badge-card ${badge.earned ? 'earned' : 'locked'} rarity-${badge.rarity.toLowerCase()}`} key={badge.id} title={badge.earned ? `Earned ${badge.earnedAt ? relativeTimeLabel(badge.earnedAt) : ''}` : 'Not earned yet'}>
@@ -1806,6 +1888,24 @@ export function CoachErrorState({ error, onRetry, onNavigateBilling }: { error: 
         <button className="button primary" onClick={onRetry}><RefreshCw size={14} /> Retry</button>
         {/upgrade|locked|plan/i.test(error) && <button className="button secondary" onClick={onNavigateBilling}><ArrowUpRight size={14} /> Upgrade Plan</button>}
       </div>
+    </div>
+  )
+}
+
+/**
+ * FIX (permanent blank boxes): shown when SOME Store Coach requests failed
+ * while others succeeded (`loadState === 'partial'`). Previously each failed
+ * section quietly rendered three blank shimmer boxes forever. This banner
+ * names what happened and offers a real retry that re-runs every coach fetch.
+ */
+export function CoachPartialBanner({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="coach-partial-banner" role="status">
+      <AlertCircle size={15} />
+      <span className="coach-partial-banner-copy">
+        <strong>A few cards couldn’t load this time</strong> — everything else on this page is live from your real store.
+      </span>
+      <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Retry</button>
     </div>
   )
 }
