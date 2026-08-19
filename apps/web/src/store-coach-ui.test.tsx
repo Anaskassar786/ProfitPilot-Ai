@@ -67,13 +67,18 @@ describe('Store Coach routing', () => {
     expect(coachViewFromPath('/ai-growth-command/coach/chat')).toBe('chat')
     expect(coachViewFromPath('/ai-growth-command/coach/achievements')).toBe('achievements')
     expect(coachViewFromPath('/ai-growth-command/coach/settings')).toBe('settings')
-    expect(coachViewFromPath('/ai-growth-command/briefing')).toBe('briefing')
-    expect(coachViewFromPath('/ai-growth-command/insights')).toBe('insights')
+  })
+  it('falls back to the coach home for retired placeholder paths', () => {
+    // /briefing and /insights used to render "coming soon" panels.
+    expect(coachViewFromPath('/ai-growth-command/briefing')).toBe('coach')
+    expect(coachViewFromPath('/ai-growth-command/insights')).toBe('coach')
   })
   it('builds paths for every view', () => {
     expect(coachPathForView('goals')).toBe('/ai-growth-command/coach/goals')
-    expect(coachPathForView('briefing')).toBe('/ai-growth-command/briefing')
-    expect(coachPathForView('insights')).toBe('/ai-growth-command/insights')
+    expect(coachPathForView('progress')).toBe('/ai-growth-command/coach/progress')
+    expect(coachPathForView('achievements')).toBe('/ai-growth-command/coach/achievements')
+    expect(coachPathForView('settings')).toBe('/ai-growth-command/coach/settings')
+    expect(coachPathForView('coach')).toBe('/ai-growth-command/coach')
   })
 })
 
@@ -242,13 +247,15 @@ describe('Store Coach components', () => {
     const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 140, tone: 'amber' }))
     expect(html).toContain('100%')
   })
-  it('renders the three priority category accents with Take Action / Skip', () => {
+  it('renders the three priority category accents with Mark as done / Skip', () => {
     const high = renderToStaticMarkup(createElement(PriorityCard, { priority: PRIORITY, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(high).toContain('coach-priority-card red')
     expect(high).toContain('High Impact')
     expect(high).toContain('$1,281')
     expect(high).toContain('15 min')
-    expect(high).toContain('Take Action')
+    // The control only records completion; it does not perform the task.
+    expect(high).toContain('Mark as done')
+    expect(high).not.toContain('Take Action')
     expect(high).toContain('Skip')
     const quick = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'QUICK_WIN', id: 'p2' }, busy: true, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(quick).toContain('coach-priority-card green')

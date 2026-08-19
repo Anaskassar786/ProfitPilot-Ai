@@ -14,10 +14,18 @@ export default defineConfig({
     headers: { 'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.e2b.app; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws:; object-src 'none'" },
     proxy: {
       '/api': 'http://127.0.0.1:3000',
-      // PatternAI deep links are client-side routes. Without this bypass the
-      // broad '/ai' rule below would forward /ai-growth-command/patternai to
-      // the API and the dev server would answer a page refresh with JSON.
-      '^/ai-growth-command/patternai': { target: 'http://127.0.0.1:5173', bypass: () => '/index.html' },
+      // Every /ai-growth-command/* path (Store Coach, PatternAI, GrowthIQ) is
+      // a client-side route. Without this bypass the broad '/ai' rule below
+      // forwards them to the API, so refreshing or deep-linking to
+      // /ai-growth-command/coach answers a page navigation with JSON (404).
+      // This supersedes the narrower '^/ai-growth-command/patternai' rule it
+      // replaces: PatternAI deep links are covered by the same bypass.
+      // Browser navigations (Accept: text/html) get the SPA shell; genuine
+      // API calls never accept HTML and still reach the API target.
+      '^/ai-growth-command': {
+        target: 'http://127.0.0.1:3000',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+      },
       // Automation deep links are client-side routes. The broad '/automation'
       // rule below would otherwise forward /automation and
       // /automation/templates to the API and a page refresh would answer

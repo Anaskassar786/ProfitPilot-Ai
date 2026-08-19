@@ -797,7 +797,7 @@ export class StoreCoachService {
   public async currentReview(storeId: StoreId): Promise<Readonly<Record<string, unknown>>> {
     const plan = await this.planFor(storeId)
     const latest = await this.deps.reports.latest(storeId, 'WEEKLY')
-    if (latest) return { id: latest.id, reportDate: latest.reportDate, content: latest.content, pdfUrl: latest.pdfUrl, sentViaEmail: latest.sentViaEmail, commanderPdf: plan === 'commander' }
+    if (latest) return { id: latest.id, reportDate: latest.reportDate, content: latest.content, pdfUrl: latest.pdfUrl, sentViaEmail: latest.sentViaEmail, commanderPdf: plan === 'commander', emailAvailable: this.deps.mailer !== undefined, pdfAvailable: plan === 'commander' && this.deps.pdf !== undefined }
     return this.generateReview(storeId)
   }
 
@@ -812,7 +812,7 @@ export class StoreCoachService {
     const day = await this.deps.merchantDay(storeId, this.now())
     if (!force) {
       const latest = await this.deps.reports.latest(storeId, 'WEEKLY')
-      if (latest) return { id: latest.id, reportDate: latest.reportDate, content: latest.content, pdfUrl: latest.pdfUrl, sentViaEmail: latest.sentViaEmail, commanderPdf: plan === 'commander' }
+      if (latest) return { id: latest.id, reportDate: latest.reportDate, content: latest.content, pdfUrl: latest.pdfUrl, sentViaEmail: latest.sentViaEmail, commanderPdf: plan === 'commander', emailAvailable: this.deps.mailer !== undefined, pdfAvailable: plan === 'commander' && this.deps.pdf !== undefined }
     }
     const preferences = await this.preferencesFor(storeId)
     const personality = this.assertPersonalityAllowed(plan, preferences.personality)
@@ -846,7 +846,7 @@ export class StoreCoachService {
     if (pdfUrl) {
       await this.deps.reports.save(storeId, { reportType: 'WEEKLY', reportDate: day, content: { ...content }, pdfUrl })
     }
-    return { id: report.id, reportDate: report.reportDate, content: report.content, pdfUrl, sentViaEmail: report.sentViaEmail, commanderPdf: plan === 'commander' }
+    return { id: report.id, reportDate: report.reportDate, content: report.content, pdfUrl, sentViaEmail: report.sentViaEmail, commanderPdf: plan === 'commander', emailAvailable: this.deps.mailer !== undefined, pdfAvailable: plan === 'commander' && this.deps.pdf !== undefined }
   }
 
   public async reviewPdf(storeId: StoreId, id: string): Promise<Readonly<{ pdfUrl: string }>> {
