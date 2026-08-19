@@ -158,11 +158,6 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       },
     },
   })
-  const commandKeys = [env.AI_COMMAND_API_KEY, env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
-  const commandModels = [env.AI_COMMAND_MODEL_PRIMARY, env.AI_COMMAND_MODEL_FALLBACK, env.AI_MODEL_PRIMARY].filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
-  const commandProvider = commandModels.length > 0
-    ? new OpenRouterClient({ keys: commandKeys, models: commandModels, maxTokens: 1_200 })
-    : new OpenRouterClient({ keys: commandKeys, maxTokens: 1_200 })
   const commandConfig = {
     repository: new PostgresAiCommandRepository(f7.database, planFor),
     tools: commandTools,
@@ -170,16 +165,13 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     planFor,
     shopFor: async (tenant: import('@profitpilot/types').StoreId) => (await f7.storeDirectory.get(tenant))?.shopDomain ?? null,
     enabled: env.AI_COMMAND_ENABLED !== 'false',
+    actionsEnabled: env.AI_COMMAND_ACTIONS_ENABLED !== 'false',
   }
-  const aiCommand = commandProvider.configured
-    ? new AiCommandService({
-      ...commandConfig,
-      generate: async (input) => {
-        const generation = await commandProvider.generate(input.system, input.user, { maxTokens: 800 })
-        return { text: generation.text, toolCalls: [], tokensUsed: generation.usage.totalTokens, model: generation.model }
-      },
-    })
-    : new AiCommandService(commandConfig)
+  // AI Command answers are deterministic and grounded in the tool outcomes.
+  // The previous adapter made an OpenRouter request but always discarded its
+  // text and returned zero tool calls, adding latency and an unmetered failure
+  // point without changing a single answer.
+  const aiCommand = new AiCommandService(commandConfig)
   return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand } }
 }
 

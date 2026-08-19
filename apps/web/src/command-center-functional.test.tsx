@@ -300,13 +300,15 @@ describe('AI Command Center Complete Functional Testing', () => {
 
   /* ── 4. Inventory Agent Card ──────────────────────────────────────── */
   describe('4. Inventory Agent Card', () => {
-    it('displays active badge, version, 7 insights today, $346,179 impact, 2 hours ago, and 75% confidence', async () => {
+    it('displays active badge, version, today’s UTC insights, $346,179 impact, 2 hours ago, and 75% confidence', async () => {
       const container = await mountWorkspace(true)
       const invCard = Array.from(container.querySelectorAll('.cc-agent-card')).find((card) => card.textContent?.includes('Inventory Agent'))
+      const today = new Date().toISOString().slice(0, 10)
+      const expectedToday = getInventoryRecommendations().filter((item) => item.createdAt.slice(0, 10) === today).length
       expect(invCard).toBeTruthy()
       expect(invCard?.textContent).toContain('Active')
       expect(invCard?.textContent).toContain('v1.1.0')
-      expect(invCard?.textContent).toContain('7insights today')
+      expect(invCard?.textContent).toContain(`${expectedToday}insights today`)
       expect(invCard?.textContent).toContain('$346,179impact tracked')
       expect(invCard?.textContent).toContain('2 hours agolast insight')
       expect(invCard?.textContent).toContain('Confidence75%')

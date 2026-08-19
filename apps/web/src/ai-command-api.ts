@@ -15,6 +15,12 @@ export function deleteAiCommandConversation(storeId: string, id: string, fetcher
 export function archiveAiCommandConversation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<AiCommandConversation> {
   return requestJson(`/ai-command/conversations/${encodeURIComponent(id)}/archive`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher)
 }
+export function exportAiCommandConversation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ filename: string; rows: readonly Readonly<Record<string, string>>[] }>> {
+  return requestJson(`/ai-command/conversations/${encodeURIComponent(id)}/export?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+export function rateAiCommandMessage(storeId: string, conversationId: string, messageId: string, rating: 'HELPFUL' | 'NOT_HELPFUL', fetcher: Fetcher = fetch): Promise<Readonly<{ saved: true }>> {
+  return requestJson(`/ai-command/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, rating }) }, fetcher)
+}
 export async function sendAiCommandMessage(storeId: string, text: string, conversationId?: string, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
   return requestJson('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, text, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) }, fetcher)
@@ -40,7 +46,8 @@ export async function streamAiCommandMessage(storeId: string, text: string, conv
       if (event.event === 'result' && isRecord(event.data) && isRecord(event.data.conversation)) result = event.data as unknown as ChatResult
       if (event.event === 'error') {
         const message = isRecord(event.data) && typeof event.data.message === 'string' ? event.data.message : 'AI Command stream failed'
-        throw new ApiClientError(message, response.status)
+        const eventStatus = isRecord(event.data) && typeof event.data.status === 'number' ? event.data.status : response.status
+        throw new ApiClientError(message, eventStatus)
       }
     }
   }

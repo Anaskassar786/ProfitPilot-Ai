@@ -125,6 +125,47 @@ export class PostgresAiCommandRepository implements AiCommandRepository {
     })
   }
 
+  public claimAction(storeId: StoreId, id: string, approvedAt: string): Promise<AiCommandActionRecord | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ActionRow>(
+        `UPDATE ai_command_actions
+         SET merchant_approved = true, approved_at = $3, execution_status = 'EXECUTING'
+         WHERE store_id = $1 AND id = $2 AND execution_status = 'PENDING'
+         RETURNING *`,
+        [storeId, id, approvedAt],
+      )
+      return result.rows[0] ? toAction(result.rows[0]) : null
+    })
+  }
+
+  public cancelPendingAction(storeId: StoreId, id: string, completedAt: string): Promise<AiCommandActionRecord | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ActionRow>(
+        `UPDATE ai_command_actions
+         SET execution_status = 'CANCELLED', completed_at = $3, rollback_available = false
+         WHERE store_id = $1 AND id = $2 AND execution_status = 'PENDING'
+         RETURNING *`,
+        [storeId, id, completedAt],
+      )
+      return result.rows[0] ? toAction(result.rows[0]) : null
+    })
+  }
+
+  public claimRollback(storeId: StoreId, id: string, now: string): Promise<AiCommandActionRecord | null> {
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<ActionRow>(
+        `UPDATE ai_command_actions
+         SET rollback_available = false
+         WHERE store_id = $1 AND id = $2 AND rollback_available = true
+           AND rollback_deadline IS NOT NULL AND rollback_deadline >= $3
+           AND execution_status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+         RETURNING *`,
+        [storeId, id, now],
+      )
+      return result.rows[0] ? toAction(result.rows[0]) : null
+    })
+  }
+
   public listSaved(storeId: StoreId): Promise<readonly AiCommandSavedCommand[]> {
     return this.scoped(storeId, async (client) => {
       const result = await client.query<SavedRow>('SELECT * FROM ai_command_saved_commands WHERE store_id = $1 ORDER BY created_at DESC', [storeId])
@@ -176,6 +217,22 @@ export class PostgresAiCommandRepository implements AiCommandRepository {
     })
   }
 
+  public async reserveCommand(storeId: StoreId, usageDate: string, limit: number | null): Promise<AiCommandUsage | null> {
+    const plan = await this.planFor(storeId)
+    return this.scoped(storeId, async (client) => {
+      const result = await client.query<UsageRow>(
+        `INSERT INTO ai_command_usage (id, store_id, usage_date, commands_used, actions_executed, tokens_used, cost_micro_dollars)
+         VALUES ($1,$2,$3,1,0,0,0)
+         ON CONFLICT (store_id, usage_date) DO UPDATE SET
+           commands_used = ai_command_usage.commands_used + 1
+         WHERE $4::integer IS NULL OR ai_command_usage.commands_used < $4::integer
+         RETURNING store_id, usage_date, commands_used, actions_executed, tokens_used, cost_micro_dollars`,
+        [randomUUID(), storeId, usageDate, limit],
+      )
+      return result.rows[0] ? toUsage(result.rows[0], plan) : null
+    })
+  }
+
   public async getUsage(storeId: StoreId, usageDate: string): Promise<AiCommandUsage> {
     const plan = await this.planFor(storeId)
     return this.scoped(storeId, async (client) => {
@@ -212,7 +269,7 @@ export class PostgresAiCommandRepository implements AiCommandRepository {
   }
 
   private scoped<Value>(storeId: StoreId, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
-    return withTenantOrDirect(this.executor, storeId, operation)
+    return withTenantStorage(this.executor, storeId, operation)
   }
 }
 
@@ -298,15 +355,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function withTenantOrDirect<Value>(executor: SqlExecutor, storeId: string, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
+async function withTenantStorage<Value>(executor: SqlExecutor, storeId: string, operation: (client: SqlExecutor) => Promise<Value>): Promise<Value> {
   try {
+    // withTenantContext already executes test doubles directly. Retrying the
+    // operation outside its transaction can duplicate writes after a failed
+    // commit and weakens tenant isolation, so production gets exactly one try.
     return await withTenantContext(executor, storeId, operation)
-  } catch (scopedError: unknown) {
-    try {
-      return await operation(executor)
-    } catch (directError: unknown) {
-      if (directError instanceof AppError) throw directError
-      throw new AppError('DEPENDENCY_ERROR', `AI Command storage is unavailable: ${directError instanceof Error ? directError.message : String(directError)}`, 503)
-    }
+  } catch (error: unknown) {
+    if (error instanceof AppError) throw error
+    throw new AppError('DEPENDENCY_ERROR', `AI Command storage is unavailable: ${error instanceof Error ? error.message : String(error)}`, 503)
   }
 }

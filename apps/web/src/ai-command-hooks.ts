@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApiClientError } from './api.js'
 import {
   archiveAiCommandConversation,
   approveAiCommandAction,
@@ -6,6 +7,7 @@ import {
   deleteAiCommandConversation,
   deleteAiCommandSaved,
   executeAiCommandSaved,
+  exportAiCommandConversation,
   fetchAiCommandConversation,
   fetchAiCommandConversations,
   fetchAiCommandPreferences,
@@ -15,6 +17,7 @@ import {
   fetchAiCommandUsage,
   fetchAiCommandUsageHistory,
   fetchAiCommandSaved,
+  rateAiCommandMessage,
   rollbackAiCommandAction,
   saveAiCommandCommand,
   sendAiCommandMessage,
@@ -155,7 +158,7 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
           setConversation((current) => current ? { ...current, messages: [...current.messages, cancelled] } : previous)
           onToast('Command cancelled.', 'info')
         }
-      } else {
+      } else if (shouldRetryWithoutStreaming(failure)) {
         try {
           const fallback = await sendAiCommandMessage(storeId, text.trim(), conversation && conversation.id !== 'pending' ? conversation.id : undefined, fetch, abortRef.current?.signal)
           setConversation(fallback.conversation)
@@ -170,6 +173,12 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
           if (/limit|upgrade plan/i.test(message)) setLimitReached(true)
           onToast(message, 'error')
         }
+      } else {
+        const message = failure instanceof Error ? failure.message : 'AI Command could not answer.'
+        setError(message)
+        if (/limit|upgrade plan/i.test(message) || failure instanceof ApiClientError && failure.status === 402) setLimitReached(true)
+        setConversation(previous)
+        onToast(message, 'error')
       }
     } finally {
       window.clearTimeout(timeout)
@@ -191,43 +200,59 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
       await approveAiCommandAction(storeId, actionId)
       if (conversation && conversation.id !== 'pending') await openConversation(conversation.id)
       await refreshSide()
+      if (preferences?.notificationOnActionComplete !== false) onToast('Action completed. Review the verified result below.', 'success')
     } catch (failure: unknown) {
       onToast(failure instanceof Error ? failure.message : 'The action could not be approved.', 'error')
     } finally { setBusy(false) }
-  }, [storeId, conversation, openConversation, refreshSide, onToast])
+  }, [storeId, conversation, openConversation, refreshSide, preferences?.notificationOnActionComplete, onToast])
 
   const cancel = useCallback(async (actionId: string) => {
     if (!storeId) return
     try {
       await cancelAiCommandAction(storeId, actionId)
       if (conversation && conversation.id !== 'pending') await openConversation(conversation.id)
+      await refreshSide()
+      onToast('Action cancelled. Nothing was executed.', 'info')
     } catch (failure: unknown) {
       onToast(failure instanceof Error ? failure.message : 'The action could not be cancelled.', 'error')
     }
-  }, [storeId, conversation, openConversation, onToast])
+  }, [storeId, conversation, openConversation, refreshSide, onToast])
 
   const undo = useCallback(async (actionId: string) => {
     if (!storeId) return
     try {
       await rollbackAiCommandAction(storeId, actionId)
       if (conversation && conversation.id !== 'pending') await openConversation(conversation.id)
+      await refreshSide()
+      onToast('Action rolled back.', 'success')
     } catch (failure: unknown) {
       onToast(failure instanceof Error ? failure.message : 'Undo is no longer available.', 'error')
     }
-  }, [storeId, conversation, openConversation, onToast])
+  }, [storeId, conversation, openConversation, refreshSide, onToast])
 
   const removeConversation = useCallback(async (id: string) => {
     if (!storeId) return
-    await deleteAiCommandConversation(storeId, id)
-    if (conversation?.id === id) newChat()
-    await refreshSide()
-  }, [storeId, conversation, newChat, refreshSide])
+    try {
+      await deleteAiCommandConversation(storeId, id)
+      if (conversation?.id === id) newChat()
+      await refreshSide()
+      onToast('Conversation deleted.', 'success')
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Conversation could not be deleted.', 'error')
+    }
+  }, [storeId, conversation, newChat, refreshSide, onToast])
 
   const archive = useCallback(async (id: string) => {
     if (!storeId) return
-    await archiveAiCommandConversation(storeId, id)
-    await refreshSide()
-  }, [storeId, refreshSide])
+    try {
+      await archiveAiCommandConversation(storeId, id)
+      if (conversation?.id === id) newChat()
+      await refreshSide()
+      onToast('Conversation archived.', 'success')
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Conversation could not be archived.', 'error')
+    }
+  }, [storeId, conversation, newChat, refreshSide, onToast])
 
   const saveCurrent = useCallback(async (name: string, commandText: string) => {
     if (!storeId) return
@@ -255,21 +280,69 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
 
   const removeSaved = useCallback(async (id: string) => {
     if (!storeId) return
-    await deleteAiCommandSaved(storeId, id)
-    await refreshSide()
-  }, [storeId, refreshSide])
+    try {
+      await deleteAiCommandSaved(storeId, id)
+      await refreshSide()
+      onToast('Saved command deleted.', 'success')
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Saved command could not be deleted.', 'error')
+    }
+  }, [storeId, refreshSide, onToast])
 
   const patchPreferences = useCallback(async (patch: Partial<AiCommandPreferences>) => {
     if (!storeId) return
-    setPreferences(await updateAiCommandPreferences(storeId, patch))
-  }, [storeId])
+    try {
+      setPreferences(await updateAiCommandPreferences(storeId, patch))
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Preferences could not be saved.', 'error')
+    }
+  }, [storeId, onToast])
+
+  const exportConversation = useCallback(async (id: string) => {
+    if (!storeId) return
+    try {
+      const exported = await exportAiCommandConversation(storeId, id)
+      downloadCsv(exported.filename, exported.rows)
+      onToast('Conversation exported.', 'success')
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Conversation could not be exported.', 'error')
+    }
+  }, [storeId, onToast])
+
+  const rateMessage = useCallback(async (messageId: string, rating: 'HELPFUL' | 'NOT_HELPFUL') => {
+    if (!storeId || !conversation || conversation.id === 'pending') return
+    try {
+      await rateAiCommandMessage(storeId, conversation.id, messageId, rating)
+      onToast('Feedback saved. Thank you!', 'success')
+    } catch (failure: unknown) {
+      onToast(failure instanceof Error ? failure.message : 'Feedback could not be saved.', 'error')
+    }
+  }, [storeId, conversation, onToast])
 
   return {
     conversations, conversation, usage, usageHistory, saved, quick, quickInsights, followUps, preferences, thinking, streaming, busy, error, limitReached,
-    openConversation, newChat, send, cancelThinking, approve, cancel, undo, removeConversation, archive, saveCurrent, runSaved, removeSaved, patchPreferences, refreshSide,
+    openConversation, newChat, send, cancelThinking, approve, cancel, undo, removeConversation, archive, saveCurrent, runSaved, removeSaved, patchPreferences, exportConversation, rateMessage, refreshSide,
   }
 }
 
 function isAbortError(failure: unknown): boolean {
   return failure instanceof Error && failure.name === 'AbortError'
+}
+
+function shouldRetryWithoutStreaming(failure: unknown): boolean {
+  if (failure instanceof TypeError) return true
+  if (!(failure instanceof ApiClientError)) return false
+  return [404, 405, 406, 415, 501].includes(failure.status)
+}
+
+function downloadCsv(filename: string, rows: readonly Readonly<Record<string, string>>[]): void {
+  const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))]
+  const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const csv = [headers.map(escape).join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
