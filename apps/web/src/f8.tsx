@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { AlertTriangle, Download, ExternalLink, FileBarChart, Headphones, LoaderCircle, Mic, Send, ShieldCheck, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
-import { askCopilot, confirmJarvisAction, downloadReport, exportCopilotThread, fetchBilling, fetchCopilotMessages, fetchCopilotThreads, fetchForecast, fetchJarvisBriefing, fetchJarvisMessages, fetchJarvisPreferences, fetchReports, generateReport, invokeJarvisStoreAction, saveJarvisPreferences, sendJarvisMessage, setJarvisState, startJarvisSession, streamJarvisMessage } from './api.js'
+import { AlertTriangle, Download, ExternalLink, Headphones, LoaderCircle, Mic, Send, ShieldCheck, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
+import { askCopilot, confirmJarvisAction, exportCopilotThread, fetchBilling, fetchCopilotMessages, fetchCopilotThreads, fetchJarvisBriefing, fetchJarvisMessages, fetchJarvisPreferences, invokeJarvisStoreAction, saveJarvisPreferences, sendJarvisMessage, setJarvisState, startJarvisSession, streamJarvisMessage } from './api.js'
 import { reduceJarvisSession } from './f8-model.js'
-import type { CopilotAnswer, CopilotThread, ForecastBundle, JarvisAction, JarvisAddressing, JarvisEvidence, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, JarvisSessionLifecycle, ReportRun } from './f8-model.js'
+import type { CopilotAnswer, CopilotThread, JarvisAction, JarvisAddressing, JarvisEvidence, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, JarvisSessionLifecycle } from './f8-model.js'
 import { microphonePreflight, speechRecognitionAvailable, speechRecognitionFailure, standaloneAppUrl } from './voice.js'
 import type { VoiceStatus } from './voice.js'
 import { JarvisOrb } from './JarvisOrb.js'
@@ -268,40 +268,6 @@ export function CopilotWorkspace({ context }: CopilotWorkspaceProps) {
   return <div className="f8-copilot-layout"><section className="copilot-main card"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">CLOSED 10-INTENT GRAMMAR</div><h2>Ask a grounded question.</h2><p>Numbers are rendered from deterministic evidence slots. No open generation.</p></div></div><div className="f8-copilot-answers">{answers.length === 0 ? <div className="copilot-empty"><ShieldCheck size={24} /><strong>Ready for real store evidence</strong><span>Try “What is my revenue?” or “Which products have stockout risk?”</span></div> : answers.map((answer) => <article className="f8-answer" key={answer.id}><div className="f8-answer-head"><span className="status-badge blue">{answer.intent ?? 'ASK'}</span><span>{answer.evidence?.confidenceLevel ?? 'CLARIFY'} confidence</span></div><p>{answer.answer}</p>{answer.clarification && <small>{answer.clarification}</small>}{answer.evidence && <div className="f8-evidence-table">{answer.evidence.facts.map((fact) => <div key={fact.key}><span>{fact.label}</span><strong>{String(fact.value ?? '—')}</strong><small>{fact.source}</small></div>)}</div>}</article>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<form className="copilot-composer f8-copilot-form" onSubmit={(event) => void submit(event)}><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Which products are at stockout risk?" rows={2} aria-label="Ask Copilot" spellCheck={false} autoCorrect="off" autoCapitalize="off" /><button className="send-button" type="submit" disabled={loading || !query.trim()} aria-label="Ask Copilot">{loading ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}</button></form><div className="suggested-prompts"><button onClick={() => setQuery('What changed in revenue?')}>Revenue change</button><button onClick={() => setQuery('Which products have stockout risk?')}>Stockout risk</button><button onClick={() => setQuery('Show store health')}>Store health</button></div></section><aside className="copilot-sidebar card"><div className="card-heading"><div><span className="section-kicker">SAVED THREADS</span><h3>Thread history</h3></div><button className="icon-button" onClick={() => void exportThread()} disabled={!threadId} aria-label="Export Copilot thread"><Download size={15} /></button></div>{threads.length === 0 ? <span className="muted-cell">No saved questions yet.</span> : threads.map((thread) => <button className={`f8-thread ${thread.id === threadId ? 'active' : ''}`} key={thread.id} onClick={() => void selectThread(thread.id)}>{thread.title}<small>{new Date(thread.updatedAt).toLocaleDateString()}</small></button>)}</aside></div>
 }
 
-export function ReportsWorkspace({ context }: Readonly<{ context: WorkspaceContext }>) {
-  const [runs, setRuns] = useState<readonly ReportRun[]>([])
-  const [forecast, setForecast] = useState<ForecastBundle | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [frequency, setFrequency] = useState<ReportRun['frequency']>('WEEKLY')
-  const [reportError, setReportError] = useState<string | null>(null)
-  const refresh = async () => { if (!context.storeId) return; const [nextRuns, nextForecast] = await Promise.all([fetchReports(context.storeId), fetchForecast(context.storeId)]); setRuns(nextRuns); setForecast(nextForecast) }
-  useEffect(() => { void refresh().catch(() => { setRuns([]); setForecast(null) }) }, [context.storeId])
-  const generate = async () => {
-    if (!context.storeId) return
-    setLoading(true)
-    setReportError(null)
-    try {
-      const end = new Date(); end.setUTCHours(0, 0, 0, 0); end.setUTCDate(end.getUTCDate() - 1)
-      const days = frequency === 'DAILY' ? 1 : frequency === 'WEEKLY' ? 7 : frequency === 'MONTHLY' ? 30 : 90
-      const start = new Date(end); start.setUTCDate(start.getUTCDate() - days + 1)
-      const generated = await generateReport(context.storeId, frequency, start.toISOString(), end.toISOString(), false)
-      if (generated.file) downloadBase64(generated.file.bodyBase64, generated.file.filename, generated.file.contentType)
-      await refresh()
-    } catch (failure: unknown) {
-      setReportError(failure instanceof Error ? failure.message : 'The report could not be generated.')
-    } finally { setLoading(false) }
-  }
-  const download = async (run: ReportRun) => {
-    if (!context.storeId) return
-    setReportError(null)
-    try {
-      const file = await downloadReport(context.storeId, run.id)
-      downloadBase64(file.bodyBase64, file.filename, file.contentType)
-    } catch (failure: unknown) {
-      setReportError(failure instanceof Error ? failure.message : 'The report file is not ready to download.')
-    }
-  }
-  return <div className="f8-reports"><div className="report-banner card"><span className="report-banner-icon"><FileBarChart size={22} /></span><div><div className="section-kicker">CLOSED-PERIOD PDF VAULT</div><h2>Reports from real store data.</h2><p>Regeneration is idempotent. Missing email delivery is reported honestly.</p></div><div className="report-generate-controls"><select aria-label="Report frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as ReportRun['frequency'])}><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option></select><button className="button primary" onClick={() => void generate()} disabled={loading || !context.storeId}>{loading ? <LoaderCircle className="spin" size={15} /> : <FileBarChart size={15} />} Generate PDF</button></div></div><div className="f8-report-grid"><section className="card"><div className="card-heading"><div><span className="section-kicker">FORECAST METHOD STAMPS</span><h3>Deterministic forecast</h3></div></div>{forecast?.revenue ? <div className="forecast-card"><strong>{forecast.revenue.value.toLocaleString()}</strong><span>projected closed-week revenue band</span><small>{forecast.revenue.lower.toLocaleString()} – {forecast.revenue.upper.toLocaleString()} · {forecast.revenue.method.method} v{forecast.revenue.method.version}</small></div> : <div className="copilot-empty"><ShieldCheck size={20} /><span>At least two closed weekly periods are required.</span></div>}{forecast?.methods.map((method) => <div className="method-row" key={`${method.method}-${method.version}`}><span>{method.method}</span><small>v{method.version}</small></div>)}</section><section className="card"><div className="card-heading"><div><span className="section-kicker">REPORT RUNS</span><h3>PDF vault</h3></div></div>{reportError && <div className="form-error" role="alert">{reportError}</div>}{runs.length === 0 ? <span className="muted-cell">No reports generated.</span> : runs.map((run) => <div className="report-run" key={run.id}><span><strong>{run.filename}</strong><small>{run.status === 'COMPLETED' ? 'Ready' : run.status === 'GENERATING' ? 'Still generating' : 'Failed'} · {run.emailStatus === 'NOT_REQUESTED' ? 'email not requested' : `email ${run.emailStatus.toLowerCase()}`}</small></span><button className="button secondary" onClick={() => void download(run)} disabled={run.status !== 'COMPLETED'} title={run.status === 'COMPLETED' ? 'Download PDF' : 'Available after generation finishes'}><Download size={13} /> Download</button></div>)}</section></div></div>
-}
+export { ReportsWorkspace } from './reports.js'
 
 function downloadBase64(base64: string, filename: string, contentType: string): void { const binary = atob(base64); const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0)); const url = URL.createObjectURL(new Blob([bytes], { type: contentType })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url) }
