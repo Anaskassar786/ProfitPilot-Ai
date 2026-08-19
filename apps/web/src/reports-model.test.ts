@@ -43,11 +43,11 @@ describe('Reports plan gating', () => {
     expect(planDisplayName('trial')).toBe('Trial')
   })
 
-  it('enforces Trial 1/month, Start 3/month + 1/quarter, Growth custom + email', () => {
-    expect(reportAccessFor('trial')).toMatchObject({ monthlyLimit: 1, quarterlyLimit: 0, custom: false, email: false, pdf: true })
-    expect(reportAccessFor('start')).toMatchObject({ monthlyLimit: 3, quarterlyLimit: 1, custom: false, email: false })
-    expect(reportAccessFor('growth')).toMatchObject({ monthlyLimit: null, custom: true, email: true, whiteLabel: false })
-    expect(reportAccessFor('commander')).toMatchObject({ email: true, whiteLabel: true, apiAccess: true })
+  it('mirrors the canonical reports entitlement (Trial 1, Start 1, Growth 2, Commander unlimited)', () => {
+    expect(reportAccessFor('trial')).toMatchObject({ monthlyLimit: 1, quarterly: false, custom: false, email: false, pdf: true })
+    expect(reportAccessFor('start')).toMatchObject({ monthlyLimit: 1, quarterly: false, custom: false, email: false })
+    expect(reportAccessFor('growth')).toMatchObject({ monthlyLimit: 2, quarterly: true, custom: true, email: true, whiteLabel: false })
+    expect(reportAccessFor('commander')).toMatchObject({ monthlyLimit: null, quarterly: true, email: true, whiteLabel: true, apiAccess: true })
   })
 
   it('blocks a second Trial monthly report in the same month', () => {
@@ -58,20 +58,24 @@ describe('Reports plan gating', () => {
     expect(blocked.reason).toContain('Upgrade Plan')
     expect(blocked.reason).not.toMatch(/Growth|Commander|Start/i)
     expect(canGenerateReport('trial', 'QUARTERLY', [], now).allowed).toBe(false)
+    expect(canGenerateReport('start', 'QUARTERLY', [], now).allowed).toBe(false)
+    expect(canGenerateReport('growth', 'QUARTERLY', [], now).allowed).toBe(true)
     expect(canGenerateReport('start', 'CUSTOM', [], now).allowed).toBe(false)
     expect(canGenerateReport('growth', 'CUSTOM', [], now).allowed).toBe(true)
   })
 
-  it('counts only successful monthly reports inside the current UTC month', () => {
+  it('counts successful reports inside the current UTC month across every kind', () => {
     const now = new Date('2026-08-18T12:00:00.000Z')
     const runs = [
       run({ createdAt: Date.parse('2026-08-02T00:00:00.000Z') }),
       run({ createdAt: Date.parse('2026-07-30T00:00:00.000Z') }),
       run({ status: 'FAILED', createdAt: Date.parse('2026-08-03T00:00:00.000Z') }),
+      run({ frequency: 'QUARTERLY', createdAt: Date.parse('2026-08-04T00:00:00.000Z') }),
     ]
-    expect(countReportsInWindow(runs, 'MONTHLY', now)).toBe(1)
-    expect(usageCopy('trial', runs, now)).toBe('Reports this month: 1/1 used')
-    expect(usageCopy('growth', [], now)).toContain('Unlimited')
+    expect(countReportsInWindow(runs, 'MONTHLY', now)).toBe(2)
+    expect(usageCopy('trial', runs, now)).toBe('Reports this month: 2/1 used')
+    expect(usageCopy('growth', [], now)).toBe('Reports this month: 0/2 used')
+    expect(usageCopy('commander', [], now)).toContain('Unlimited')
   })
 })
 
