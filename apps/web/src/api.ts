@@ -7,7 +7,7 @@ import type { InventoryCoverage, InventoryItem, InventoryLocation, InventoryPage
 import type { InventoryHistoryResult, InventoryInsightFeature, InventoryInsightsResult } from './inventory-insights-model.js'
 import type { AnalyticsInsights } from './analytics-model.js'
 import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult, DiscoveryStatus, GeneratedDiscoveries, InsightComparison, InsightDiscovery, InsightInvestigation, InsightKnowledgeEntry, InsightLesson, InsightPattern, InsightPersona, InsightPrediction, InsightTrend, InsightsDataReadiness, InsightsOverview, InsightsPreferences, InsightsUsageSummary, KnowledgeEntryType, MarketTrendsResult, PersonaCustomersResult, PersonaListResult, PredictionHorizon, PredictionListResult, TimelineEntityType, TimelineResult, TrendListResult } from './patternai-model.js'
-import type { AgentActivityItem, AgentOverview, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
+import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
 
@@ -265,6 +265,10 @@ export function fetchAgentStatuses(fetcher: Fetcher = fetch): Promise<readonly A
 
 export function fetchAgentOverview(storeId: string, fetcher: Fetcher = fetch): Promise<AgentOverview> {
   return requestJson<AgentOverview>(`/ai/agents?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+
+export function fetchAiCommandPageMetrics(storeId: string, fetcher: Fetcher = fetch): Promise<AiCommandPageMetrics> {
+  return requestJson<AiCommandPageMetrics>(`/api/ai-command/page-metrics?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
 
 export function fetchAiCost(storeId: string, fetcher: Fetcher = fetch): Promise<CostSummaryView> {

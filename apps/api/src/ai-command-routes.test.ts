@@ -4,6 +4,7 @@ import { storeId } from '@profitpilot/types'
 import { AiCommandService, InMemoryAiCommandRepository, InMemoryCommandActions, InMemoryCommandTools } from '@profitpilot/ai'
 import { Logger } from '@profitpilot/logger'
 import { createApi } from './app.js'
+import type { AiCommandPageMetricsProvider } from './ai-command-page-metrics.js'
 
 const tenant = storeId('store-1')
 
@@ -27,8 +28,8 @@ function commandService(plan: 'trial' | 'start' | 'growth' | 'commander') {
   })
 }
 
-async function withServer<T>(plan: 'trial' | 'start' | 'growth' | 'commander', handler: (base: string) => Promise<T>): Promise<T> {
-  const app = createApi({ logger: new Logger(), readinessChecks: [], aiCommand: { service: commandService(plan) } })
+async function withServer<T>(plan: 'trial' | 'start' | 'growth' | 'commander', handler: (base: string) => Promise<T>, pageMetrics?: AiCommandPageMetricsProvider): Promise<T> {
+  const app = createApi({ logger: new Logger(), readinessChecks: [], aiCommand: { service: commandService(plan), ...(pageMetrics ? { pageMetrics } : {}) } })
   const server = createServer(app)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -99,6 +100,28 @@ describe('AI Command API', () => {
     const historyBody = await history.json() as { data: readonly { usageDate: string; commandsUsed: number }[] }
     expect(historyBody.data.every((row) => Number.isInteger(row.commandsUsed) && row.commandsUsed >= 0)).toBe(true)
   }))
+
+  it('returns all real-store page metrics from one no-cache endpoint', async () => {
+    const pageMetrics: AiCommandPageMetricsProvider = { get: async (store) => ({
+      customers: { total: 245, inactive30Days: 42, repeat: 89, potentialRecoverableRevenue: 12_450 },
+      products: { active: 156, lowStock: 8, deadStock: 23, crossSellPairs: 34 },
+      orders: { total: 892, pending: 5, todayCount: 12 },
+      revenue: { today: 1_245, yesterday: 980, changePercent: 27.04, currency: 'USD' },
+      storeHealth: { score: 82, status: 'Healthy' },
+      subscription: { currentPlan: 'trial', basicAgentCount: 2 },
+      availability: { customers: true, products: true, orders: true, inventoryHistory: true, storeHealth: true },
+      generatedAt: '2026-08-19T12:00:00.000Z',
+    }) }
+    await withServer('trial', async (base) => {
+      const response = await fetch(`${base}/api/ai-command/page-metrics?storeId=${tenant}`)
+      expect(response.status).toBe(200)
+      expect(response.headers.get('cache-control')).toBe('private, no-store')
+      const payload = await response.json() as { data: { customers: { total: number }; products: { crossSellPairs: number }; storeHealth: { score: number } } }
+      expect(payload.data.customers.total).toBe(245)
+      expect(payload.data.products.crossSellPairs).toBe(34)
+      expect(payload.data.storeHealth.score).toBe(82)
+    }, pageMetrics)
+  })
 
   it('validates empty and overlong commands without a 500', async () => await withServer('growth', async (base) => {
     for (const text of ['', 'x'.repeat(2001)]) {

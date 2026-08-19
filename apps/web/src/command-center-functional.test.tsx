@@ -49,7 +49,7 @@ function getInventoryRecommendations() {
     { id: 'inv-4', storeId: 's1', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Restock AeroPress Paper Filters', reason: 'Two days of cover left.', impactValue: 49454, impactLabel: 'revenue at risk', currency: 'USD', confidence: 0.75, confidenceLevel: 'HIGH', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { ruleVersion: '1.1.0', sha256: 'd'.repeat(64) }, explanation: null, explanationStatus: 'AI_GENERATED', model: 'gpt-4o-mini', version: 0, createdAt: isoAgo(5 * 3_600_000) },
     { id: 'inv-5', storeId: 's1', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Restock French Press 8-Cup', reason: 'Six days of cover left.', impactValue: 49454, impactLabel: 'revenue at risk', currency: 'USD', confidence: 0.75, confidenceLevel: 'HIGH', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { ruleVersion: '1.1.0', sha256: 'e'.repeat(64) }, explanation: null, explanationStatus: 'AI_GENERATED', model: 'gpt-4o-mini', version: 0, createdAt: isoAgo(6 * 3_600_000) },
     { id: 'inv-6', storeId: 's1', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Restock Coffee Scale Pro', reason: 'Four days of cover left.', impactValue: 49454, impactLabel: 'revenue at risk', currency: 'USD', confidence: 0.75, confidenceLevel: 'HIGH', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { ruleVersion: '1.1.0', sha256: 'f'.repeat(64) }, explanation: null, explanationStatus: 'AI_GENERATED', model: 'gpt-4o-mini', version: 0, createdAt: isoAgo(7 * 3_600_000) },
-    { id: 'inv-7', storeId: 's1', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Restock Cold Brew Pitcher', reason: 'One day of cover left.', impactValue: 49455, impactLabel: 'revenue at risk', currency: 'USD', confidence: 0.75, confidenceLevel: 'HIGH', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { ruleVersion: '1.1.0', sha256: 'g'.repeat(64) }, explanation: null, explanationStatus: 'AI_GENERATED', model: 'gpt-4o-mini', version: 0, createdAt: isoAgo(8 * 3_600_000) },
+    { id: 'inv-7', storeId: 's1', agent: 'INVENTORY_AGENT', ruleId: 'STOCKOUT_RISK', title: 'Restock Cold Brew Pitcher', reason: 'One day of cover left.', impactValue: 49455, impactLabel: 'revenue at risk', currency: 'USD', confidence: 0.75, confidenceLevel: 'HIGH', actionType: 'CREATE_RECOMMENDATION', actionRisk: 'SAFE', status: 'PENDING', evidencePack: { ruleVersion: '1.1.0', sha256: 'g'.repeat(64) }, explanation: null, explanationStatus: 'AI_GENERATED', model: 'gpt-4o-mini', version: 0, createdAt: isoAgo(7 * 3_600_000) },
   ]
 }
 
@@ -89,6 +89,17 @@ const HEALTH_DATA = {
   historyDays: 120,
 }
 
+const PAGE_METRICS = {
+  customers: { total: 245, inactive30Days: 42, repeat: 89, potentialRecoverableRevenue: 12450 },
+  products: { active: 156, lowStock: 8, deadStock: 23, crossSellPairs: 34 },
+  orders: { total: 892, pending: 5, todayCount: 12 },
+  revenue: { today: 1245, yesterday: 980, changePercent: 27, currency: 'USD' },
+  storeHealth: { score: 82, status: 'Healthy' },
+  subscription: { currentPlan: 'trial', basicAgentCount: 2 },
+  availability: { customers: true, products: true, orders: true, inventoryHistory: true, storeHealth: true },
+  generatedAt: new Date().toISOString(),
+}
+
 const RULES_DATA = [
   { id: 'STOCKOUT_RISK', name: 'Stockout risk', agent: 'INVENTORY_AGENT', purpose: 'Flags best sellers about to run out of cover.', threshold: 'cover < 7 days', inputs: ['inventory_units', 'average_daily_units'], impact: 'Revenue protected' },
   { id: 'MARGIN_LEAK', name: 'Margin leak', agent: 'REVENUE_AGENT', purpose: 'Finds discount depth growing faster than volume.', threshold: 'discount delta > 5pts', inputs: ['orders', 'unit_cost'], impact: 'Margin recovered' },
@@ -119,6 +130,7 @@ function setupFetchMock(customOverrides?: { health?: unknown; summary?: unknown;
       if (url.includes('INVENTORY_AGENT')) return respond(getInventoryRecommendations())
       return respond([])
     }
+    if (url.startsWith('/api/ai-command/page-metrics')) return respond(PAGE_METRICS)
     if (url.startsWith('/ai/agents')) return respond(OVERVIEW_DATA)
     if (url.startsWith('/ai/health')) return respond(customOverrides?.health ?? HEALTH_DATA)
     if (url.startsWith('/ai/rules')) return respond(RULES_DATA)
@@ -444,6 +456,28 @@ describe('AI Command Center Complete Functional Testing', () => {
       expect(upgradeBtn).toBeTruthy()
       act(() => { upgradeBtn.click() })
       expect(navigations).toContain('billing')
+    })
+
+    it('fills the Start and Commander gaps with real page metrics and the growth path', async () => {
+      const container = await mountWorkspace(false)
+      const startValue = container.querySelector('.cc-start-value-card')
+      expect(startValue?.textContent).toContain('What Start Plan Delivers for YOUR Store')
+      expect(startValue?.textContent).toContain('245')
+      expect(startValue?.textContent).toContain('42')
+      expect(startValue?.textContent).toContain('$12,450')
+      expect(container.querySelector('.cc-growth-path')?.textContent).toContain('Your AI Team Growth Path')
+
+      const actions = container.querySelector('.cc-commander-actions-card')
+      expect(actions?.textContent).toContain('34')
+      expect(actions?.textContent).toContain('892')
+      expect(actions?.textContent).toContain('23')
+
+      const snapshot = container.querySelector('.cc-store-snapshot-card')
+      expect(snapshot?.textContent).toContain('82/100')
+      expect(snapshot?.textContent).toContain('$1,245')
+      expect(snapshot?.textContent).toContain('156')
+      expect(snapshot?.textContent).toContain('5')
+      expect(snapshot?.textContent).toContain('Auto-refreshes every 60 seconds')
     })
   })
 

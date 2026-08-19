@@ -441,6 +441,66 @@
   font-weight: 700;
 }
 
+/* ═══════════════ REAL PLAN-VALUE CARDS ═══════════════ */
+.app-shell.light-mode .cc-value-card {
+  border-color: var(--cc-l-border);
+  background: var(--cc-l-surface);
+  backdrop-filter: none;
+  box-shadow: var(--cc-l-shadow-sm);
+}
+.app-shell.light-mode .cc-value-card:hover {
+  border-color: #A78BFA;
+  background: var(--cc-l-surface);
+  box-shadow: var(--cc-l-shadow-purple);
+}
+.app-shell.light-mode .cc-start-value-card { background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 42%); }
+.app-shell.light-mode .cc-start-value-card:hover { border-color: #F59E0B; box-shadow: var(--cc-l-shadow-amber); }
+.app-shell.light-mode .cc-value-card-header { border-bottom-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-value-card-header h3,
+.app-shell.light-mode .cc-action-opportunity > div > strong,
+.app-shell.light-mode .cc-snapshot-value,
+.app-shell.light-mode .cc-tier-step strong,
+.app-shell.light-mode .cc-growth-path-header h3 { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-value-icon { color: var(--cc-l-purple); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-value-icon.start { color: #B45309; background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-value-icon.commander { color: #B45309; background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-value-icon.snapshot { color: #1D4ED8; background: var(--cc-l-blue-bg); }
+.app-shell.light-mode .cc-value-plan-badge { color: var(--cc-l-amber-text); border-color: var(--cc-l-amber-border); background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-live-badge { color: var(--cc-l-text-muted); border-color: var(--cc-l-border); background: var(--cc-l-raised); }
+.app-shell.light-mode .cc-live-badge.live { color: var(--cc-l-green-text); border-color: var(--cc-l-green-border); background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-value-stat-icon,
+.app-shell.light-mode .cc-action-icon { color: var(--cc-l-purple); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-value-stat-icon.warning { color: #B45309; background: var(--cc-l-amber-bg); }
+.app-shell.light-mode .cc-value-stat strong,
+.app-shell.light-mode .cc-action-opportunity > div > span strong { color: var(--cc-l-purple-strong); }
+.app-shell.light-mode .cc-value-stat > div > span,
+.app-shell.light-mode .cc-action-opportunity > div > span,
+.app-shell.light-mode .cc-value-footer,
+.app-shell.light-mode .cc-snapshot-label,
+.app-shell.light-mode .cc-snapshot-status,
+.app-shell.light-mode .cc-tier-step small,
+.app-shell.light-mode .cc-metric-missing { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-value-footer { border-top-color: var(--cc-l-border); }
+.app-shell.light-mode .cc-metrics-empty { color: var(--cc-l-text-secondary); border-color: var(--cc-l-border-strong); background: var(--cc-l-canvas); }
+.app-shell.light-mode .cc-sync-metrics { color: var(--cc-l-purple-deep); border-color: var(--cc-l-purple-border); background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-sync-metrics:hover { border-color: var(--cc-l-purple); background: #EDE9FE; }
+.app-shell.light-mode .cc-snapshot-tile { border-color: var(--cc-l-border); background: var(--cc-l-canvas); }
+.app-shell.light-mode .cc-snapshot-value.positive,
+.app-shell.light-mode .cc-snapshot-status.positive { color: var(--cc-l-green-text); }
+.app-shell.light-mode .cc-snapshot-value.warning,
+.app-shell.light-mode .cc-snapshot-status.warning { color: var(--cc-l-amber-text); }
+.app-shell.light-mode .cc-snapshot-value.negative,
+.app-shell.light-mode .cc-snapshot-status.negative { color: var(--cc-l-red-text); }
+.app-shell.light-mode .cc-growth-path { border-color: var(--cc-l-purple-border); background: linear-gradient(135deg, #F5F0FF, #EFF6FF); box-shadow: var(--cc-l-shadow-sm); }
+.app-shell.light-mode .cc-growth-path-header svg { color: var(--cc-l-purple); }
+.app-shell.light-mode .cc-tier-step { border-color: var(--cc-l-border); background: rgba(255,255,255,.75); }
+.app-shell.light-mode .cc-tier-step.active { border-color: var(--cc-l-green-border); background: var(--cc-l-green-bg); }
+.app-shell.light-mode .cc-tier-step.next { border-color: #C4B5FD; background: var(--cc-l-purple-bg); }
+.app-shell.light-mode .cc-tier-marker { color: var(--cc-l-text-secondary); background: var(--cc-l-raised); }
+.app-shell.light-mode .cc-tier-step.active .cc-tier-marker { color: #FFFFFF; background: var(--cc-l-green); }
+.app-shell.light-mode .cc-tier-step.next .cc-tier-marker { color: #FFFFFF; background: var(--cc-l-purple); }
+.app-shell.light-mode .cc-tier-connector { background: var(--cc-l-border-strong); }
+
 /* ═══════════════ RUN-ALL BANNER ═══════════════ */
 .app-shell.light-mode .cc-run-banner {
   border-color: var(--cc-l-purple-border);
