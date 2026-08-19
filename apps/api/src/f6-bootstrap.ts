@@ -51,6 +51,12 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
     merchantEmails,
     targetedCampaigns,
     tickets: new ThreadLedger(),
+    sendVerificationEmail: async ({ email, fromName, token, shopId }) => {
+      const origin = env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || ''
+      const link = origin ? `${origin.replace(/\/$/, '')}/settings/merchant-email/verify?token=${encodeURIComponent(token)}` : token
+      await campaignEmail.sendSystem(email, 'Verify your ProfitPilot sender email', `<p>Confirm ${fromName} (${shopId}) can send from this address.</p><p><a href="${link}">Verify email</a></p>`)
+      return true
+    },
     requirePermission: (tenant, user, permission) => withTenantContext(f5.database, tenant, async (client) => {
       const result = await client.query<{ allowed: boolean }>(`SELECT EXISTS (SELECT 1 FROM member_roles mr JOIN role_permissions rp ON rp.role_id = mr.role_id WHERE mr.store_id = $1 AND mr.user_id = $2 AND rp.permission_id = $3) AS allowed`, [tenant, user, permission])
       if (result.rows[0]?.allowed !== true) throw new AppError('FORBIDDEN', 'You do not have permission to manage automations', 403, { permission })

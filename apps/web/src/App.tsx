@@ -85,7 +85,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
@@ -124,6 +124,8 @@ import { PatternAiWorkspace } from './patternai.js'
 import { PatternAiIcon } from './patternai-logo.js'
 import { GrowthIqNavIcon } from './growthiq-logo.js'
 import { AiCommandIcon } from './ai-command-logo.js'
+import { SettingsPage } from './settings.js'
+import { SETTINGS_EVENT, readWorkspaceSettings } from './settings-model.js'
 
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -237,6 +239,7 @@ export default function App() {
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [readNotificationIds, setReadNotificationIds] = useState<ReadonlySet<string>>(new Set())
+  const [workspacePrefs, setWorkspacePrefs] = useState(() => readWorkspaceSettings(null))
   const [lightMode, setLightMode] = useState(() => {
     try {
       const stored = window.localStorage.getItem('profitpilot:theme')
@@ -343,6 +346,16 @@ export default function App() {
     if (next) shownRecommendationIds.current.add(next.id)
     setPassiveRecommendation(next)
   }, [context.storeId, data.recommendations, jarvisPreference, passiveRecommendation])
+
+  useEffect(() => {
+    setWorkspacePrefs(readWorkspaceSettings(context.storeId))
+    const onSettings = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (detail) setWorkspacePrefs(detail)
+    }
+    window.addEventListener(SETTINGS_EVENT, onSettings)
+    return () => window.removeEventListener(SETTINGS_EVENT, onSettings)
+  }, [context.storeId])
 
   // Theme persistence — Q9
   useEffect(() => {
@@ -496,7 +509,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${lightMode ? 'light-mode' : ''}`}>
+    <div className={`app-shell ${lightMode ? 'light-mode' : ''} ${workspacePrefs.reducedMotion ? 'reduce-motion' : ''} ${workspacePrefs.bubbleEnabled ? '' : 'hide-jarvis'} jarvis-pos-${workspacePrefs.bubblePosition}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <Sidebar activePage={activePage} collapsed={collapsed} mobileOpen={mobileOpen} context={context} onNavigate={navigate} onCollapse={() => setCollapsed((value) => !value)} onClose={() => setMobileOpen(false)} onOpenCommand={() => setCommandOpen(true)} onOnboarding={() => setOnboardingOpen(true)} />
       <main id="main-content" tabIndex={-1} className={`main-shell ${collapsed ? 'sidebar-is-collapsed' : ''}`}>
@@ -616,7 +629,7 @@ function PageRouter({
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
-  if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} />
+  if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'support') return <SupportPage context={context} onToast={onToast} />
   if (active === 'exports') return <ExportsPage context={context} />
   return <EmptyDataPage page={active} context={context} onSync={onSync} />
@@ -855,13 +868,6 @@ function BillingPage({ context, onPhaseGate, onToast }: { context: WorkspaceCont
   </PageLayout>
 }
 
-function SettingsPage({ context, lightMode, onTheme, onToast }: { context: WorkspaceContext; lightMode: boolean; onTheme: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
-  const [email, setEmail] = useState(''); const [fromName, setFromName] = useState(''); const [verificationToken, setVerificationToken] = useState(''); const [verified, setVerified] = useState(false)
-  const saveEmail = async () => { if (!context.storeId) { onToast('Connect Shopify before configuring merchant email.', 'info'); return } try { const result = await saveMerchantEmail(context.storeId, email, fromName); setVerificationToken(result.verificationToken); onToast('Verification token created. Verify before campaigns send.', 'success') } catch (error: unknown) { onToast(errorMessage(error), 'error') } }
-  const verifyEmail = async () => { try { await verifyMerchantEmail(verificationToken); setVerified(true); onToast('Merchant email verified.', 'success') } catch (error: unknown) { onToast(errorMessage(error), 'error') } }
-  return <PageLayout eyebrow="Workspace controls" title="Settings" description="Store context, merchant-owned campaign identity, and accessibility preferences."><div className="settings-layout"><aside className="settings-nav card"><button className="settings-nav-item active"><Settings size={15} /> General</button><button className="settings-nav-item"><Bell size={15} /> Notifications</button><button className="settings-nav-item"><Bot size={15} /> Jarvis preferences</button><button className="settings-nav-item"><Users size={15} /> Team members</button><button className="settings-nav-item"><ShieldCheck size={15} /> Security & audit</button><button className="settings-nav-item danger"><Trash2 size={15} /> Danger zone</button></aside><div className="settings-panels"><SettingsPanel title="Store context" description="The UI reads this context from the embedded Shopify URL."><SettingRow label="Shopify store" description="No store name is fabricated"><span className="setting-readonly">{context.shop ?? 'Not provided'}</span></SettingRow><SettingRow label="Tenant id" description="Used for tenant-scoped requests"><span className="setting-readonly mono">{context.storeId ?? 'Not provided'}</span></SettingRow></SettingsPanel><SettingsPanel title="Merchant campaign email" description="Campaigns never send from ProfitPilot system email. Verification is required."><SettingRow label="Merchant email" description="The From address for customer campaigns"><input className="setting-input" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="merchant@example.com" /></SettingRow><SettingRow label="From name" description="Shown to campaign recipients"><input className="setting-input" value={fromName} onChange={(event) => setFromName(event.target.value)} placeholder="Your store" /></SettingRow><div className="email-verification-row"><span className={`status-badge ${verified ? 'green' : 'amber'}`}>{verified ? 'Verified' : 'Verification required'}</span><button className="button secondary" onClick={() => void saveEmail()} disabled={!email || !fromName}>Save and verify</button>{verificationToken && !verified && <button className="button primary" onClick={() => void verifyEmail()}>Confirm verification</button>}</div></SettingsPanel><SettingsPanel title="Appearance" description="Dark mode is the default ProfitPilot surface."><SettingRow label="Theme" description="Optional light mode for daytime work"><div className="theme-choice"><button className={!lightMode ? 'selected' : ''} onClick={() => lightMode && onTheme()}><Moon size={15} /> Dark</button><button className={lightMode ? 'selected' : ''} onClick={() => !lightMode && onTheme()}><Sun size={15} /> Light</button></div></SettingRow><SettingRow label="Reduced motion" description="Respect the operating system preference"><Toggle on={false} /></SettingRow></SettingsPanel><div className="settings-save"><span><ShieldCheck size={15} /> Merchant identity is explicit</span><button className="button primary" onClick={() => onToast('Preferences are saved locally for this shell.', 'success')}>Save preferences</button></div></div></div></PageLayout>
-}
-
 function PageLayout({ eyebrow, title, description, actions, children }: { eyebrow: ReactNode; title: string; description: string; actions?: ReactNode; children: ReactNode }) { return <div className="page-content"><div className="page-header"><div><div className="page-eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>{children}</div> }
 
 function CardHeading({ kicker, dot, title, action }: { kicker: string; dot: string; title: string; action?: ReactNode }) { return <div className="card-heading"><div><div className="section-kicker"><span className={`kicker-dot ${dot}`} />{kicker}</div><h3>{title}</h3></div>{action ?? <MoreHorizontal size={18} className="muted-icon" />}</div> }
@@ -890,9 +896,6 @@ function EmptySmall({ icon: Icon, text }: { icon: LucideIcon; text: string }) { 
 function InsightItem({ icon: Icon, title, detail, tone }: { icon: LucideIcon; title: string; detail: string; tone: string }) { return <div className="insight-item"><span className={`insight-icon ${tone}`}><Icon size={16} /></span><span><strong>{title}</strong><small>{detail}</small></span><ArrowUpRight size={15} /></div> }
 function MetricLine({ label, value }: { label: string; value: string }) { return <div className="metric-line"><span>{label}</span><strong>{value}</strong></div> }
 function Quota({ label, value, percent }: { label: string; value: string; percent: number }) { return <div className="quota"><div><span>{label}</span><strong>{value}</strong></div><div className="usage-track"><span style={{ width: `${percent}%` }} /></div></div> }
-function Toggle({ on }: { on: boolean }) { return <span className={`toggle ${on ? 'on' : ''}`}><span /></span> }
-function SettingRow({ label, description, children }: { label: string; description: string; children: ReactNode }) { return <div className="setting-row"><div><strong>{label}</strong><small>{description}</small></div>{children}</div> }
-function SettingsPanel({ title, description, children }: { title: string; description: string; children: ReactNode }) { return <section className="card settings-panel"><div className="settings-panel-head"><h3>{title}</h3><p>{description}</p></div>{children}</section> }
 function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><button onClick={onSettings}><Settings size={15} /> Settings</button><button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</button><button onClick={onClose}><LockKeyhole size={15} /> Security boundary</button></div> }
 function OfflineBanner({ error, partial = false, onRetry }: { error: string | null; partial?: boolean; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>{partial ? 'Partial data load' : 'API unavailable'}</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><button onClick={onRetry}><RotateCcw size={14} /> Retry</button></div> }
 function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></button></div> }
