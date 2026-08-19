@@ -67,4 +67,61 @@ describe('recommendation repositories', () => {
     expect(queries[0]).toMatchObject({ text: 'SELECT set_config($1, $2, true)', values: ['app.store_id', 's'] })
     expect(queries[1]?.text).toContain("WHERE store_id = $1 AND id::text = $2 AND version = $3")
   })
+
+  // Regression (production 500 on approve / skip): PostgreSQL cannot deduce a
+  // single parameter type when the same parameter feeds both a timestamptz
+  // column and a jsonb_build_object(...) ::text position — the planner raises
+  // "inconsistent types deduced for parameter $N". Every shared parameter must
+  // therefore carry an explicit cast in every position it is used.
+  it('casts every shared parameter explicitly in the Postgres decision SQL', async () => {
+    const queries: string[] = []
+    const executor: SqlExecutor = {
+      async query<Row extends QueryResultRow>(text: string): Promise<DatabaseResult<Row>> {
+        queries.push(text)
+        if (text.includes('UPDATE ai_recommendations')) return { rows: [{ payload: { ...recommendation, status: 'APPROVED', version: 1 } } as unknown as Row], rowCount: 1 }
+        return { rows: [], rowCount: 1 }
+      },
+    }
+    const repository = new PostgresRecommendationRepository(executor)
+    await repository.decide(storeId('s'), 'r1', 0, 'APPROVED')
+    const decide = queries[queries.length - 1] ?? ''
+    expect(decide).toContain('decided_at = $5::text::timestamptz')
+    expect(decide).toContain("'decidedAt', $5::text")
+    expect(decide).toContain('status = $4::text')
+    expect(decide).toContain('decided_by = $6::text')
+    expect(decide).toContain('reject_reason = $7::text')
+  })
+
+  it('casts every shared parameter explicitly in the Postgres snooze SQL', async () => {
+    const queries: string[] = []
+    const executor: SqlExecutor = {
+      async query<Row extends QueryResultRow>(text: string): Promise<DatabaseResult<Row>> {
+        queries.push(text)
+        if (text.includes('UPDATE ai_recommendations')) return { rows: [{ payload: { ...recommendation, status: 'PENDING', version: 0, snoozedUntil: '2026-08-20T00:00:00.000Z' } } as unknown as Row], rowCount: 1 }
+        return { rows: [], rowCount: 1 }
+      },
+    }
+    const repository = new PostgresRecommendationRepository(executor)
+    await repository.snooze(storeId('s'), 'r1', '2026-08-20T00:00:00.000Z')
+    const snooze = queries[queries.length - 1] ?? ''
+    expect(snooze).toContain('snoozed_until = $3::text::timestamptz')
+    expect(snooze).toContain("'snoozedUntil', $3::text")
+  })
+
+  it('casts every shared parameter explicitly in the Postgres expiry sweep SQL', async () => {
+    const queries: string[] = []
+    const executor: SqlExecutor = {
+      async query<Row extends QueryResultRow>(text: string): Promise<DatabaseResult<Row>> {
+        queries.push(text)
+        if (text.includes('UPDATE ai_recommendations')) return { rows: [], rowCount: 0 }
+        return { rows: [], rowCount: 1 }
+      },
+    }
+    const repository = new PostgresRecommendationRepository(executor)
+    await repository.expireStale(storeId('s'))
+    const sweep = queries[queries.length - 1] ?? ''
+    expect(sweep).toContain('decided_at = $2::text::timestamptz')
+    expect(sweep).toContain('expires_at <= $2::text::timestamptz')
+    expect(sweep).toContain("'decidedAt', $2::text")
+  })
 })
