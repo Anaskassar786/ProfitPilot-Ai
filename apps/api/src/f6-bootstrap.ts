@@ -1,4 +1,4 @@
-import { AutomationExecutionService, CampaignEmailService, MerchantEmailVerifier, PostgresMerchantEmailConfigRepository, PostgresRunRepository, PostgresTemplateRepository, PostgresWorkflowRepository, ThreadLedger, createBrevoMailer } from '@profitpilot/automation'
+import { AutomationExecutionService, CampaignEmailService, MerchantEmailVerifier, PostgresMerchantEmailConfigRepository, PostgresRunRepository, PostgresTemplateRepository, PostgresTicketRepository, PostgresWorkflowRepository, createBrevoMailer } from '@profitpilot/automation'
 import { ProductionWorkflowActions } from './automation-actions.js'
 import { AutomationTriggerService } from './automation-triggers.js'
 import type { EmailTransport } from '@profitpilot/automation'
@@ -54,7 +54,7 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
     emailVerifier,
     merchantEmails,
     targetedCampaigns,
-    tickets: new ThreadLedger(),
+    tickets: new PostgresTicketRepository(f5.database),
     sendVerificationEmail: async ({ email, fromName, token, shopId }) => {
       const origin = env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || ''
       const link = origin ? `${origin.replace(/\/$/, '')}/settings/merchant-email/verify?token=${encodeURIComponent(token)}` : token

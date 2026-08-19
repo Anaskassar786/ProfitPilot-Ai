@@ -441,6 +441,81 @@
   font-size: 13px;
 }
 
+/* ---------- Loading state (first paint) ---------- */
+
+.support-loading { display: flex; flex-direction: column; gap: 18px; }
+
+.support-loading-head { display: flex; align-items: center; gap: 13px; }
+
+.support-loading-head h2 { margin: 4px 0 0; font-size: 20px; letter-spacing: -0.03em; }
+
+.support-loading-spinner {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--s-blue);
+  border-radius: 11px;
+  background: var(--s-blue-soft);
+}
+
+.support-loading-spinner svg { animation: support-spin 900ms linear infinite; }
+
+.support-loading-bars { display: flex; flex-direction: column; gap: 10px; }
+
+.support-loading-bar {
+  display: block;
+  height: 46px;
+  width: 100%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--s-card-inset) 25%, var(--s-card-raised) 50%, var(--s-card-inset) 75%);
+  background-size: 200% 100%;
+  animation: support-shimmer 1400ms ease-in-out infinite;
+}
+
+.support-loading-bar.short { width: 62%; }
+
+@keyframes support-shimmer {
+  0% { background-position: 180% 0; }
+  100% { background-position: -20% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-loading-bar,
+  .support-loading-spinner svg,
+  .support-button .spinning { animation: none; }
+}
+
+/* ---------- Load-error state (never disguised as "All Clear") ---------- */
+
+.support-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.support-load-error-copy { display: flex; align-items: center; gap: 14px; min-width: 0; }
+
+.support-load-error-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--s-amber);
+  border-radius: 12px;
+  background: var(--s-amber-soft);
+}
+
+.support-load-error-copy h2 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.02em; }
+
+.support-load-error-copy p { margin: 0; color: var(--s-text-2); font-size: 13px; line-height: 1.55; }
+
+.support-load-error-actions { flex: 0 0 auto; }
+
 /* ---------- Empty state ---------- */
 
 .support-empty { text-align: left; }
@@ -454,6 +529,26 @@
   border-radius: 12px;
   background: var(--s-green-soft);
 }
+
+.support-empty-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 7px 12px;
+  flex: 0 0 auto;
+  color: var(--s-green-strong);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.support-empty-refresh:hover { border-color: var(--s-green); transform: translateY(-1px); }
 
 .support-empty-emoji { font-size: 26px; line-height: 1; }
 
@@ -882,20 +977,33 @@
 
 .support-past-list { display: flex; flex-direction: column; gap: 8px; }
 
+.support-past-item {
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  background: var(--s-card-inset);
+  overflow: hidden;
+  transition: border-color 140ms ease;
+}
+
+.support-past-item:hover { border-color: var(--s-border-strong); }
+
+.support-past-item.expanded { border-color: rgba(96, 143, 255, 0.5); }
+
 .support-past-row {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 12px 14px;
   color: var(--s-text);
-  border: 1px solid var(--s-border);
-  border-radius: 10px;
-  background: var(--s-card-inset);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   text-align: left;
 }
 
-.support-past-row:hover { border-color: var(--s-border-strong); }
+.support-past-row:hover { background: rgba(124, 176, 248, 0.05); }
 
 .support-past-row > strong {
   flex: 1;
@@ -906,6 +1014,33 @@
 }
 
 .support-past-row > small { color: var(--s-text-3); font-size: 12px; white-space: nowrap; }
+
+.support-past-details { padding: 2px 14px 14px 35px; }
+
+.support-past-details > p {
+  margin: 0 0 12px;
+  color: var(--s-text-2);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.support-past-details > p.muted { color: var(--s-text-3); }
+
+.support-past-details dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  background: var(--s-card-raised);
+}
+
+.support-past-details dl > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.support-past-details dt { color: var(--s-text-3); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.support-past-details dd { margin: 0; color: var(--s-text); font-size: 13px; overflow-wrap: anywhere; }
 
 .support-past-empty {
   margin: 0;
@@ -941,6 +1076,11 @@
   .support-ticket-details { padding-left: 17px; }
   .support-ticket-details dl { grid-template-columns: 1fr; }
   .support-past-row { flex-wrap: wrap; }
+  .support-past-row .support-status-badge { display: none; }
+  .support-past-details { padding-left: 14px; }
+  .support-past-details dl { grid-template-columns: 1fr; }
+  .support-load-error { flex-direction: column; align-items: flex-start; }
+  .support-empty-banner { flex-wrap: wrap; }
 }
 
 /* ==========================================================================
@@ -995,10 +1135,31 @@
 }
 
 .app-shell.light-mode .support-workspace .support-faq-item,
-.app-shell.light-mode .support-workspace .support-past-row {
+.app-shell.light-mode .support-workspace .support-past-item {
   background: #F8FAFC;
   border-color: #E2E8F0;
 }
+
+.app-shell.light-mode .support-workspace .support-past-details dl {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+
+.app-shell.light-mode .support-workspace .support-loading-bar {
+  background: linear-gradient(90deg, #F1F5F9 25%, #FFFFFF 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+}
+
+.app-shell.light-mode .support-workspace .support-load-error {
+  border-color: #FCD34D;
+}
+
+.app-shell.light-mode .support-workspace .support-empty-refresh {
+  color: #047857;
+  border-color: #A7F3D0;
+}
+
+.app-shell.light-mode .support-workspace .support-empty-refresh:hover { border-color: #059669; }
 
 .app-shell.light-mode .support-workspace .support-form-card {
   border-color: #BFDBFE;

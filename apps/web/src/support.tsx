@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
   Bot,
@@ -74,6 +75,10 @@ export function HelpSupportPage({
   const [formOpen, setFormOpen] = useState(false)
   const [showAllFaqs, setShowAllFaqs] = useState(false)
   const [loading, setLoading] = useState(true)
+  // A failed tickets fetch must never be indistinguishable from an empty
+  // inbox: the celebratory "All Clear!" state is only honest after a
+  // *successful* load that returned zero tickets.
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const plan: SupportPlan = resolveSupportPlan(account)
   const tier = SUPPORT_TIERS[plan]
@@ -81,11 +86,11 @@ export function HelpSupportPage({
   const { open: openTickets, past: pastTickets } = useMemo(() => splitTickets(tickets), [tickets])
 
   const refresh = () => {
-    if (!context.storeId) { setTickets([]); setLoading(false); return }
+    if (!context.storeId) { setTickets([]); setLoading(false); setLoadFailed(false); return }
     setLoading(true)
     void Promise.allSettled([fetchTickets(context.storeId), fetchBilling(context.storeId)]).then(([ticketResult, billingResult]) => {
-      if (ticketResult.status === 'fulfilled') setTickets(ticketResult.value)
-      else onToast('Tickets could not be loaded. Check your connection and try again.', 'error')
+      if (ticketResult.status === 'fulfilled') { setTickets(ticketResult.value); setLoadFailed(false) }
+      else { setLoadFailed(true); onToast('Tickets could not be loaded. Check your connection and try again.', 'error') }
       if (billingResult.status === 'fulfilled') setAccount(billingResult.value)
       setLoading(false)
     })
@@ -116,6 +121,7 @@ export function HelpSupportPage({
       <FaqSection
         showAll={showAllFaqs}
         onToggleAll={() => setShowAllFaqs((value) => !value)}
+        onShowAll={() => setShowAllFaqs(true)}
         onAskAi={() => onNavigate('ai-command')}
       />
 
@@ -132,12 +138,19 @@ export function HelpSupportPage({
       )}
 
       {tickets.length === 0 && !formOpen ? (
-        <SupportEmptyState
-          onAskAi={() => onNavigate('ai-command')}
-          onBrowseFaqs={() => { setShowAllFaqs(true); try { document.getElementById('support-faq')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }) } catch { /* embedded browsers may restrict scrolling */ } }}
-          onNewTicket={() => setFormOpen(true)}
-          storeConnected={!!context.storeId}
-        />
+        loadFailed ? (
+          <SupportLoadError onRetry={refresh} loading={loading} />
+        ) : loading ? (
+          <SupportLoadingState />
+        ) : (
+          <SupportEmptyState
+            onAskAi={() => onNavigate('ai-command')}
+            onBrowseFaqs={() => { setShowAllFaqs(true); try { document.getElementById('support-faq')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }) } catch { /* embedded browsers may restrict scrolling */ } }}
+            onNewTicket={() => setFormOpen(true)}
+            onRefresh={refresh}
+            storeConnected={!!context.storeId}
+          />
+        )
       ) : (
         <TicketHistory open={openTickets} past={pastTickets} loading={loading} onRefresh={refresh} responseBadge={tier.responseBadge} />
       )}
@@ -189,7 +202,7 @@ export function SupportPlanCard({ plan, quota, onUpgrade }: { plan: SupportPlan;
 }
 
 /** 📚 Quick answers (4 categories) + ❓ common questions (expandable). */
-function FaqSection({ showAll, onToggleAll, onAskAi }: { showAll: boolean; onToggleAll: () => void; onAskAi: () => void }) {
+function FaqSection({ showAll, onToggleAll, onShowAll, onAskAi }: { showAll: boolean; onToggleAll: () => void; onShowAll: () => void; onAskAi: () => void }) {
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set())
   const toggle = (id: string) => setOpenIds((current) => {
     const next = new Set(current)
@@ -197,6 +210,8 @@ function FaqSection({ showAll, onToggleAll, onAskAi }: { showAll: boolean; onTog
     else next.add(id)
     return next
   })
+  // Category "Read" must always *reveal* the library — never collapse it.
+  const openQuestion = (id: string) => setOpenIds((current) => current.has(id) ? current : new Set(current).add(id))
   const common = commonFaqs()
   return (
     <section className="support-faq" id="support-faq" aria-label="Quick answers">
@@ -216,7 +231,7 @@ function FaqSection({ showAll, onToggleAll, onAskAi }: { showAll: boolean; onTog
             <div className="support-faq-category-pin" aria-hidden="true">📌</div>
             <h3>{category.title}</h3>
             <p>{category.blurb}</p>
-            <button type="button" className="support-text-button" onClick={() => { onToggleAll(); toggle(category.questions[0]?.id ?? '') }}>
+            <button type="button" className="support-text-button" onClick={() => { onShowAll(); openQuestion(category.questions[0]?.id ?? '') }}>
               Read <ArrowRight size={14} />
             </button>
           </div>
@@ -265,8 +280,48 @@ function FaqItem({ entry, categoryTitle, open, onToggle }: { entry: Readonly<{ i
   )
 }
 
+/** ⏳ Honest first paint while the tickets fetch is in flight. */
+function SupportLoadingState() {
+  return (
+    <section className="support-tickets support-loading" aria-label="Loading your tickets" aria-busy="true">
+      <div className="support-loading-head">
+        <span className="support-loading-spinner" aria-hidden="true"><RefreshCw size={15} /></span>
+        <div>
+          <div className="support-section-kicker"><TicketCheck size={13} /> YOUR TICKETS</div>
+          <h2>Loading your tickets…</h2>
+        </div>
+      </div>
+      <div className="support-loading-bars" aria-hidden="true">
+        <span className="support-loading-bar wide" />
+        <span className="support-loading-bar" />
+        <span className="support-loading-bar short" />
+      </div>
+    </section>
+  )
+}
+
+/** ⚠️ A failed load with a working retry — never disguised as "All Clear!". */
+function SupportLoadError({ onRetry, loading }: { onRetry: () => void; loading: boolean }) {
+  return (
+    <section className="support-tickets support-load-error" role="alert" aria-label="Tickets could not be loaded">
+      <div className="support-load-error-copy">
+        <span className="support-load-error-icon" aria-hidden="true"><AlertTriangle size={20} /></span>
+        <div>
+          <h2>Your tickets could not be loaded</h2>
+          <p>This is usually a temporary connection issue — your tickets are safe. Try again, or browse the quick answers above in the meantime.</p>
+        </div>
+      </div>
+      <div className="support-load-error-actions">
+        <button type="button" className="support-button primary" onClick={onRetry} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'spinning' : ''} /> {loading ? 'Checking…' : 'Try again'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 /** 🎉 The helpful empty state: three fastest paths to an answer. */
-function SupportEmptyState({ onAskAi, onBrowseFaqs, onNewTicket, storeConnected }: { onAskAi: () => void; onBrowseFaqs: () => void; onNewTicket: () => void; storeConnected: boolean }) {
+function SupportEmptyState({ onAskAi, onBrowseFaqs, onNewTicket, onRefresh, storeConnected }: { onAskAi: () => void; onBrowseFaqs: () => void; onNewTicket: () => void; onRefresh: () => void; storeConnected: boolean }) {
   return (
     <section className="support-empty" aria-label="No open tickets">
       <div className="support-empty-banner">
@@ -275,6 +330,11 @@ function SupportEmptyState({ onAskAi, onBrowseFaqs, onNewTicket, storeConnected 
           <h2>All Clear! No open tickets.</h2>
           <p>{storeConnected ? 'No open support tickets. Your store is running smoothly!' : 'Connect your Shopify store to open tickets — until then, the FAQ and AI Command below work right away.'}</p>
         </div>
+        {storeConnected && (
+          <button type="button" className="support-empty-refresh" onClick={onRefresh} title="Re-check your tickets">
+            <RefreshCw size={13} /> Check again
+          </button>
+        )}
       </div>
       <p className="support-empty-lead">Need help with something? Choose the fastest option:</p>
       <div className="support-empty-options">
@@ -487,15 +547,7 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
                 </button>
                 {expanded && (
                   <div className="support-ticket-details">
-                    {ticket.description ? <p>{ticket.description}</p> : <p className="muted">No description was added to this ticket.</p>}
-                    <dl>
-                      <div><dt>Status</dt><dd>{status.label}</dd></div>
-                      <div><dt>Priority</dt><dd>{ticketPriorityLabel(ticket.priority)}</dd></div>
-                      <div><dt>Created</dt><dd>{formatTicketDate(ticket.createdAt)}</dd></div>
-                      <div><dt>Last update</dt><dd>{formatTicketDate(ticket.updatedAt)}</dd></div>
-                      <div><dt>Response target</dt><dd>{responseBadge}</dd></div>
-                      <div><dt>Ticket ID</dt><dd className="mono">{ticket.id}</dd></div>
-                    </dl>
+                    <TicketDetailsBody ticket={ticket} responseBadge={responseBadge} />
                   </div>
                 )}
               </article>
@@ -514,13 +566,22 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
           <div className="support-past-list">
             {past.map((ticket) => {
               const status = ticketStatusMeta(ticket.status)
+              const expanded = expandedId === ticket.id
               return (
-                <button type="button" className="support-past-row" key={ticket.id} onClick={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}>
-                  <span className={`support-ticket-status-dot ${status.tone}`} aria-hidden="true" />
-                  <strong>{ticket.subject}</strong>
-                  <small>Resolved {formatTicketDate(ticket.updatedAt)} · {ticketPriorityLabel(ticket.priority)} priority</small>
-                  <span className={`support-status-badge ${status.tone}`}>{status.label}</span>
-                </button>
+                <div className={`support-past-item ${expanded ? 'expanded' : ''}`} key={ticket.id}>
+                  <button type="button" className="support-past-row" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
+                    <span className={`support-ticket-status-dot ${status.tone}`} aria-hidden="true" />
+                    <strong>{ticket.subject}</strong>
+                    <small>Resolved {formatTicketDate(ticket.updatedAt)} · {ticketPriorityLabel(ticket.priority)} priority</small>
+                    <span className={`support-status-badge ${status.tone}`}>{status.label}</span>
+                    <span className="support-ticket-chevron" aria-hidden="true"><ChevronDown size={15} className={expanded ? 'flipped' : ''} /></span>
+                  </button>
+                  {expanded && (
+                    <div className="support-past-details">
+                      <TicketDetailsBody ticket={ticket} />
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -529,6 +590,24 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
         )}
       </div>
     </section>
+  )
+}
+
+/** Shared expandable details for open and past tickets. */
+function TicketDetailsBody({ ticket, responseBadge }: { ticket: SupportTicketRecord; responseBadge?: string }) {
+  const status = ticketStatusMeta(ticket.status)
+  return (
+    <>
+      {ticket.description ? <p>{ticket.description}</p> : <p className="muted">No description was added to this ticket.</p>}
+      <dl>
+        <div><dt>Status</dt><dd>{status.label}</dd></div>
+        <div><dt>Priority</dt><dd>{ticketPriorityLabel(ticket.priority)}</dd></div>
+        <div><dt>Created</dt><dd>{formatTicketDate(ticket.createdAt)}</dd></div>
+        <div><dt>Last update</dt><dd>{formatTicketDate(ticket.updatedAt)}</dd></div>
+        {responseBadge && <div><dt>Response target</dt><dd>{responseBadge}</dd></div>}
+        <div><dt>Ticket ID</dt><dd className="mono">{ticket.id}</dd></div>
+      </dl>
+    </>
   )
 }
 

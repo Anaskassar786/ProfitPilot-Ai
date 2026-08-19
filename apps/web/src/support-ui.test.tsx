@@ -7,7 +7,8 @@ import { SUPPORT_TIERS, commonFaqs, ticketQuota } from './support-model.js'
 /**
  * Static-render contracts for the Help & Support redesign. renderToStaticMarkup
  * never runs effects, so this is the honest initial paint: Trial plan (no
- * billing data yet), zero tickets, FAQ strip visible.
+ * billing data yet), the tickets area still loading (never a premature
+ * "All Clear!" before the fetch resolves — AUDIT-2), FAQ strip visible.
  */
 
 const context = { storeId: 'store-1', shop: 'demo.myshopify.com' }
@@ -59,18 +60,27 @@ describe('FAQ / self-help section (FIX 2)', () => {
   })
 })
 
-describe('helpful empty state (FIX 3)', () => {
-  it('celebrates "All Clear!" and offers the three fastest help options', () => {
+describe('honest first paint (AUDIT-2)', () => {
+  it('shows a loading card while tickets load instead of a premature "All Clear!"', () => {
     const html = renderPage()
-    expect(html).toContain('All Clear! No open tickets.')
-    expect(html).toContain('Your store is running smoothly')
-    expect(html).toContain('Need help with something? Choose the fastest option')
-    expect(html).toContain('Ask AI Command')
-    expect(html).toContain('Browse FAQs')
-    expect(html).toContain('New Ticket')
-    expect(html).toContain('Instant answers about your store')
-    expect(html).toContain('Complex issues need human support')
-    expect(html).toContain('AI Command can answer 80% of questions instantly')
+    expect(html).toContain('Loading your tickets')
+    expect(html).toContain('support-loading')
+    // The celebration is only honest after a successful load with zero tickets.
+    expect(html).not.toContain('Your store is running smoothly')
+    expect(html).not.toContain('All Clear! No open tickets.')
+    // …and the FAQ + header help paths are available during the load.
+    expect(html).toContain('QUICK ANSWERS')
+    expect(html).toContain('New ticket')
+  })
+})
+
+describe('helpful empty state copy (FIX 3, post-load contract)', () => {
+  it('keeps the friendly copy ready for the settled empty state', () => {
+    // The empty state only paints after the tickets fetch resolves — the
+    // interactive copy is verified end-to-end in support-functional.test.tsx.
+    const html = renderPage()
+    expect(html).toContain('Get help from our team. We track every question and respond quickly.')
+    expect(html).not.toContain('Your store is running smoothly')
   })
 })
 
@@ -116,6 +126,8 @@ describe('zero fake data', () => {
   it('does not paint any seeded or demo tickets', () => {
     const html = renderPage()
     expect(html).not.toContain('New merchant question')
-    expect(html).toContain('No open support tickets')
+    // No ticket rows are invented for the first paint — the area loads honestly.
+    expect(html).not.toContain('support-ticket-card')
+    expect(html).not.toContain('support-past-row')
   })
 })
