@@ -25,13 +25,16 @@ export function createAiCommandRouter(dependencies: AiCommandRouteDependencies):
         response.setHeader('x-accel-buffering', 'no')
         response.flushHeaders()
         let open = true
-        response.on('close', () => { open = false })
+        const controller = new AbortController()
+        const abort = (): void => { open = false; controller.abort() }
+        request.on('aborted', abort)
+        response.on('close', abort)
         const send = (event: string, payload: unknown): void => {
           if (!open || response.writableEnded || response.destroyed) return
           response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
         }
         try {
-          const result = await service.chat({ storeId: tenant, text: body.text, ...(conversationId ? { conversationId } : {}) }, (event, payload) => send(event, payload))
+          const result = await service.chat({ storeId: tenant, text: body.text, signal: controller.signal, ...(conversationId ? { conversationId } : {}) }, (event, payload) => send(event, payload))
           send('result', result)
         } catch (error: unknown) {
           if (open && !response.writableEnded) send('error', { message: error instanceof Error ? error.message : 'AI Command failed', status: error instanceof AppError ? error.status : 500, code: error instanceof AppError ? error.code : 'INTERNAL_ERROR' })
@@ -79,6 +82,12 @@ export function createAiCommandRouter(dependencies: AiCommandRouteDependencies):
     return service.updatePreferences(bodyStore(body), body)
   }))
   router.get('/ai-command/quick-commands', asyncRoute(async (request) => service.quickCommands(queryStore(request))))
+  router.get('/ai-command/suggestions', asyncRoute(async (request) => {
+    const command = typeof request.query.command === 'string' ? request.query.command : ''
+    if (!command.trim()) throw new AppError('VALIDATION_ERROR', 'command is required', 400)
+    return service.suggestions(queryStore(request), command)
+  }))
+  router.get('/store/quick-insights', asyncRoute(async (request) => service.quickInsights(queryStore(request))))
 
   return router
 }

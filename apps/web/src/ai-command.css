@@ -1989,6 +1989,83 @@
 }
 .aic-activity-footer span:first-child { font-weight: 700; color: var(--aic-text); }
 
+.aic-followups-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.aic-followups-grid button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--aic-accent-border);
+  border-radius: 999px;
+  background: var(--aic-accent-soft);
+  color: var(--aic-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.aic-followups-grid button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--aic-accent); color: var(--aic-text); }
+.aic-followups-grid button:disabled, .aic-insights-grid button:disabled, .aic-popular-compact button:disabled, .aic-daily-tip button:disabled { opacity: .58; cursor: not-allowed; }
+.aic-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+.aic-insights-grid > button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--aic-border);
+  border-radius: 12px;
+  background: var(--aic-panel-2);
+  color: var(--aic-text-secondary);
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.aic-insights-grid > button:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--aic-accent-border); box-shadow: var(--aic-shadow); }
+.aic-insight-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--aic-accent-soft); color: var(--aic-accent); }
+.aic-insights-grid button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.aic-insights-grid small { color: var(--aic-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+.aic-insights-grid strong { overflow: hidden; text-overflow: ellipsis; color: var(--aic-text); font-size: 15px; white-space: nowrap; }
+.aic-insights-grid em { color: var(--aic-text-muted); font-size: 10.5px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aic-popular-compact { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.aic-popular-compact button {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0; padding: 9px 10px;
+  border: 1px solid var(--aic-border); border-radius: 9px; background: var(--aic-panel-2);
+  color: var(--aic-text-secondary); font: inherit; font-size: 11.5px; font-weight: 650; cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.aic-popular-compact button:hover:not(:disabled) { background: var(--aic-accent-soft); border-color: var(--aic-accent-border); color: var(--aic-text); }
+.aic-popular-compact svg { flex: none; color: var(--aic-accent); }
+.aic-daily-tip {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px;
+  padding: 13px 15px; border: 1px solid rgba(234,179,8,.28); border-radius: 12px;
+  background: rgba(234,179,8,.08);
+}
+.aic-tip-icon { font-size: 19px; }
+.aic-daily-tip strong { color: var(--aic-text); font-size: 12px; }
+.aic-daily-tip p { margin: 2px 0 0; color: var(--aic-text-secondary); font-size: 11.5px; line-height: 1.4; }
+.aic-daily-tip button { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border: 0; border-radius: 8px; background: #CA8A04; color: #fff; font-weight: 750; cursor: pointer; white-space: nowrap; }
+@media (max-width: 900px) {
+  .aic-insights-grid, .aic-popular-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .aic-insights-grid { grid-template-columns: 1fr; }
+  .aic-daily-tip { grid-template-columns: auto 1fr; }
+  .aic-daily-tip button { grid-column: 2; justify-self: start; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    AI Command — LIGHT THEME (high-contrast, Claude/ChatGPT-grade)
    Loaded last so these win. Dark theme is never matched (all rules are

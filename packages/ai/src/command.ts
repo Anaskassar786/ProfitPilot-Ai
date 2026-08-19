@@ -163,6 +163,21 @@ export type AiCommandQuickCommand = Readonly<{
   kind: 'info' | 'action'
 }>
 
+/** Live snapshot values. Null means the backing store has no synced data; it is
+ * deliberately not replaced with a demo value. */
+export type AiCommandQuickInsights = Readonly<{
+  revenueToday: number | null
+  revenueYesterday: number | null
+  ordersToday: number | null
+  ordersYesterday: number | null
+  lowStockCount: number | null
+  healthScore: number | null
+  healthStatus: string | null
+  sources: readonly string[]
+}>
+
+export type AiCommandSuggestion = Readonly<{ label: string; command: string }>
+
 export type AiCommandPlanLimits = Readonly<{
   commandsPerDay: number | null
   actionsEnabled: boolean
@@ -536,6 +551,25 @@ export function defaultQuickCommands(plan: PlanTier): readonly AiCommandQuickCom
     { id: 'tag-new', label: 'Tag new customers', command: 'Tag new customers as new-buyer', kind: 'action' },
     { id: 'weekend', label: 'Create weekend discount', command: 'Create a 15% weekend discount with a 100 use limit that expires in 3 days', kind: 'action' },
   ]
+}
+
+export function contextualFollowUps(command: string): readonly AiCommandSuggestion[] {
+  const text = command.toLowerCase()
+  const category = /(stock|inventory|product|sku)/.test(text) ? 'inventory'
+    : /(customer|vip|churn|inactive|segment)/.test(text) ? 'customers'
+      : /(health|seo|conversion|speed)/.test(text) ? 'health'
+        : /(growth|increase sales|recommend|opportunit)/.test(text) ? 'growth'
+          : /(order)/.test(text) ? 'orders'
+            : 'revenue'
+  const groups: Readonly<Record<string, readonly string[]>> = {
+    revenue: ['Compare with last month’s revenue', 'Show revenue breakdown by product', 'Which products generated the most revenue?', 'Show revenue trend for the last 6 months', 'What is my average order value?', 'Show today’s orders'],
+    customers: ['Show repeat customers', 'Show customer acquisition this month', 'Find at-risk customers with no orders in 30 days', 'Show top spending customers', 'Show new customers this week', 'Compare new and returning customers'],
+    inventory: ['Show products to reorder', 'Find products with no sales in 60 days', 'Show inventory value report', 'Show best sellers running low', 'Calculate inventory turnover', 'Show out-of-stock products'],
+    health: ['How can I improve store health?', 'Show conversion rate analysis', 'Show inventory health details', 'Find my biggest growth opportunity', 'Compare this week with last week', 'Show pending recommendations'],
+    growth: ['Show my biggest growth opportunities', 'Find underperforming products', 'Show at-risk customers', 'Compare this week with last week', 'Show best-selling products', 'Run a store health check'],
+    orders: ['Show today’s orders', 'Compare order count with last week', 'Show average order value', 'Show highest-value recent orders', 'Show recent customers', 'Show revenue from recent orders'],
+  }
+  return (groups[category] ?? groups.revenue ?? []).map((label) => ({ label, command: label }))
 }
 
 export function contextualQuickCommands(plan: PlanTier, snapshot: Readonly<{ lowStock?: number; pendingRecommendations?: number; inactiveCustomers?: number }>): readonly AiCommandQuickCommand[] {
@@ -1001,6 +1035,31 @@ export class AiCommandService {
     return action
   }
 
+  public async quickInsights(storeId: StoreId): Promise<AiCommandQuickInsights> {
+    const [analytics, inventory, health] = await Promise.all([
+      this.tools.run(storeId, { name: 'get_analytics', params: { metric: 'revenue_orders', date_range: '1d' } }),
+      this.tools.run(storeId, { name: 'get_inventory_status', params: { filter: 'low', limit: 1 } }),
+      this.tools.run(storeId, { name: 'get_store_health', params: {} }),
+    ])
+    const analyticsData = analytics.ok && isRecord(analytics.data) ? analytics.data : null
+    const inventoryData = inventory.ok && isRecord(inventory.data) ? inventory.data : null
+    const healthData = health.ok && isRecord(health.data) ? health.data : null
+    return {
+      revenueToday: analyticsData ? numberish(analyticsData.revenue) : null,
+      revenueYesterday: analyticsData ? numberish(analyticsData.previousRevenue) : null,
+      ordersToday: analyticsData ? numberish(analyticsData.orders) : null,
+      ordersYesterday: analyticsData ? numberish(analyticsData.previousOrders) : null,
+      lowStockCount: inventoryData ? numberish(inventoryData.lowStockCount) : null,
+      healthScore: healthData ? numberish(healthData.score) : null,
+      healthStatus: healthData && typeof healthData.label === 'string' ? healthData.label : null,
+      sources: [analytics, inventory, health].filter((outcome) => outcome.ok).map((outcome) => outcome.source),
+    }
+  }
+
+  public async suggestions(_storeId: StoreId, command: string): Promise<readonly AiCommandSuggestion[]> {
+    return contextualFollowUps(command)
+  }
+
   public async quickCommands(storeId: StoreId): Promise<readonly AiCommandQuickCommand[]> {
     const plan = await this.planFor(storeId)
     const snapshot: { lowStock?: number; pendingRecommendations?: number; inactiveCustomers?: number } = {}
@@ -1017,10 +1076,12 @@ export class AiCommandService {
     return contextualQuickCommands(plan, snapshot)
   }
 
-  public async chat(input: Readonly<{ storeId: StoreId; text: string; conversationId?: string }>, listener?: ChatListener): Promise<AiCommandChatResult> {
+  public async chat(input: Readonly<{ storeId: StoreId; text: string; conversationId?: string; signal?: AbortSignal }>, listener?: ChatListener): Promise<AiCommandChatResult> {
+    throwIfCommandAborted(input.signal)
     if (!this.enabled) throw new AppError('FORBIDDEN', 'AI Command is not enabled', 403)
-    const text = input.text.trim().slice(0, 2_000)
+    const text = input.text.trim()
     if (!text) throw new AppError('VALIDATION_ERROR', 'Command cannot be empty', 400)
+    if (text.length > 2_000) throw new AppError('VALIDATION_ERROR', 'Command must be 2,000 characters or fewer', 400)
     const plan = await this.planFor(input.storeId)
     const limits = limitsForPlan(plan)
     const date = usageDateKey(this.now())
@@ -1040,6 +1101,9 @@ export class AiCommandService {
     else if (confirm === 'undo') resultMessage = await this.undoLatest(input.storeId, conversation, plan)
     else resultMessage = await this.answer(input.storeId, conversation, text, plan, listener)
 
+    // A disconnected streaming client means the merchant pressed Cancel. Do
+    // not persist the conversation or consume quota after that point.
+    throwIfCommandAborted(input.signal)
     const nextMessages = [...conversation.messages, userMessage, resultMessage]
     const nextConversation = await this.repository.saveConversation({
       ...conversation,
@@ -1460,6 +1524,10 @@ function normalizeNumber(value: number): string {
 
 function numberish(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function throwIfCommandAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new AppError('CONFLICT', 'Command cancelled', 409)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

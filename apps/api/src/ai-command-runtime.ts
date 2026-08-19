@@ -122,13 +122,16 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     const current = snapshot.revenue.filter((row) => row.day >= cutoff)
     const previous = snapshot.revenue.filter((row) => row.day >= previousCutoff && row.day < cutoff)
     const orders = snapshot.orders.filter((row) => row.day >= cutoff)
+    const previousOrders = snapshot.orders.filter((row) => row.day >= previousCutoff && row.day < cutoff)
     const revenue = current.reduce((sum, row) => sum + row.grossRevenue, 0)
     const previousRevenue = previous.reduce((sum, row) => sum + row.grossRevenue, 0)
     const orderCount = orders.reduce((sum, row) => sum + row.orderCount, 0)
+    const previousOrderCount = previousOrders.reduce((sum, row) => sum + row.orderCount, 0)
     const data = {
       revenue,
       previousRevenue,
       orders: orderCount,
+      previousOrders: previousOrderCount,
       aov: orderCount > 0 ? revenue / orderCount : null,
       days,
       sourceDays: current.map((row) => row.day),

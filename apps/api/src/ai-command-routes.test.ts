@@ -87,11 +87,25 @@ describe('AI Command API', () => {
     const usage = await fetch(`${base}/ai-command/usage?storeId=${tenant}`)
     expect((await usage.json() as { data: { commandsUsed: number; limit: number } }).data.limit).toBe(200)
     expect((await fetch(`${base}/ai-command/quick-commands?storeId=${tenant}`)).status).toBe(200)
+    const insights = await fetch(`${base}/store/quick-insights?storeId=${tenant}`)
+    expect(insights.status).toBe(200)
+    expect((await insights.json() as { data: { revenueToday: number; lowStockCount: number; healthScore: number } }).data).toMatchObject({ revenueToday: 500, lowStockCount: 2, healthScore: 70 })
+    const suggestions = await fetch(`${base}/ai-command/suggestions?storeId=${tenant}&command=${encodeURIComponent('Who are my best customers?')}`)
+    expect(suggestions.status).toBe(200)
+    expect((await suggestions.json() as { data: readonly { command: string }[] }).data.some((item) => /repeat customers/i.test(item.command))).toBe(true)
     expect((await fetch(`${base}/ai-command/preferences?storeId=${tenant}`)).status).toBe(200)
     const history = await fetch(`${base}/ai-command/usage/history?storeId=${tenant}&days=7`)
     expect(history.status).toBe(200)
     const historyBody = await history.json() as { data: readonly { usageDate: string; commandsUsed: number }[] }
     expect(historyBody.data.every((row) => Number.isInteger(row.commandsUsed) && row.commandsUsed >= 0)).toBe(true)
+  }))
+
+  it('validates empty and overlong commands without a 500', async () => await withServer('growth', async (base) => {
+    for (const text of ['', 'x'.repeat(2001)]) {
+      const response = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text }) })
+      expect(response.status).toBe(400)
+      expect((await response.json() as { error: { message: string } }).error.message).toMatch(/empty|2,000/i)
+    }
   }))
 
   it('saves commands and refuses extra trial shortcuts', async () => await withServer('trial', async (base) => {

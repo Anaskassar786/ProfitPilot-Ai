@@ -84,6 +84,19 @@ export type AiCommandQuickCommand = Readonly<{
   kind: 'info' | 'action'
 }>
 
+export type AiCommandQuickInsights = Readonly<{
+  revenueToday: number | null
+  revenueYesterday: number | null
+  ordersToday: number | null
+  ordersYesterday: number | null
+  lowStockCount: number | null
+  healthScore: number | null
+  healthStatus: string | null
+  sources: readonly string[]
+}>
+
+export type AiCommandSuggestion = Readonly<{ label: string; command: string }>
+
 export type AiCommandQuickCategory = 'analytics' | 'customers' | 'products' | 'growth' | 'actions'
 
 /** Category tone key used for icon tiles and hover accents. */
