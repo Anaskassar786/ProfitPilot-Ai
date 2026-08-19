@@ -27,6 +27,16 @@ export type AgentOverview = Readonly<{ plan: PlanTier; unlockedCount: number; to
 export type CostSummaryView = Readonly<{ storeId: string; day: string; microDollars: number; capMicroDollars: number; remainingMicroDollars: number; calls: number }>
 export type CostBreakdownRow = Readonly<{ agent: string; model: string; microDollars: number; calls: number; promptTokens: number; completionTokens: number }>
 export type StoreHealthResult = Readonly<{ score: number | null; method: string; components: readonly Readonly<{ key: string; score: number | null; weight: number; reason: string }>[]; orderCount?: number; historyDays?: number | null }>
+export type AiCommandPageMetrics = Readonly<{
+  customers: Readonly<{ total: number | null; inactive30Days: number | null; repeat: number | null; potentialRecoverableRevenue: number | null }>
+  products: Readonly<{ active: number | null; lowStock: number | null; deadStock: number | null; crossSellPairs: number | null }>
+  orders: Readonly<{ total: number | null; pending: number | null; todayCount: number | null }>
+  revenue: Readonly<{ today: number | null; yesterday: number | null; changePercent: number | null; currency: string | null }>
+  storeHealth: Readonly<{ score: number | null; status: 'Healthy' | 'Needs attention' | null }>
+  subscription: Readonly<{ currentPlan: PlanTier | null; basicAgentCount: number | null }>
+  availability: Readonly<{ customers: boolean; products: boolean; orders: boolean; inventoryHistory: boolean; storeHealth: boolean }>
+  generatedAt: string
+}>
 export type RuleCatalogEntry = Readonly<{ id: string; name: string; agent: string; purpose: string; threshold: string; inputs: readonly string[]; impact: string }>
 export type AgentActivityItem = Readonly<{ id: string; agent: string; ruleId: string; title: string; reason: string; impactValue: number; impactLabel: string; currency: string; status: string; explanationStatus: string; confidence: number; confidenceLevel: string; version: number; createdAt: string }>
 

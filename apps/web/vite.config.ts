@@ -13,6 +13,7 @@ export default defineConfig({
     // the dev server; Shopify domains keep parity with production.
     headers: { 'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.e2b.app; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws:; object-src 'none'" },
     proxy: {
+      '/api': 'http://127.0.0.1:3000',
       // PatternAI deep links are client-side routes. Without this bypass the
       // broad '/ai' rule below would forward /ai-growth-command/patternai to
       // the API and the dev server would answer a page refresh with JSON.
