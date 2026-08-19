@@ -103,7 +103,7 @@ describe('AI Command API', () => {
     expect(blockedBody.data.message.content).toContain('Orders')
     expect((await fetch(`${base}/ai-command/conversations?storeId=${tenant}`)).status).toBe(200)
     const usage = await fetch(`${base}/ai-command/usage?storeId=${tenant}`)
-    expect((await usage.json() as { data: { commandsUsed: number; limit: number } }).data.limit).toBe(200)
+    expect((await usage.json() as { data: { commandsUsed: number; limit: number } }).data.limit).toBe(300)
     expect((await fetch(`${base}/ai-command/quick-commands?storeId=${tenant}`)).status).toBe(200)
     const insights = await fetch(`${base}/store/quick-insights?storeId=${tenant}`)
     expect(insights.status).toBe(200)

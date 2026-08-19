@@ -19,7 +19,7 @@ Nothing is invented. Empty action targets never get an Approve button. If a back
 
 | Capability | Trial | Start | Growth | Commander |
 |---|---|---|---|---|
-| Commands / day | 10 | 50 | 200 | Unlimited |
+| Commands / day | 10 | 100 | 300 | Unlimited |
 | Data queries | All | All | All | All |
 | Action execution | No | No | No | Yes, after approval |
 | Memory | Session | Session | 24 hours | Unlimited (90-day cleanup) |

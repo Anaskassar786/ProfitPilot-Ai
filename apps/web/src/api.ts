@@ -95,6 +95,16 @@ export function initializeCsrf(fetcher: Fetcher = fetch): Promise<string> {
   return csrfInitialization
 }
 
+/**
+ * Headers to attach to unsafe (POST/PUT/PATCH/DELETE) streaming requests.
+ * Streaming call sites bypass `requestJson` (which injects the token for you),
+ * so they must add this explicitly — otherwise a browser that holds the
+ * `profitpilot_csrf` cookie is rejected with 403 "CSRF validation failed".
+ */
+export function csrfHeaders(): Record<string, string> {
+  return csrfToken ? { 'x-csrf-token': csrfToken } : {}
+}
+
 /** Clears module state between isolated browser-client tests. */
 export function resetApiClientStateForTests(): void {
   csrfToken = null
@@ -462,8 +472,12 @@ export function sendJarvisMessage(storeId: string, sessionId: string, text: stri
  * caller should then fall back to sendJarvisMessage.
  */
 export async function streamJarvisMessage(storeId: string, sessionId: string, text: string, page: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<JarvisResponse> {
-  const response = await fetcher(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId, text, page, stream: true }) })
-  if (!response.ok || !response.body) throw new ApiClientError('Jarvis streaming unavailable', response.status)
+  const response = await fetcher(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, page, stream: true }) })
+  if (!response.ok || !response.body) {
+    let payload: unknown = null
+    try { payload = await response.json() } catch { payload = null }
+    throw failureFromPayload(payload, response.status)
+  }
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -611,7 +625,7 @@ function isCsrfFailure(payload: unknown, status: number): boolean {
   return payload.error.code === 'FORBIDDEN' && typeof payload.error.message === 'string' && payload.error.message.toLowerCase().includes('csrf')
 }
 
-function failureFromPayload(payload: unknown, status: number): ApiClientError {
+export function failureFromPayload(payload: unknown, status: number): ApiClientError {
   if (isRecord(payload) && isRecord(payload.error)) {
     const message = typeof payload.error.message === 'string' ? payload.error.message : 'API request failed'
     const code = typeof payload.error.code === 'string' ? payload.error.code : 'API_ERROR'
@@ -663,7 +677,7 @@ export async function streamCoachChat(storeId: string, message: string, onDelta:
   try {
     response = await fetcher(coachPath('/store-coach/chat', storeId), {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}) },
+      headers: { 'content-type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ message }),
     })
   } catch (error: unknown) {

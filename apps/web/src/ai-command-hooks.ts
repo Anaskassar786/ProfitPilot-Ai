@@ -332,7 +332,10 @@ function isAbortError(failure: unknown): boolean {
 function shouldRetryWithoutStreaming(failure: unknown): boolean {
   if (failure instanceof TypeError) return true
   if (!(failure instanceof ApiClientError)) return false
-  return [404, 405, 406, 415, 501].includes(failure.status)
+  // 403 (CSRF validation failed) is included so a stream rejected by the
+  // double-submit check retries through `sendAiCommandMessage`, whose
+  // `requestJson` path injects and auto-refreshes the CSRF token.
+  return [403, 404, 405, 406, 415, 501].includes(failure.status)
 }
 
 function downloadCsv(filename: string, rows: readonly Readonly<Record<string, string>>[]): void {

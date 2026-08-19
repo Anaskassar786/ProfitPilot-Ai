@@ -1,4 +1,4 @@
-import { ApiClientError, initializeCsrf, requestJson } from './api.js'
+import { ApiClientError, csrfHeaders, failureFromPayload, initializeCsrf, requestJson } from './api.js'
 import type { Fetcher } from './api.js'
 import type { AiCommandConversation, AiCommandPreferences, AiCommandQuickCommand, AiCommandQuickInsights, AiCommandSavedCommand, AiCommandSuggestion, AiCommandUsage, ChatResult } from './ai-command-model.js'
 import { isRecord, parseSseBlocks, parseSseFrame } from './ai-command-model.js'
@@ -27,8 +27,12 @@ export async function sendAiCommandMessage(storeId: string, text: string, conver
 }
 export async function streamAiCommandMessage(storeId: string, text: string, conversationId: string | undefined, onEvent: (event: string, payload: unknown) => void, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
-  const response = await fetcher('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) })
-  if (!response.ok || !response.body) throw new ApiClientError('AI Command streaming unavailable', response.status)
+  const response = await fetcher('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) })
+  if (!response.ok || !response.body) {
+    let payload: unknown = null
+    try { payload = await response.json() } catch { payload = null }
+    throw failureFromPayload(payload, response.status)
+  }
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''

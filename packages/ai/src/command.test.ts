@@ -78,8 +78,8 @@ function service(plan: 'trial' | 'start' | 'growth' | 'commander' = 'trial', ext
 describe('AI Command plan limits', () => {
   it('gates trial/start/growth to info only and commander to full actions', () => {
     expect(limitsForPlan('trial').commandsPerDay).toBe(10)
-    expect(limitsForPlan('start').commandsPerDay).toBe(50)
-    expect(limitsForPlan('growth').commandsPerDay).toBe(200)
+    expect(limitsForPlan('start').commandsPerDay).toBe(100)
+    expect(limitsForPlan('growth').commandsPerDay).toBe(300)
     expect(limitsForPlan('commander').commandsPerDay).toBeNull()
     expect(AI_COMMAND_PLAN_LIMITS.trial.actionsEnabled).toBe(false)
     expect(AI_COMMAND_PLAN_LIMITS.growth.actionsEnabled).toBe(false)
@@ -88,8 +88,8 @@ describe('AI Command plan limits', () => {
   })
   it('computes remaining commands without inventing extra quota', () => {
     const usage = applyUsageLimits({ ...emptyUsage(tenant, '2026-08-18', 'start'), commandsUsed: 45 }, 'start')
-    expect(usage.remaining).toBe(5)
-    expect(applyUsageLimits({ ...usage, commandsUsed: 50 }, 'start').remaining).toBe(0)
+    expect(usage.remaining).toBe(55)
+    expect(applyUsageLimits({ ...usage, commandsUsed: 100 }, 'start').remaining).toBe(0)
     expect(applyUsageLimits({ ...usage, commandsUsed: 9 }, 'commander').remaining).toBeNull()
   })
 })

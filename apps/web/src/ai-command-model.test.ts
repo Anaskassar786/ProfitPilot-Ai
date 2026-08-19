@@ -41,8 +41,8 @@ describe('AI Command frontend model', () => {
   })
 
   it('renders usage without inventing extra quota', () => {
-    const usage = { storeId: 's', usageDate: '2026-08-18', commandsUsed: 45, actionsExecuted: 0, tokensUsed: 0, costMicroDollars: 0, limit: 50, remaining: 5, actionsEnabled: false }
-    expect(usageLabel(usage, 'start')).toBe('45/50 commands today')
+    const usage = { storeId: 's', usageDate: '2026-08-18', commandsUsed: 90, actionsExecuted: 0, tokensUsed: 0, costMicroDollars: 0, limit: 100, remaining: 10, actionsEnabled: false }
+    expect(usageLabel(usage, 'start')).toBe('90/100 commands today')
     expect(usagePercent(usage)).toBe(90)
     expect(usageTone(usage)).toBe('amber')
     expect(usageLabel(null, 'commander')).toBe('Unlimited ∞')

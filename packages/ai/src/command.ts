@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { AppError } from '@profitpilot/types'
+import { AppError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
 import type { PlanTier, StoreId } from '@profitpilot/types'
 import { extractNumbers } from './language.js'
 
@@ -189,11 +189,14 @@ export type AiCommandPlanLimits = Readonly<{
   undoSeconds: number
 }>
 
+// Daily command caps are read from `PLAN_ENTITLEMENT_LIMITS.ai_command_daily`
+// (the billing entitlement table) so plan gating and billing can never drift:
+// Trial 10 · Start 100 · Growth 300 · Commander unlimited.
 export const AI_COMMAND_PLAN_LIMITS: Readonly<Record<PlanTier, AiCommandPlanLimits>> = {
-  trial: { commandsPerDay: 10, actionsEnabled: false, memoryHours: 0, savedCommands: 3, historyDays: 7, exportConversations: false, undoSeconds: 0 },
-  start: { commandsPerDay: 50, actionsEnabled: false, memoryHours: 0, savedCommands: 10, historyDays: 30, exportConversations: false, undoSeconds: 0 },
-  growth: { commandsPerDay: 200, actionsEnabled: false, memoryHours: 24, savedCommands: 25, historyDays: 90, exportConversations: true, undoSeconds: 0 },
-  commander: { commandsPerDay: null, actionsEnabled: true, memoryHours: null, savedCommands: null, historyDays: null, exportConversations: true, undoSeconds: 30 },
+  trial: { commandsPerDay: PLAN_ENTITLEMENT_LIMITS.trial.ai_command_daily, actionsEnabled: false, memoryHours: 0, savedCommands: 3, historyDays: 7, exportConversations: false, undoSeconds: 0 },
+  start: { commandsPerDay: PLAN_ENTITLEMENT_LIMITS.start.ai_command_daily, actionsEnabled: false, memoryHours: 0, savedCommands: 10, historyDays: 30, exportConversations: false, undoSeconds: 0 },
+  growth: { commandsPerDay: PLAN_ENTITLEMENT_LIMITS.growth.ai_command_daily, actionsEnabled: false, memoryHours: 24, savedCommands: 25, historyDays: 90, exportConversations: true, undoSeconds: 0 },
+  commander: { commandsPerDay: PLAN_ENTITLEMENT_LIMITS.commander.ai_command_daily, actionsEnabled: true, memoryHours: null, savedCommands: null, historyDays: null, exportConversations: true, undoSeconds: 30 },
 }
 
 export type ToolCall = Readonly<{ name: AiCommandToolName; params: Readonly<Record<string, unknown>> }>
