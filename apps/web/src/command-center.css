@@ -17,8 +17,8 @@
 .cc-error-banner .cc-button { margin-left: auto; }
 
 /* ── Hero KPIs ── */
-.cc-hero { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.cc-kpi { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 132px; padding: 18px 20px; border: 1px solid rgba(155,124,246,.16); border-radius: var(--radius-lg); background: linear-gradient(155deg, rgba(36,29,72,.45), rgba(21,24,35,.75)); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: border-color .25s ease, transform .25s ease; }
+.cc-hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.cc-kpi { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 132px; min-width: 0; overflow: hidden; padding: 18px 20px; border: 1px solid rgba(155,124,246,.16); border-radius: var(--radius-lg); background: linear-gradient(155deg, rgba(36,29,72,.45), rgba(21,24,35,.75)); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: border-color .25s ease, transform .25s ease; }
 .cc-kpi:hover { border-color: rgba(155,124,246,.35); transform: translateY(-1px); }
 .cc-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cc-kpi-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; }
@@ -26,7 +26,7 @@
 .cc-kpi-icon.actions { color: var(--amber); background: rgba(245,158,11,.12); }
 .cc-kpi-icon.insights { color: var(--purple); background: rgba(155,124,246,.14); }
 .cc-kpi-icon.agents { color: var(--blue); background: rgba(59,130,246,.12); }
-.cc-kpi strong { font-size: 28px; letter-spacing: -.04em; line-height: 1.2; color: var(--text); }
+.cc-kpi strong { font-size: clamp(18px, 2.4vw, 28px); letter-spacing: -.04em; line-height: 1.2; color: var(--text); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .cc-kpi strong small { font-size: 14px; color: var(--text-tertiary); font-weight: 500; }
 .cc-kpi > span { color: var(--text-secondary); font-size: 12px; }
 .cc-kpi-note { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; }
@@ -45,7 +45,7 @@
 .cc-sparkline { width: 100%; height: 30px; margin: 2px 0 4px; overflow: visible; }
 .cc-sparkline polyline { stroke: var(--purple); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
 .cc-sparkline circle { fill: var(--purple); opacity: .9; cursor: help; }
-.cc-kpi-week { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; letter-spacing: -.01em; }
+.cc-kpi-week { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; letter-spacing: -.01em; overflow-wrap: anywhere; min-width: 0; }
 .cc-kpi-total { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
 .cc-kpi .cc-kpi-trend { align-self: flex-start; }
 

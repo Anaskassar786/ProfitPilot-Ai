@@ -6,15 +6,16 @@
 /* ── Row 1: KPI cards ───────────────────────────────────────────── */
 .inventory-stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; }
 .inventory-stats-grid.loading { opacity:.65; }
-.inventory-stat-card { min-height:112px; display:flex; flex-direction:column; gap:7px; padding:15px 16px 13px; }
-.inventory-stat-head { display:flex; align-items:center; gap:8px; color:var(--text-tertiary); font-size:8px; font-weight:700; letter-spacing:.045em; text-transform:uppercase; }
+.inventory-stat-card { min-height:112px; min-width:0; overflow:hidden; display:flex; flex-direction:column; gap:7px; padding:15px 16px 13px; }
+.inventory-stat-head { display:flex; align-items:center; gap:8px; color:var(--text-tertiary); font-size:8px; font-weight:700; letter-spacing:.045em; text-transform:uppercase; min-width:0; }
+.inventory-stat-head > span:last-child { min-width:0; overflow-wrap:anywhere; }
 .inventory-stat-icon { width:27px; height:27px; display:grid; flex:0 0 auto; place-items:center; border:1px solid currentColor; border-radius:8px; }
 .inventory-stat-card.tone-blue .inventory-stat-icon { color:var(--blue-bright); border-color:rgba(59,130,246,.22); background:rgba(59,130,246,.1); }
 .inventory-stat-card.tone-green .inventory-stat-icon { color:var(--green); border-color:rgba(16,185,129,.22); background:rgba(16,185,129,.1); }
 .inventory-stat-card.tone-amber .inventory-stat-icon { color:var(--amber); border-color:rgba(245,158,11,.22); background:rgba(245,158,11,.1); }
 .inventory-stat-card.tone-red .inventory-stat-icon { color:var(--red); border-color:rgba(239,68,68,.22); background:rgba(239,68,68,.1); }
-.inventory-stat-card > strong { margin-top:6px; color:var(--text); font-size:24px; font-weight:800; letter-spacing:-.06em; }
-.inventory-stat-card > small { color:var(--text-tertiary); font-size:8px; line-height:1.45; }
+.inventory-stat-card > strong { margin-top:6px; color:var(--text); font-size:24px; font-weight:800; letter-spacing:-.06em; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.inventory-stat-card > small { color:var(--text-tertiary); font-size:8px; line-height:1.45; overflow-wrap:anywhere; }
 
 /* ── Row 2: health, distribution, value ─────────────────────────── */
 .inventory-overview-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:11px; }

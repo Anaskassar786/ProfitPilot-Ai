@@ -20,10 +20,10 @@
 .button.compact { padding: 6px 10px; font-size: 11px; }
 
 /* KPI hero */
-.recs-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-.recs-kpi { display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: var(--radius-lg); background: var(--card); }
-.recs-kpi-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
-.recs-kpi-value { font-size: 21px; letter-spacing: -.04em; font-family: var(--font-mono); }
+.recs-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.recs-kpi { display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: var(--radius-lg); background: var(--card); min-width: 0; overflow: hidden; }
+.recs-kpi-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-tertiary); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; min-width: 0; overflow-wrap: anywhere; }
+.recs-kpi-value { font-size: clamp(16px, 1.8vw, 21px); letter-spacing: -.04em; font-family: var(--font-mono); overflow-wrap: anywhere; }
 .recs-kpi-value.accent { color: var(--green); }
 .recs-kpi small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
 .recs-kpi small .trend-up { color: var(--green); margin-left: 4px; }
@@ -378,6 +378,7 @@
 
 /* Topline last-analysis stamp */
 .recs-last-run { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px solid var(--border-soft); border-radius: 99px; color: var(--text-tertiary); font-size: 10.5px; white-space: nowrap; }
+.recs-last-run svg { color: var(-; }
 .recs-last-run svg { color: var(--green); }
 
 /* First-run: what to expect */
@@ -1681,6 +1682,7 @@
 
 .recs-kpi { position: relative; }
 .recs-kpi-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.recs-kpi-head .recs-kpi-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .recs-kpi-chip {
   display: grid;
   place-items: center;
