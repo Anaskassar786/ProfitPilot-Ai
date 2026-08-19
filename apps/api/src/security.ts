@@ -325,6 +325,13 @@ export function normalizeRequestError(error: unknown): AppError {
   if (isMissingRelationError(error) || (error instanceof Error && isMissingRelationError(error.cause))) {
     return new AppError('DEPENDENCY_ERROR', 'Required database tables are missing. Pending migrations will apply on the next API restart (or set RUN_MIGRATIONS=true).', 503, { reason: 'SCHEMA_MISSING' })
   }
+  // PostgreSQL 22P02 (invalid_text_representation): a request-supplied value
+  // — a malformed storeId, a bad date, a non-UUID id — reached a typed column
+  // and would otherwise surface as a merchant-hostile 500 INTERNAL_ERROR.
+  // The value came from the caller, so answer 400 in plain language instead.
+  if (isInvalidTextRepresentationError(error) || (error instanceof Error && isInvalidTextRepresentationError(error.cause))) {
+    return new AppError('VALIDATION_ERROR', 'One of the values in this request is not in a valid format. Please check it and try again.', 400, { reason: 'INVALID_VALUE_FORMAT' })
+  }
   if (isShopifyApiError(error) || (isRecord(error) && error.name === 'ShopifyApiError')) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 502
     const message = error instanceof Error ? error.message : 'Shopify API error'
@@ -387,6 +394,11 @@ function numberEnv(env: Readonly<Record<string, string | undefined>>, key: strin
   const value = env[key]?.trim()
   const parsed = value ? Number(value) : fallback
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+/** PostgreSQL invalid_text_representation (e.g. 'not-a-uuid' against a uuid column). */
+function isInvalidTextRepresentationError(error: unknown): boolean {
+  return isRecord(error) && error.code === '22P02'
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

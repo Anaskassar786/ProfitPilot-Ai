@@ -244,6 +244,19 @@ describe('Data Exports — generation', () => {
     expect((await download(base, 'orders', { from: '2026-08-18', to: '2026-08-01' })).status).toBe(400)
   }))
 
+  it('rejects impossible calendar dates that Date.parse quietly normalises', async () => await withHarness('growth', async ({ base }) => {
+    // Date.parse('2026-02-30') succeeds (it rolls over to March 2nd); without a
+    // real calendar check the merchant got a confusing "no data" 404 instead.
+    for (const impossible of ['2026-02-30', '2026-04-31', '2026-02-29', '2026-13-05']) {
+      const response = await download(base, 'orders', { from: impossible })
+      expect(response.status).toBe(400)
+      expect((await response.json()).error.message).toContain('real calendar date')
+    }
+    // A real leap day and a normal date still pass.
+    expect((await download(base, 'orders', { from: '2028-02-29', to: '2028-03-01' })).status).not.toBe(400)
+    expect((await download(base, 'orders', { from: '2026-08-16', to: '2026-08-18' })).status).toBe(201)
+  }))
+
   it('rejects an unknown dataset in merchant language', async () => await withHarness('growth', async ({ base }) => {
     const response = await fetch(`${base}/exports/customers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: STORE }) })
     expect(response.status).toBe(400)
