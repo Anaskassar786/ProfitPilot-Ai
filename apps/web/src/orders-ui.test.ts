@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrdersEmptyState, PlanLockedFeature } from './orders.js'
 import { initials, insightByFeature, lockedInsightByFeature, orderStatusLabel, paymentStatusLabel } from './orders-model.js'
 import type { OrderInsightsResult } from './orders-model.js'
+import { EXPORT_DATASET_DEFINITIONS } from '@profitpilot/types'
 
 describe('Orders UI regressions', () => {
   it('renders a graceful empty state without invented order rows', () => {
@@ -29,14 +30,23 @@ describe('Orders UI regressions', () => {
     expect(ordersBranch).not.toContain('Add New')
   })
 
-  it('awaits post-sync reloads, reports synced wording, partial load errors, and labels aggregate export honestly', () => {
+  it('awaits post-sync reloads, reports synced wording, and partial load errors', () => {
     const source = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
     expect(source).toContain('await loadData()')
     expect(source).toContain('synced from Shopify')
     expect(source).not.toContain('sync queued through')
     expect(source).toContain("errors.length > 0 ? 'partial' : 'ready'")
     expect(source).toContain('Partial data load')
-    expect(source).toContain("title: 'Daily aggregate export'")
+  })
+
+  // The daily order export is still honest about what it contains, but its
+  // merchant-facing label now lives with the other Data Exports definitions
+  // instead of being hard-coded in App.tsx under developer wording.
+  it('labels the daily order export honestly and without jargon', () => {
+    expect(EXPORT_DATASET_DEFINITIONS.orders.name).toBe('Orders Export')
+    expect(EXPORT_DATASET_DEFINITIONS.orders.description).toBe('Daily order summaries from your Shopify sync.')
+    const source = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('Daily aggregate export')
   })
 })
 

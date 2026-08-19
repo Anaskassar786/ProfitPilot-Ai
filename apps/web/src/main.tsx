@@ -20,6 +20,7 @@ import './store-coach.css'
 import './recommendations.css'
 import './patternai.css'
 import './support.css'
+import './exports.css'
 import './upgrade-overrides.css'
 import './final-polish.css'
 // Loaded last: AI Command Center light-theme surfaces only (dark theme untouched).
