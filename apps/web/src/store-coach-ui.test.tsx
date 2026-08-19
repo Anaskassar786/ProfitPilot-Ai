@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TrendingUp, Trophy } from 'lucide-react'
 import {
+  BadgeRadar,
   BigNumberCard,
   CoachEmptyState,
   CoachErrorState,
@@ -286,6 +287,32 @@ describe('Store Coach components', () => {
     const html = renderToStaticMarkup(createElement(Sparkline, { values: [10, 20, 15, 30, 25] }))
     expect(html).toContain('coach-momentum-wave')
     expect(html).toContain('Weekly momentum wave')
+  })
+  it('renders the badge radar from real per-category counts, not the old empty-dot constellation', () => {
+    const html = renderToStaticMarkup(createElement(BadgeRadar, {
+      categories: [
+        { category: 'STREAK', earned: 2, total: 10 },
+        { category: 'REVENUE', earned: 1, total: 8 },
+        { category: 'GROWTH', earned: 0, total: 10 },
+        { category: 'ENGAGEMENT', earned: 0, total: 12 },
+        { category: 'SPECIAL', earned: 1, total: 10 },
+      ],
+      earnedTotal: 4,
+    }))
+    expect(html).toContain('coach-badge-radar')
+    expect(html).not.toContain('coach-constellation')
+    expect(html).toContain('Streaks')
+    expect(html).toContain('Revenue')
+    expect(html).toContain('Special')
+    expect(html).toContain('2/10')
+    expect(html).toContain('1/8')
+    expect(html).toContain('of 50 earned')
+  })
+  it('renders an honest fallback when the badge catalog has not loaded', () => {
+    const html = renderToStaticMarkup(createElement(BadgeRadar, { categories: [], earnedTotal: 3 }))
+    expect(html).toContain('coach-badge-radar-empty')
+    expect(html).toContain('The badge radar didn’t load this time')
+    expect(html).toContain('3 earned badges are safe')
   })
   it('renders educational empty states with actions', () => {
     const html = renderToStaticMarkup(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first weekly goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))

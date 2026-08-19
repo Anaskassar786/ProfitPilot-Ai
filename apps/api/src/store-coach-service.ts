@@ -536,16 +536,34 @@ export class StoreCoachService {
     return { earned, visible: badgesVisibleForPlan(plan) }
   }
 
-  public async availableAchievements(storeId: StoreId): Promise<Readonly<{ earnedIds: readonly string[]; catalog: readonly { id: string; title: string; description: string; category: string; rarity: string; earned: boolean; earnedAt: number | null }[]; visible: number }>> {
+  public async availableAchievements(storeId: StoreId): Promise<Readonly<{ earnedIds: readonly string[]; catalog: readonly { id: string; title: string; description: string; category: string; rarity: string; earned: boolean; earnedAt: number | null }[]; categories: readonly Readonly<{ category: string; earned: number; total: number }>[]; visible: number }>> {
     const plan = await this.planFor(storeId)
     const earned = await this.deps.achievements.earned(storeId)
     const earnedById = new Map(earned.map((record) => [record.badgeId, record]))
+    const earnedIds = new Set(earned.map((record) => record.badgeId))
     const visible = badgesVisibleForPlan(plan)
     const catalog = BADGE_CATALOG.slice(0, visible).map((badge) => {
       const record = earnedById.get(badge.id)
       return { id: badge.id, title: badge.title, description: badge.description, category: badge.category, rarity: badge.rarity, earned: record !== undefined, earnedAt: record?.earnedAt ?? null }
     })
-    return { earnedIds: earned.map((record) => record.badgeId), catalog, visible }
+    // Per-category earned/total across the FULL 50-badge catalog (not the
+    // plan-capped slice), so the home "badge radar" is a real, aspirational
+    // map of the whole collection — every count comes from BADGE_CATALOG and
+    // the merchant's actual earned set, never a guess.
+    const categoryOrder: string[] = []
+    const byCategory = new Map<string, { earned: number; total: number }>()
+    for (const badge of BADGE_CATALOG) {
+      const entry = byCategory.get(badge.category)
+      if (entry) {
+        entry.total += 1
+        if (earnedIds.has(badge.id)) entry.earned += 1
+      } else {
+        categoryOrder.push(badge.category)
+        byCategory.set(badge.category, { total: 1, earned: earnedIds.has(badge.id) ? 1 : 0 })
+      }
+    }
+    const categories = categoryOrder.map((category) => ({ category, ...byCategory.get(category)! }))
+    return { earnedIds: earned.map((record) => record.badgeId), catalog, categories, visible }
   }
 
   public async streak(storeId: StoreId): Promise<CoachStreak & Readonly<{ todayViewed: boolean }>> {

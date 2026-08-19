@@ -666,6 +666,7 @@
 .coach-partial-banner svg { flex: none; }
 .coach-partial-banner-copy { flex: 1; color: var(--c-text-2); }
 .coach-partial-banner-copy strong { color: var(--c-text); font-weight: 650; }
+.coach-partial-banner-failed { display: block; margin-top: 3px; font-size: 12px; color: var(--c-gold); }
 .coach-section-unavailable { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--c-blue) 35%, transparent); background: var(--c-blue-soft); }
 .coach-section-unavailable.slim { padding: 16px; }
 .coach-section-unavailable-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; flex: none; }
@@ -826,8 +827,24 @@
 
 .coach-momentum-wave { display: flex; flex-direction: column; gap: 6px; }
 .coach-wave-days { display: flex; justify-content: space-between; font-size: 11px; color: var(--c-text-3); padding: 0 4px; }
-.coach-constellation { display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-inner); }
-.coach-constellation small { font-size: 12px; color: var(--c-text-3); }
+.coach-badge-radar { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.coach-badge-radar-chart { position: relative; display: flex; justify-content: center; }
+.coach-badge-radar-svg { width: min(300px, 100%); height: auto; display: block; }
+.coach-badge-radar-ring { fill: none; stroke: var(--c-border-strong); stroke-width: 1; }
+.coach-badge-radar-axis { stroke: var(--c-border); stroke-width: 1; }
+.coach-badge-radar-data { fill: var(--c-purple-soft); stroke: var(--c-purple); stroke-width: 2; stroke-linejoin: round; }
+.coach-badge-radar-label { font-size: 10.5px; font-weight: 650; fill: var(--c-text-3); letter-spacing: 0.02em; }
+.coach-badge-radar-center { position: absolute; left: 50%; top: 46.4%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.coach-badge-radar-center strong { font-size: 22px; font-weight: 800; color: var(--c-text); letter-spacing: -0.03em; }
+.coach-badge-radar-center small { font-size: 11px; color: var(--c-text-3); }
+.coach-badge-radar-legend { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px 16px; margin: 0; padding: 0; }
+.coach-badge-radar-legend li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--c-text-2); }
+.coach-badge-radar-legend i { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+.coach-badge-radar-legend span { flex: 1; }
+.coach-badge-radar-legend b { font-variant-numeric: tabular-nums; color: var(--c-text); }
+.coach-badge-radar-empty { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px dashed var(--c-border-strong); border-radius: 10px; background: var(--c-inner); margin-top: 12px; }
+.coach-badge-radar-empty p { margin: 0; font-size: 12.5px; color: var(--c-text-2); line-height: 1.5; }
+.coach-badge-radar-empty .coach-empty-icon { flex: none; }
 .coach-rhythm-beat { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .coach-beat-row { display: flex; align-items: center; gap: 10px; }
 .coach-beat-day { width: 32px; font-size: 12px; font-weight: 600; color: var(--c-text-2); }
