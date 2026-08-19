@@ -1596,3 +1596,195 @@
 }
 .app-shell.light-mode .recs-kpi-empty-state { color: #64748B; }
 .app-shell.light-mode .recs-usage-limit-message { color: #B91C1C !important; }
+
+/* ------------------------------------------------------------------------- */
+/* KPI redesign (2026-08) — roomier cards, one unique identity per metric.   */
+/* Card anatomy: icon chip + label header, big value, caption, footer visual.*/
+/* ------------------------------------------------------------------------- */
+
+.recs-kpi { position: relative; }
+.recs-kpi-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.recs-kpi-chip {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--chip-color, var(--purple)) 13%, transparent);
+  color: var(--chip-color, var(--purple));
+}
+.recs-kpi-head .recs-kpi-label { font-weight: 750; }
+
+/* Revenue opportunity pending — hero card with a gradient accent edge */
+.recs-kpi-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, var(--green), var(--purple));
+}
+.recs-kpi-hero .recs-kpi-row .recs-kpi-value-stack .recs-kpi-value { font-size: 26px; }
+.recs-kpi-ring-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+.recs-kpi-foot { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
+.recs-kpi-foot-title { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 10.5px; font-weight: 650; }
+.recs-kpi-foot-title svg { color: var(--green); }
+.recs-kpi-share { display: flex; gap: 2px; height: 5px; border-radius: 99px; overflow: hidden; }
+.recs-kpi-share i { display: block; height: 100%; border-radius: 99px; opacity: .85; }
+.recs-kpi-share-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.recs-kpi-share-legend > span { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 9px; }
+.recs-kpi-share-legend i { width: 7px; height: 7px; border-radius: 99px; flex: 0 0 auto; }
+.recs-kpi-share-legend b { font-family: var(--font-mono); font-weight: 700; color: var(--text-secondary); }
+.recs-kpi-share-more { color: var(--text-tertiary); font-size: 9px; }
+
+/* Approved this month — single green identity, weekly letters, month progress */
+.recs-kpi-approved .recs-kpi-row .recs-kpi-value-stack .recs-kpi-value { font-size: 26px; }
+.recs-kpi-impact-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(16, 185, 129, .12);
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.recs-kpi-week .recs-kpi-bars { width: 92px; height: 40px; }
+.recs-kpi-bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; height: 100%; min-width: 0; }
+.recs-kpi-bar-col .bar { width: 100%; min-height: 3px; }
+.recs-kpi-bar-letter { color: var(--text-tertiary); font-size: 8px !important; line-height: 1; }
+.recs-kpi-month { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
+.recs-kpi-month-label { color: var(--text-tertiary); font-size: 8.5px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
+.recs-kpi-month-track { flex: 1; height: 6px; border-radius: 99px; background: var(--border-soft); overflow: hidden; }
+.recs-kpi-month-track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #059669, var(--green)); }
+.recs-kpi-month-caption { color: var(--text-tertiary); font-size: 9px; white-space: nowrap; }
+
+/* Approval rate — breathing room, delta pill, fill, floating marker, target */
+.recs-kpi-rate-stack { display: flex; align-items: center; gap: 8px; }
+.recs-kpi-rate-caption { display: block; margin-top: 1px; }
+.recs-kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.recs-kpi-delta.up { color: var(--green); background: rgba(16, 185, 129, .12); }
+.recs-kpi-delta.down { color: var(--amber); background: rgba(245, 158, 11, .13); }
+.recs-kpi-progress { margin-top: 12px; }
+.recs-kpi-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #059669, #34D399);
+  opacity: .9;
+}
+.recs-kpi-progress-marker {
+  position: absolute;
+  top: -2.5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 99px;
+  background: var(--card);
+  border: 2.5px solid var(--green);
+  transform: translateX(-50%);
+}
+.recs-kpi-progress-marker::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 99px;
+  background: var(--green);
+}
+.recs-kpi-target {
+  position: absolute;
+  top: -16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--purple);
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-weight: 800;
+  transform: translateX(-50%);
+}
+.recs-kpi-target i { display: block; width: 2px; height: 6px; border-radius: 1px; background: var(--purple); }
+
+/* Avg time to decide — threshold legend under the gauge */
+.recs-kpi-speedo-legend { display: flex; gap: 10px; margin-top: 1px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
+.recs-kpi-speedo-legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--text-tertiary); font-size: 9px; }
+.recs-kpi-speedo-legend i { width: 7px; height: 7px; border-radius: 99px; }
+.recs-kpi-speedo-legend i.fast { background: var(--green); }
+.recs-kpi-speedo-legend i.mid { background: var(--amber); }
+.recs-kpi-speedo-legend i.slow { background: var(--red); }
+
+/* Activity timeline — analytics-style area chart */
+.recs-trend-chart { display: flex; flex-direction: column; gap: 4px; }
+.recs-trend-svg { width: 100%; height: auto; display: block; }
+.recs-trend-grid { stroke: rgba(120, 133, 157, .2); stroke-width: 1; stroke-dasharray: 3 3; }
+.recs-trend-area { fill: url(#recs-trend-area); }
+.recs-trend-line { stroke: var(--green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.recs-trend-dot.approved { fill: var(--green); stroke: var(--card); stroke-width: 1.5; }
+.recs-trend-dot.generated { fill: var(--purple); stroke: var(--card); stroke-width: 1.5; }
+.recs-trend-xlabels { display: flex; justify-content: space-between; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 8.5px; }
+.recs-trend-conversion {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgba(16, 185, 129, .12);
+}
+.recs-trend-conversion strong { color: var(--green); font-size: 10px; }
+
+/* Light mode */
+.app-shell.light-mode .recs-kpi-chip { background: color-mix(in srgb, var(--chip-color, var(--purple)) 10%, #FFFFFF); }
+.app-shell.light-mode .recs-kpi-hero::before { background: linear-gradient(90deg, #10B981, #9B7CF6); }
+.app-shell.light-mode .recs-kpi-ring-count { color: #0F172A; }
+.app-shell.light-mode .recs-kpi-foot { border-top-color: #F1F5F9; }
+.app-shell.light-mode .recs-kpi-foot-title { color: #475569; }
+.app-shell.light-mode .recs-kpi-share i { opacity: .9; }
+.app-shell.light-mode .recs-kpi-share-legend > span { color: #64748B; }
+.app-shell.light-mode .recs-kpi-share-legend b { color: #475569; }
+.app-shell.light-mode .recs-kpi-impact-pill { background: #ECFDF5; color: #059669; }
+.app-shell.light-mode .recs-kpi-bar-letter { color: #94A3B8; }
+.app-shell.light-mode .recs-kpi-month { border-top-color: #F1F5F9; }
+.app-shell.light-mode .recs-kpi-month-label,
+.app-shell.light-mode .recs-kpi-month-caption { color: #94A3B8; }
+.app-shell.light-mode .recs-kpi-month-track { background: #F1F5F9; }
+.app-shell.light-mode .recs-kpi-month-track i { background: linear-gradient(90deg, #059669, #10B981); }
+.app-shell.light-mode .recs-kpi-delta.up { background: #ECFDF5; color: #059669; }
+.app-shell.light-mode .recs-kpi-delta.down { background: #FEF3C7; color: #B45309; }
+.app-shell.light-mode .recs-kpi-progress-marker { background: #FFFFFF; border-color: #10B981; }
+.app-shell.light-mode .recs-kpi-progress-marker::before { background: #059669; }
+.app-shell.light-mode .recs-kpi-target { color: #7C3AED; }
+.app-shell.light-mode .recs-kpi-target i { background: #7C3AED; }
+.app-shell.light-mode .recs-kpi-speedo-legend { border-top-color: #F1F5F9; }
+.app-shell.light-mode .recs-kpi-speedo-legend span { color: #64748B; }
+.app-shell.light-mode .recs-trend-grid { stroke: #E2E8F0; }
+.app-shell.light-mode .recs-trend-line { stroke: #10B981; }
+.app-shell.light-mode .recs-trend-dot.approved { fill: #10B981; stroke: #FFFFFF; }
+.app-shell.light-mode .recs-trend-dot.generated { fill: #7C3AED; stroke: #FFFFFF; }
+.app-shell.light-mode .recs-trend-xlabels { color: #94A3B8; }
+.app-shell.light-mode .recs-trend-conversion { background: #ECFDF5; }
+.app-shell.light-mode .recs-trend-conversion strong { color: #059669; }
