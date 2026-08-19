@@ -6,7 +6,7 @@ import { InMemoryAnalyticsRepository } from '@profitpilot/db'
 import type { StoreId } from '@profitpilot/types'
 import type { AiGeneration, PriorityCandidate } from '@profitpilot/ai'
 import { createApi } from './app.js'
-import { StoreCoachService } from './store-coach-service.js'
+import { huddleGreetingForHour, StoreCoachService } from './store-coach-service.js'
 import type { CoachAiProvider } from './store-coach-service.js'
 import type {
   AchievementRepository,
@@ -236,6 +236,15 @@ const FAKE_AI: CoachAiProvider = {
     return generation(text)
   },
 }
+
+describe('Store Coach huddle salutations', () => {
+  it('uses the merchant local time instead of a hard-coded morning greeting', () => {
+    expect(huddleGreetingForHour(8)).toBe('Good morning.')
+    expect(huddleGreetingForHour(14)).toBe('Good afternoon.')
+    expect(huddleGreetingForHour(19)).toBe('Good evening.')
+    expect(huddleGreetingForHour(23)).toBe('Burning the midnight oil.')
+  })
+})
 
 function generation(text: string): AiGeneration {
   return { text, model: 'nvidia/nemotron-3-ultra:free', keyIndex: 0, usage: { promptTokens: 120, completionTokens: 60, totalTokens: 180 }, attempts: 1 }

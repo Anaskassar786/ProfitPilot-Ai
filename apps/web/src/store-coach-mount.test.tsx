@@ -118,7 +118,7 @@ describe('Store Coach app mount (PR #48)', () => {
     expect(hero?.textContent ?? '').toContain('Just getting started')
     expect(hero?.textContent ?? '').toContain('Your personal store growth coach')
     const actions = [...(hero?.querySelectorAll('button') ?? [])].map((button) => button.textContent ?? '')
-    expect(actions.some((label) => label.includes('Start Morning Huddle'))).toBe(true)
+    expect(actions.some((label) => /Start (Morning|Afternoon|Evening|Night) Huddle/.test(label))).toBe(true)
     expect(actions.some((label) => label.includes('Ask Coach'))).toBe(false)
   })
   it('shows the plan card with factual inclusions and Upgrade Plan wording', async () => {

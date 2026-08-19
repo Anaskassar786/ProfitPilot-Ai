@@ -332,6 +332,16 @@ export function greetingForDaypart(part: CoachDaypart): string {
   }
 }
 
+/** Label the huddle action for the time the merchant is actually viewing it. */
+export function huddleActionLabelForDaypart(part: CoachDaypart): string {
+  switch (part) {
+    case 'morning': return 'Start Morning Huddle'
+    case 'afternoon': return 'Start Afternoon Huddle'
+    case 'evening': return 'Start Evening Huddle'
+    case 'night': return 'Start Night Huddle'
+  }
+}
+
 /**
  * Friendly merchant name derived from the real Shopify shop domain
  * (e.g. "anas-apparel.myshopify.com" → "Anas Apparel"). Falls back to null —

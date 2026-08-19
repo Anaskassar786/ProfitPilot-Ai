@@ -140,6 +140,14 @@ type DayRow = Readonly<{ day: string; grossRevenue: number; orderCount: number; 
 
 const DAY_MS = 86_400_000
 
+/** A huddle greeting is based on the merchant's local hour, never the server clock. */
+export function huddleGreetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Good morning.'
+  if (hour >= 12 && hour < 17) return 'Good afternoon.'
+  if (hour >= 17 && hour < 22) return 'Good evening.'
+  return 'Burning the midnight oil.'
+}
+
 export class StoreCoachService {
   private readonly deps: StoreCoachServiceDependencies
   private readonly now: () => Date
@@ -261,7 +269,12 @@ export class StoreCoachService {
   }
 
   public async generateHuddle(storeId: StoreId, force = false): Promise<HuddleView> {
-    const [plan, day] = await Promise.all([this.planFor(storeId), this.deps.merchantDay(storeId, this.now())])
+    const now = this.now()
+    const [plan, day, hour] = await Promise.all([
+      this.planFor(storeId),
+      this.deps.merchantDay(storeId, now),
+      this.deps.merchantHour(storeId, now),
+    ])
     if (!force) {
       const existing = await this.deps.huddles.getByDate(storeId, day)
       if (existing) return { id: existing.id, huddleDate: existing.huddleDate, content: existing.content, viewed: existing.viewedAt !== null, createdAt: existing.createdAt, plan, voiceAvailable: await this.voiceAvailable(storeId, plan) }
@@ -279,7 +292,7 @@ export class StoreCoachService {
     } catch {
       generation = {
         text: JSON.stringify({
-          greeting: `Good morning.`,
+          greeting: huddleGreetingForHour(hour),
           yesterdaySnapshot: `Yesterday generated ${evidence.yesterdayOrders} orders and $${evidence.yesterdayRevenue.toFixed(2)} in revenue.`,
           todayPreview: `Review your top priorities and keep store operations steady.`,
           keyInsight: evidence.topSignal,
@@ -292,7 +305,9 @@ export class StoreCoachService {
       }
     }
     const parsed = parseHuddleJson(generation.text, evidence)
-    const content = { ...parsed, evidence: { yesterdayRevenue: evidence.yesterdayRevenue, yesterdayOrders: evidence.yesterdayOrders, yesterdayAov: evidence.yesterdayAov, trailing7dRevenue: evidence.trailing7dRevenue, trailing7dOrders: evidence.trailing7dOrders } }
+    // The model is free to personalize the briefing, but time-aware salutations
+    // must stay accurate even if it returns a stale "Good morning" template.
+    const content = { ...parsed, greeting: huddleGreetingForHour(hour), evidence: { yesterdayRevenue: evidence.yesterdayRevenue, yesterdayOrders: evidence.yesterdayOrders, yesterdayAov: evidence.yesterdayAov, trailing7dRevenue: evidence.trailing7dRevenue, trailing7dOrders: evidence.trailing7dOrders } }
     const huddle = await this.deps.huddles.upsert(storeId, day, content)
     await this.deps.usage.incrementHuddle(storeId, day)
     return { id: huddle.id, huddleDate: huddle.huddleDate, content: huddle.content, viewed: huddle.viewedAt !== null, createdAt: huddle.createdAt, plan, voiceAvailable: await this.voiceAvailable(storeId, plan) }

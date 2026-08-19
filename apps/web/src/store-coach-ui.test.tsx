@@ -27,6 +27,7 @@ import {
   formatCoachDate,
   formatCoachDateRange,
   greetingForDaypart,
+  huddleActionLabelForDaypart,
   heatmapPatterns,
   huddleTimeLabel,
   merchantDisplayName,
@@ -150,6 +151,8 @@ describe('Personalized hero greeting (FIX 2)', () => {
     expect(greetingForDaypart('afternoon')).toBe('Good afternoon')
     expect(greetingForDaypart('evening')).toBe('Good evening')
     expect(greetingForDaypart('night')).toBe('Burning the midnight oil')
+    expect(huddleActionLabelForDaypart('afternoon')).toBe('Start Afternoon Huddle')
+    expect(huddleActionLabelForDaypart('night')).toBe('Start Night Huddle')
   })
   it('derives the merchant name from the real shop domain only', () => {
     expect(merchantDisplayName('anas-apparel.myshopify.com')).toBe('Anas Apparel')
