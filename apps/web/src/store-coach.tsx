@@ -73,6 +73,7 @@ import {
 import type {
   CoachAchievement,
   CoachBadgeCatalogEntry,
+  CoachBadgeCategoryStat,
   CoachGoal,
   CoachHeatmapView,
   CoachHuddle,
@@ -152,6 +153,7 @@ export type CoachData = Readonly<{
   heatmap: CoachHeatmapView | null
   achievements: readonly CoachAchievement[]
   badgeCatalog: readonly CoachBadgeCatalogEntry[]
+  badgeCategoryStats: readonly CoachBadgeCategoryStat[]
   streak: CoachStreakView | null
   review: CoachReviewView | null
   preferences: CoachPreferencesView | null
@@ -170,6 +172,7 @@ const EMPTY_COACH_DATA: CoachData = {
   heatmap: null,
   achievements: [],
   badgeCatalog: [],
+  badgeCategoryStats: [],
   streak: null,
   review: null,
   preferences: null,
@@ -177,12 +180,35 @@ const EMPTY_COACH_DATA: CoachData = {
   health: null,
 }
 
-export function useCoachData(storeId: string | null): readonly [CoachData, CoachLoadState, string | null, () => void] {
+/**
+ * Human labels for the twelve cards the coach home fetches in parallel, in the
+ * exact order of the `Promise.allSettled` calls in `useCoachData`. Used to name
+ * the specific cards that failed when the page enters the `partial` state, so
+ * the banner can say *what* didn't load instead of leaving the merchant to
+ * guess.
+ */
+export const COACH_CARD_LABELS = [
+  'Today’s briefing',
+  'Today’s priorities',
+  'Your goals',
+  'Revenue trend',
+  'Activity heatmap',
+  'Earned badges',
+  'Badge catalog',
+  'Daily streak',
+  'Weekly review',
+  'Coach preferences',
+  'Plan usage',
+  'Health score',
+] as const
+
+export function useCoachData(storeId: string | null): readonly [CoachData, CoachLoadState, string | null, () => void, readonly string[]] {
   const [data, setData] = useState<CoachData>(EMPTY_COACH_DATA)
   const [loadState, setLoadState] = useState<CoachLoadState>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [failedCards, setFailedCards] = useState<readonly string[]>([])
   const load = useCallback(async () => {
-    if (!storeId) { setData(EMPTY_COACH_DATA); setLoadState('ready'); setError(null); return }
+    if (!storeId) { setData(EMPTY_COACH_DATA); setLoadState('ready'); setError(null); setFailedCards([]); return }
     setLoadState('loading')
     const [huddle, priorities, goals, summary, heatmap, achievements, badges, streak, review, preferences, usage, health] = await Promise.allSettled([
       fetchCoachHuddle(storeId),
@@ -208,6 +234,9 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       fetchCoachHealthScore(storeId),
     ])
     const catalog = badges.status === 'fulfilled' && Array.isArray(badges.value.catalog) ? badges.value.catalog : []
+    const badgeCategoryStats: readonly CoachBadgeCategoryStat[] = badges.status === 'fulfilled' && Array.isArray(badges.value.categories)
+      ? badges.value.categories.filter((entry): entry is CoachBadgeCategoryStat => typeof entry === 'object' && entry !== null && typeof (entry as CoachBadgeCategoryStat).category === 'string' && typeof (entry as CoachBadgeCategoryStat).total === 'number')
+      : []
     const next: CoachData = {
       huddle: huddle.status === 'fulfilled' ? huddle.value : null,
       priorities: priorities.status === 'fulfilled' ? priorities.value : null,
@@ -216,6 +245,7 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       heatmap: heatmap.status === 'fulfilled' ? heatmap.value : null,
       achievements: achievements.status === 'fulfilled' ? achievements.value.earned : [],
       badgeCatalog: catalog,
+      badgeCategoryStats,
       streak: streak.status === 'fulfilled' ? streak.value : null,
       review: review.status === 'fulfilled' ? review.value : null,
       preferences: preferences.status === 'fulfilled' ? preferences.value : null,
@@ -223,17 +253,19 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       health: health.status === 'fulfilled' ? { score: health.value.score, label: health.value.label, tone: health.value.tone } : null,
     }
     setData(next)
-    const failed = [huddle, priorities, goals, summary, heatmap, achievements, badges, streak, review, preferences, usage, health].filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    if (failed.length === 0) { setLoadState('ready'); setError(null) }
+    const settled = [huddle, priorities, goals, summary, heatmap, achievements, badges, streak, review, preferences, usage, health] as const
+    const failed = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failed.length === 0) { setLoadState('ready'); setError(null); setFailedCards([]) }
     else {
       const first = failed[0]!.reason
       const message = first instanceof ApiClientError && first.status === 402 ? 'Store Coach is locked on your current plan. Upgrade Plan to keep coaching.' : first instanceof Error ? first.message : 'Some Store Coach data could not be loaded.'
       setLoadState(failed.length >= 10 ? 'error' : 'partial')
       setError(message)
+      setFailedCards(COACH_CARD_LABELS.filter((_, index) => settled[index]!.status === 'rejected'))
     }
   }, [storeId])
   useEffect(() => { void load() }, [load])
-  return [data, loadState, error, load]
+  return [data, loadState, error, load, failedCards]
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +274,7 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
 
 export function StoreCoachWorkspace({ context, onToast, onNavigateBilling }: { context: WorkspaceContext; onToast: CoachToast; onNavigateBilling: () => void }) {
   const [view, navigate] = useCoachView()
-  const [data, loadState, error, reload] = useCoachData(context.storeId)
+  const [data, loadState, error, reload, failedCards] = useCoachData(context.storeId)
   const plan: CoachPlan = data.usage?.plan ?? data.preferences?.plan ?? data.huddle?.plan ?? 'trial'
   const [onboardingOpen, setOnboardingOpen] = useState(false)
 
@@ -271,6 +303,7 @@ export function StoreCoachWorkspace({ context, onToast, onNavigateBilling }: { c
           context={context}
           data={data}
           loadState={loadState}
+          failedCards={failedCards}
           plan={plan}
           onToast={onToast}
           onNavigate={navigate}
@@ -387,11 +420,12 @@ export function CoachHealthBadge({ score, label, tone }: { score: number | null;
 // Main page
 // ---------------------------------------------------------------------------
 
-function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, onNavigateBilling, onReload, onOpenOnboarding }: {
+function CoachMain({ view, context, data, loadState, failedCards, plan, onToast, onNavigate, onNavigateBilling, onReload, onOpenOnboarding }: {
   view: CoachView
   context: WorkspaceContext
   data: CoachData
   loadState: CoachLoadState
+  failedCards: readonly string[]
   plan: CoachPlan
   onToast: CoachToast
   onNavigate: (view: CoachView) => void
@@ -413,7 +447,7 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
 
   return (
     <div className="coach-main">
-      {loadState === 'partial' && <CoachPartialBanner onRetry={onReload} />}
+      {loadState === 'partial' && <CoachPartialBanner failed={failedCards} onRetry={onReload} />}
       <section className="coach-sections">
         <TodayBriefingCard storeId={context.storeId!} huddle={data.huddle} plan={plan} onToast={onToast} onReload={onReload} onOpenTour={onOpenOnboarding} />
         <CoachValueStrip data={data} onFocusGoals={() => onNavigate('goals')} onFocusDays={() => onNavigate('progress')} />
@@ -421,7 +455,7 @@ function CoachMain({ view, context, data, loadState, plan, onToast, onNavigate, 
         <GoalSection storeId={context.storeId!} goals={data.goals} plan={plan} onToast={onToast} onNavigate={() => onNavigate('goals')} onNavigateBilling={onNavigateBilling} />
         <ProgressDashboard summary={data.summary} plan={plan} onNavigate={() => onNavigate('progress')} onNavigateBilling={onNavigateBilling} onRetry={onReload} />
         <BestDaysSection heatmap={data.heatmap} onNavigate={() => onNavigate('progress')} onRetry={onReload} />
-        <AchievementsSection achievements={data.achievements} badgeCatalog={data.badgeCatalog} streak={data.streak} plan={plan} onNavigate={() => onNavigate('achievements')} onViewHuddle={() => { void onHuddleClick(context.storeId!, onToast, onReload) }} />
+        <AchievementsSection achievements={data.achievements} badgeCatalog={data.badgeCatalog} badgeCategoryStats={data.badgeCategoryStats} streak={data.streak} plan={plan} onNavigate={() => onNavigate('achievements')} onViewHuddle={() => { void onHuddleClick(context.storeId!, onToast, onReload) }} />
         <CoachStyleSection storeId={context.storeId!} preferences={data.preferences} plan={plan} onToast={onToast} onReload={onReload} onNavigateBilling={onNavigateBilling} />
         {data.review && context.storeId && <WeeklyReviewCard storeId={context.storeId} review={data.review} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onSetGoal={() => onNavigate('goals')} />}
         <CoachPlanCard plan={plan} onNavigateBilling={onNavigateBilling} />
@@ -876,18 +910,93 @@ export function MomentumWave({ values }: { values: readonly number[] }) {
   )
 }
 
-export function AchievementConstellation({ earned, total }: { earned: number; total: number }) {
-  const stars = Array.from({ length: Math.max(total, 5) }, (_, i) => i < earned)
+const BADGE_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  STREAK: 'Streaks',
+  REVENUE: 'Revenue',
+  GROWTH: 'Growth',
+  ENGAGEMENT: 'Engagement',
+  SPECIAL: 'Special',
+}
+
+const BADGE_CATEGORY_TONES: Readonly<Record<string, string>> = {
+  STREAK: 'var(--c-purple)',
+  REVENUE: 'var(--c-gold)',
+  GROWTH: 'var(--c-green)',
+  ENGAGEMENT: 'var(--c-blue)',
+  SPECIAL: 'var(--c-orange)',
+}
+
+const BADGE_RADAR_RINGS = [0.25, 0.5, 0.75, 1] as const
+
+function badgeCategoryLabel(category: string): string {
+  return BADGE_CATEGORY_LABELS[category] ?? category.split('_').map((word) => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')
+}
+
+function badgeRadarPoint(index: number, count: number, fraction: number, cx: number, cy: number, radius: number): readonly [number, number] {
+  const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count
+  return [cx + radius * fraction * Math.cos(angle), cy + radius * fraction * Math.sin(angle)]
+}
+
+function badgeRadarPolygon(count: number, fraction: number, cx: number, cy: number, radius: number): string {
+  return Array.from({ length: count }, (_, index) => {
+    const [x, y] = badgeRadarPoint(index, count, fraction, cx, cy, radius)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+}
+
+/**
+ * Badge Radar — the replacement for the old five-dot constellation. A real
+ * spider/radar chart: one axis per badge category, the filled web is the
+ * merchant's actual earned-badges-per-category ratio (live catalog counts),
+ * and the center reads the true earned/total. Zero axes or a missing catalog
+ * render an honest note, never an invented shape.
+ */
+export function BadgeRadar({ categories, earnedTotal }: { categories: readonly CoachBadgeCategoryStat[]; earnedTotal: number }) {
+  const cx = 150
+  const cy = 116
+  const radius = 84
+  const labelRadius = 112
+  const count = categories.length
+  const totalBadges = categories.reduce((sum, entry) => sum + entry.total, 0)
+  if (count < 3) {
+    return (
+      <div className="coach-badge-radar-empty" role="status">
+        <span className="coach-empty-icon"><Trophy size={18} /></span>
+        <p><strong>The badge radar didn’t load this time.</strong> {earnedTotal > 0 ? `Your ${earnedTotal} earned badge${earnedTotal === 1 ? '' : 's'} are safe — ` : ''}retry reloads the live category counts. Nothing here is invented.</p>
+      </div>
+    )
+  }
+  const dataPoints = categories.map((entry, index) => badgeRadarPoint(index, count, entry.total > 0 ? Math.min(entry.earned / entry.total, 1) : 0, cx, cy, radius))
+  const dataPolygon = dataPoints.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
   return (
-    <div className="coach-constellation" role="img" aria-label={`${earned} of ${total} achievements earned`}>
-      <svg viewBox="0 0 200 80" width="100%" height="80">
-        {stars.map((isEarned, i) => {
-          const x = 20 + i * 32
-          const y = 40 + Math.sin(i * 1.2) * 18
-          return <g key={i}><circle cx={x} cy={y} r={isEarned ? 7 : 5} fill={isEarned ? 'var(--c-gold)' : 'var(--c-card-3)'} stroke={isEarned ? 'var(--c-gold)' : 'var(--c-border-strong)'} strokeWidth="1.5" />{i < stars.length - 1 && <line x1={x} y1={y} x2={20 + (i+1)*32} y2={40 + Math.sin((i+1)*1.2)*18} stroke="var(--c-border-strong)" strokeWidth="1" strokeDasharray={isEarned ? '0' : '3 3'} />}</g>
-        })}
-      </svg>
-      <small>Earned: {earned} stars · Next: {Math.max(total-earned,0)} to unlock</small>
+    <div className="coach-badge-radar">
+      <div className="coach-badge-radar-chart">
+        <svg viewBox="0 0 300 250" className="coach-badge-radar-svg" role="img" aria-label={`Badge radar: ${earnedTotal} of ${totalBadges} badges earned`}>
+          {BADGE_RADAR_RINGS.map((ring) => <polygon key={ring} points={badgeRadarPolygon(count, ring, cx, cy, radius)} className="coach-badge-radar-ring" />)}
+          {Array.from({ length: count }, (_, index) => {
+            const [x, y] = badgeRadarPoint(index, count, 1, cx, cy, radius)
+            return <line key={index} x1={cx} y1={cy} x2={x} y2={y} className="coach-badge-radar-axis" />
+          })}
+          <polygon points={dataPolygon} className="coach-badge-radar-data" />
+          {dataPoints.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={3.2} fill={BADGE_CATEGORY_TONES[categories[index]!.category] ?? 'var(--c-purple)'} stroke="var(--c-card)" strokeWidth="1" />)}
+          {categories.map((entry, index) => {
+            const [x, y] = badgeRadarPoint(index, count, 1, cx, cy, labelRadius)
+            const anchor = x > cx + 8 ? 'start' : x < cx - 8 ? 'end' : 'middle'
+            return <text key={entry.category} x={x} y={y + 4} textAnchor={anchor} className="coach-badge-radar-label">{badgeCategoryLabel(entry.category)}</text>
+          })}
+        </svg>
+        <span className="coach-badge-radar-center"><strong>{earnedTotal}</strong><small>of {totalBadges} earned</small></span>
+      </div>
+      <ul className="coach-badge-radar-legend">
+        {categories.map((entry) => (
+          <li key={entry.category}>
+            <i style={{ background: BADGE_CATEGORY_TONES[entry.category] ?? 'var(--c-purple)' }} />
+            <span>{badgeCategoryLabel(entry.category)}</span>
+            <b>{entry.earned}/{entry.total}</b>
+          </li>
+        ))}
+      </ul>
+      <p className="coach-chart-note">Radar maps real earned badges across the full 50-badge catalog — every axis is a live count, never a guess.</p>
     </div>
   )
 }
@@ -1112,7 +1221,7 @@ function InsightChip({ icon: Icon, tone, text }: { icon: LucideIcon; tone: strin
 // 6. Achievements (FIX 7 — gamified, but only real events earn badges)
 // ---------------------------------------------------------------------------
 
-function AchievementsSection({ achievements, badgeCatalog, streak, plan, onNavigate, onViewHuddle }: { achievements: readonly CoachAchievement[]; badgeCatalog: readonly CoachBadgeCatalogEntry[]; streak: CoachStreakView | null; plan: CoachPlan; onNavigate: () => void; onViewHuddle: () => void }) {
+function AchievementsSection({ achievements, badgeCatalog, badgeCategoryStats, streak, plan, onNavigate, onViewHuddle }: { achievements: readonly CoachAchievement[]; badgeCatalog: readonly CoachBadgeCatalogEntry[]; badgeCategoryStats: readonly CoachBadgeCategoryStat[]; streak: CoachStreakView | null; plan: CoachPlan; onNavigate: () => void; onViewHuddle: () => void }) {
   const recent = achievements.slice(0, 3)
   const visibleCap = COACH_LIMITS[plan].badgesVisible as number
   const streakDays = streak?.currentStreak ?? 0
@@ -1199,7 +1308,7 @@ function AchievementsSection({ achievements, badgeCatalog, streak, plan, onNavig
           ))}
         </div>
       )}
-      <AchievementConstellation earned={achievements.length} total={visibleCap} />
+      <BadgeRadar categories={badgeCategoryStats} earnedTotal={achievements.length} />
       <CoachProgressionPath currentStep={Math.min(streakDays,5)} totalSteps={6} labels={['Day 1','Day 3','Day 7','Day 30','Day 100','Champion']} />
       <div className="coach-badge-progress">
         <span>{achievements.length} of {visibleCap} badges visible on your plan earned</span>
@@ -1898,12 +2007,13 @@ export function CoachErrorState({ error, onRetry, onNavigateBilling }: { error: 
  * section quietly rendered three blank shimmer boxes forever. This banner
  * names what happened and offers a real retry that re-runs every coach fetch.
  */
-export function CoachPartialBanner({ onRetry }: { onRetry: () => void }) {
+export function CoachPartialBanner({ failed, onRetry }: { failed: readonly string[]; onRetry: () => void }) {
   return (
     <div className="coach-partial-banner" role="status">
       <AlertCircle size={15} />
       <span className="coach-partial-banner-copy">
         <strong>A few cards couldn’t load this time</strong> — everything else on this page is live from your real store.
+        {failed.length > 0 && <span className="coach-partial-banner-failed">Didn’t load: {failed.join(' · ')}</span>}
       </span>
       <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Retry</button>
     </div>

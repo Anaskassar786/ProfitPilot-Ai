@@ -517,3 +517,26 @@ describe('Store Coach weekly review, preferences, onboarding', () => {
     expect(health.status).toBe(200)
   }))
 })
+
+describe('Store Coach badge radar categories', () => {
+  it('reports real per-category earned/total counts across the full 50-badge catalog', async () => {
+    const deps = makeDeps()
+    await deps.achievements.award(STORE, 'FIRST_HUDDLE', {}) // STREAK
+    await deps.achievements.award(STORE, 'FIRST_100_DAY', {}) // REVENUE
+    await deps.achievements.award(STORE, '10_PERCENT_GROWTH', {}) // GROWTH
+    const service = new StoreCoachService(deps)
+    await withServer(service, async (base) => {
+      const result = await apiCall(base, 'GET', `/store-coach/achievements/available?storeId=${STORE}`)
+      expect(result.status).toBe(200)
+      const data = result.json.data as { categories: readonly { category: string; earned: number; total: number }[] }
+      expect(data.categories).toHaveLength(5)
+      const byCategory = new Map(data.categories.map((entry) => [entry.category, entry]))
+      expect(byCategory.get('STREAK')).toMatchObject({ earned: 1, total: 10 })
+      expect(byCategory.get('REVENUE')).toMatchObject({ earned: 1, total: 8 })
+      expect(byCategory.get('GROWTH')).toMatchObject({ earned: 1, total: 10 })
+      expect(byCategory.get('ENGAGEMENT')).toMatchObject({ earned: 0, total: 12 })
+      expect(byCategory.get('SPECIAL')).toMatchObject({ earned: 0, total: 10 })
+      expect(data.categories.reduce((sum, entry) => sum + entry.total, 0)).toBe(50)
+    })
+  })
+})

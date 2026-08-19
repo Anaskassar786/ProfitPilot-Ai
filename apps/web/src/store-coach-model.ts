@@ -97,6 +97,13 @@ export type CoachBadgeCatalogEntry = Readonly<{
   earnedAt: number | null
 }>
 
+/** Per-category earned/total badge counts that power the home "Badge Radar". */
+export type CoachBadgeCategoryStat = Readonly<{
+  category: string
+  earned: number
+  total: number
+}>
+
 export type CoachStreakView = Readonly<{
   currentStreak: number
   longestStreak: number
