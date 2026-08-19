@@ -43,29 +43,27 @@
 .recs-kpi-row .recs-kpi-value-stack .recs-kpi-value { font-size: 22px; }
 .recs-kpi-row .recs-kpi-visual { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 
-/* Radial ring (Revenue Pending, Monthly Usage) */
+/* Radial ring (Revenue Pending, Monthly Usage) — thin, single accent */
 .recs-kpi-radial { position: relative; }
 .recs-kpi-radial-track { stroke: var(--border-soft); }
-.recs-kpi-radial-fill { stroke-linecap: round; transition: stroke-dasharray 600ms ease; }
+.recs-kpi-radial-fill { stroke: var(--green); stroke-linecap: butt; transition: stroke-dasharray 600ms cubic-bezier(.4, 0, .2, 1); }
 
-/* Mini bar chart (Approved This Month) */
-.recs-kpi-bars { display: flex; align-items: flex-end; gap: 3px; height: 44px; width: 84px; padding: 2px; }
-.recs-kpi-bars .bar { flex: 1; background: var(--border); border-radius: 2px 2px 0 0; min-height: 3px; transition: background 220ms ease; }
-.recs-kpi-bars .bar.filled { background: linear-gradient(180deg, #34D399, #059669); }
-.recs-kpi-bars .bar:hover { background: var(--purple); }
+/* Mini bar chart (Approved This Month) — flat bars on a hairline baseline */
+.recs-kpi-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; width: 84px; padding: 2px 0 0; }
+.recs-kpi-bars .bar { flex: 1; background: var(--border-soft); border-radius: 1.5px; min-height: 2px; transition: background 180ms ease; }
+.recs-kpi-bars .bar.filled { background: var(--green); }
 .recs-kpi-bars-label { display: flex; justify-content: space-between; width: 84px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 8.5px; margin-top: 3px; }
 
-/* Progress bar with zones + marker (Approval Rate) */
+/* Scale bar with segments + marker (Approval Rate) — neutral scale, one accent */
 .recs-kpi-progress { position: relative; width: 100%; margin-top: 2px; }
-.recs-kpi-progress-track { position: relative; display: flex; height: 8px; border-radius: 4px; overflow: visible; background: var(--border-soft); }
-.recs-kpi-progress-empty .recs-kpi-progress-track { background: var(--border-soft); }
-.recs-kpi-progress-zone { display: block; height: 100%; }
-.recs-kpi-progress-zone.low { flex: 0 0 40%; background: rgba(239, 68, 68, .55); border-radius: 4px 0 0 4px; }
-.recs-kpi-progress-zone.mid { flex: 0 0 30%; background: rgba(245, 158, 11, .6); }
-.recs-kpi-progress-zone.good { flex: 1; background: rgba(16, 185, 129, .6); border-radius: 0 4px 4px 0; }
-.recs-kpi-progress-marker { position: absolute; top: -3px; width: 3px; height: 14px; background: var(--text); border-radius: 2px; transform: translateX(-50%); }
-.recs-kpi-progress-marker::before { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 7px; height: 7px; border-radius: 99px; background: var(--text); }
-.recs-kpi-progress-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; }
+.recs-kpi-progress-track { position: relative; display: flex; gap: 2px; height: 4px; border-radius: 2px; overflow: visible; background: transparent; }
+.recs-kpi-progress-empty .recs-kpi-progress-track { background: transparent; }
+.recs-kpi-progress-zone { display: block; height: 100%; border-radius: 2px; background: var(--border-soft); }
+.recs-kpi-progress-zone.low { flex: 0 0 calc(40% - 2px); }
+.recs-kpi-progress-zone.mid { flex: 0 0 calc(30% - 2px); }
+.recs-kpi-progress-zone.good { flex: 1; }
+.recs-kpi-progress-marker { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--text); border-radius: 1px; transform: translateX(-50%); }
+.recs-kpi-progress-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; }
 
 /* Speedometer (Avg Time to Decide) */
 .recs-kpi-speedo { width: 96px; height: 56px; display: block; }
@@ -971,12 +969,20 @@
 .app-shell.light-mode .recs-kpi-bars .bar { background: #F1F5F9; }
 .app-shell.light-mode .recs-kpi-bars .bar.filled { background: linear-gradient(180deg, #34D399, #059669); }
 .app-shell.light-mode .recs-kpi-bars-label { color: #94A3B8; }
-.app-shell.light-mode .recs-kpi-progress-track { background: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-progress-zone.low { background: #FCA5A5; }
-.app-shell.light-mode .recs-kpi-progress-zone.mid { background: #FCD34D; }
-.app-shell.light-mode .recs-kpi-progress-zone.good { background: #6EE7B7; }
-.app-shell.light-mode .recs-kpi-progress-marker { background: #0F172A; }
-.app-shell.light-mode .recs-kpi-progress-marker::before { background: #0F172A; }
+.app-shell.light-mode .recs-kpi-progress-track { background: transparent; }
+.app-shell.light-mode .recs-kpi-progress-zone.low,
+.app-shell.light-mode .recs-kpi-progress-zone.mid,
+.app-shell.light-mode .recs-kpi-progress-zone.good { background: #E2E8F0; }
+.app-shell.light-mode .recs-kpi-progress-fill { background: #7C3AED; }
+.app-shell.light-mode .recs-kpi-progress-marker { background: #7C3AED; }
+.app-shell.light-mode .recs-kpi-progress-marker::before { background: #7C3AED; }
+.app-shell.light-mode .recs-kpi-target { color: #64748B; }
+.app-shell.light-mode .recs-kpi-target i { background: #CBD5E1; }
+.app-shell.light-mode .recs-kpi-bars .bar { background: #E2E8F0; }
+.app-shell.light-mode .recs-kpi-bars .bar.filled { background: #059669; }
+.app-shell.light-mode .recs-kpi-month-track i { background: #E2E8F0; }
+.app-shell.light-mode .recs-kpi-month-track i.elapsed { background: #059669; }
+.app-shell.light-mode .recs-kpi-radial-fill { stroke: #059669; }
 .app-shell.light-mode .recs-kpi-progress-axis { color: #64748B; }
 .app-shell.light-mode .recs-kpi-speedo-track { stroke: #F1F5F9; }
 .app-shell.light-mode .recs-kpi-speedo-zone-fast { stroke: #10B981; }
@@ -1623,9 +1629,10 @@
   top: 0;
   left: 14px;
   right: 14px;
-  height: 3px;
-  border-radius: 0 0 3px 3px;
-  background: linear-gradient(90deg, var(--green), var(--purple));
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--green);
+  opacity: .85;
 }
 .recs-kpi-hero .recs-kpi-row .recs-kpi-value-stack .recs-kpi-value { font-size: 26px; }
 .recs-kpi-ring-count {
@@ -1641,8 +1648,8 @@
 .recs-kpi-foot { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
 .recs-kpi-foot-title { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 10.5px; font-weight: 650; }
 .recs-kpi-foot-title svg { color: var(--green); }
-.recs-kpi-share { display: flex; gap: 2px; height: 5px; border-radius: 99px; overflow: hidden; }
-.recs-kpi-share i { display: block; height: 100%; border-radius: 99px; opacity: .85; }
+.recs-kpi-share { display: flex; gap: 2px; height: 4px; border-radius: 2px; overflow: hidden; }
+.recs-kpi-share i { display: block; height: 100%; border-radius: 2px; opacity: .9; }
 .recs-kpi-share-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .recs-kpi-share-legend > span { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 9px; }
 .recs-kpi-share-legend i { width: 7px; height: 7px; border-radius: 99px; flex: 0 0 auto; }
@@ -1670,8 +1677,9 @@
 .recs-kpi-bar-letter { color: var(--text-tertiary); font-size: 8px !important; line-height: 1; }
 .recs-kpi-month { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
 .recs-kpi-month-label { color: var(--text-tertiary); font-size: 8.5px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
-.recs-kpi-month-track { flex: 1; height: 6px; border-radius: 99px; background: var(--border-soft); overflow: hidden; }
-.recs-kpi-month-track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #059669, var(--green)); }
+.recs-kpi-month-track { flex: 1; display: flex; align-items: flex-end; gap: 1px; height: 10px; min-width: 56px; }
+.recs-kpi-month-track i { display: block; flex: 1 1 0; min-width: 1px; height: 5px; border-radius: 1px; background: var(--border-soft); transition: background 180ms ease, height 180ms ease; }
+.recs-kpi-month-track i.elapsed { height: 10px; background: var(--green); }
 .recs-kpi-month-caption { color: var(--text-tertiary); font-size: 9px; white-space: nowrap; }
 
 /* Approval rate — breathing room, delta pill, fill, floating marker, target */
@@ -1689,47 +1697,52 @@
 }
 .recs-kpi-delta.up { color: var(--green); background: rgba(16, 185, 129, .12); }
 .recs-kpi-delta.down { color: var(--amber); background: rgba(245, 158, 11, .13); }
-.recs-kpi-progress { margin-top: 12px; }
+.recs-kpi-progress { margin-top: 14px; }
 .recs-kpi-progress-fill {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #059669, #34D399);
-  opacity: .9;
+  border-radius: 2px;
+  background: var(--purple);
+  transition: width 600ms cubic-bezier(.4, 0, .2, 1);
 }
 .recs-kpi-progress-marker {
   position: absolute;
-  top: -2.5px;
-  width: 13px;
-  height: 13px;
-  border-radius: 99px;
-  background: var(--card);
-  border: 2.5px solid var(--green);
+  top: -4px;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--purple);
+  border: 0;
   transform: translateX(-50%);
 }
 .recs-kpi-progress-marker::before {
   content: '';
   position: absolute;
-  inset: 3px;
+  top: -5px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
   border-radius: 99px;
-  background: var(--green);
+  background: var(--purple);
+  transform: translateX(-50%);
 }
 .recs-kpi-target {
   position: absolute;
-  top: -16px;
+  top: -15px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  color: var(--purple);
+  color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: 7.5px;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: .02em;
   transform: translateX(-50%);
 }
-.recs-kpi-target i { display: block; width: 2px; height: 6px; border-radius: 1px; background: var(--purple); }
+.recs-kpi-target i { display: block; width: 1px; height: 5px; background: var(--border); }
 
 /* Avg time to decide — threshold legend under the gauge */
 .recs-kpi-speedo-legend { display: flex; gap: 10px; margin-top: 1px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
