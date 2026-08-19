@@ -167,7 +167,7 @@ function Harness() {
                   <TopProductInsight insight={topProductInsight} orders={orderRows} ordersTotal={2} onNavigate={() => {}} />
                   <CancellationRateCard insight={cancellationInsight} orders={orderRows} />
                   <FulfillmentRateCard insight={fulfillmentInsight} orders={orderRows} />
-                  <OrderHealthInsight insight={orderHealthInsight} totalOrders={5} />
+                  <OrderHealthInsight insight={orderHealthInsight} totalOrders={5} orders={orderRows} />
                 </div>
               </div>
             </section>
