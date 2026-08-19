@@ -5,8 +5,8 @@ import { AppError, requestId, storeId, success } from '@profitpilot/types'
 import type { Permission } from '@profitpilot/types'
 import { assertAccess } from '@profitpilot/billing'
 import type { BillingRepository, Subscription } from '@profitpilot/billing'
-import { activateWorkflow, compileTemplate, installTemplate, isWorkflowCategory, isWorkflowStatus, MerchantEmailVerifier, planAllowsTemplate, priorityForPlan, templateFor, ThreadLedger, triggerSummary, validateWorkflow, WORKFLOW_CATEGORIES, WORKFLOW_TEMPLATES } from '@profitpilot/automation'
-import type { AutomationExecutionService, CampaignTemplate, MerchantEmailConfigRepository, RunRepository, TemplateRepository, Ticket, WorkflowDefinition, WorkflowListQuery, WorkflowPatch, WorkflowRepository, WorkflowStatus } from '@profitpilot/automation'
+import { activateWorkflow, compileTemplate, installTemplate, isWorkflowCategory, isWorkflowStatus, MerchantEmailVerifier, planAllowsTemplate, priorityForPlan, templateFor, triggerSummary, validateWorkflow, WORKFLOW_CATEGORIES, WORKFLOW_TEMPLATES } from '@profitpilot/automation'
+import type { AutomationExecutionService, CampaignTemplate, MerchantEmailConfigRepository, RunRepository, TemplateRepository, Ticket, TicketStore, WorkflowDefinition, WorkflowListQuery, WorkflowPatch, WorkflowRepository, WorkflowStatus } from '@profitpilot/automation'
 import type { TargetedCampaignInput, TargetedCampaignService } from './targeted-campaigns.js'
 import { writeCsv, writePdf, writeXlsx } from '@profitpilot/reporting'
 import type { ExportRow, ExportFormat } from '@profitpilot/reporting'
@@ -18,7 +18,7 @@ export type AutomationRouteDependencies = Readonly<{
   emailVerifier: MerchantEmailVerifier
   merchantEmails?: MerchantEmailConfigRepository
   targetedCampaigns?: Pick<TargetedCampaignService, 'preview' | 'send' | 'unsubscribe'>
-  tickets: ThreadLedger
+  tickets: TicketStore
   runs?: RunRepository
   execution?: AutomationExecutionService
   billing?: BillingRepository
@@ -103,7 +103,7 @@ export function createAutomationRouter(dependencies: AutomationRouteDependencies
   router.post('/campaigns/send', asyncRoute(async (request) => {if(!dependencies.targetedCampaigns)throw unavailable('Targeted campaign delivery');return dependencies.targetedCampaigns.send(targetedInput(request.body,true))}))
   router.get('/campaigns/unsubscribe', async(request,response,next)=>{try{if(!dependencies.targetedCampaigns)throw unavailable('Campaign unsubscribe');const token=typeof request.query.token==='string'?request.query.token:'';const result=await dependencies.targetedCampaigns.unsubscribe(token);response.status(200).type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unsubscribed</title></head><body><main><h1>You are unsubscribed</h1><p>${result.alreadySuppressed?'This email was already unsubscribed.':'Marketing email for this store has been disabled.'}</p></main></body></html>`)}catch(error:unknown){next(error)}})
   router.post('/exports', asyncRoute(async(request)=>{const body=record(request.body);if(!isFormat(body.format))throw new AppError('VALIDATION_ERROR','format is required',400);const dataset=isDataset(body.dataset)?body.dataset:null;const supplied=Array.isArray(body.rows)?body.rows.filter(isExportRow):[];const tenant=typeof body.storeId==='string'?body.storeId:typeof request.query.storeId==='string'?request.query.storeId:'';const rows=dataset&&dependencies.exportRows&&tenant?await dependencies.exportRows(tenant,dataset):supplied;const file=body.format==='CSV'?writeCsv(`${dataset??'export'}-${randomUUID()}.csv`,rows):body.format==='XLSX'?writeXlsx(`${dataset??'export'}-${randomUUID()}.xlsx`,rows):writePdf(`${dataset??'export'}-${randomUUID()}.pdf`,rows);return{filename:file.filename,contentType:file.contentType,bodyBase64:file.body.toString('base64'),rows:rows.length,ceiling:50_000,ceilingNote:'Technical safety limit for one file — not a plan quota.'}}))
-  router.get('/support/tickets',(request,response)=>response.status(200).json(success(dependencies.tickets.list(queryStore(request)),requestIdFrom(request))))
+  router.get('/support/tickets',asyncRoute(async(request)=>dependencies.tickets.list(queryStore(request))))
   router.post('/support/tickets',asyncRoute(async(request)=>{const body=record(request.body);if(typeof body.shopId!=='string'||typeof body.subject!=='string'||!isPlan(body.plan))throw new AppError('VALIDATION_ERROR','shopId, subject, and plan are required',400);const now=Date.now();const priority=body.priority==='NORMAL'||body.priority==='HIGH'||body.priority==='URGENT'?body.priority:priorityForPlan(body.plan);const ticket:Ticket={id:randomUUID(),shopId:body.shopId,subject:body.subject.trim().slice(0,200)||'Support request',description:typeof body.description==='string'?body.description.trim().slice(0,4_000):'',priority,status:'OPEN',createdAt:now,updatedAt:now,version:0};return dependencies.tickets.create(ticket)},201))
   router.get('/settings/merchant-email', asyncRoute(async (request) => {
     const shopId = typeof request.query.shopId === 'string' ? request.query.shopId : typeof request.query.storeId === 'string' ? request.query.storeId : ''

@@ -177,6 +177,22 @@ describe('FAQ interactions', () => {
 })
 
 describe('empty state options (FIX 3)', () => {
+  it('celebrates "All Clear!" with the three fastest help options once loading settles', async () => {
+    await mountPage()
+    const empty = document.querySelector('.support-empty')
+    expect(empty?.textContent).toContain('All Clear! No open tickets.')
+    expect(empty?.textContent).toContain('Your store is running smoothly')
+    expect(empty?.textContent).toContain('Need help with something? Choose the fastest option')
+    expect(empty?.textContent).toContain('Ask AI Command')
+    expect(empty?.textContent).toContain('Browse FAQs')
+    expect(empty?.textContent).toContain('New Ticket')
+    expect(empty?.textContent).toContain('Instant answers about your store')
+    expect(empty?.textContent).toContain('Complex issues need human support')
+    expect(empty?.textContent).toContain('AI Command can answer 80% of questions instantly')
+    // The loading card is gone by now — only truthful states paint.
+    expect(document.querySelector('.support-loading')).toBeNull()
+  })
+
   it('opens the ticket form from the "New Ticket" option', async () => {
     await mountPage()
     await click('New Ticket')

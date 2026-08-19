@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { AutomationExecutionService, InMemoryMerchantEmailConfigRepository, InMemoryRunRepository, InMemoryTemplateRepository, InMemoryWorkflowRepository, MerchantEmailVerifier, ThreadLedger } from '@profitpilot/automation'
+import type { TicketStore } from '@profitpilot/automation'
 import { Logger } from '@profitpilot/logger'
 import { createApi } from './app.js'
 
@@ -25,6 +26,30 @@ describe('F6 automation and marketing APIs', () => {
   it('compiles campaign templates and rejects invalid variables', async () => await withServer(async (base) => { const response = await fetch(`${base}/campaigns/templates`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 't', storeId: 's', name: 'Welcome', kind: 'EMAIL', subject: 'Hi {{customer.first_name}}', body: 'Bye {{unsubscribe.url}}' }) }); expect(response.status).toBe(201); const invalid = await fetch(`${base}/campaigns/templates`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'bad', storeId: 's', name: 'Bad', kind: 'EMAIL', subject: 'Hi {{bad}}', body: 'No {{unsubscribe.url}}' }) }); expect(invalid.status).toBe(400) }))
   it('exports real rows with the selected writer', async () => await withServer(async (base) => { const response = await fetch(`${base}/exports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: 'CSV', rows: [{ id: 1, name: 'A' }] }) }); expect(response.status).toBe(200); expect((await response.json()).data.contentType).toContain('csv') }))
   it('creates tickets with plan priority', async () => await withServer(async (base) => { const response = await fetch(`${base}/support/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', subject: 'Help', plan: 'commander' }) }); expect(response.status).toBe(201); expect((await response.json()).data.priority).toBe('URGENT') }))
+  it('round-trips tickets through an async durable store (production wiring shape)', async () => {
+    // Regression guard: production wires PostgresTicketRepository, whose
+    // methods are async. The routes must await them — a synchronous list
+    // handler would serialize a pending Promise instead of the tickets.
+    const ledger = new ThreadLedger()
+    const durableShape: TicketStore = { create: async (ticket) => ledger.create(ticket), list: async (shopId) => ledger.list(shopId) }
+    const app = createApi({ logger: new Logger(), readinessChecks: [], automation: { workflows: new InMemoryWorkflowRepository(), runs: new InMemoryRunRepository(), execution: new AutomationExecutionService(new InMemoryRunRepository(), { async execute() { return { action: 'noop', testMode: false } } }), templates: new InMemoryTemplateRepository(), emailVerifier: new MerchantEmailVerifier('secret'), tickets: durableShape } })
+    const server = createServer(app)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address(); if (!address || typeof address === 'string') throw new Error('No address')
+    const base = `http://127.0.0.1:${address.port}`
+    try {
+      const created = await fetch(`${base}/support/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', subject: 'Orders missing', description: 'Nothing synced.', plan: 'growth', priority: 'HIGH' }) })
+      expect(created.status).toBe(201)
+      expect((await created.json()).data.priority).toBe('HIGH')
+      const listed = await fetch(`${base}/support/tickets?storeId=s`)
+      expect(listed.status).toBe(200)
+      const tickets = (await listed.json()).data
+      expect(Array.isArray(tickets)).toBe(true)
+      expect(tickets).toHaveLength(1)
+      expect(tickets[0]).toMatchObject({ shopId: 's', subject: 'Orders missing', description: 'Nothing synced.', status: 'OPEN' })
+    } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
+  })
+  it('rejects ticket creation without a subject', async () => await withServer(async (base) => { const response = await fetch(`${base}/support/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', plan: 'start' }) }); expect(response.status).toBe(400) }))
   it('verifies merchant email settings before campaign use', async () => await withServer(async (base) => { const saved = await fetch(`${base}/settings/merchant-email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', email: 'merchant@example.com', fromName: 'Store' }) }); const token = (await saved.json()).data.verificationToken as string; const verified = await fetch(`${base}/settings/merchant-email/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }); expect(verified.status).toBe(200) }))
   it('loads saved merchant email and persists workspace preferences', async () => await withServer(async (base) => {
     await fetch(`${base}/settings/merchant-email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 's', email: 'merchant@example.com', fromName: 'Store' }) })
