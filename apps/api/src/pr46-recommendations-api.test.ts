@@ -172,6 +172,11 @@ describe('PR46 undo', () => {
   it('409s when nothing is undoable', async () => await withServer(() => undefined, async ({ base }) => {
     expect((await fetch(`${base}/recommendations/r1/undo?storeId=s`, { method: 'POST', headers: json, body: '{}' })).status).toBe(409)
   }))
+  it('404s when the recommendation does not exist', async () => await withServer(() => ({ seed: [] }), async ({ base }) => {
+    const response = await fetch(`${base}/recommendations/r1/undo?storeId=s`, { method: 'POST', headers: json, body: '{}' })
+    expect(response.status).toBe(404)
+    expect((await response.json()).error.code).toBe('NOT_FOUND')
+  }))
 })
 
 describe('PR46 bulk decide', () => {

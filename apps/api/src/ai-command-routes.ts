@@ -4,8 +4,9 @@ import type { Request } from 'express'
 import { AppError, requestId, storeId, success } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { AiCommandService } from '@profitpilot/ai'
+import type { AiCommandPageMetricsProvider } from './ai-command-page-metrics.js'
 
-export type AiCommandRouteDependencies = Readonly<{ service: AiCommandService }>
+export type AiCommandRouteDependencies = Readonly<{ service: AiCommandService; pageMetrics?: AiCommandPageMetricsProvider }>
 
 export function createAiCommandRouter(dependencies: AiCommandRouteDependencies): Router {
   const router = Router()
@@ -87,6 +88,13 @@ export function createAiCommandRouter(dependencies: AiCommandRouteDependencies):
     return service.updatePreferences(bodyStore(body), body)
   }))
   router.get('/ai-command/quick-commands', asyncRoute(async (request) => service.quickCommands(queryStore(request))))
+  router.get('/api/ai-command/page-metrics', async (request, response, next) => {
+    try {
+      if (!dependencies.pageMetrics) throw new AppError('DEPENDENCY_ERROR', 'AI Command page metrics are not configured', 503)
+      response.setHeader('cache-control', 'private, no-store')
+      response.status(200).json(success(await dependencies.pageMetrics.get(queryStore(request)), requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
   router.get('/ai-command/suggestions', asyncRoute(async (request) => {
     const command = typeof request.query.command === 'string' ? request.query.command : ''
     if (!command.trim()) throw new AppError('VALIDATION_ERROR', 'command is required', 400)

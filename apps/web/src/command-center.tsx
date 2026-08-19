@@ -11,11 +11,14 @@ import {
   Box,
   Briefcase,
   CalendarClock,
+  Camera,
   Check,
   CheckCircle2,
+  CircleDollarSign,
   ChevronRight,
   Clock3,
   Command,
+  Crown,
   Database,
   Gauge,
   GraduationCap,
@@ -23,6 +26,7 @@ import {
   ListFilter,
   Loader2,
   LockKeyhole,
+  Mail,
   Minus,
   MoreHorizontal,
   Network,
@@ -30,8 +34,10 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Rocket,
   Send,
   Settings2,
+  ShoppingCart,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -46,6 +52,7 @@ import {
   decideRecommendation,
   fetchAgentActivity,
   fetchAgentOverview,
+  fetchAiCommandPageMetrics,
   fetchRecommendations,
   fetchRecommendationSummary,
   fetchRuleCatalog,
@@ -76,7 +83,7 @@ import {
   unlockedAgents,
   visibleAgents,
 } from './command-center-model.js'
-import type { AgentActivityItem, AgentOverview, AgentOverviewEntry, GrowthModule, PeriodTotals, PlanTier, RuleCatalogEntry, RunAllState, SeriesPoint, StoreHealthResult } from './command-center-model.js'
+import type { AgentActivityItem, AgentOverview, AgentOverviewEntry, AiCommandPageMetrics, GrowthModule, PeriodTotals, PlanTier, RuleCatalogEntry, RunAllState, SeriesPoint, StoreHealthResult } from './command-center-model.js'
 import type { RecommendationSummary } from './recommendations-model.js'
 
 export const AGENT_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -105,6 +112,7 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
   const [overview, setOverview] = useState<AgentOverview | null>(null)
   const [summary, setSummary] = useState<RecommendationSummary | null>(null)
   const [health, setHealth] = useState<StoreHealthResult | null>(null)
+  const [pageMetrics, setPageMetrics] = useState<AiCommandPageMetrics | null>(null)
   const [rules, setRules] = useState<readonly RuleCatalogEntry[]>([])
   const [recent, setRecent] = useState<readonly Recommendation[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,12 +125,13 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
     if (!context.storeId) { setLoading(false); return }
     setLoadError(null)
     const storeId = context.storeId
-    const [overviewResult, summaryResult, healthResult, rulesResult, recentResult] = await Promise.allSettled([
+    const [overviewResult, summaryResult, healthResult, rulesResult, recentResult, metricsResult] = await Promise.allSettled([
       fetchAgentOverview(storeId),
       fetchRecommendationSummary(storeId),
       fetchStoreHealth(storeId),
       fetchRuleCatalog(),
       fetchRecommendations(storeId),
+      fetchAiCommandPageMetrics(storeId),
     ])
     if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value)
     else setLoadError(overviewResult.reason instanceof Error ? overviewResult.reason.message : 'Agent statuses could not be loaded.')
@@ -130,10 +139,19 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
     if (healthResult.status === 'fulfilled') setHealth(healthResult.value)
     if (rulesResult.status === 'fulfilled') setRules(rulesResult.value)
     if (recentResult.status === 'fulfilled') setRecent(recentResult.value)
+    if (metricsResult.status === 'fulfilled') setPageMetrics(metricsResult.value)
     setLoading(false)
   }, [context.storeId])
 
-  useEffect(() => { setLoading(true); void load() }, [load])
+  useEffect(() => { setLoading(true); setPageMetrics(null); void load() }, [load])
+  useEffect(() => {
+    if (!context.storeId) return
+    const storeId = context.storeId
+    const timer = window.setInterval(() => {
+      void fetchAiCommandPageMetrics(storeId).then(setPageMetrics).catch(() => undefined)
+    }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [context.storeId])
 
   const upgrade = useCallback((plan: PlanTier) => {
     try { sessionStorage.setItem('pp-upgrade-target', plan) } catch { /* private mode */ }
@@ -160,6 +178,8 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
   const visible = visibleAgents(agents)
   const unlocked = unlockedAgents(visible)
   const lockedGroups = groupLockedByPlan(visible)
+  const currentPlan = pageMetrics?.subscription?.currentPlan ?? overview?.plan ?? 'trial'
+  const basicAgentCount = pageMetrics?.subscription?.basicAgentCount ?? unlocked.length
 
   return (
     <div className="cc-workspace">
@@ -238,10 +258,18 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
                 <span>Available in {PLAN_LABELS[group.plan]}</span>
                 {PLAN_PRICES[group.plan] && <em>{PLAN_PRICES[group.plan]}</em>}
               </div>
-              <div className="cc-agent-grid">
+              {group.plan === 'start' && <AiTeamGrowthPath currentPlan={currentPlan} basicAgentCount={basicAgentCount} />}
+              <div className={`cc-agent-grid ${group.plan === 'start' ? 'cc-start-value-grid' : group.plan === 'commander' ? 'cc-commander-value-grid' : ''}`}>
                 {group.agents.map((agent) => (
                   <LockedAgentCard key={agent.id} agent={agent} onUpgrade={() => upgrade(group.plan)} onLearnMore={() => openDrawer(agent, 'overview')} />
                 ))}
+                {group.plan === 'start' && <StartPlanValueCard metrics={pageMetrics} onSync={() => onNavigate('dashboard')} />}
+                {group.plan === 'commander' && (
+                  <>
+                    <CommanderActionsCard metrics={pageMetrics} onSync={() => onNavigate('dashboard')} />
+                    <StoreSnapshotCard metrics={pageMetrics} onSync={() => onNavigate('dashboard')} />
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -460,6 +488,190 @@ export function LockedAgentCard({ agent, onUpgrade, onLearnMore }: { agent: Agen
       </div>
     </article>
   )
+}
+
+/* ── Real store-value cards for locked plan rows ─────────────────────── */
+
+const SYNC_METRIC_TOOLTIP = 'Sync your store to see this data'
+
+function MetricValue({ value, format = formatCount }: { value: number | null | undefined; format?: (value: number) => string }) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return <span className="cc-metric-missing cc-tip" data-tip={SYNC_METRIC_TOOLTIP} title={SYNC_METRIC_TOOLTIP}>--</span>
+  }
+  return <>{format(value)}</>
+}
+
+function SyncMetricsPrompt({ onSync, compact = false }: { onSync: () => void; compact?: boolean }) {
+  return (
+    <div className={`cc-metrics-empty ${compact ? 'compact' : ''}`}>
+      {!compact && <Database size={22} />}
+      <span>Sync your Shopify store to see what these agents can do for you.</span>
+      <button type="button" className="cc-sync-metrics" onClick={onSync}>Sync Store <ArrowUpRight size={13} /></button>
+    </div>
+  )
+}
+
+export function StartPlanValueCard({ metrics, onSync }: { metrics: AiCommandPageMetrics | null; onSync: () => void }) {
+  const customers = metrics?.customers
+  const hasCustomerData = customers?.total !== null && customers?.total !== undefined
+  const currency = metrics?.revenue?.currency ?? null
+  return (
+    <article className="cc-value-card cc-start-value-card">
+      <header className="cc-value-card-header">
+        <span className="cc-value-icon start"><Target size={20} /></span>
+        <h3>What Start Plan Delivers for YOUR Store</h3>
+        <span className="cc-value-plan-badge start">Start · $49/mo</span>
+      </header>
+      {hasCustomerData ? (
+        <div className="cc-value-stats">
+          <ValueStat icon={Users} value={<MetricValue value={customers?.total} />} label="customers Customer Agent will monitor" />
+          <ValueStat icon={AlertCircle} value={<MetricValue value={customers?.inactive30Days} />} label="inactive customers ready for win-back" tone="warning" />
+          <ValueStat icon={CircleDollarSign} value={<MetricValue value={customers?.potentialRecoverableRevenue} format={(value) => formatStoreMoney(value, currency)} />} label="potential revenue at risk" />
+          <ValueStat icon={RefreshCw} value={<MetricValue value={customers?.repeat} />} label="repeat customers to nurture" />
+        </div>
+      ) : <SyncMetricsPrompt onSync={onSync} />}
+      <footer className="cc-value-footer"><Sparkles size={13} /><span>Based on your real Shopify customer data</span></footer>
+    </article>
+  )
+}
+
+function ValueStat({ icon: Icon, value, label, tone = 'purple' }: { icon: LucideIcon; value: ReactNode; label: string; tone?: 'purple' | 'warning' }) {
+  return (
+    <div className="cc-value-stat">
+      <span className={`cc-value-stat-icon ${tone}`}><Icon size={19} /></span>
+      <div><strong>{value}</strong><span>{label}</span></div>
+    </div>
+  )
+}
+
+export function CommanderActionsCard({ metrics, onSync }: { metrics: AiCommandPageMetrics | null; onSync: () => void }) {
+  const products = metrics?.products
+  const customers = metrics?.customers
+  const orders = metrics?.orders
+  const noActionData = products?.crossSellPairs == null && customers?.inactive30Days == null && products?.deadStock == null && orders?.total == null
+  return (
+    <article className="cc-value-card cc-commander-actions-card">
+      <header className="cc-value-card-header">
+        <span className="cc-value-icon commander"><Crown size={20} /></span>
+        <h3>Commander Actions Ready for YOUR Store</h3>
+        <span className="cc-value-plan-badge commander">Commander · $349/mo</span>
+      </header>
+      <div className="cc-action-list">
+        <ActionOpportunity icon={ShoppingCart} title="Cross-sell Opportunities">
+          <strong><MetricValue value={products?.crossSellPairs} /></strong> product pairings detected from <strong><MetricValue value={orders?.total} /></strong> orders
+        </ActionOpportunity>
+        <ActionOpportunity icon={Mail} title="Auto Win-Back Emails">
+          Ready to prepare for <strong><MetricValue value={customers?.inactive30Days} /></strong> inactive customers
+        </ActionOpportunity>
+        <ActionOpportunity icon={Tag} title="Smart Discount Creation">
+          <strong><MetricValue value={products?.deadStock} /></strong> stocked products have no sale in 60+ days
+        </ActionOpportunity>
+        <ActionOpportunity icon={CalendarClock} title="Weekly Executive Digest">
+          Built from your live, deterministic store health score
+        </ActionOpportunity>
+      </div>
+      {noActionData && <SyncMetricsPrompt onSync={onSync} compact />}
+    </article>
+  )
+}
+
+function ActionOpportunity({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+  return (
+    <div className="cc-action-opportunity">
+      <span className="cc-action-icon"><Icon size={18} /></span>
+      <div><strong>{title}</strong><span>{children}</span></div>
+    </div>
+  )
+}
+
+export function StoreSnapshotCard({ metrics, onSync }: { metrics: AiCommandPageMetrics | null; onSync: () => void }) {
+  const health = metrics?.storeHealth
+  const products = metrics?.products
+  const orders = metrics?.orders
+  const revenue = metrics?.revenue
+  const hasLiveData = health?.score != null || revenue?.today != null || products?.active != null || orders?.pending != null
+  const revenueChange = revenue?.changePercent
+  const healthTone = health?.score == null ? 'muted' : health.score >= 75 ? 'positive' : health.score >= 40 ? 'warning' : 'negative'
+  return (
+    <article className="cc-value-card cc-store-snapshot-card">
+      <header className="cc-value-card-header">
+        <span className="cc-value-icon snapshot"><Camera size={20} /></span>
+        <h3>Your Store Live Snapshot</h3>
+        <span className={`cc-live-badge ${hasLiveData ? 'live' : 'waiting'}`}><i />{hasLiveData ? 'Live' : 'Awaiting sync'}</span>
+      </header>
+      <div className="cc-snapshot-grid">
+        <SnapshotTile label="Store Health" tone={healthTone} value={<><MetricValue value={health?.score} />{health?.score == null ? '' : '/100'}</>} status={health?.status ?? 'Sync store to calculate'} />
+        <SnapshotTile
+          label="Revenue Today"
+          value={<MetricValue value={revenue?.today} format={(value) => formatStoreMoney(value, revenue?.currency ?? null)} />}
+          tone={revenueChange == null ? 'muted' : revenueChange >= 0 ? 'positive' : 'negative'}
+          status={revenueChange == null ? '-- vs yesterday' : `${revenueChange >= 0 ? '↑' : '↓'} ${formatCount(Math.abs(revenueChange))}% vs yesterday`}
+        />
+        <SnapshotTile
+          label="Active Products"
+          value={<MetricValue value={products?.active} />}
+          tone={products?.lowStock == null ? 'muted' : products.lowStock > 0 ? 'warning' : 'positive'}
+          status={products?.lowStock == null ? 'Sync inventory to check stock' : products.lowStock > 0 ? `⚠ ${formatCount(products.lowStock)} low stock` : 'All stocked'}
+        />
+        <SnapshotTile
+          label="Pending Orders"
+          value={<MetricValue value={orders?.pending} />}
+          tone={orders?.pending == null ? 'muted' : orders.pending > 0 ? 'warning' : 'positive'}
+          status={orders?.pending == null ? 'Sync orders to check' : orders.pending > 0 ? 'Awaiting fulfillment' : 'All fulfilled'}
+        />
+      </div>
+      <footer className="cc-value-footer cc-snapshot-footer">
+        <RefreshCw size={13} /><span>Auto-refreshes every 60 seconds</span>
+        {!hasLiveData && <button type="button" className="cc-sync-metrics inline" onClick={onSync}>Sync Store <ArrowUpRight size={12} /></button>}
+      </footer>
+    </article>
+  )
+}
+
+function SnapshotTile({ label, value, status, tone = 'muted' }: { label: string; value: ReactNode; status: string; tone?: 'positive' | 'negative' | 'warning' | 'muted' }) {
+  return (
+    <div className="cc-snapshot-tile">
+      <span className="cc-snapshot-label">{label}</span>
+      <strong className={`cc-snapshot-value ${tone}`}>{value}</strong>
+      <span className={`cc-snapshot-status ${tone}`}>{status}</span>
+    </div>
+  )
+}
+
+export function AiTeamGrowthPath({ currentPlan, basicAgentCount }: { currentPlan: PlanTier; basicAgentCount: number }) {
+  const tiers: readonly Readonly<{ plan: PlanTier; name: string; detail: string }>[] = [
+    { plan: 'trial', name: 'Basic', detail: `${formatCount(basicAgentCount)} agents unlocked now` },
+    { plan: 'start', name: 'Start · $49/mo', detail: '+1 Customer Agent' },
+    { plan: 'growth', name: 'Growth · $149/mo', detail: '+2 more agents' },
+    { plan: 'commander', name: 'Commander · $349/mo', detail: 'Full AI team + auto actions' },
+  ]
+  const currentRank = tiers.findIndex((tier) => tier.plan === currentPlan)
+  return (
+    <div className="cc-growth-path" aria-label="Your AI Team Growth Path">
+      <div className="cc-growth-path-header"><Rocket size={18} /><h3>Your AI Team Growth Path</h3></div>
+      <div className="cc-tier-progression">
+        {tiers.map((tier, index) => {
+          const state = index <= currentRank ? 'active' : index === currentRank + 1 ? 'next' : 'future'
+          return (
+            <div className="cc-tier-step-wrap" key={tier.plan}>
+              {index > 0 && <span className="cc-tier-connector" />}
+              <div className={`cc-tier-step ${state}`} aria-current={tier.plan === currentPlan ? 'step' : undefined}>
+                <span className="cc-tier-marker">{state === 'active' ? tier.plan === 'commander' ? <Crown size={14} /> : <Check size={15} /> : index + 1}</span>
+                <strong>{tier.name}</strong>
+                <small>{tier.detail}</small>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function formatCount(value: number): string { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) }
+function formatStoreMoney(value: number, currency: string | null): string {
+  if (!currency) return formatCount(value)
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value) } catch { return `${formatCount(value)} ${currency}` }
 }
 
 /* ── AI Growth Command modules (all shipped — cards link to real pages) ── */

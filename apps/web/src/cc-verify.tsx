@@ -97,6 +97,26 @@ const populatedSummary = {
 
 const freshHealth = { score: null, method: 'deterministic-v1', components: [], orderCount: 4, historyDays: 6 }
 const populatedHealth = { score: 78, method: 'deterministic-v1', components: [{ key: 'revenue', score: 82, weight: .3, reason: 'Revenue is growing.' }], orderCount: 231, historyDays: 120 }
+const freshPageMetrics = {
+  customers: { total: null, inactive30Days: null, repeat: null, potentialRecoverableRevenue: null },
+  products: { active: null, lowStock: null, deadStock: null, crossSellPairs: null },
+  orders: { total: null, pending: null, todayCount: null },
+  revenue: { today: null, yesterday: null, changePercent: null, currency: null },
+  storeHealth: { score: null, status: null },
+  subscription: { currentPlan: 'trial', basicAgentCount: 2 },
+  availability: { customers: false, products: false, orders: false, inventoryHistory: false, storeHealth: false },
+  generatedAt: new Date(now).toISOString(),
+}
+const populatedPageMetrics = {
+  customers: { total: 245, inactive30Days: 42, repeat: 89, potentialRecoverableRevenue: 12450 },
+  products: { active: 156, lowStock: 8, deadStock: 23, crossSellPairs: 34 },
+  orders: { total: 892, pending: 5, todayCount: 12 },
+  revenue: { today: 1245, yesterday: 980, changePercent: 27, currency: 'USD' },
+  storeHealth: { score: 82, status: 'Healthy' },
+  subscription: { currentPlan: 'trial', basicAgentCount: 2 },
+  availability: { customers: true, products: true, orders: true, inventoryHistory: true, storeHealth: true },
+  generatedAt: new Date(now).toISOString(),
+}
 
 const RULES = [
   { id: 'STOCKOUT_RISK', name: 'Stockout risk', agent: 'INVENTORY_AGENT', purpose: 'Flags best sellers about to run out of cover.', threshold: 'cover < 7 days', inputs: ['inventory_units', 'average_daily_units'], impact: 'Revenue protected' },
@@ -111,6 +131,7 @@ function installMock(scenario: Scenario) {
     const url = String(input)
     const respond = (data: unknown) => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ ok: true, data }) }) as Response
     if (new URLSearchParams(window.location.search).get('state') === 'loading') return new Promise<Response>(() => {})
+    if (url.startsWith('/api/ai-command/page-metrics')) return respond(scenarioStore === 'populated' ? populatedPageMetrics : freshPageMetrics)
     if (url.startsWith('/ai/agents/')) return respond(scenarioStore === 'populated' ? RECOMMENDATIONS : [])
     if (url.startsWith('/ai/agents')) return respond(overview(scenarioStore))
     if (url.startsWith('/ai/health')) return respond(scenarioStore === 'populated' ? populatedHealth : freshHealth)

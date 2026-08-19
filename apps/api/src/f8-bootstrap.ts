@@ -3,6 +3,7 @@ import { sha256Hex } from '@profitpilot/crypto'
 import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
 import type { QueryResultRow } from '@profitpilot/db'
+import { withTenantContext } from '@profitpilot/db'
 import { AiCommandService, OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
 import type { JarvisActionAuditEntry, JarvisActionTool } from '@profitpilot/ai'
 import { PostgresCopilotRepository, PostgresJarvisRepository, PostgresReportRepository } from './f8-repositories.js'
@@ -14,6 +15,7 @@ import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDe
 import type { AiCommandRouteDependencies } from './ai-command-routes.js'
 import { PostgresAiCommandRepository } from './ai-command-repository.js'
 import { ProductionCommandActions, ProductionCommandTools } from './ai-command-runtime.js'
+import { AiCommandPageMetricsService } from './ai-command-page-metrics.js'
 import { CloudflareR2ObjectStore, ReportService } from '@profitpilot/reporting'
 import type { ReportDataProvider } from '@profitpilot/reporting'
 import { OrderInsightsService, PostgresOrderInsightAudit, PostgresOrderInsightUsage, PostgresOrderRepository } from './orders.js'
@@ -89,6 +91,21 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   }
   const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
   const planFor = async (tenant: import('@profitpilot/types').StoreId) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial'
+  const pageMetrics = new AiCommandPageMetricsService({
+    customers: customerRepository,
+    inventory: inventoryRepository,
+    orders: orderRepository,
+    snapshot: (tenant) => {
+      if (!f7.ai.snapshot) return Promise.reject(new Error('Store snapshots are not configured'))
+      return f7.ai.snapshot(tenant)
+    },
+    planFor,
+    storeContext: (tenant) => withTenantContext(f7.database, tenant, async (client) => {
+      const result = await client.query<QueryResultRow & { timezone: string; currency: string | null }>('SELECT timezone, currency FROM stores WHERE id = $1 LIMIT 1', [tenant])
+      const row = result.rows[0]
+      return row ? { timezone: row.timezone, currency: row.currency } : null
+    }),
+  })
   const commandTools = new ProductionCommandTools({
     customers: customerRepository,
     orders: orderRepository,
@@ -172,7 +189,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   // text and returned zero tool calls, adding latency and an unmetered failure
   // point without changing a single answer.
   const aiCommand = new AiCommandService(commandConfig)
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand } }
+  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand, pageMetrics } }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

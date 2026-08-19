@@ -382,8 +382,8 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
   const position = dashboard.benchmarkPosition
   const risks = dashboard.risks
   const roadmap = dashboard.roadmap
-  const revenueValues = dashboard.revenueSeries.map((point) => point.value)
-  const ordersValues = dashboard.ordersSeries.map((point) => point.value)
+        const revenueValues = dashboard.revenueSeries.map((point) => point?.value ?? 0).filter((v) => Number.isFinite(v))
+  const ordersValues = dashboard.ordersSeries.map((point) => point?.value ?? 0).filter((v) => Number.isFinite(v))
   const revenue30 = revenueValues.slice(-30).reduce((sum, value) => sum + value, 0)
   const revenuePrior30 = revenueValues.slice(-60, -30).reduce((sum, value) => sum + value, 0)
   const revenueGrowth = revenuePrior30 > 0 ? (revenue30 / revenuePrior30 - 1) * 100 : null
@@ -411,9 +411,9 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
               {dashboard.latestReport && <span><Gauge size={12} /> {dashboard.latestReport.content.aiNarrativeAvailable ? 'AI narrative grounded in store facts' : 'Deterministic analysis'}</span>}
             </div>
             <div className="gq-hero-metrics">
-              <div className="gq-hero-metric"><strong>{formatExecutiveMoney(revenue30, dashboard.currency, 0)}{revenueGrowth !== null && <DeltaTag value={revenueGrowth} />}</strong><span>Revenue · last 30 days</span></div>
-              <div className="gq-hero-metric"><strong>{formatExecutiveNumber(orders30, 0)}{ordersGrowth !== null && <DeltaTag value={ordersGrowth} />}</strong><span>Orders · last 30 days</span></div>
-              <div className="gq-hero-metric"><strong>{aov === null ? '—' : formatExecutiveMoney(aov, dashboard.currency)}</strong><span>Average order value</span></div>
+              <div className="gq-hero-metric"><strong>{formatExecutiveMoney(revenue30, dashboard.currency, 0)}{revenueGrowth !== null && Number.isFinite(revenueGrowth) && <DeltaTag value={revenueGrowth} />}</strong><span>Revenue · last 30 days</span></div>
+              <div className="gq-hero-metric"><strong>{formatExecutiveNumber(orders30, 0)}{ordersGrowth !== null && Number.isFinite(ordersGrowth) && <DeltaTag value={ordersGrowth} />}</strong><span>Orders · last 30 days</span></div>
+              <div className="gq-hero-metric"><strong>{aov === null || !Number.isFinite(aov) ? '—' : formatExecutiveMoney(aov, dashboard.currency)}</strong><span>Average order value</span></div>
               <div className="gq-hero-metric"><strong>{health ? <>{health.overallScore}<small> /100</small></> : '—'}</strong><span>Health score</span></div>
             </div>
           </div>
