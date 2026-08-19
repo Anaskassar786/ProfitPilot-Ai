@@ -7,12 +7,12 @@ import {
   FileText,
   Filter,
   Grid2X2,
+  LayoutTemplate,
   List,
   LockKeyhole,
   Pencil,
   Plus,
   RefreshCw,
-  Rocket,
   Search,
   ShieldCheck,
   Sparkles,
@@ -23,7 +23,7 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import type { WorkspaceContext } from './model.js'
-import { archiveWorkflow, createAutomationWorkflow, getAutomationTemplates, getAutomationUsage, getWorkflow, installAutomationTemplate, workflowCommand } from './automation-api.js'
+import { archiveWorkflow, createAutomationWorkflow, getAutomationTemplates, getAutomationUsage, getWorkflow, installAutomationTemplate, updateAutomationWorkflow, workflowCommand } from './automation-api.js'
 import { useAutomationHub } from './automation-hooks.js'
 import type { WorkflowCategory, WorkflowRecord, WorkflowStatus, WorkflowTemplate } from './automation-model.js'
 import { CATEGORIES } from './automation-model.js'
@@ -172,6 +172,16 @@ function AutomationHub({
     }
   }
 
+  const renameWorkflow = async (workflow: WorkflowRecord, name: string): Promise<void> => {
+    try {
+      await updateAutomationWorkflow(storeId, workflow.id, { name })
+      onToast('Automation renamed.', 'success')
+      void refresh()
+    } catch (reason: unknown) {
+      onToast(reason instanceof Error ? reason.message : 'Automation could not be renamed.', 'error')
+    }
+  }
+
   if (loading) return <AutomationLoading />
   if (error)
     return (
@@ -224,7 +234,7 @@ function AutomationHub({
             <BookOpen size={16} /> How it works
           </button>
           <button className="automation-secondary browse-templates-btn" onClick={() => onNavigate({ view: 'templates' })}>
-            <Sparkles size={16} /> Browse Templates
+            <LayoutTemplate size={16} /> Browse Templates
           </button>
           <button
             className="automation-primary create-automation-btn"
@@ -353,6 +363,7 @@ function AutomationHub({
                   workflow={workflow}
                   onOpen={() => onNavigate({ view: 'editor', id: workflow.id })}
                   onCommand={(command) => void runAction(workflow, command)}
+                  onRename={(name) => renameWorkflow(workflow, name)}
                 />
               ))}
             </div>
@@ -466,7 +477,7 @@ function planBanner(
             </span>
           </div>
           <button onClick={onCompleteDrafts}>Complete Drafts</button>
-          <button className="warning-upgrade-btn" onClick={onUpgrade}>Upgrade Plan</button>
+          <button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
         </div>
       )
     }
@@ -479,7 +490,7 @@ function planBanner(
             <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use. Upgrade Plan to create more automations.
           </span>
         </div>
-        <button className="warning-upgrade-btn" onClick={onUpgrade}>Upgrade Plan</button>
+        <button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
       </div>
     )
   }
@@ -493,7 +504,7 @@ function planBanner(
             {usage.used} of {usage.limit} automations in use.
           </span>
         </div>
-        <button onClick={onUpgrade}>Upgrade Plan</button>
+        <button className="upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
       </div>
     )
   }
@@ -519,7 +530,7 @@ function GettingStartedHero({
         <p>Automations do the repetitive work for you — so you can focus on growing your store.</p>
         <div className="gs-actions">
           <button className="automation-primary" onClick={onTemplates}>
-            <Rocket size={16} /> Browse Templates
+            <LayoutTemplate size={16} /> Browse Templates
           </button>
           <button className="automation-secondary" onClick={onHow}>
             <BookOpen size={16} /> How it works
@@ -724,9 +735,13 @@ function TemplatesRoute({
         templates={templates}
         onBack={onBack}
         onInstall={async (template, name) => {
-          const workflow = await installAutomationTemplate(storeId, template.id, name)
-          onToast('Template installed — review it, then activate.', 'success')
-          onOpen(workflow.id)
+          try {
+            const workflow = await installAutomationTemplate(storeId, template.id, name)
+            onToast('Template installed — review it, then activate.', 'success')
+            onOpen(workflow.id)
+          } catch (reason: unknown) {
+            onToast(reason instanceof Error ? reason.message : 'Template could not be installed.', 'error')
+          }
         }}
         onUpgrade={onUpgrade}
       />

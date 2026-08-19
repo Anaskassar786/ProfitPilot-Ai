@@ -1,8 +1,8 @@
-import { ArrowLeft, ArrowRight, Boxes, Clock3, LockKeyhole, Mail, PackagePlus, ShoppingBag, ShoppingCart, Sparkles, Tag, Users, WandSparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, Sparkles, WandSparkles, X } from 'lucide-react'
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 import type { WorkflowTemplate } from './automation-model.js'
-import { friendlyCategory, planBadgeClass, planBadgeLabel, setupLabel, templateToneClass } from './automation-helpers.js'
+import { categoryIcon, friendlyCategory, planBadgeClass, planBadgeLabel, setupLabel, templateToneClass } from './automation-helpers.js'
 
 type TabKey =
   | 'All'
@@ -133,7 +133,7 @@ export function TemplateGallery({
                 {preview.locked ? 'This template needs a higher plan.' : 'Installs as a draft you can review.'}
               </span>
               {preview.locked ? (
-                <button className="automation-primary" onClick={onUpgrade}>
+                <button className="automation-primary upgrade-plan-btn" onClick={onUpgrade}>
                   <LockKeyhole size={15} /> Upgrade Plan
                 </button>
               ) : (
@@ -145,6 +145,10 @@ export function TemplateGallery({
                     try {
                       await onInstall(preview, preview.name)
                       setPreview(null)
+                    } catch {
+                      // The parent (hub or templates route) surfaces the
+                      // user-friendly error toast; keep the modal open so the
+                      // merchant can retry or close it themselves.
                     } finally {
                       setInstalling(false)
                     }
@@ -172,7 +176,7 @@ function TemplateCard({
 }): JSX.Element {
   return (
     <article className={`template-card template-card-pro ${templateToneClass(template.category)} ${template.locked ? 'locked' : ''}`}>
-      <button className="template-card-main" onClick={onPreview}>
+      <button className="template-card-main" onClick={onPreview} aria-label={`Preview template: ${template.name}`}>
         <span className="template-card-top">
           <TemplateIcon template={template} />
           <span className={`plan-badge template-plan-badge ${planBadgeClass(template.minimumPlan)}`}>{planBadgeLabel(template.minimumPlan)}</span>
@@ -187,11 +191,11 @@ function TemplateCard({
           <Clock3 size={12} className="template-meta-icon" /> {setupLabel(template.complexity)} · {template.nodes} step{template.nodes === 1 ? '' : 's'}
         </span>
         {template.locked ? (
-          <button className="upgrade-mini template-upgrade-btn" onClick={onUpgrade}>
+          <button className="upgrade-mini template-upgrade-btn upgrade-plan-btn" onClick={onUpgrade} aria-label={`Upgrade Plan to use ${template.name}`}>
             <LockKeyhole size={13} /> Upgrade Plan
           </button>
         ) : (
-          <button className="set-up-mini template-setup-btn" onClick={onPreview}>
+          <button className="set-up-mini template-setup-btn" onClick={onPreview} aria-label={`Set up ${template.name}`}>
             Set Up <ArrowRight size={13} />
           </button>
         )}
@@ -201,20 +205,7 @@ function TemplateCard({
 }
 
 function TemplateIcon({ template }: { template: WorkflowTemplate }): JSX.Element {
-  const Icon =
-    template.minimumPlan === 'commander'
-      ? WandSparkles
-      : template.category === 'Marketing'
-        ? Mail
-        : template.category === 'Customer'
-          ? Users
-          : template.category === 'Inventory'
-            ? Boxes
-            : template.category === 'Operations'
-              ? PackagePlus
-              : template.category === 'Revenue'
-                ? Tag
-                : ShoppingBag
+  const Icon = template.minimumPlan === 'commander' ? WandSparkles : categoryIcon(template.category)
   return (
     <span className="template-icon template-icon-wrap">
       <Icon size={20} className="template-icon-svg" />

@@ -96,6 +96,47 @@ export function isApiPath(requestPath: string): boolean {
   return API_PATH_PREFIXES.some((prefix) => requestPath === prefix || requestPath.startsWith(`${prefix}/`))
 }
 
+/**
+ * Client-side routes inside the Automation module. They share their path
+ * prefix with the JSON API (`/automation` is an API prefix), so the general
+ * SPA fallback below refuses to serve them. Browser navigations — which
+ * always request HTML — must still reach the app shell, otherwise a hard
+ * refresh or deep link to /automation (or a workflow) shows "Cannot GET".
+ */
+const AUTOMATION_SPA_PATH_PATTERN =
+  /^\/automation(?:\/(?:templates|approvals|runs\/[^/]+|workflows\/[^/]+(?:\/runs)?))?$/
+
+export function isAutomationSpaNavigation(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false
+  if (extname(request.path) !== '') return false
+  const accept = request.header('accept') ?? ''
+  if (!accept.includes('text/html')) return false
+  return AUTOMATION_SPA_PATH_PATTERN.test(request.path)
+}
+
+/**
+ * Serves the app shell for Automation deep links BEFORE the API routers run,
+ * so the JSON endpoints keep answering API clients while the browser still
+ * gets index.html for `/automation`, `/automation/templates`,
+ * `/automation/workflows/:id`, and friends. Returns false when the web build
+ * is absent (API-only development and tests).
+ */
+export function mountAutomationSpaFallback(app: Express, distPath = defaultWebDistPath()): boolean {
+  const indexPath = resolve(resolve(distPath), 'index.html')
+  if (!existsSync(indexPath)) return false
+  app.use((request, response, next): void => {
+    if (!isAutomationSpaNavigation(request)) {
+      next()
+      return
+    }
+    setWebHeaders(response, indexPath)
+    response.sendFile(indexPath, { cacheControl: false }, (error) => {
+      if (error) next(error)
+    })
+  })
+  return true
+}
+
 function isWebNavigation(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false
   if (extname(request.path) !== '') return false

@@ -14,6 +14,28 @@ export default defineConfig({
       // broad '/ai' rule below would forward /ai-growth-command/patternai to
       // the API and the dev server would answer a page refresh with JSON.
       '^/ai-growth-command/patternai': { target: 'http://127.0.0.1:5173', bypass: () => '/index.html' },
+      // Automation deep links are client-side routes. The broad '/automation'
+      // rule below would otherwise forward /automation and
+      // /automation/templates to the API and a page refresh would answer
+      // with JSON (or "Cannot GET /automation"). Browser navigations (which
+      // always request text/html) get the SPA shell; API calls — which never
+      // accept HTML — fall through to the API target exactly as before.
+      '^/automation/(templates|approvals)$': {
+        target: 'http://127.0.0.1:3000',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+      },
+      '^/automation/workflows/[^/]+(/runs)?$': {
+        target: 'http://127.0.0.1:3000',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+      },
+      '^/automation/runs/[^/]+$': {
+        target: 'http://127.0.0.1:3000',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+      },
+      '/automation': {
+        target: 'http://127.0.0.1:3000',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+      },
       '/sync': 'http://127.0.0.1:3000',
       '/analytics': 'http://127.0.0.1:3000',
       '/catalog': 'http://127.0.0.1:3000',
@@ -25,7 +47,6 @@ export default defineConfig({
       '/recommendations': 'http://127.0.0.1:3000',
       '/billing': 'http://127.0.0.1:3000',
       '/admin': 'http://127.0.0.1:3000',
-      '/automation': 'http://127.0.0.1:3000',
       '/campaigns': 'http://127.0.0.1:3000',
       '/customers': 'http://127.0.0.1:3000',
       '/inventory': 'http://127.0.0.1:3000',
