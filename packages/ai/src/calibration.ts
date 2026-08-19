@@ -1,4 +1,5 @@
 import type { StoreId } from '@profitpilot/types'
+import { withTenantContext } from '@profitpilot/db'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import type { AgentId, ConfidenceLevel } from './domain.js'
 import { AGENT_IDS } from './domain.js'
@@ -92,7 +93,7 @@ export class PostgresCalibrationStore implements CalibrationStore {
     const sample: CalibrationSample = typeof sampleOrStoreId === 'string'
       ? { storeId: sampleOrStoreId as StoreId, agent: agent as AgentId, recommendationId: recommendationId ?? null, outcome: outcome as CalibrationOutcome }
       : sampleOrStoreId
-    await this.executor.query('INSERT INTO ai_calibration_samples (store_id, agent, recommendation_id, outcome) VALUES ($1, $2, $3, $4)', [sample.storeId, sample.agent, sample.recommendationId, sample.outcome])
+    await withTenantContext(this.executor, sample.storeId, (executor) => executor.query('INSERT INTO ai_calibration_samples (store_id, agent, recommendation_id, outcome) VALUES ($1, $2, $3, $4)', [sample.storeId, sample.agent, sample.recommendationId, sample.outcome]).then(() => undefined))
   }
 
   public async counts(): Promise<ReadonlyMap<AgentId, Readonly<{ accepted: number; rejected: number }>>> {

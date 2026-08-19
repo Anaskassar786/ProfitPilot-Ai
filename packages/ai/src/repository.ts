@@ -1,5 +1,6 @@
 import { AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
+import { withTenantContext as withDatabaseTenantContext } from '@profitpilot/db'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import type { AgentId, Recommendation, RecommendationStatus, RejectReason, RuleId } from './domain.js'
 
@@ -170,13 +171,17 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
 
   public constructor(executor: SqlExecutor) { this.executor = executor }
 
+  private withTenant<Value>(storeId: StoreId, operation: (executor: SqlExecutor) => Promise<Value>): Promise<Value> {
+    return withDatabaseTenantContext(this.executor, storeId, operation)
+  }
+
   public async put(recommendation: Recommendation): Promise<void> {
     const normalized = normalize(recommendation)
-    await this.executor.query(
+    await this.withTenant(normalized.storeId, (executor) => executor.query(
       `INSERT INTO ai_recommendations (id, store_id, agent, rule_id, status, version, payload, created_at, entity_key, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10) ON CONFLICT (id) DO NOTHING`,
       [normalized.id, normalized.storeId, normalized.agent, normalized.ruleId, normalized.status, normalized.version, JSON.stringify(normalized), normalized.createdAt, normalized.entityKey, normalized.expiresAt],
-    )
+    ).then(() => undefined))
   }
 
   public async list(storeId: StoreId, query: RecommendationListQuery = {}): Promise<readonly Recommendation[]> {
@@ -184,134 +189,156 @@ export class PostgresRecommendationRepository implements RecommendationRepositor
   }
 
   public async page(storeId: StoreId, query: RecommendationListQuery): Promise<RecommendationPage> {
-    const where: string[] = ['store_id = $1']
-    const values: unknown[] = [storeId]
-    const add = (clause: string, value: unknown): void => { values.push(value); where.push(clause.replace('?', `$${values.length}`)) }
-    if (query.status) add('status = ?', query.status)
-    if (query.agent) add('agent = ?', query.agent)
-    if (query.ruleId) add('rule_id = ?', query.ruleId)
-    if (typeof query.minImpact === 'number') add(`(payload->>'impactValue')::numeric >= ?`, query.minImpact)
-    if (typeof query.maxImpact === 'number') add(`(payload->>'impactValue')::numeric <= ?`, query.maxImpact)
-    if (query.dateFrom) add('created_at >= ?', query.dateFrom)
-    if (query.dateTo) add('created_at <= ?', query.dateTo)
-    const cursor = Math.max(0, query.cursor ?? 0)
-    const limit = clampLimit(query.limit)
-    const orderBy = sqlOrder(query.sort ?? 'created', query.direction)
-    const countResult = await this.executor.query<CountRow>(`SELECT COUNT(*) AS total FROM ai_recommendations WHERE ${where.join(' AND ')}`, values)
-    const total = Number(countResult.rows[0]?.total ?? 0)
-    values.push(limit, cursor)
-    const result = await this.executor.query<RecommendationRow>(
-      `SELECT payload, status, version FROM ai_recommendations WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT $${values.length - 1} OFFSET $${values.length}`,
-      values,
-    )
-    const items = result.rows.map((row) => parseRecommendation(row.payload))
-    return { items, total, cursor, limit, hasMore: cursor + items.length < total }
+    return this.withTenant(storeId, async (executor) => {
+      const where: string[] = ['store_id = $1']
+      const values: unknown[] = [storeId]
+      const add = (clause: string, value: unknown): void => { values.push(value); where.push(clause.replace('?', `$${values.length}`)) }
+      if (query.status) add('status = ?', query.status)
+      if (query.agent) add('agent = ?', query.agent)
+      if (query.ruleId) add('rule_id = ?', query.ruleId)
+      if (typeof query.minImpact === 'number') add(`(payload->>'impactValue')::numeric >= ?`, query.minImpact)
+      if (typeof query.maxImpact === 'number') add(`(payload->>'impactValue')::numeric <= ?`, query.maxImpact)
+      if (query.dateFrom) add('created_at >= ?', query.dateFrom)
+      if (query.dateTo) add('created_at <= ?', query.dateTo)
+      const cursor = Math.max(0, query.cursor ?? 0)
+      const limit = clampLimit(query.limit)
+      const orderBy = sqlOrder(query.sort ?? 'created', query.direction)
+      const countResult = await executor.query<CountRow>(`SELECT COUNT(*) AS total FROM ai_recommendations WHERE ${where.join(' AND ')}`, values)
+      const total = Number(countResult.rows[0]?.total ?? 0)
+      values.push(limit, cursor)
+      const result = await executor.query<RecommendationRow>(
+        `SELECT payload, status, version FROM ai_recommendations WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT $${values.length - 1} OFFSET $${values.length}`,
+        values,
+      )
+      const items = result.rows.map((row) => parseRecommendation(row.payload))
+      return { items, total, cursor, limit, hasMore: cursor + items.length < total }
+    })
   }
 
   public async listByAgent(storeId: StoreId, agent: AgentId, limit = 20): Promise<readonly Recommendation[]> {
-    const result = await this.executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND agent = $2 ORDER BY created_at DESC LIMIT $3', [storeId, agent, limit])
-    return result.rows.map((row) => parseRecommendation(row.payload))
+    return this.withTenant(storeId, async (executor) => {
+      const result = await executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND agent = $2 ORDER BY created_at DESC LIMIT $3', [storeId, agent, limit])
+      return result.rows.map((row) => parseRecommendation(row.payload))
+    })
   }
 
   public async get(storeId: StoreId, id: string): Promise<Recommendation | null> {
-    const result = await this.executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND id = $2 LIMIT 1', [storeId, id])
-    const row = result.rows[0]
-    return row ? parseRecommendation(row.payload) : null
+    return this.withTenant(storeId, async (executor) => {
+      const result = await executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND id::text = $2 LIMIT 1', [storeId, id])
+      const row = result.rows[0]
+      return row ? parseRecommendation(row.payload) : null
+    })
   }
 
   public async findPending(storeId: StoreId, ruleId: string, entityKey: string | null): Promise<Recommendation | null> {
-    const result = await this.executor.query<RecommendationRow>(`SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND rule_id = $2 AND status = 'PENDING' AND ((entity_key IS NULL AND $3::text IS NULL) OR entity_key = $3) ORDER BY created_at DESC LIMIT 1`, [storeId, ruleId, entityKey])
-    const row = result.rows[0]
-    return row ? parseRecommendation(row.payload) : null
+    return this.withTenant(storeId, async (executor) => {
+      const result = await executor.query<RecommendationRow>(`SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 AND rule_id = $2 AND status = 'PENDING' AND ((entity_key IS NULL AND $3::text IS NULL) OR entity_key = $3) ORDER BY created_at DESC LIMIT 1`, [storeId, ruleId, entityKey])
+      const row = result.rows[0]
+      return row ? parseRecommendation(row.payload) : null
+    })
   }
 
   public async refresh(recommendation: Recommendation): Promise<void> {
-    await this.executor.query(`UPDATE ai_recommendations SET payload = $3::jsonb WHERE store_id = $1 AND id = $2 AND status = 'PENDING'`, [recommendation.storeId, recommendation.id, JSON.stringify(recommendation)])
+    await this.withTenant(recommendation.storeId, (executor) => executor.query(`UPDATE ai_recommendations SET payload = $3::jsonb WHERE store_id = $1 AND id::text = $2 AND status = 'PENDING'`, [recommendation.storeId, recommendation.id, JSON.stringify(recommendation)]).then(() => undefined))
   }
 
   public async decide(storeId: StoreId, id: string, expectedVersion: number, status: 'APPROVED' | 'REJECTED', input: DecisionInput = {}): Promise<Recommendation> {
-    const decidedAt = input.decidedAt ?? new Date().toISOString()
-    const decidedBy = input.decidedBy ?? null
-    const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
-    const result = await this.executor.query<RecommendationRow>(
-      `UPDATE ai_recommendations SET status = $4, version = version + 1, decided_at = $5, decided_by = $6, reject_reason = $7,
-         payload = payload || jsonb_build_object('status', $4::text, 'version', version + 1, 'decidedAt', $5::text, 'decidedBy', $6::text, 'rejectReason', $7::text)
-       WHERE store_id = $1 AND id = $2 AND version = $3 AND status = 'PENDING' RETURNING payload, status, version`,
-      [storeId, id, expectedVersion, status, decidedAt, decidedBy, rejectReason],
-    )
-    const row = result.rows[0]
-    if (!row) throw new AppError('CONFLICT', 'Recommendation changed; reload before deciding', 409, { id, expectedVersion })
-    return parseRecommendation(row.payload)
+    return this.withTenant(storeId, async (executor) => {
+      const decidedAt = input.decidedAt ?? new Date().toISOString()
+      const decidedBy = input.decidedBy ?? null
+      const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
+      const result = await executor.query<RecommendationRow>(
+        `UPDATE ai_recommendations SET status = $4, version = version + 1, decided_at = $5, decided_by = $6, reject_reason = $7,
+           payload = payload || jsonb_build_object('status', $4::text, 'version', version + 1, 'decidedAt', $5::text, 'decidedBy', $6::text, 'rejectReason', $7::text)
+         WHERE store_id = $1 AND id::text = $2 AND version = $3 AND status = 'PENDING' RETURNING payload, status, version`,
+        [storeId, id, expectedVersion, status, decidedAt, decidedBy, rejectReason],
+      )
+      const row = result.rows[0]
+      if (!row) throw new AppError('CONFLICT', 'Recommendation changed; reload before deciding', 409, { id, expectedVersion })
+      return parseRecommendation(row.payload)
+    })
   }
 
   public async decidePending(storeId: StoreId, id: string, status: 'APPROVED' | 'REJECTED', input: DecisionInput = {}): Promise<Recommendation> {
-    const decidedAt = input.decidedAt ?? new Date().toISOString()
-    const decidedBy = input.decidedBy ?? null
-    const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
-    const result = await this.executor.query<RecommendationRow>(
-      `UPDATE ai_recommendations SET status = $3, version = version + 1, decided_at = $4, decided_by = $5, reject_reason = $6,
-         payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1, 'decidedAt', $4::text, 'decidedBy', $5::text, 'rejectReason', $6::text)
-       WHERE store_id = $1 AND id = $2 AND status = 'PENDING' RETURNING payload, status, version`,
-      [storeId, id, status, decidedAt, decidedBy, rejectReason],
-    )
-    const row = result.rows[0]
-    if (!row) throw new AppError('CONFLICT', 'That recommendation is not pending', 409, { id })
-    return parseRecommendation(row.payload)
+    return this.withTenant(storeId, async (executor) => {
+      const decidedAt = input.decidedAt ?? new Date().toISOString()
+      const decidedBy = input.decidedBy ?? null
+      const rejectReason = status === 'REJECTED' ? input.rejectReason ?? null : null
+      const result = await executor.query<RecommendationRow>(
+        `UPDATE ai_recommendations SET status = $3, version = version + 1, decided_at = $4, decided_by = $5, reject_reason = $6,
+           payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1, 'decidedAt', $4::text, 'decidedBy', $5::text, 'rejectReason', $6::text)
+         WHERE store_id = $1 AND id::text = $2 AND status = 'PENDING' RETURNING payload, status, version`,
+        [storeId, id, status, decidedAt, decidedBy, rejectReason],
+      )
+      const row = result.rows[0]
+      if (!row) throw new AppError('CONFLICT', 'That recommendation is not pending', 409, { id })
+      return parseRecommendation(row.payload)
+    })
   }
 
   public async undo(storeId: StoreId, id: string, now = Date.now()): Promise<Recommendation> {
-    const cutoff = new Date(now - UNDO_WINDOW_MS).toISOString()
-    const result = await this.executor.query<RecommendationRow>(
-      `UPDATE ai_recommendations SET status = 'PENDING', version = version + 1, decided_at = NULL, decided_by = NULL, reject_reason = NULL,
-         payload = payload || jsonb_build_object('status', 'PENDING'::text, 'version', version + 1) || '{"decidedAt": null, "decidedBy": null, "rejectReason": null}'::jsonb
-       WHERE store_id = $1 AND id = $2 AND status IN ('APPROVED', 'REJECTED') AND decided_at IS NOT NULL AND decided_at >= $3 RETURNING payload, status, version`,
-      [storeId, id, cutoff],
-    )
-    const row = result.rows[0]
-    if (!row) throw new AppError('CONFLICT', 'The undo window has closed for this recommendation', 409, { id })
-    return parseRecommendation(row.payload)
+    return this.withTenant(storeId, async (executor) => {
+      const cutoff = new Date(now - UNDO_WINDOW_MS).toISOString()
+      const result = await executor.query<RecommendationRow>(
+        `UPDATE ai_recommendations SET status = 'PENDING', version = version + 1, decided_at = NULL, decided_by = NULL, reject_reason = NULL,
+           payload = payload || jsonb_build_object('status', 'PENDING'::text, 'version', version + 1) || '{"decidedAt": null, "decidedBy": null, "rejectReason": null}'::jsonb
+         WHERE store_id = $1 AND id::text = $2 AND status IN ('APPROVED', 'REJECTED') AND decided_at IS NOT NULL AND decided_at >= $3 RETURNING payload, status, version`,
+        [storeId, id, cutoff],
+      )
+      const row = result.rows[0]
+      if (!row) throw new AppError('CONFLICT', 'The undo window has closed for this recommendation', 409, { id })
+      return parseRecommendation(row.payload)
+    })
   }
 
   public async snooze(storeId: StoreId, id: string, until: string): Promise<Recommendation> {
-    const result = await this.executor.query<RecommendationRow>(
-      `UPDATE ai_recommendations SET snoozed_until = $3, payload = payload || jsonb_build_object('snoozedUntil', $3::text)
-       WHERE store_id = $1 AND id = $2 AND status = 'PENDING' RETURNING payload, status, version`,
-      [storeId, id, until],
-    )
-    const row = result.rows[0]
-    if (!row) throw new AppError('CONFLICT', 'Only a pending recommendation can be snoozed', 409, { id })
-    return parseRecommendation(row.payload)
+    return this.withTenant(storeId, async (executor) => {
+      const result = await executor.query<RecommendationRow>(
+        `UPDATE ai_recommendations SET snoozed_until = $3, payload = payload || jsonb_build_object('snoozedUntil', $3::text)
+         WHERE store_id = $1 AND id::text = $2 AND status = 'PENDING' RETURNING payload, status, version`,
+        [storeId, id, until],
+      )
+      const row = result.rows[0]
+      if (!row) throw new AppError('CONFLICT', 'Only a pending recommendation can be snoozed', 409, { id })
+      return parseRecommendation(row.payload)
+    })
   }
 
   public async markExecution(storeId: StoreId, id: string, status: 'EXECUTED' | 'FAILED'): Promise<Recommendation> {
-    const result = await this.executor.query<RecommendationRow>(
-      `UPDATE ai_recommendations SET status = $3, version = version + 1,
-         payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1)
-       WHERE store_id = $1 AND id = $2 AND status = 'APPROVED' RETURNING payload, status, version`,
-      [storeId, id, status],
-    )
-    const row = result.rows[0]
-    if (!row) throw new AppError('CONFLICT', 'Only an approved recommendation can be executed', 409, { id })
-    return parseRecommendation(row.payload)
+    return this.withTenant(storeId, async (executor) => {
+      const result = await executor.query<RecommendationRow>(
+        `UPDATE ai_recommendations SET status = $3, version = version + 1,
+           payload = payload || jsonb_build_object('status', $3::text, 'version', version + 1)
+         WHERE store_id = $1 AND id::text = $2 AND status = 'APPROVED' RETURNING payload, status, version`,
+        [storeId, id, status],
+      )
+      const row = result.rows[0]
+      if (!row) throw new AppError('CONFLICT', 'Only an approved recommendation can be executed', 409, { id })
+      return parseRecommendation(row.payload)
+    })
   }
 
   public async expireStale(storeId: StoreId, now = Date.now()): Promise<number> {
-    const at = new Date(now).toISOString()
-    const result = await this.executor.query(
-      `UPDATE ai_recommendations SET status = 'EXPIRED', version = version + 1, decided_at = $2, decided_by = 'system',
-         payload = payload || jsonb_build_object('status', 'EXPIRED'::text, 'version', version + 1, 'decidedAt', $2::text, 'decidedBy', 'system'::text)
-       WHERE store_id = $1 AND status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= $2`,
-      [storeId, at],
-    )
-    return result.rowCount
+    return this.withTenant(storeId, async (executor) => {
+      const at = new Date(now).toISOString()
+      const result = await executor.query(
+        `UPDATE ai_recommendations SET status = 'EXPIRED', version = version + 1, decided_at = $2, decided_by = 'system',
+           payload = payload || jsonb_build_object('status', 'EXPIRED'::text, 'version', version + 1, 'decidedAt', $2::text, 'decidedBy', 'system'::text)
+         WHERE store_id = $1 AND status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= $2`,
+        [storeId, at],
+      )
+      return result.rowCount
+    })
   }
 
   public async summary(storeId: StoreId, now = Date.now()): Promise<RecommendationSummary> {
-    // Summary works over the full payload set; the per-store volume of
-    // recommendations is bounded by monthly plan limits, so one scan is fine
-    // and keeps every aggregate consistent with a single snapshot.
-    const result = await this.executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 ORDER BY created_at DESC LIMIT 2000', [storeId])
-    return buildSummary(result.rows.map((row) => parseRecommendation(row.payload)), now)
+    return this.withTenant(storeId, async (executor) => {
+      // Summary works over the full payload set; the per-store volume of
+      // recommendations is bounded by monthly plan limits, so one scan is fine
+      // and keeps every aggregate consistent with a single snapshot.
+      const result = await executor.query<RecommendationRow>('SELECT payload, status, version FROM ai_recommendations WHERE store_id = $1 ORDER BY created_at DESC LIMIT 2000', [storeId])
+      return buildSummary(result.rows.map((row) => parseRecommendation(row.payload)), now)
+    })
   }
 }
 

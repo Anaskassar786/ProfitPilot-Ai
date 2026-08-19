@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PostgresDatabase } from '@profitpilot/db'
 import type { QueryResultRow } from '@profitpilot/db'
 import type { DatabaseResult, SqlExecutor } from '@profitpilot/db'
 import { InMemoryRecommendationRepository, PostgresRecommendationRepository } from './repository.js'
@@ -48,5 +49,22 @@ describe('recommendation repositories', () => {
   it('raises a CAS conflict when Postgres returns no row', async () => {
     const executor: SqlExecutor = { async query<Row extends QueryResultRow>(): Promise<DatabaseResult<Row>> { return { rows: [], rowCount: 0 } } }
     await expect(new PostgresRecommendationRepository(executor).decide(storeId('s'), 'r1', 0, 'APPROVED')).rejects.toThrow('changed')
+  })
+
+  it('sets the tenant context on the same Postgres transaction used for a decision', async () => {
+    const queries: Array<Readonly<{ text: string; values: readonly unknown[] }>> = []
+    const database = Object.create(PostgresDatabase.prototype) as PostgresDatabase
+    database.withTransaction = async (operation) => operation({
+      async query<Row extends QueryResultRow>(text: string, values: readonly unknown[] = []): Promise<DatabaseResult<Row>> {
+        queries.push({ text, values })
+        if (text.includes('UPDATE ai_recommendations')) return { rows: [{ payload: { ...recommendation, status: 'APPROVED', version: 1 } } as unknown as Row], rowCount: 1 }
+        return { rows: [], rowCount: 1 }
+      },
+    } as never)
+
+    const decided = await new PostgresRecommendationRepository(database).decide(storeId('s'), 'r1', 0, 'APPROVED')
+    expect(decided.status).toBe('APPROVED')
+    expect(queries[0]).toMatchObject({ text: 'SELECT set_config($1, $2, true)', values: ['app.store_id', 's'] })
+    expect(queries[1]?.text).toContain("WHERE store_id = $1 AND id::text = $2 AND version = $3")
   })
 })

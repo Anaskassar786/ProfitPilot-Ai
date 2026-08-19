@@ -228,6 +228,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
   const [howItWorksOpen, setHowItWorksOpen] = useState(false)
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [busyDecisionIds, setBusyDecisionIds] = useState<ReadonlySet<string>>(new Set())
   const undoTimer = useRef<number | null>(null)
   const sort = SORT_OPTIONS[sortIndex] ?? SORT_OPTIONS[0]!
 
@@ -336,12 +337,10 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
   const applyLocal = (updated: RecommendationView) => {
     setItems((current) => applyDecisionLocally(current, updated))
     setDrawer((current) => (current?.id === updated.id ? updated : current))
-    void refreshSummary()
-  }
-
-  const refreshSummary = async () => {
-    if (!storeId) return
-    try { setSummary(await fetchRecommendationSummary(storeId)) } catch { /* summary refresh is best-effort */ }
+    // Re-read the current filtered page as soon as the server confirms the
+    // decision. This removes a decided card from the Pending tab and makes the
+    // destination tab/counts reflect the same durable state as the API.
+    void load({ silent: true })
   }
 
   const startUndoWindow = (recommendation: RecommendationView, decision: 'approved' | 'rejected') => {
@@ -351,15 +350,22 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
   }
 
   const decide = async (recommendation: RecommendationView, decision: 'approve' | 'reject', reason: RejectReason | null) => {
-    if (!storeId) return
+    if (!storeId || busyDecisionIds.has(recommendation.id)) return
+    setBusyDecisionIds((current) => new Set(current).add(recommendation.id))
     try {
       const updated = await decideRecommendationWithReason(storeId, recommendation.id, recommendation.version, decision, reason)
       applyLocal(updated)
       startUndoWindow(updated, decision === 'approve' ? 'approved' : 'rejected')
-      onToast(decision === 'approve' ? 'Great job approving that recommendation! Your AI team is learning from your feedback.' : 'Skipped — we will keep that in mind next time.', decision === 'approve' ? 'success' : 'info')
+      onToast(decision === 'approve' ? 'Recommendation approved' : 'Recommendation skipped', 'success')
     } catch (error: unknown) {
       onToast(errorText(error), 'error')
       await load({ silent: true })
+    } finally {
+      setBusyDecisionIds((current) => {
+        const next = new Set(current)
+        next.delete(recommendation.id)
+        return next
+      })
     }
   }
 
@@ -367,7 +373,11 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
     if (recommendation.actionRisk === 'SAFE') { void decide(recommendation, 'approve', null); return }
     setConfirm({ kind: 'approve', recommendation })
   }
-  const requestReject = (recommendation: RecommendationView) => setConfirm({ kind: 'reject', recommendation })
+  // Skipping is intentionally one click. A reason is optional and remains
+  // available to other decision surfaces; the primary card action should not
+  // make a merchant open a second dialog before the recommendation leaves the
+  // pending queue.
+  const requestReject = (recommendation: RecommendationView) => { void decide(recommendation, 'reject', null) }
 
   const performUndo = async () => {
     if (!storeId || !undo) return
@@ -413,7 +423,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
       const failed = result.results.filter((entry) => !entry.ok)
       for (const entry of succeeded) { if (entry.recommendation) setItems((current) => applyDecisionLocally(current, entry.recommendation!)) }
       setSelected(new Set())
-      void refreshSummary()
+      void load({ silent: true })
       onToast(failed.length > 0 ? `${succeeded.length} ${decision === 'approve' ? 'approved' : 'skipped'}, ${failed.length} failed (${failed[0]?.error?.message ?? 'conflict'}).` : `${succeeded.length} recommendation${succeeded.length === 1 ? '' : 's'} ${decision === 'approve' ? 'approved' : 'skipped'}. Keep going — you are growing!`, failed.length > 0 ? 'warning' : 'success')
     } catch (error: unknown) { onToast(errorText(error), 'error') } finally { setBulkBusy(false) }
   }
@@ -498,7 +508,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
               ))}
             </div>
             <div className="recs-toolbar-row">
-              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, product, customer, or rule…" aria-label="Search recommendations by title, product, customer, or rule" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button>}</div>
+              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Search by title, product, customer, or rule…" aria-label="Search recommendations by title, product, customer, or rule" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button>}</div>
               <span className="recs-tip-anchor recs-sort-wrap" data-tip={SORT_TOOLTIP}>
                 <select className="recs-select" value={sortIndex} onChange={(event) => setSortIndex(Number(event.target.value))} aria-label={`Sort recommendations. ${SORT_TOOLTIP}`}>
                   {SORT_OPTIONS.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}
@@ -510,9 +520,9 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                 <button className={groupMode === 'rule' ? 'active' : ''} onClick={() => setGroupMode('rule')}>By rule</button>
               </div>
               <div className="recs-dates">
-                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} aria-label="From date" />
+                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} onInput={(event) => setDateFrom(event.currentTarget.value)} aria-label="From date" />
                 <span>–</span>
-                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} aria-label="To date" />
+                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} onInput={(event) => setDateTo(event.currentTarget.value)} aria-label="To date" />
               </div>
               <button className="icon-button recs-refresh" onClick={() => void load()} title={refreshedAt ? `Refreshed ${formatRelativeTime(new Date(refreshedAt).toISOString())}` : 'Refresh'} aria-label="Refresh recommendations"><RefreshCw size={15} /></button>
             </div>
@@ -571,6 +581,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                       onEvidence={() => openDrawer(item)}
                       onApprove={() => requestApprove(item)}
                       onReject={() => requestReject(item)}
+                      busy={busyDecisionIds.has(item.id)}
                       onSnooze={(hours) => void snooze(item, hours)}
                       onCopyLink={() => copyLink(item)}
                       undoAvailable={undo?.recommendation.id === item.id}
@@ -657,14 +668,16 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
           </div>
         </div>
       </div>
-      <div className="recs-kpi">
+      <div className="recs-kpi recs-kpi-approved">
         <Tip label={KPI_TOOLTIPS.approvedThisMonth}><span className="recs-kpi-label"><CheckCircle2 size={13} /> Approved this month</span></Tip>
-        <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvedCount}</strong>
-          {approvedCount === 0
-            ? <small>Approve recommendations to see the impact here</small>
-            : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+        <div className="recs-kpi-row">
+          <div className="recs-kpi-value-stack"><strong className="recs-kpi-value">{approvedCount}</strong>
+            {approvedCount === 0
+              ? <small>Approve recommendations to see the impact here</small>
+              : <small>{approvedCount} approval{approvedCount === 1 ? '' : 's'} this month{summary.approvedThisMonth.impact.length > 0 ? ` · ${formatCurrencyAmounts(summary.approvedThisMonth.impact)} modeled` : ''}</small>}
+          </div>
+          <ApprovedBars values={last7DaysApproved} />
         </div>
-        <ApprovedBars values={last7DaysApproved} />
       </div>
       <div className="recs-kpi">
         <Tip label={KPI_TOOLTIPS.approvalRate}><span className="recs-kpi-label"><TrendingUp size={13} /> Approval rate</span></Tip>
@@ -690,6 +703,7 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
           <div className="recs-usage-copy">
             <strong>{usage.limit === null ? `${usage.used}` : `${usage.used}/${usage.limit}`}</strong>
             <small>{usage.limit === null ? `Unlimited on ${plan ? PLAN_LABELS[plan] : 'your'} plan` : `${plan ? PLAN_LABELS[plan] : ''} plan · ${usage.remaining} left`}</small>
+            {usage.atLimit && <small className="recs-usage-limit-message">Come back next month or Upgrade Plan</small>}
           </div>
         </div>
         {usage.limit !== null && <button className="text-button recs-upgrade-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></button>}
@@ -732,13 +746,12 @@ function ApprovedBars({ values }: { values: readonly number[] }) {
 }
 
 function ApprovalRateBar({ rate }: { rate: number | null }) {
-  // Empty state: a plain gray track with Low/Medium/Good labels — no marker
-  // and no fill, so a missing rate never looks like a broken gauge.
+  // Empty state: do not draw a track that looks like a broken gauge. The
+  // headline and helper copy already explain that a decision is needed.
   if (rate === null) {
     return (
-      <div className="recs-kpi-progress recs-kpi-progress-empty" aria-hidden>
-        <div className="recs-kpi-progress-track" />
-        <div className="recs-kpi-progress-axis"><span>Low</span><span>Medium</span><span>Good</span></div>
+      <div className="recs-kpi-progress recs-kpi-progress-empty" aria-label="Approval rate unavailable until a decision is made">
+        <span className="recs-kpi-empty-state">No decisions yet</span>
       </div>
     )
   }
@@ -816,7 +829,7 @@ function UsageRing({ ratio, atLimit, nearLimit }: { ratio: number | null; atLimi
 // Recommendation card
 // ---------------------------------------------------------------------------
 
-function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onEvidence, onApprove, onReject, onSnooze, onCopyLink, undoAvailable, onUndo }: {
+function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onEvidence, onApprove, onReject, onSnooze, onCopyLink, undoAvailable, onUndo, busy = false }: {
   recommendation: RecommendationView
   maxImpact: number
   selected: boolean
@@ -827,6 +840,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
   onSnooze: (hours: number) => void
   onCopyLink: () => void
   undoAvailable: boolean
+  busy?: boolean
   onUndo: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -879,8 +893,8 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
         <button className="text-button recs-evidence-link" onClick={onEvidence}><Eye size={14} /> View Full Details</button>
         {pending ? (
           <div className="recs-card-actions">
-            <button className="button reject compact" onClick={onReject}>Skip This</button>
-            <button className="button approve compact" onClick={onApprove}><Check size={13} /> {highRisk ? 'Review & Approve' : 'Approve & Take Action'}</button>
+            <button className="button reject compact" onClick={onReject} disabled={busy}><X size={13} /> {busy ? 'Saving…' : 'Skip This'}</button>
+            <button className="button approve compact" onClick={onApprove} disabled={busy}><Check size={13} /> {busy ? 'Saving…' : highRisk ? 'Review & Approve' : 'Approve & Take Action'}</button>
             <div className="recs-card-menu-wrap">
               <button className="icon-button compact" aria-label="More actions" onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={14} /></button>
               {menuOpen && (
