@@ -378,7 +378,6 @@
 
 /* Topline last-analysis stamp */
 .recs-last-run { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px solid var(--border-soft); border-radius: 99px; color: var(--text-tertiary); font-size: 10.5px; white-space: nowrap; }
-.recs-last-run svg { color: var(-; }
 .recs-last-run svg { color: var(--green); }
 
 /* First-run: what to expect */
