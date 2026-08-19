@@ -105,6 +105,13 @@ describe('Inventory toolbar', () => {
     sortOptions: inventorySortOptions(false),
   }
 
+  it('gives Sort by / Product name enough width so the selected field is fully readable', () => {
+    const css = readFileSync(new URL('./inventory.css', import.meta.url), 'utf8')
+    expect(css).toContain('min-width: 248px')
+    expect(css).toContain('.inventory-sort-control .custom-select-trigger > strong')
+    expect(css).toContain('max-width: none')
+  })
+
   it('keeps search and sort on the primary row so Name/Sort no longer wrap under the filters', () => {
     const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
     expect(html).toContain('inventory-toolbar-primary')

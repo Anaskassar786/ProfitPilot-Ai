@@ -550,15 +550,17 @@
 }
 .inventory-sort-control .custom-select,
 .inventory-sort-control .inventory-sort-select {
-  min-width: 188px;
-  max-width: 260px;
-  min-height: 40px;
+  min-width: 248px;
+  max-width: 320px;
+  min-height: 42px;
   border: 0 !important;
   background: transparent !important;
 }
 .inventory-sort-control .custom-select-trigger {
-  min-height: 40px;
-  padding-right: 8px;
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 12px 0 12px;
+  padding-right: 10px;
 }
 .inventory-sort-control .custom-select-trigger > span {
   color: var(--text-tertiary);
@@ -566,14 +568,21 @@
   font-weight: 650;
   letter-spacing: .02em;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 .inventory-sort-control .custom-select-trigger > strong {
-  min-width: 72px;
-  max-width: 140px;
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 auto;
   overflow: hidden;
-  font-size: 13px !important;
+  font-size: 14px !important;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.inventory-sort-control .custom-select-menu {
+  min-width: 100%;
+  z-index: 50;
 }
 .inventory-sort-control button {
   width: 40px;

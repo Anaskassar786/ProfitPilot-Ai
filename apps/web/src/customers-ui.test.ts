@@ -77,6 +77,17 @@ describe('Customers UI safety regressions', () => {
     expect(source).not.toMatch(/https?:\/\/.*(avatar|photo|unsplash)/i)
   })
 
+  it('renders a professional Sort by control instead of a cramped Newest customer label', () => {
+    const source = readFileSync(new URL('./customers.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('label="Sort by"')
+    expect(source).toContain("label: 'Newest'")
+    expect(source).not.toContain('Newest customer')
+    expect(source).toContain('ariaLabel="Sort customers by"')
+    const css = readFileSync(new URL('./customers.css', import.meta.url), 'utf8')
+    expect(css).toContain('.customers-sort')
+    expect(css).toContain('overflow: visible !important')
+  })
+
   it('renders a safety-first email composer with explicit review and no arbitrary recipient input', () => {
     const html = renderToStaticMarkup(createElement(TargetedEmailComposer, { storeId: 'store-1', customer, onClose: vi.fn(), onToast: vi.fn() }))
     expect(html).toContain('NO ONE-CLICK SEND')
