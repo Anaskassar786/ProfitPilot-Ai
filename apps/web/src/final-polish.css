@@ -1371,6 +1371,8 @@
 
 .analytics-kpi {
   min-height: 178px !important;
+  min-width: 0;
+  overflow: hidden;
   padding: 18px 18px 74px !important;
   border-radius: 16px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, .18);
@@ -1386,6 +1388,7 @@
   position: relative;
   z-index: 3;
   gap: 9px;
+  min-width: 0;
 }
 
 .analytics-kpi .kpi-icon {
@@ -1407,6 +1410,8 @@
   font-weight: 800;
   line-height: 1.35;
   letter-spacing: .055em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .analytics-kpi > strong {
@@ -1417,6 +1422,8 @@
   font-weight: 850;
   line-height: 1.1;
   letter-spacing: -.05em;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .analytics-kpi > p {

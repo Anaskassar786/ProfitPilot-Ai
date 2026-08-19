@@ -265,6 +265,8 @@
 /* Hero key-metric strip */
 .gq-hero-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
 .gq-hero-metric {
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -275,7 +277,7 @@
   min-width: 0;
 }
 .app-shell.light-mode .gq-hero-metric { border-color: #E4E1F5; background: rgba(255, 255, 255, .72); }
-.gq-hero-metric strong { font-family: var(--exec-sans); font-size: 17px; font-weight: 720; color: #FFFFFF; letter-spacing: -.01em; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.gq-hero-metric strong { font-family: var(--exec-sans); font-size: 17px; font-weight: 720; color: #FFFFFF; letter-spacing: -.01em; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; overflow-wrap: anywhere; min-width: 0; }
 .app-shell.light-mode .gq-hero-metric strong { color: #1E1B3A; }
 .gq-hero-metric span { color: #9A93C2; font-size: 11px; font-weight: 550; }
 .app-shell.light-mode .gq-hero-metric span { color: #6B6590; }
@@ -683,11 +685,11 @@
 
 /* ─── Benchmarks page ─────────────────────────────────────────────────────── */
 .exec-benchmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
-.exec-metric-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--exec-border); border-radius: 12px; background: var(--exec-surface); box-shadow: var(--exec-shadow); transition: box-shadow 160ms ease; }
+.exec-metric-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--exec-border); border-radius: 12px; background: var(--exec-surface); box-shadow: var(--exec-shadow); transition: box-shadow 160ms ease; min-width: 0; overflow: hidden; }
 .exec-metric-card:hover { box-shadow: var(--exec-shadow-lift); }
 .exec-metric-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .exec-metric-card-head h3 { margin: 0; font-size: 13px; font-weight: 680; color: var(--exec-body); font-family: var(--exec-sans); }
-.exec-metric-value { font-family: var(--exec-sans); font-size: 25px; font-weight: 750; color: var(--exec-heading); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.exec-metric-value { font-family: var(--exec-sans); font-size: clamp(18px, 2.2vw, 25px); font-weight: 750; color: var(--exec-heading); letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .exec-metric-value small { display: block; font-family: var(--exec-sans); font-size: 11px; font-weight: 550; color: var(--exec-muted); }
 .exec-metric-rows { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--exec-body); font-family: var(--exec-sans); }
 .exec-metric-rows span { display: flex; justify-content: space-between; gap: 8px; }

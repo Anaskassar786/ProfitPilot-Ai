@@ -300,7 +300,7 @@ kbd { padding: 2px 5px; color: var(--text-tertiary); border: 1px solid var(--bor
 .real-data-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; color: var(--green); border: 1px solid rgba(16,185,129,.18); border-radius: 999px; background: rgba(16,185,129,.075); font-family: var(--font-mono); font-size: 7px; text-transform: uppercase; }
 .real-data-pill.muted { color: var(--text-tertiary); border-color: var(--border); background: rgba(107,114,128,.07); }
 .product-stat-label { position: relative; z-index: 1; color: var(--text-tertiary); font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.product-stat-card > strong { position: relative; z-index: 1; color: var(--text); font-size: 26px; line-height: 1.02; letter-spacing: -.07em; }
+.product-stat-card > strong { position: relative; z-index: 1; color: var(--text); font-size: 26px; line-height: 1.02; letter-spacing: -.07em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .product-stat-card > small, .product-stat-card .winning-product-main small { position: relative; z-index: 1; color: var(--text-tertiary); font-size: 8px; line-height: 1.45; }
 .product-stat-action { position: relative; z-index: 1; align-self: flex-start; margin-top: auto; }
 .winning-product-main { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: auto; }

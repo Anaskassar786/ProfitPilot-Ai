@@ -764,10 +764,10 @@ export function patternAiStats(overview: InsightsOverview | null): readonly Patt
   const raw = (count: number | undefined): number | null => (overview ? count ?? 0 : null)
   const counts = overview?.counts
   return [
-    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread', count: raw(counts?.newDiscoveries), visual: 'bubbles', pending: 'waiting to populate' },
+    { id: 'discoveries', label: 'Discoveries', value: value(counts?.newDiscoveries), caption: 'new and unread', count: raw(counts?.newDiscoveries), visual: 'bubbles', pending: 'waiting…' },
     { id: 'patterns', label: 'Patterns', value: value(counts?.patterns), caption: 'active right now', count: raw(counts?.patterns), visual: 'network', pending: 'discovering…' },
-    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified', count: raw(counts?.personas), visual: 'cohort', pending: 'analysing customers…' },
-    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered', count: raw(counts?.investigations), visual: 'answers', pending: 'ask your first question' },
+    { id: 'personas', label: 'Personas', value: value(counts?.personas), caption: 'identified', count: raw(counts?.personas), visual: 'cohort', pending: 'analysing…' },
+    { id: 'investigations', label: 'Investigations', value: value(counts?.investigations), caption: 'answered', count: raw(counts?.investigations), visual: 'answers', pending: 'ask first' },
     { id: 'trends', label: 'Trends', value: value(counts?.trends), caption: 'under watch', count: raw(counts?.trends), visual: 'arrows', pending: 'monitoring…' },
     { id: 'predictions', label: 'Predictions', value: value(counts?.predictions), caption: 'forecasts live', count: raw(counts?.predictions), visual: 'wave', pending: 'learning…' },
   ]

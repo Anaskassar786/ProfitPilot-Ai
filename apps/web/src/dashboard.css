@@ -121,6 +121,8 @@
 
 .metric-card-enhanced {
   min-height: 128px;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -209,6 +211,7 @@
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .metric-growth-label {
   color: var(--text-tertiary);

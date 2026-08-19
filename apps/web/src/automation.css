@@ -1002,6 +1002,8 @@
 .automation-kpis article,
 .automation-kpis > button {
   min-height: 136px;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1049,8 +1051,10 @@
 
 .automation-kpis strong {
   margin-top: 3px;
-  font-size: 25px;
+  font-size: clamp(18px, 2vw, 25px);
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .automation-kpis p {
@@ -3353,6 +3357,8 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .automation-page .kpi-visualization {
@@ -3470,9 +3476,11 @@
 
 .automation-page .kpi-value {
   color: #f5f5f5;
-  font-size: 28px;
+  font-size: clamp(18px, 2.2vw, 28px);
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .automation-page .kpi-total {
@@ -3562,7 +3570,7 @@
 .light-mode .automation-page .create-automation-btn,
 .light-mode .automation-page .automation-primary,
 .light-mode .automation-modal .automation-primary,
-.light-mode .automation-page .warning-upgrade-btn {
+.light-mpage .warning-upgrade-btn {
   background: linear-gradient(135deg, #7c3aed, #6d28d9);
   color: #ffffff;
   border: none;
@@ -4424,5 +4432,8 @@
   .automation-plan-banner button,
   .pending-approval-banner button {
     margin-left: 0;
+  }
+}
+-left: 0;
   }
 }

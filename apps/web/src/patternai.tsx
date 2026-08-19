@@ -1137,7 +1137,7 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
             <div className="pa-card pa-strength-card">
               <div className="pa-card-head">
                 <span className="section-kicker"><Radar size={11} /> PATTERN CONFIDENCE</span>
-                <small>How much evidence your store has for each family of pattern</small>
+                <small>Evidence your store has for each pattern family</small>
               </div>
               <PatternStrengthMeter rows={strengthRows} tip="More synced orders mean stronger patterns — every bar is your real count against the engine's own threshold." />
             </div>
