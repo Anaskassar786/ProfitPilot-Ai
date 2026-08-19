@@ -174,6 +174,8 @@ describe('rebuilt analytics widgets render measured data', () => {
       expect(html).toContain(contract)
     }
     expect(html).not.toContain('NaN')
+    const summary = html.slice(html.indexOf('chart-summary'), html.indexOf('insight-strip'))
+    expect(summary).not.toContain('<i')
   })
 
   it('renders the discount waterfall with real totals', () => {

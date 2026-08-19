@@ -215,9 +215,9 @@ export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonl
         <b className={growth !== null && growth < 0 ? 'negative' : 'positive'}>{growth === null ? 'Baseline building' : `${growth >= 0 ? '↗ Ahead of' : '↘ Behind'} last period by ${Math.abs(growth).toFixed(1)}%`}</b>
       </div>
       <div className="chart-summary">
-        <div><small>Total</small><strong title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}>{money(pacing.total)}</strong></div><i/>
-        <div><small>Average / day</small><strong title="Run rate across the synced days in this period">{money(pacing.runRate)}</strong></div><i/>
-        <div><small>Peak Day</small><strong title={peak ? `${shortDay(peak.day)} — best revenue day of the period` : 'Awaiting sales data'}>{peak ? `${shortDay(peak.day)} · ${money(peak.revenue)}` : '—'}</strong></div><i/>
+        <div><small>Total</small><strong title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}>{money(pacing.total)}</strong></div>
+        <div><small>Average / day</small><strong title="Run rate across the synced days in this period">{money(pacing.runRate)}</strong></div>
+        <div><small>Peak Day</small><strong title={peak ? `${shortDay(peak.day)} — best revenue day of the period` : 'Awaiting sales data'}>{peak ? `${shortDay(peak.day)} · ${money(peak.revenue)}` : '—'}</strong></div>
         <div><small>Growth</small><strong className={growth === null ? '' : growth < 0 ? 'negative' : 'positive'} title={growth === null ? 'A previous-period baseline is still building' : 'Pace against the same elapsed days of the previous period'}>{growth === null ? '—' : `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`}</strong></div>
       </div>
       <div className="insight-strip"><Brain size={14}/><span>This period has banked <b>{money(pacing.total)}</b> across {pacing.daysElapsed} {pacing.daysElapsed === 1 ? 'day' : 'days'}, a run rate of <b>{money(pacing.runRate)}</b> per day{closing !== null ? <> — on the {closeSource} this period tracks to close near <b>{money(closing)}</b></> : null}. {growth === null ? 'A previous-period baseline is still building, so pacing appears once comparable days exist.' : growth >= 0 ? `You are ${Math.abs(growth).toFixed(1)}% ahead of the same point last period — protect what is working.` : `You are ${Math.abs(growth).toFixed(1)}% behind the same point last period — close the gap while days remain.`}</span></div>
@@ -356,9 +356,9 @@ export function DiscountLeakage({ snapshot, trend }: { snapshot: AnalyticsSnapsh
         <b className={data.cancelledOrders > 0 ? 'negative' : 'positive'}>{data.cancelledOrders > 0 ? `${data.cancelledOrders} cancelled of ${data.orders} orders (${(data.cancelRate ?? 0).toFixed(1)}%)` : `${data.orders} orders · none cancelled`}</b>
       </div>
       <div className="chart-summary">
-        <div><small>Merchandise value</small><strong title="Collected revenue plus every discount given in this period">{money(data.merchandiseValue)}</strong></div><i/>
-        <div><small>Discounts given</small><strong className={data.discounts > 0 ? 'negative' : ''} title="Shopify discount totals across the period">{data.discounts > 0 ? `−${money(data.discounts)}` : money(0)}</strong></div><i/>
-        <div><small>Collected</small><strong className="positive" title="Order totals actually captured">{money(data.collected)}{share !== null ? ` · ${share.toFixed(0)}%` : ''}</strong></div><i/>
+        <div><small>Merchandise value</small><strong title="Collected revenue plus every discount given in this period">{money(data.merchandiseValue)}</strong></div>
+        <div><small>Discounts given</small><strong className={data.discounts > 0 ? 'negative' : ''} title="Shopify discount totals across the period">{data.discounts > 0 ? `−${money(data.discounts)}` : money(0)}</strong></div>
+        <div><small>Collected</small><strong className="positive" title="Order totals actually captured">{money(data.collected)}{share !== null ? ` · ${share.toFixed(0)}%` : ''}</strong></div>
         <div><small>Discount days</small><strong title="Days in this period where at least one discount was applied">{data.discountDays} of {data.rows.length}</strong></div>
       </div>
       <div className="insight-strip"><Brain size={14}/><span>{data.discounts > 0
@@ -423,9 +423,9 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
           </div>
         )}
         <div className="chart-summary">
-          <div><small>Out of stock</small><strong className={risk.outCount > 0 ? 'negative' : 'positive'}>{risk.outCount}</strong></div><i/>
-          <div><small>Low stock</small><strong className={risk.lowCount > 0 ? 'warn' : ''}>{risk.lowCount}</strong></div><i/>
-          <div><small>Healthy SKUs</small><strong className="positive">{risk.healthyCount}</strong></div><i/>
+          <div><small>Out of stock</small><strong className={risk.outCount > 0 ? 'negative' : 'positive'}>{risk.outCount}</strong></div>
+          <div><small>Low stock</small><strong className={risk.lowCount > 0 ? 'warn' : ''}>{risk.lowCount}</strong></div>
+          <div><small>Healthy SKUs</small><strong className="positive">{risk.healthyCount}</strong></div>
           <div><small>30-day exposure</small><strong className={risk.exposure ? 'negative' : ''} title={risk.exposure === null ? 'Needs measured velocity and a price on the at-risk SKUs' : `Revenue at risk over 30 days across ${risk.exposureItems} SKU${risk.exposureItems === 1 ? '' : 's'} at their measured sales velocity`}>{risk.exposure === null ? '—' : `≈ ${money(risk.exposure)}`}</strong></div>
         </div>
         <div className="insight-strip"><Brain size={14}/><span>{worst
