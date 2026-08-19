@@ -40,12 +40,14 @@ describe('AI Command fixes (empty space / activity timeline)', () => {
     { storeId: 's', usageDate: '2026-08-17', commandsUsed: 3, actionsExecuted: 0, tokensUsed: 0, costMicroDollars: 0, limit: 10, remaining: 7, actionsEnabled: false },
   ]
 
-  it('renders quick follow-up actions with real prompts', () => {
-    const html = renderToStaticMarkup(createElement(PostChatActivity, { usageHistory: history, now, onPrompt: vi.fn() }))
-    expect(html).toContain('Quick follow-ups')
-    for (const label of ['Ask about customers', 'Check inventory', 'Revenue analysis', 'Growth ideas']) {
-      expect(html).toContain(label)
-    }
+  it('renders contextual follow-ups, live-data empty states, popular commands, and a daily tip', () => {
+    const html = renderToStaticMarkup(createElement(PostChatActivity, { usageHistory: history, now, lastCommand: 'Show low stock products', onPrompt: vi.fn() }))
+    expect(html).toContain('Continue exploring')
+    expect(html).toContain('Show products to reorder')
+    expect(html).toContain('Quick insights')
+    expect(html).toContain('No data yet')
+    expect(html).toContain('Popular commands')
+    expect(html).toContain('AI tip of the day')
   })
 
   it('renders a unique 7-day command activity timeline from real usage (no fake data)', () => {

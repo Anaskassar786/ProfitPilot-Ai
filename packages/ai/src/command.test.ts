@@ -10,6 +10,7 @@ import {
   applyUsageLimits,
   buildSystemPrompt,
   collectNumbers,
+  contextualFollowUps,
   contextualQuickCommands,
   conversationGroups,
   defaultQuickCommands,
@@ -85,6 +86,23 @@ describe('AI Command plan limits', () => {
     expect(usage.remaining).toBe(5)
     expect(applyUsageLimits({ ...usage, commandsUsed: 50 }, 'start').remaining).toBe(0)
     expect(applyUsageLimits({ ...usage, commandsUsed: 9 }, 'commander').remaining).toBeNull()
+  })
+})
+
+describe('AI Command conversation enhancements', () => {
+  it('returns live quick insights and contextual follow-ups without placeholder figures', async () => {
+    const command = service('growth')
+    await expect(command.quickInsights(tenant)).resolves.toMatchObject({ revenueToday: 8940, lowStockCount: 3, healthScore: 81 })
+    expect(contextualFollowUps('Who are my best customers?').map((item) => item.command)).toContain('Show repeat customers')
+    expect(contextualFollowUps('Which products are low stock?').map((item) => item.command)).toContain('Show products to reorder')
+  })
+
+  it('does not persist or consume quota for an already-cancelled command', async () => {
+    const command = service('trial')
+    const controller = new AbortController()
+    controller.abort()
+    await expect(command.chat({ storeId: tenant, text: 'Show revenue', signal: controller.signal })).rejects.toMatchObject({ status: 409 })
+    await expect(command.usage(tenant)).resolves.toMatchObject({ commandsUsed: 0 })
   })
 })
 

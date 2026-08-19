@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  ClipboardList,
   Clock3,
   Command,
   Copy,
@@ -15,12 +16,12 @@ import {
   LoaderCircle,
   Lock,
   Package,
-  Paperclip,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   Send,
+  ShoppingCart,
   Settings,
   Share2,
   ShieldCheck,
@@ -257,8 +258,16 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
               />
             ))}
             {workspace.busy && <ThinkingCard steps={workspace.thinking} streaming={workspace.streaming} onCancel={workspace.cancelThinking} />}
-            {messages.length > 0 && !workspace.busy && (
-              <PostChatActivity usageHistory={workspace.usageHistory} now={now} onPrompt={sendText} />
+            {messages.length > 0 && (
+              <PostChatActivity
+                usageHistory={workspace.usageHistory}
+                now={now}
+                lastCommand={lastUserContent(messages)}
+                insights={workspace.quickInsights}
+                followUps={workspace.followUps}
+                disabled={workspace.busy || workspace.limitReached}
+                onPrompt={sendText}
+              />
             )}
           </div>
 
@@ -274,6 +283,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={PLACEHOLDER_EXAMPLES[placeholderIndex]}
+                maxLength={2000}
                 rows={2}
                 disabled={workspace.busy || workspace.limitReached}
                 onKeyDown={(event) => {
@@ -281,7 +291,6 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 }}
               />
               <div className="aic-composer-side">
-                <button type="button" className="aic-tool" disabled title="File attachments are coming soon" aria-label="Attach files (coming soon)"><Paperclip size={16} /></button>
                 <button type="submit" className="aic-send" disabled={workspace.busy || !draft.trim()} aria-label="Send command">
                   {workspace.busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
                 </button>
@@ -523,9 +532,13 @@ function WelcomeScreen({ plan, usage, now, onPrompt, onUpgrade }: {
   )
 }
 
-export function PostChatActivity({ usageHistory, now, onPrompt }: {
+export function PostChatActivity({ usageHistory, now, lastCommand = '', insights = null, followUps = [], disabled = false, onPrompt }: {
   usageHistory: readonly import('./ai-command-model.js').AiCommandUsage[]
   now: number
+  lastCommand?: string
+  insights?: import('./ai-command-model.js').AiCommandQuickInsights | null
+  followUps?: readonly import('./ai-command-model.js').AiCommandSuggestion[]
+  disabled?: boolean
   onPrompt: (value: string) => void
 }) {
   const bars = usageHistoryBars(usageHistory, 7, new Date(now))
@@ -533,47 +546,110 @@ export function PostChatActivity({ usageHistory, now, onPrompt }: {
   const savedMinutes = total * 3
   const savedLabel = savedMinutes >= 60 ? `${(savedMinutes / 60).toFixed(1)}h` : `${savedMinutes}m`
   const maxDot = Math.max(1, ...bars.map((bar) => bar.value))
+  const suggestions = followUps.length > 0 ? followUps : fallbackFollowUps(lastCommand)
+  const tip = DAILY_TIPS[new Date(now).getUTCDate() % DAILY_TIPS.length] ?? DAILY_TIPS[0]!
+  const insightCards = [
+    { icon: BarChart3, label: 'Revenue today', value: moneyOrEmpty(insights?.revenueToday), detail: comparison(insights?.revenueToday, insights?.revenueYesterday, 'yesterday'), prompt: "Show today's revenue details", tone: 'purple' },
+    { icon: ShoppingCart, label: 'Orders today', value: countOrEmpty(insights?.ordersToday, 'orders'), detail: comparison(insights?.ordersToday, insights?.ordersYesterday, 'yesterday'), prompt: "Show today's orders", tone: 'blue' },
+    { icon: Package, label: 'Low stock alerts', value: countOrEmpty(insights?.lowStockCount, 'products'), detail: insights?.lowStockCount == null ? 'Sync inventory to see data' : insights.lowStockCount > 0 ? 'Needs attention' : 'No low-stock alerts', prompt: 'Show low stock products', tone: 'orange' },
+    { icon: ShieldCheck, label: 'Store health', value: insights?.healthScore == null ? 'No data yet' : `${insights.healthScore}/100`, detail: insights?.healthStatus ?? 'Sync your store to calculate', prompt: 'Run store health check', tone: 'green' },
+  ] as const
   return (
-    <div className="aic-postchat">
-      <section className="aic-quickactions" aria-label="Quick follow-up actions">
-        <div className="aic-postchat-head">
-          <Zap size={14} /> Quick follow-ups
+    <div className="aic-postchat" aria-label="Conversation tools">
+      <section aria-label="Contextual follow-up suggestions">
+        <div className="aic-postchat-head"><ArrowUpRight size={14} /> Continue exploring <small>Based on your last command</small></div>
+        <div className="aic-followups-grid">
+          {suggestions.slice(0, 6).map((suggestion) => (
+            <button key={suggestion.command} type="button" disabled={disabled} onClick={() => onPrompt(suggestion.command)}>{suggestion.label}<ChevronRight size={13} /></button>
+          ))}
         </div>
-        <div className="aic-quickactions-grid">
-          {FOLLOW_UP_ACTIONS.map((action) => (
-            <button key={action.label} type="button" className={`tone-${action.tone}`} onClick={() => onPrompt(action.prompt)}>
-              <span className="aic-chip-icon"><action.icon size={13} /></span> {action.label}
+      </section>
+
+      <section aria-label="Live store quick insights">
+        <div className="aic-postchat-head"><Zap size={14} /> Quick insights <small>{insights?.sources.length ? 'Live synced store data' : 'Waiting for synced store data'}</small></div>
+        <div className="aic-insights-grid">
+          {insightCards.map((card) => (
+            <button key={card.label} type="button" className={`tone-${card.tone}`} disabled={disabled} onClick={() => onPrompt(card.prompt)}>
+              <span className="aic-insight-icon"><card.icon size={16} /></span>
+              <span><small>{card.label}</small><strong>{card.value}</strong><em>{card.detail}</em></span>
+              <ChevronRight size={14} />
             </button>
           ))}
         </div>
       </section>
 
-      <section className="aic-activity" aria-label="Your command activity for the last 7 days">
-        <div className="aic-postchat-head">
-          <TrendingUp size={14} /> Your Command Activity
-          <small>Last 7 days · real usage</small>
+      <section aria-label="Popular commands">
+        <div className="aic-postchat-head"><Star size={14} /> Popular commands <small>Always available</small></div>
+        <div className="aic-popular-compact">
+          {POPULAR_COMPACT.map((item) => (
+            <button key={item.label} type="button" disabled={disabled} onClick={() => onPrompt(item.command)}><item.icon size={14} /> {item.label}</button>
+          ))}
         </div>
+      </section>
+
+      <section className="aic-daily-tip" aria-label="AI tip of the day">
+        <span className="aic-tip-icon">💡</span>
+        <div><strong>AI tip of the day</strong><p>{tip.text}</p></div>
+        <button type="button" disabled={disabled} onClick={() => onPrompt(tip.command)}>Try it <ArrowUpRight size={13} /></button>
+      </section>
+
+      <section className="aic-activity" aria-label="Your command activity for the last 7 days">
+        <div className="aic-postchat-head"><TrendingUp size={14} /> Your Command Activity <small>Last 7 days · real usage</small></div>
         <div className="aic-activity-track">
           {bars.map((bar, index) => (
-            <span
-              key={`${bar.label}-${index}`}
-              className={`aic-activity-day ${bar.isToday ? 'today' : ''} ${bar.value === 0 ? 'empty' : ''}`}
-              style={{ '--dot-scale': Math.max(0.55, bar.value / maxDot) } as CSSProperties}
-              title={`${bar.label}: ${bar.value} command${bar.value === 1 ? '' : 's'}`}
-            >
-              <span className="aic-activity-dot"><i /></span>
-              <strong>{bar.value}</strong>
-              <small>{bar.label}</small>
+            <span key={`${bar.label}-${index}`} className={`aic-activity-day ${bar.isToday ? 'today' : ''} ${bar.value === 0 ? 'empty' : ''}`} style={{ '--dot-scale': Math.max(0.55, bar.value / maxDot) } as CSSProperties} title={`${bar.label}: ${bar.value} command${bar.value === 1 ? '' : 's'}`}>
+              <span className="aic-activity-dot"><i /></span><strong>{bar.value}</strong><small>{bar.label}</small>
             </span>
           ))}
         </div>
-        <div className="aic-activity-footer">
-          <span>Total: {total} commands</span>
-          <span>Time saved: ~{savedLabel}</span>
-        </div>
+        <div className="aic-activity-footer"><span>Total: {total} commands</span><span>Time saved: ~{savedLabel}</span></div>
       </section>
     </div>
   )
+}
+
+const POPULAR_COMPACT = [
+  { icon: BarChart3, label: 'Revenue report', command: 'Show my revenue report' },
+  { icon: Users, label: 'Top customers', command: 'Show my top customers' },
+  { icon: Package, label: 'Inventory check', command: 'Show low stock products' },
+  { icon: TrendingUp, label: 'Growth tips', command: 'Show growth opportunities' },
+  { icon: ShoppingCart, label: 'Recent orders', command: 'Show recent orders' },
+  { icon: ShieldCheck, label: 'Store health', command: 'Run store health check' },
+  { icon: RefreshCw, label: 'Automation status', command: 'Show automation status' },
+  { icon: ClipboardList, label: 'Weekly summary', command: "Summarize this week's store performance" },
+] as const
+
+const DAILY_TIPS = [
+  { text: 'Find customers who have not ordered in 30 days to identify at-risk customers.', command: "Find customers who haven't ordered in 30 days" },
+  { text: 'Compare this week’s sales with last week for a quick performance check.', command: "Compare this week's sales to last week" },
+  { text: 'Find products with no sales this month to spot underperformers.', command: 'Show products with no sales this month' },
+  { text: 'Ask for today’s best-selling product for an instant merchandising insight.', command: "What's my best selling product today?" },
+  { text: 'Review low-stock best sellers before they become lost sales.', command: 'Show best sellers that are running low' },
+  { text: 'Compare new and returning customers to understand retention.', command: 'Compare new and returning customers this month' },
+  { text: 'Run a store health check to combine live sales and inventory signals.', command: 'Run store health check' },
+] as const
+
+function fallbackFollowUps(command: string): readonly import('./ai-command-model.js').AiCommandSuggestion[] {
+  const text = command.toLowerCase()
+  const prompts = /(stock|inventory|product)/.test(text)
+    ? ['Show products to reorder', 'Find products with no sales in 60 days', 'Show best sellers running low', 'Show out-of-stock products']
+    : /(customer|vip|inactive)/.test(text)
+      ? ['Show repeat customers', 'Find at-risk customers', 'Show top spending customers', 'Show new customers this week']
+      : ['Compare with last month’s revenue', 'Show revenue by product', 'Show average order value', 'Show today’s orders']
+  return prompts.map((label) => ({ label, command: label }))
+}
+
+function moneyOrEmpty(value: number | null | undefined): string {
+  return value == null ? 'No data yet' : formatMoney(value)
+}
+function countOrEmpty(value: number | null | undefined, noun: string): string {
+  return value == null ? 'No data yet' : `${formatNumber(value)} ${noun}`
+}
+function comparison(current: number | null | undefined, previous: number | null | undefined, period: string): string {
+  if (current == null || previous == null) return 'Sync store to compare'
+  if (previous === 0) return current === 0 ? `No change vs ${period}` : `New activity vs ${period}`
+  const change = Math.round(((current - previous) / previous) * 100)
+  return `${change >= 0 ? '↑' : '↓'} ${Math.abs(change)}% vs ${period}`
 }
 
 function MessageBubble({ message, now, busy, onApprove, onCancel, onUndo, onUpgrade, plan, onSave, onRegenerate, onPrompt, onToast }: {
@@ -1059,6 +1135,13 @@ function ActivityCard({ usage, conversations, saved }: { usage: AiCommandUsage |
       <p className="aic-stats-note">Every figure reflects your real AI Command usage — nothing is estimated.</p>
     </section>
   )
+}
+
+function lastUserContent(messages: readonly AiCommandMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return messages[index]!.content
+  }
+  return ''
 }
 
 function previousUserMessage(messages: readonly AiCommandMessage[], index: number): string | null {

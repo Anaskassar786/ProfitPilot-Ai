@@ -10,6 +10,8 @@ import {
   fetchAiCommandConversations,
   fetchAiCommandPreferences,
   fetchAiCommandQuickCommands,
+  fetchStoreQuickInsights,
+  fetchAiCommandSuggestions,
   fetchAiCommandUsage,
   fetchAiCommandUsageHistory,
   fetchAiCommandSaved,
@@ -24,6 +26,8 @@ import type {
   AiCommandMessage,
   AiCommandPreferences,
   AiCommandQuickCommand,
+  AiCommandQuickInsights,
+  AiCommandSuggestion,
   AiCommandSavedCommand,
   AiCommandUsage,
 } from './ai-command-model.js'
@@ -37,6 +41,8 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
   const [usageHistory, setUsageHistory] = useState<readonly AiCommandUsage[]>([])
   const [saved, setSaved] = useState<readonly AiCommandSavedCommand[]>([])
   const [quick, setQuick] = useState<readonly AiCommandQuickCommand[]>([])
+  const [quickInsights, setQuickInsights] = useState<AiCommandQuickInsights | null>(null)
+  const [followUps, setFollowUps] = useState<readonly AiCommandSuggestion[]>([])
   const [preferences, setPreferences] = useState<AiCommandPreferences | null>(null)
   const [thinking, setThinking] = useState<readonly string[]>([])
   const [streaming, setStreaming] = useState('')
@@ -47,13 +53,14 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
 
   const refreshSide = useCallback(async () => {
     if (!storeId) return
-    const [nextConversations, nextUsage, nextSaved, nextQuick, nextPrefs, nextHistory] = await Promise.allSettled([
+    const [nextConversations, nextUsage, nextSaved, nextQuick, nextPrefs, nextHistory, nextInsights] = await Promise.allSettled([
       fetchAiCommandConversations(storeId),
       fetchAiCommandUsage(storeId),
       fetchAiCommandSaved(storeId),
       fetchAiCommandQuickCommands(storeId),
       fetchAiCommandPreferences(storeId),
       fetchAiCommandUsageHistory(storeId, 7),
+      fetchStoreQuickInsights(storeId),
     ])
     if (nextConversations.status === 'fulfilled') setConversations(nextConversations.value)
     if (nextUsage.status === 'fulfilled') setUsage(nextUsage.value)
@@ -61,6 +68,7 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
     if (nextQuick.status === 'fulfilled') setQuick(nextQuick.value)
     if (nextPrefs.status === 'fulfilled') setPreferences(nextPrefs.value)
     if (nextHistory.status === 'fulfilled') setUsageHistory(nextHistory.value)
+    if (nextInsights.status === 'fulfilled') setQuickInsights(nextInsights.value)
   }, [storeId])
 
   useEffect(() => { void refreshSide() }, [refreshSide])
@@ -79,6 +87,7 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
     setConversation(null)
     setThinking([])
     setStreaming('')
+    setFollowUps([])
     setError(null)
   }, [])
 
@@ -87,6 +96,11 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
     const previous = conversation
     abortRef.current?.abort()
     abortRef.current = new AbortController()
+    let timedOut = false
+    const timeout = window.setTimeout(() => {
+      timedOut = true
+      abortRef.current?.abort()
+    }, 30_000)
     setBusy(true)
     setError(null)
     setLimitReached(false)
@@ -119,24 +133,46 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
       setUsage(result.usage)
       setThinking([])
       setStreaming('')
+      const suggestions = await fetchAiCommandSuggestions(storeId, text.trim()).catch(() => [])
+      setFollowUps(suggestions)
       await refreshSide()
     } catch (failure: unknown) {
       if (isAbortError(failure)) {
-        setConversation(previous)
-        onToast('Command cancelled.', 'info')
+        if (timedOut) {
+          setError('This command took longer than 30 seconds. Please try again.')
+          onToast('Command timed out after 30 seconds.', 'error')
+        } else {
+          const cancelled: AiCommandMessage = {
+            id: `cancelled-${Date.now()}`,
+            role: 'assistant',
+            content: 'Command cancelled. No result was applied.',
+            contentType: 'error',
+            structuredData: null,
+            action: null,
+            thinkingSteps: null,
+            timestamp: new Date().toISOString(),
+          }
+          setConversation((current) => current ? { ...current, messages: [...current.messages, cancelled] } : previous)
+          onToast('Command cancelled.', 'info')
+        }
       } else {
         try {
-          const fallback = await sendAiCommandMessage(storeId, text.trim(), conversation && conversation.id !== 'pending' ? conversation.id : undefined)
+          const fallback = await sendAiCommandMessage(storeId, text.trim(), conversation && conversation.id !== 'pending' ? conversation.id : undefined, fetch, abortRef.current?.signal)
           setConversation(fallback.conversation)
           setUsage(fallback.usage)
+          setFollowUps(await fetchAiCommandSuggestions(storeId, text.trim()).catch(() => []))
+          await refreshSide()
         } catch (second: unknown) {
-          const message = second instanceof Error ? second.message : 'AI Command could not answer.'
+          const message = isAbortError(second) && timedOut
+            ? 'This command took longer than 30 seconds. Please try again.'
+            : second instanceof Error ? second.message : 'AI Command could not answer.'
           setError(message)
           if (/limit|upgrade plan/i.test(message)) setLimitReached(true)
           onToast(message, 'error')
         }
       }
     } finally {
+      window.clearTimeout(timeout)
       setBusy(false)
       setThinking([])
       abortRef.current = null
@@ -229,7 +265,7 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
   }, [storeId])
 
   return {
-    conversations, conversation, usage, usageHistory, saved, quick, preferences, thinking, streaming, busy, error, limitReached,
+    conversations, conversation, usage, usageHistory, saved, quick, quickInsights, followUps, preferences, thinking, streaming, busy, error, limitReached,
     openConversation, newChat, send, cancelThinking, approve, cancel, undo, removeConversation, archive, saveCurrent, runSaved, removeSaved, patchPreferences, refreshSide,
   }
 }

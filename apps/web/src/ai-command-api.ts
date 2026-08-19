@@ -1,6 +1,6 @@
 import { ApiClientError, initializeCsrf, requestJson } from './api.js'
 import type { Fetcher } from './api.js'
-import type { AiCommandConversation, AiCommandPreferences, AiCommandQuickCommand, AiCommandSavedCommand, AiCommandUsage, ChatResult } from './ai-command-model.js'
+import type { AiCommandConversation, AiCommandPreferences, AiCommandQuickCommand, AiCommandQuickInsights, AiCommandSavedCommand, AiCommandSuggestion, AiCommandUsage, ChatResult } from './ai-command-model.js'
 import { isRecord, parseSseBlocks, parseSseFrame } from './ai-command-model.js'
 
 export function fetchAiCommandConversations(storeId: string, fetcher: Fetcher = fetch): Promise<readonly AiCommandConversation[]> {
@@ -15,9 +15,9 @@ export function deleteAiCommandConversation(storeId: string, id: string, fetcher
 export function archiveAiCommandConversation(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<AiCommandConversation> {
   return requestJson(`/ai-command/conversations/${encodeURIComponent(id)}/archive`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher)
 }
-export async function sendAiCommandMessage(storeId: string, text: string, conversationId?: string, fetcher: Fetcher = fetch): Promise<ChatResult> {
+export async function sendAiCommandMessage(storeId: string, text: string, conversationId?: string, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
-  return requestJson('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, text, ...(conversationId ? { conversationId } : {}) }) }, fetcher)
+  return requestJson('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, text, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) }, fetcher)
 }
 export async function streamAiCommandMessage(storeId: string, text: string, conversationId: string | undefined, onEvent: (event: string, payload: unknown) => void, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
@@ -82,4 +82,10 @@ export function updateAiCommandPreferences(storeId: string, patch: Partial<AiCom
 }
 export function fetchAiCommandQuickCommands(storeId: string, fetcher: Fetcher = fetch): Promise<readonly AiCommandQuickCommand[]> {
   return requestJson(`/ai-command/quick-commands?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
+}
+export function fetchAiCommandSuggestions(storeId: string, command: string, fetcher: Fetcher = fetch): Promise<readonly AiCommandSuggestion[]> {
+  return requestJson(`/ai-command/suggestions?storeId=${encodeURIComponent(storeId)}&command=${encodeURIComponent(command)}`, {}, fetcher)
+}
+export function fetchStoreQuickInsights(storeId: string, fetcher: Fetcher = fetch): Promise<AiCommandQuickInsights> {
+  return requestJson(`/store/quick-insights?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)
 }
