@@ -38,7 +38,6 @@ import {
   GitBranch,
   Globe2,
   GraduationCap,
-  Inbox,
   Info,
   Keyboard,
   LayoutDashboard,
@@ -71,7 +70,6 @@ import {
   Sun,
   Tag,
   Target,
-  TicketCheck,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -85,7 +83,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { PhaseNotImplementedError } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
@@ -118,6 +116,7 @@ import { RecommendationsWorkspace } from './recommendations.js'
 import { GrowthIqPage } from './executive.js'
 import { StoreCoachWorkspace } from './store-coach.js'
 import { AiCommandPage } from './ai-command-page.js'
+import { HelpSupportPage } from './support.js'
 import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
 import { PatternAiWorkspace } from './patternai.js'
@@ -161,7 +160,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
     items: [
       { id: 'reports', label: 'Reports', icon: FileBarChart, tag: 'Reports' },
       { id: 'exports', label: 'Exports', icon: Download },
-      { id: 'support', label: 'Support tickets', icon: LifeBuoy },
+      { id: 'support', label: 'Help & Support', icon: LifeBuoy },
       { id: 'billing', label: 'Billing', icon: WalletCards, tag: 'Plans' },
       { id: 'settings', label: 'Settings', icon: Settings },
       { id: 'admin-ops', label: 'Admin Ops', icon: ShieldCheck, tag: 'Admin' },
@@ -629,8 +628,8 @@ function PageRouter({
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
-  if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'support') return <SupportPage context={context} onToast={onToast} />
+if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'support') return <HelpSupportPage context={context} onToast={onToast} onNavigate={onNavigate} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'exports') return <ExportsPage context={context} />
   return <EmptyDataPage page={active} context={context} onSync={onSync} />
 }
@@ -811,30 +810,6 @@ function ExportsPage({ context }: { context: WorkspaceContext }) {
     <div className="export-intro"><div><div className="section-kicker"><span className="kicker-dot blue" /> Store-scoped writers</div><h2>{context.storeId ? 'Choose a real dataset to export.' : 'Connect a store before exporting.'}</h2><p>Generate downloads the file immediately. Empty files mean that dataset has not been synced yet.</p></div><span className="export-limit"><strong>50,000</strong><small>row safety ceiling</small></span></div>
     {message && <div className="sync-banner"><CheckCircle2 size={15} /><span>{message}</span></div>}
     <div className="export-grid">{exportTypes.map(({ title, icon: Icon, format, dataset, detail }) => <div className="card export-card" key={title}><span className="export-icon blue"><Icon size={20} /></span><h3>{title}</h3><p>{detail}</p><div className="export-card-bottom"><span>{format}</span><button className="button secondary" onClick={() => void runExport(format, dataset)}>Generate</button></div></div>)}</div>
-  </PageLayout>
-}
-
-function SupportPage({ context, onToast }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void }) {
-  const [tickets, setTickets] = useState<readonly import('./api.js').TicketRecord[]>([])
-  const [open, setOpen] = useState(false)
-  const [subject, setSubject] = useState('')
-  const [description, setDescription] = useState('')
-  const [priority, setPriority] = useState<'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL')
-  const refresh = () => { if (context.storeId) void fetchTickets(context.storeId).then(setTickets).catch((error: unknown) => onToast(errorMessage(error), 'error')) }
-  useEffect(() => { refresh() }, [context.storeId])
-  const create = async () => {
-    if (!context.storeId) { onToast('Connect Shopify before opening a ticket.', 'info'); return }
-    if (!subject.trim() || !description.trim()) { onToast('Add a subject and a short description.', 'info'); return }
-    try {
-      await createTicket(context.storeId, subject.trim(), 'growth', fetch, { description: description.trim(), priority })
-      onToast('Support ticket submitted. We will follow up in this inbox.', 'success')
-      setSubject(''); setDescription(''); setPriority('NORMAL'); setOpen(false); refresh()
-    } catch (error: unknown) { onToast(errorMessage(error), 'error') }
-  }
-  return <PageLayout eyebrow="Operator inbox" title="Support tickets" description="Send a real question to the ProfitPilot team. Status and priority stay auditable." actions={<button className="button primary" onClick={() => setOpen(true)}><Plus size={15} /> New ticket</button>}>
-    <div className="support-hero"><span className="support-hero-icon"><LifeBuoy size={22} /></span><div><div className="section-kicker">SUPPORT INBOX</div><h2>{tickets.length ? `${tickets.length} open ticket${tickets.length === 1 ? '' : 's'}` : 'No open tickets.'}</h2><p>{context.storeId ? 'Use the form to describe the issue. Duplicate “New merchant question” tickets are no longer created.' : 'Connect a store before opening a ticket.'}</p></div><span className="support-sla"><strong>24h</strong><small>Growth response target</small></span></div>
-    {open && <section className="card ticket-form"><div className="card-heading"><div><span className="section-kicker">NEW TICKET</span><h3>How can we help?</h3></div></div><label>Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="e.g. Inventory sync failed" /></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What happened, and what should we look at?" /></label><label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as 'NORMAL' | 'HIGH' | 'URGENT')}><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label><div className="modal-actions"><button className="button secondary" onClick={() => setOpen(false)}>Cancel</button><button className="button primary" onClick={() => void create()}>Submit ticket</button></div></section>}
-    {tickets.length === 0 && !open ? <EmptyState icon={Inbox} title="Your support inbox is clear" description="Create a ticket when there is a real question for the ProfitPilot team." action="New ticket" onAction={() => setOpen(true)} /> : <div className="ticket-list-card">{tickets.map((ticket) => <div className="ticket-row" key={ticket.id}><span className="ticket-icon"><TicketCheck size={16} /></span><span><strong>{ticket.subject}</strong><small>{ticket.priority} · {ticket.status}{ticket.description ? ` · ${ticket.description.slice(0, 80)}` : ''}</small></span><span className="status-badge neutral">{ticket.status}</span></div>)}</div>}
   </PageLayout>
 }
 
