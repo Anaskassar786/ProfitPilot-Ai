@@ -173,6 +173,10 @@ export type CoachReviewView = Readonly<{
   pdfUrl: string | null
   sentViaEmail: boolean
   commanderPdf: boolean
+  /** True only when the server actually has an SMTP mailer wired up. */
+  emailAvailable?: boolean
+  /** True only when the plan allows PDFs AND a PDF writer is configured. */
+  pdfAvailable?: boolean
 }>
 
 export type CoachChatDone = Readonly<{ type: 'done'; message: CoachMessage }>

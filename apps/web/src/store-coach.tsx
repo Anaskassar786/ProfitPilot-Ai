@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
-  Award,
   BarChart3,
   BookOpenCheck,
   CalendarDays,
@@ -31,7 +30,6 @@ import {
   Settings,
   Smile,
   Sparkles,
-  Star,
   Sun,
   SunMedium,
   Target,
@@ -96,12 +94,16 @@ export type CoachToast = (message: string, kind?: 'success' | 'info' | 'warning'
 // Routing (path-based, preserves the Shopify query string)
 // ---------------------------------------------------------------------------
 
-export type CoachView = 'coach' | 'briefing' | 'insights' | 'goals' | 'progress' | 'chat' | 'achievements' | 'settings'
+/**
+ * Store Coach views. `/briefing` and `/insights` used to resolve to
+ * placeholder "coming soon" panels; `/insights` is owned by PatternAI and
+ * `/briefing` never shipped, so both now fall back to the coach home
+ * instead of advertising unbuilt features.
+ */
+export type CoachView = 'coach' | 'goals' | 'progress' | 'chat' | 'achievements' | 'settings'
 
 export function coachViewFromPath(pathname: string): CoachView {
   const path = pathname.replace(/\/+$/, '')
-  if (path.endsWith('/briefing')) return 'briefing'
-  if (path.endsWith('/insights')) return 'insights'
   if (path.endsWith('/coach/goals')) return 'goals'
   if (path.endsWith('/coach/progress')) return 'progress'
   if (path.endsWith('/coach/chat')) return 'chat'
@@ -112,8 +114,6 @@ export function coachViewFromPath(pathname: string): CoachView {
 
 export function coachPathForView(view: CoachView): string {
   switch (view) {
-    case 'briefing': return '/ai-growth-command/briefing'
-    case 'insights': return '/ai-growth-command/insights'
     case 'goals': return '/ai-growth-command/coach/goals'
     case 'progress': return '/ai-growth-command/coach/progress'
     case 'chat': return '/ai-growth-command/coach/chat'
@@ -159,6 +159,9 @@ export type CoachData = Readonly<{
   health: Readonly<{ score: number | null; label: string; tone: 'good' | 'ok' | 'low' }> | null
 }>
 
+/** Stable identity so `useMemo` deps do not change on every render. */
+const EMPTY_HEATMAP_CELLS: CoachHeatmapView['cells'] = []
+
 const EMPTY_COACH_DATA: CoachData = {
   huddle: null,
   priorities: null,
@@ -185,7 +188,9 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       fetchCoachHuddle(storeId),
       fetchCoachPriorities(storeId),
       fetchCoachGoals(storeId, 'ACTIVE'),
-      fetchCoachProgressSummary(storeId, 30),
+      // Ask for the widest dashboard window; the API clamps it down to the
+      // store's real plan entitlement and echoes the window it served.
+      fetchCoachProgressSummary(storeId, 90),
       fetchCoachActivityHeatmap(storeId),
       fetchCoachAchievements(storeId),
       fetchCoachAvailableAchievements(storeId),
@@ -253,8 +258,6 @@ export function StoreCoachWorkspace({ context, onToast, onNavigateBilling }: { c
 
       {error && loadState === 'error' ? (
         <CoachErrorState error={error} onRetry={reload} onNavigateBilling={onNavigateBilling} />
-      ) : view === 'briefing' || view === 'insights' ? (
-        <ComingSoonSection title={view === 'briefing' ? 'Executive Briefing' : 'Insights Hub'} icon={view === 'briefing' ? BookOpenCheck : Lightbulb} description={view === 'briefing' ? 'A boardroom-grade weekly summary of your store, prepared by your AI employee. Shipping in PR #49.' : 'Deep pattern discovery across your synced store data. Shipping in PR #50.'} />
       ) : (
         <CoachMain
           view={view}
@@ -608,11 +611,9 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
       </div>
       {priorities === null ? (
         <div className="coach-building-priorities">
-          <CoachProgressionPath currentStep={2} totalSteps={4} labels={['Sync Store', 'Coach Setup', 'Data Ready', 'Priorities']} />
           <div>
             <strong>Your Coach is analyzing your store…</strong>
-            <p>While we prepare your priorities, here is what helps: sync your store and we will surface real actions.</p>
-            <div className="coach-sync-progress"><span>Sync Progress: 60%</span><div className="coach-progress-track slim"><span style={{ width: '60%' }} /></div><small>Need 30+ orders for personalized priorities · Currently: 12 orders</small></div>
+            <p>I’m reading your recent synced orders to find the actions actually worth your time. This only takes a moment.</p>
           </div>
         </div>
       ) : visible.length === 0 ? (
@@ -654,7 +655,7 @@ export function PriorityCard({ priority, busy, onComplete, onDismiss }: { priori
         <span>{priority.impactValue > 0 && priority.impactLabel ? `Impact: ${priority.impactLabel}` : 'Impact: long-term momentum'}</span>
       </div>
       <div className="coach-priority-actions">
-        <button className="button primary" disabled={busy} onClick={onComplete}><Check size={14} /> Take Action</button>
+        <button className="button primary" disabled={busy} onClick={onComplete}><Check size={14} /> {busy ? 'Saving…' : 'Mark as done'}</button>
         <button className="text-button" disabled={busy} onClick={onDismiss}>Skip</button>
       </div>
     </article>
@@ -741,7 +742,6 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
                 <button className="text-button coach-goal-custom" onClick={onNavigate}>Or create a custom goal <ChevronRight size={13} /></button>
               </div>
             )}
-            {goals.length > 0 && <p className="coach-goal-note">You have {goals.length} goal{goals.length === 1 ? '' : 's'} — none active this week.</p>}
             {plan === 'trial' && <LockedFeatureNote feature="Want to track multiple goals?" onUpgrade={onNavigateBilling} />}
           </div>
         </div>
@@ -779,15 +779,21 @@ function GoalPaceNote({ goal, progress }: { goal: CoachGoal; progress: import('.
   if (!progress) return null
   const currentPct = Math.min(progress.current / Math.max(goal.targetValue, 1) * 100, 100)
   if (currentPct >= 100) return <p className="coach-goal-pace achieved">Coach's note: goal achieved — this is a real win from your store. Take the momentum into next week!</p>
+  // Never render a projection sentence out of unusable numbers: a missing or
+  // non-finite pace would print "at today's real pace (—/day) ... about —".
+  const paceUsable = Number.isFinite(progress.actualDailyPace) && Number.isFinite(progress.daysTotal)
+  const requiredUsable = Number.isFinite(progress.requiredDailyPace) && progress.requiredDailyPace > 0
+  if (!paceUsable) return null
   if (progress.actualDailyPace <= 0) {
-    if (progress.daysRemaining <= 0) return null
+    if (progress.daysRemaining <= 0 || !requiredUsable) return null
     return <p className="coach-goal-pace behind">Coach's note: the clock is running — {formatMoney(progress.requiredDailyPace, goal.targetCurrency)}/day from here closes the gap.</p>
   }
   const projected = progress.actualDailyPace * progress.daysTotal
+  if (!Number.isFinite(projected)) return null
   return (
     <p className={`coach-goal-pace ${progress.pace === 'BEHIND' ? 'behind' : 'on-track'}`}>
       Coach's projection: at today's real pace ({formatMoney(progress.actualDailyPace, goal.targetCurrency)}/day) you're heading to about {formatMoney(projected, goal.targetCurrency)} by {goal.endDate}.
-      {progress.pace === 'BEHIND' ? ` It needs ${formatMoney(progress.requiredDailyPace, goal.targetCurrency)}/day to land on target.` : ' Keep up the great work!'}
+      {progress.pace === 'BEHIND' && requiredUsable ? ` It needs ${formatMoney(progress.requiredDailyPace, goal.targetCurrency)}/day to land on target.` : ' Keep up the great work!'}
     </p>
   )
 }
@@ -857,7 +863,7 @@ export function MomentumWave({ values }: { values: readonly number[] }) {
         <path d={fillPath} fill="var(--c-purple-soft)" stroke="none" />
         <path d={path} fill="none" stroke="var(--c-purple)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <div className="coach-wave-days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+      <div className="coach-wave-days"><span>oldest</span><span>{values.length} days of real revenue</span><span>latest</span></div>
     </div>
   )
 }
@@ -892,17 +898,6 @@ export function WeeklyRhythmBeat({ beats }: { beats: readonly { day: string; int
   )
 }
 
-export function CoachPersonalityRadarSmall({ personality }: { personality: string }) {
-  const traits: Record<string, number[]> = { PROFESSIONAL: [80,60,90,50], MOTIVATIONAL: [90,85,60,70], ANALYTICAL: [60,90,85,60], CASUAL: [85,55,60,90] }
-  const vals = traits[personality] ?? [70,70,70,70]
-  return (
-    <div className="coach-radar-small" role="img" aria-label={`Personality ${personality}`}>
-      <svg viewBox="0 0 60 60" width="60" height="60"><polygon points={vals.map((v,i)=>{const a=(i*90-90)*Math.PI/180;const r=v/100*24;return `${30+Math.cos(a)*r},${30+Math.sin(a)*r}`}).join(' ')} fill="var(--c-purple-soft)" stroke="var(--c-purple)" strokeWidth="1.5" /><circle cx="30" cy="30" r="24" fill="none" stroke="var(--c-border)" strokeWidth="0.8" /></svg>
-      <small>{personality.toLowerCase()}</small>
-    </div>
-  )
-}
-
 // Keep RadialGauge and Sparkline for backwards compat but delegate to new
 export function RadialGauge({ percent }: { percent: number; tone?: string; size?: number }) {
   return <MotivationalMilestoneBars percent={percent} />
@@ -920,12 +915,15 @@ export function LockedFeatureNote({ feature, onUpgrade }: { feature: string; pla
 }
 
 // ---------------------------------------------------------------------------
-// 4. 30-day progress dashboard
+// 4. Progress dashboard (window = what the API actually returned)
 // ---------------------------------------------------------------------------
 
 function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling }: { summary: CoachProgressSummary | null; plan: CoachPlan; onNavigate: () => void; onNavigateBilling: () => void }) {
-  const historyDays = COACH_LIMITS[plan].progressHistoryDays as number
+  const planHistoryDays = COACH_LIMITS[plan].progressHistoryDays as number
   if (!summary) return <CoachSkeletonRow />
+  // Label the window the server actually served, so the heading can never
+  // promise 90 days while the payload only covers 30.
+  const historyDays = Number.isFinite(summary.window) && summary.window > 0 ? summary.window : planHistoryDays
   const { revenue, orders, aov, customers, revenueTrendPct, series, comparisonSeries } = summary
   if (series.length === 0) {
     return (
@@ -954,15 +952,10 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling }: { s
         <div className="coach-chart-legend"><Waves size={12} /> Weekly momentum wave · Last {historyDays} days{comparisonSeries.length > 0 && <> · dashed is previous avg</>}</div>
         <MomentumWave values={series.map((row) => row.revenue)} />
         {comparisonSeries.length > 0 && <p className="coach-chart-note">Wave shows real daily revenue. Previous period context is honest, not a target.</p>}
-        {historyDays < 90 && plan !== 'commander' && <LockedFeatureNote feature="90 days of progress history" onUpgrade={onNavigateBilling} />}
+        {planHistoryDays < 90 && plan !== 'commander' && <LockedFeatureNote feature="90 days of progress history" onUpgrade={onNavigateBilling} />}
       </div>
     </section>
   )
-}
-
-function averageOf(series: readonly Readonly<{ revenue: number }>[]): number {
-  if (series.length === 0) return 0
-  return series.reduce((sum, row) => sum + row.revenue, 0) / series.length
 }
 
 export function BigNumberCard({ label, value, trendPct, icon: Icon }: { label: string; value: string; trendPct: number | null; series?: readonly number[]; icon: LucideIcon }) {
@@ -983,19 +976,17 @@ export function Sparkline({ values }: { values: readonly number[] }) {
   return <MomentumWave values={values} />
 }
 
-function CoachChartTooltip({ active, payload, label }: { active?: boolean; payload?: readonly Readonly<{ value?: number | string }>[]; label?: string | number }) {
-  if (!active || !payload || payload.length === 0) return null
-  return <div className="coach-chart-tooltip"><strong>{label}</strong>{payload.map((entry, index) => <span key={index}>${typeof entry.value === 'number' ? entry.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(entry.value ?? '')}</span>)}</div>
-}
-
 // ---------------------------------------------------------------------------
 // 5. Activity heatmap (FIX 6 — real rhythm, derived patterns)
 // ---------------------------------------------------------------------------
 
 function HeatmapSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | null; onNavigate: () => void }) {
-  if (!heatmap) return <CoachSkeletonRow />
-  const { cells, bestDay, busiestWeek } = heatmap
+  // Hooks must run on every render: compute before any early return so the
+  // hook order stays stable when `heatmap` flips between null and loaded.
+  const cells = heatmap?.cells ?? EMPTY_HEATMAP_CELLS
   const patterns = useMemo(() => heatmapPatterns(cells), [cells])
+  if (!heatmap) return <CoachSkeletonRow />
+  const { bestDay, busiestWeek } = heatmap
   const bestWeekdayName = patterns.bestWeekday !== null ? WEEKDAY_LABELS_SHORT[patterns.bestWeekday] : null
   return (
     <section className="coach-card coach-heatmap-section">
@@ -1212,8 +1203,10 @@ function CoachValueStrip({ data, onFocusGoals, onFocusDays }: { data: CoachData;
 }
 
 function BestDaysSection({ heatmap, onNavigate }: { heatmap: CoachHeatmapView | null; onNavigate: () => void }) {
+  // Same rule as HeatmapSection: hooks before the early return.
+  const cells = heatmap?.cells ?? EMPTY_HEATMAP_CELLS
+  const patterns = useMemo(() => heatmapPatterns(cells), [cells])
   if (!heatmap) return <CoachSkeletonRow />
-  const patterns = useMemo(() => heatmapPatterns(heatmap.cells), [heatmap.cells])
   const bestName = patterns.bestWeekday !== null ? WEEKDAY_LABELS[patterns.bestWeekday] : null
   return (
     <section className="coach-card coach-bestdays-section">
@@ -1265,7 +1258,6 @@ function CoachStyleSection({ storeId, preferences, plan, onToast, onReload, onNa
     <section className="coach-card coach-style-section">
       <CoachCardHeading kicker="CHOOSE YOUR COACH STYLE" dot="purple" title="How should I talk with you?" />
       <p className="coach-style-lede">Your Store Coach can match the way you like to work.</p>
-      <div className="coach-personality-radar-row"><CoachPersonalityRadarSmall personality={preferences?.personality ?? allowed[0] ?? 'PROFESSIONAL'} /><small>Current style traits</small></div>
       <div className="coach-personality-grid">
         {(Object.keys(PERSONALITY_META) as CoachPersonality[]).map((id) => {
           const meta = PERSONALITY_META[id]
@@ -1326,8 +1318,13 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
   const learnings = asStringArray(content.learnings).slice(0, 3)
   const focus = asStringArray(content.nextWeekFocus).slice(0, 3)
   const suggestedGoal = typeof content.suggestedGoal === 'object' && content.suggestedGoal !== null ? content.suggestedGoal as Readonly<Record<string, unknown>> : null
+  const [emailing, setEmailing] = useState(false)
   const emailReview = () => {
-    void import('./api.js').then(({ emailCoachReview }) => emailCoachReview(storeId, review.id)).then(() => onToast('Weekly review emailed to your verified merchant address.', 'success')).catch((error: unknown) => onToast(errorMessage(error), 'error'))
+    setEmailing(true)
+    void import('./api.js').then(({ emailCoachReview }) => emailCoachReview(storeId, review.id))
+      .then(() => onToast('Weekly review emailed to your verified merchant address.', 'success'))
+      .catch((error: unknown) => onToast(errorMessage(error), 'error'))
+      .finally(() => setEmailing(false))
   }
   const downloadPdf = () => {
     void import('./api.js').then(({ fetchCoachReviewPdf }) => fetchCoachReviewPdf(storeId, review.id)).then(({ pdfUrl }) => { window.location.assign(pdfUrl); onToast('PDF report ready.', 'success') }).catch((error: unknown) => onToast(errorMessage(error), 'error'))
@@ -1382,9 +1379,16 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
         </div>
       )}
       <div className="coach-review-actions">
-        <button className="button secondary" onClick={emailReview}><Mail size={14} /> Email me this review</button>
+        {/* Only offer actions the server can actually perform. When SMTP or the
+            PDF writer is not configured these endpoints return 503, so showing
+            the button would guarantee an error toast. */}
+        {review.emailAvailable !== false && (
+          <button className="button secondary" disabled={emailing} onClick={emailReview}><Mail size={14} /> {emailing ? 'Sending…' : 'Email me this review'}</button>
+        )}
         {plan === 'commander' ? (
-          <button className="button secondary" onClick={downloadPdf}><ArrowUpRight size={14} /> Download PDF report</button>
+          review.pdfAvailable !== false
+            ? <button className="button secondary" onClick={downloadPdf}><ArrowUpRight size={14} /> Download PDF report</button>
+            : <span className="coach-data-note"><AlertCircle size={12} /> PDF export is not enabled on this deployment yet.</span>
         ) : (
           <LockedFeatureNote feature="Downloadable PDF reports" planName="Commander" onUpgrade={onNavigateBilling} />
         )}
@@ -1547,30 +1551,35 @@ export function CoachProgressView({ context, plan, onToast, onNavigateBilling }:
   const [comparisons, setComparisons] = useState<Readonly<Record<string, unknown>> | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const storeId = context.storeId
-  useEffect(() => {
+  // The window is the merchant's real plan entitlement, not a hardcoded 30.
+  const historyDays = Math.min(COACH_LIMITS[plan].progressHistoryDays as number, 365)
+  const load = useCallback(() => {
     if (!storeId) return
     setLoadState('loading')
-    void Promise.allSettled([fetchCoachProgressSummary(storeId, 30), fetchCoachActivityHeatmap(storeId), import('./api.js').then(({ fetchCoachProgressComparisons }) => fetchCoachProgressComparisons(storeId))]).then(([summaryResult, heatmapResult, comparisonsResult]) => {
+    void Promise.allSettled([
+      fetchCoachProgressSummary(storeId, historyDays),
+      fetchCoachActivityHeatmap(storeId),
+      import('./api.js').then(({ fetchCoachProgressComparisons }) => fetchCoachProgressComparisons(storeId)),
+    ]).then(([summaryResult, heatmapResult, comparisonsResult]) => {
       setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null)
       setHeatmap(heatmapResult.status === 'fulfilled' ? heatmapResult.value : null)
       setComparisons(comparisonsResult.status === 'fulfilled' ? comparisonsResult.value : null)
-      setLoadState('ready')
+      setLoadState(summaryResult.status === 'rejected' && heatmapResult.status === 'rejected' ? 'error' : 'ready')
     }).catch(() => setLoadState('error'))
-  }, [storeId])
-  if (loadState === 'loading') return <div className="coach-subview"><CoachSubHeader eyebrow="Store Coach" title="Progress" description="Real 30-day trends from synced store rows." onBack={() => undefined} /><CoachSkeletonMain /></div>
+  }, [storeId, historyDays])
+  useEffect(() => { load() }, [load])
+  const goBack = useCallback(() => { window.history.back() }, [])
+  const description = `Real ${historyDays >= 365 ? 'full-history' : `${historyDays}-day`} trends, comparisons, and your weekly activity pattern.`
+  if (loadState === 'loading') return <div className="coach-subview"><CoachSubHeader eyebrow="Store Coach" title="Progress" description={description} onBack={goBack} /><CoachSkeletonMain /></div>
   return (
     <div className="coach-subview">
-      <CoachSubHeader eyebrow="Store Coach" title="Progress" description="Real 30-day trends, comparisons, and your weekly activity pattern." onBack={onBackNavigate(plan)} />
-      {summary ? <ProgressDashboard summary={summary} plan={plan} onNavigate={() => undefined} onNavigateBilling={onNavigateBilling} /> : <CoachErrorState error="Progress data could not be loaded." onRetry={() => undefined} onNavigateBilling={onNavigateBilling} />}
+      <CoachSubHeader eyebrow="Store Coach" title="Progress" description={description} onBack={goBack} />
+      {summary ? <ProgressDashboard summary={summary} plan={plan} onNavigate={goBack} onNavigateBilling={onNavigateBilling} /> : <CoachErrorState error="Progress data could not be loaded." onRetry={load} onNavigateBilling={onNavigateBilling} />}
       {comparisons && <ComparisonsSection comparisons={comparisons} />}
-      <HeatmapSection heatmap={heatmap} onNavigate={() => undefined} />
+      <HeatmapSection heatmap={heatmap} onNavigate={goBack} />
       <WeeklyPatternBars storeId={storeId} onToast={onToast} />
     </div>
   )
-}
-
-function onBackNavigate(_plan: CoachPlan): () => void {
-  return () => { window.history.back() }
 }
 
 function ComparisonsSection({ comparisons }: { comparisons: Readonly<Record<string, unknown>> }) {
@@ -1818,21 +1827,6 @@ export function CoachSkeletonMain() {
 
 function CoachSkeletonRow() {
   return <div className="coach-skeleton-row">{[0, 1, 2].map((index) => <div className="coach-skeleton-card" key={index} />)}</div>
-}
-
-function ComingSoonSection({ title, icon: Icon, description }: { title: string; icon: LucideIcon; description: string }) {
-  return (
-    <div className="coach-coming-soon">
-      <span className="coach-coming-soon-icon"><Icon size={26} /></span>
-      <div className="section-kicker"><span className="kicker-dot purple" />AI GROWTH COMMAND</div>
-      <h2>{title} is coming soon</h2>
-      <p>{description}</p>
-      <div className="coach-coming-soon-features">
-        {['Built on the same real store data', 'No demo numbers, ever', 'Plan-aware from day one'].map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}
-      </div>
-      <span className="coming-soon-pill large">Coming Soon</span>
-    </div>
-  )
 }
 
 function todayIso(): string {

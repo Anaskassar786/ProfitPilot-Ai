@@ -22,7 +22,15 @@ const toasts: string[] = []
 const navigations: string[] = []
 
 const DAY = 86_400_000
-const getNow = () => Date.now()
+/**
+ * Fixtures below span the previous ~8 hours and the suite asserts an exact
+ * "insights today" count. With a real wall clock those rows straddle UTC
+ * midnight whenever the suite runs before 08:00 UTC, so the count silently
+ * changed (7 -> 6 -> 5) depending on the time of day. Pin "now" to midday UTC
+ * so the window is deterministic.
+ */
+const FIXED_NOW = Date.UTC(2026, 7, 18, 12, 0, 0)
+const getNow = () => FIXED_NOW
 const isoAgo = (msAgo: number) => new Date(getNow() - msAgo).toISOString()
 const dayKeyAgo = (daysAgo: number) => new Date(getNow() - daysAgo * DAY).toISOString().slice(0, 10)
 
@@ -158,6 +166,8 @@ describe('AI Command Center Complete Functional Testing', () => {
       originalError.apply(console, args)
     }
     setupFetchMock()
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] })
+    vi.setSystemTime(new Date(FIXED_NOW))
   })
 
   afterEach(() => {
@@ -167,6 +177,7 @@ describe('AI Command Center Complete Functional Testing', () => {
     }
     console.error = originalError
     document.body.innerHTML = ''
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
