@@ -45,40 +45,88 @@
 
 /* Radial ring (Revenue Pending, Monthly Usage) */
 .recs-kpi-radial { position: relative; }
-.recs-kpi-radial-track { stroke: var(--border-soft); }
-.recs-kpi-radial-fill { stroke-linecap: round; transition: stroke-dasharray 600ms ease; }
+.recs-kpi-radial-track { stroke: var(--border); }
+.recs-kpi-radial-fill {
+  stroke-linecap: round;
+  transition: stroke-dasharray 600ms cubic-bezier(.4, 0, .2, 1);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--green) 40%, transparent));
+}
 
 /* Mini bar chart (Approved This Month) */
 .recs-kpi-bars { display: flex; align-items: flex-end; gap: 3px; height: 44px; width: 84px; padding: 2px; }
-.recs-kpi-bars .bar { flex: 1; background: var(--border); border-radius: 2px 2px 0 0; min-height: 3px; transition: background 220ms ease; }
-.recs-kpi-bars .bar.filled { background: linear-gradient(180deg, #34D399, #059669); }
+.recs-kpi-bars .bar {
+  flex: 1;
+  min-height: 3px;
+  border-radius: 3px 3px 2px 2px;
+  background: var(--border);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, .14);
+  transition: background 220ms ease, transform 220ms ease;
+}
+.recs-kpi-bars .bar.filled {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #34D399, #059669);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .28), 0 1px 3px rgba(5, 150, 105, .35);
+}
 .recs-kpi-bars .bar:hover { background: var(--purple); }
 .recs-kpi-bars-label { display: flex; justify-content: space-between; width: 84px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 8.5px; margin-top: 3px; }
 
 /* Progress bar with zones + marker (Approval Rate) */
 .recs-kpi-progress { position: relative; width: 100%; margin-top: 2px; }
-.recs-kpi-progress-track { position: relative; display: flex; height: 8px; border-radius: 4px; overflow: visible; background: var(--border-soft); }
+.recs-kpi-progress-track {
+  position: relative;
+  display: flex;
+  height: 10px;
+  border-radius: 99px;
+  overflow: visible;
+  background: var(--border-soft);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .22);
+}
 .recs-kpi-progress-empty .recs-kpi-progress-track { background: var(--border-soft); }
 .recs-kpi-progress-zone { display: block; height: 100%; }
-.recs-kpi-progress-zone.low { flex: 0 0 40%; background: rgba(239, 68, 68, .55); border-radius: 4px 0 0 4px; }
-.recs-kpi-progress-zone.mid { flex: 0 0 30%; background: rgba(245, 158, 11, .6); }
-.recs-kpi-progress-zone.good { flex: 1; background: rgba(16, 185, 129, .6); border-radius: 0 4px 4px 0; }
-.recs-kpi-progress-marker { position: absolute; top: -3px; width: 3px; height: 14px; background: var(--text); border-radius: 2px; transform: translateX(-50%); }
-.recs-kpi-progress-marker::before { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 7px; height: 7px; border-radius: 99px; background: var(--text); }
+.recs-kpi-progress-zone.low {
+  flex: 0 0 40%;
+  background: linear-gradient(180deg, #F87171, rgba(239, 68, 68, .7));
+  border-radius: 99px 0 0 99px;
+}
+.recs-kpi-progress-zone.mid {
+  flex: 0 0 30%;
+  background: linear-gradient(180deg, #FBBF24, rgba(245, 158, 11, .78));
+}
+.recs-kpi-progress-zone.good {
+  flex: 1;
+  background: linear-gradient(180deg, #34D399, rgba(16, 185, 129, .74));
+  border-radius: 0 99px 99px 0;
+}
 .recs-kpi-progress-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; }
 
 /* Speedometer (Avg Time to Decide) */
+.recs-kpi-visual-speedo { flex-direction: column; gap: 3px; }
 .recs-kpi-speedo { width: 96px; height: 56px; display: block; }
-.recs-kpi-speedo-track { stroke: var(--border-soft); }
+.recs-kpi-speedo-track { stroke: var(--border); }
 .recs-kpi-speedo-zone-fast { stroke: var(--green); }
 .recs-kpi-speedo-zone-mid { stroke: var(--amber); }
 .recs-kpi-speedo-zone-slow { stroke: var(--red); }
-.recs-kpi-speedo-needle { stroke-linecap: round; }
-.recs-kpi-speedo-label { display: block; text-align: center; margin-top: -4px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; color: var(--text-tertiary); letter-spacing: .04em; text-transform: uppercase; }
-.recs-kpi-speedo-label[data-zone="fast"] { color: var(--green); }
-.recs-kpi-speedo-label[data-zone="mid"] { color: var(--amber); }
-.recs-kpi-speedo-label[data-zone="slow"] { color: var(--red); }
-.recs-kpi-speedo-label[data-zone="idle"] { color: var(--text-tertiary); }
+.recs-kpi-speedo-needle { stroke-linecap: round; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
+.recs-kpi-speedo-hub { fill: var(--text); stroke: var(--card); stroke-width: 2; }
+.recs-kpi-speedo-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 13%, transparent);
+}
+.recs-kpi-speedo-label[data-zone="fast"] { color: var(--green); background: color-mix(in srgb, var(--green) 13%, transparent); }
+.recs-kpi-speedo-label[data-zone="mid"] { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+.recs-kpi-speedo-label[data-zone="slow"] { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.recs-kpi-speedo-label[data-zone="idle"] { color: var(--text-tertiary); background: color-mix(in srgb, var(--text-tertiary) 14%, transparent); }
 
 /* Usage ring (Monthly Usage — keep, polish) */
 .recs-usage-ring { transition: stroke-dasharray 600ms ease; }
@@ -967,23 +1015,26 @@
 .app-shell.light-mode .recs-kpi-value.accent { color: #059669 !important; }
 
 /* KPI visualizations — light theme */
-.app-shell.light-mode .recs-kpi-radial-track { stroke: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-bars .bar { background: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-bars .bar.filled { background: linear-gradient(180deg, #34D399, #059669); }
+.app-shell.light-mode .recs-kpi-radial-track { stroke: #E2E8F0; }
+.app-shell.light-mode .recs-kpi-bars .bar { background: #F1F5F9; box-shadow: none; }
+.app-shell.light-mode .recs-kpi-bars .bar.filled {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #34D399, #059669);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .5), 0 1px 2px rgba(5, 150, 105, .22);
+}
 .app-shell.light-mode .recs-kpi-bars-label { color: #94A3B8; }
-.app-shell.light-mode .recs-kpi-progress-track { background: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-progress-zone.low { background: #FCA5A5; }
-.app-shell.light-mode .recs-kpi-progress-zone.mid { background: #FCD34D; }
-.app-shell.light-mode .recs-kpi-progress-zone.good { background: #6EE7B7; }
-.app-shell.light-mode .recs-kpi-progress-marker { background: #0F172A; }
-.app-shell.light-mode .recs-kpi-progress-marker::before { background: #0F172A; }
+.app-shell.light-mode .recs-kpi-progress-track { background: #F1F5F9; box-shadow: inset 0 1px 2px rgba(15, 23, 42, .07); }
+.app-shell.light-mode .recs-kpi-progress-zone.low { background: linear-gradient(180deg, #FCA5A5, #F87171); }
+.app-shell.light-mode .recs-kpi-progress-zone.mid { background: linear-gradient(180deg, #FDE68A, #FBBF24); }
+.app-shell.light-mode .recs-kpi-progress-zone.good { background: linear-gradient(180deg, #6EE7B7, #34D399); }
 .app-shell.light-mode .recs-kpi-progress-axis { color: #64748B; }
-.app-shell.light-mode .recs-kpi-speedo-track { stroke: #F1F5F9; }
+.app-shell.light-mode .recs-kpi-speedo-track { stroke: #E2E8F0; }
 .app-shell.light-mode .recs-kpi-speedo-zone-fast { stroke: #10B981; }
 .app-shell.light-mode .recs-kpi-speedo-zone-mid { stroke: #F59E0B; }
 .app-shell.light-mode .recs-kpi-speedo-zone-slow { stroke: #EF4444; }
-.app-shell.light-mode .recs-kpi-speedo-needle,
-.app-shell.light-mode .recs-kpi-speedo-hub { stroke: #0F172A; fill: #0F172A; }
+.app-shell.light-mode .recs-kpi-speedo-needle { stroke: #0F172A; }
+.app-shell.light-mode .recs-kpi-speedo-hub { stroke: #FFFFFF; fill: #0F172A; }
 
 /* Filter tabs and toolbar */
 .app-shell.light-mode .recs-toolbar { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
@@ -1641,8 +1692,24 @@
 .recs-kpi-foot { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
 .recs-kpi-foot-title { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 10.5px; font-weight: 650; }
 .recs-kpi-foot-title svg { color: var(--green); }
-.recs-kpi-share { display: flex; gap: 2px; height: 5px; border-radius: 99px; overflow: hidden; }
-.recs-kpi-share i { display: block; height: 100%; border-radius: 99px; opacity: .85; }
+.recs-kpi-share {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  padding: 1px;
+  border-radius: 99px;
+  background: var(--border-soft);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .18);
+}
+.recs-kpi-share i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  opacity: .92;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22);
+  transition: opacity 160ms ease;
+}
+.recs-kpi-share i:hover { opacity: 1; }
 .recs-kpi-share-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .recs-kpi-share-legend > span { display: inline-flex; align-items: center; gap: 4px; color: var(--text-tertiary); font-size: 9px; }
 .recs-kpi-share-legend i { width: 7px; height: 7px; border-radius: 99px; flex: 0 0 auto; }
@@ -1670,8 +1737,37 @@
 .recs-kpi-bar-letter { color: var(--text-tertiary); font-size: 8px !important; line-height: 1; }
 .recs-kpi-month { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding-top: 9px; border-top: 1px solid var(--border-soft); }
 .recs-kpi-month-label { color: var(--text-tertiary); font-size: 8.5px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
-.recs-kpi-month-track { flex: 1; height: 6px; border-radius: 99px; background: var(--border-soft); overflow: hidden; }
-.recs-kpi-month-track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #059669, var(--green)); }
+.recs-kpi-month-track {
+  position: relative;
+  flex: 1;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--border-soft);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .25);
+  overflow: hidden;
+}
+.recs-kpi-month-track i {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5px, rgba(255, 255, 255, .16) 5px 6px),
+    linear-gradient(90deg, #047857, #10B981 55%, #34D399);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--green) 45%, transparent);
+  transition: width 500ms cubic-bezier(.4, 0, .2, 1);
+}
+.recs-kpi-month-track i::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 2.5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .8);
+  box-shadow: 0 0 4px rgba(255, 255, 255, .55);
+}
 .recs-kpi-month-caption { color: var(--text-tertiary); font-size: 9px; white-space: nowrap; }
 
 /* Approval rate — breathing room, delta pill, fill, floating marker, target */
@@ -1695,19 +1791,24 @@
   top: 0;
   left: 0;
   bottom: 0;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #059669, #34D399);
-  opacity: .9;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #047857, #10B981 55%, #34D399);
+  opacity: .92;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--green) 50%, transparent);
+  transition: width 500ms cubic-bezier(.4, 0, .2, 1);
 }
 .recs-kpi-progress-marker {
   position: absolute;
-  top: -2.5px;
-  width: 13px;
-  height: 13px;
+  top: -3.5px;
+  width: 17px;
+  height: 17px;
+  z-index: 2;
   border-radius: 99px;
   background: var(--card);
   border: 2.5px solid var(--green);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .28);
   transform: translateX(-50%);
+  transition: left 500ms cubic-bezier(.4, 0, .2, 1);
 }
 .recs-kpi-progress-marker::before {
   content: '';
@@ -1715,10 +1816,12 @@
   inset: 3px;
   border-radius: 99px;
   background: var(--green);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--green) 70%, transparent);
 }
 .recs-kpi-target {
   position: absolute;
-  top: -16px;
+  top: -19px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1729,7 +1832,7 @@
   font-weight: 800;
   transform: translateX(-50%);
 }
-.recs-kpi-target i { display: block; width: 2px; height: 6px; border-radius: 1px; background: var(--purple); }
+.recs-kpi-target i { display: block; width: 2px; height: 7px; border-radius: 1px; background: var(--purple); box-shadow: 0 0 4px color-mix(in srgb, var(--purple) 60%, transparent); }
 
 /* Avg time to decide — threshold legend under the gauge */
 .recs-kpi-speedo-legend { display: flex; gap: 10px; margin-top: 1px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
@@ -1763,7 +1866,8 @@
 .app-shell.light-mode .recs-kpi-ring-count { color: #0F172A; }
 .app-shell.light-mode .recs-kpi-foot { border-top-color: #F1F5F9; }
 .app-shell.light-mode .recs-kpi-foot-title { color: #475569; }
-.app-shell.light-mode .recs-kpi-share i { opacity: .9; }
+.app-shell.light-mode .recs-kpi-share { background: #F1F5F9; box-shadow: inset 0 1px 2px rgba(15, 23, 42, .06); }
+.app-shell.light-mode .recs-kpi-share i { opacity: .95; }
 .app-shell.light-mode .recs-kpi-share-legend > span { color: #64748B; }
 .app-shell.light-mode .recs-kpi-share-legend b { color: #475569; }
 .app-shell.light-mode .recs-kpi-impact-pill { background: #ECFDF5; color: #059669; }
@@ -1771,11 +1875,16 @@
 .app-shell.light-mode .recs-kpi-month { border-top-color: #F1F5F9; }
 .app-shell.light-mode .recs-kpi-month-label,
 .app-shell.light-mode .recs-kpi-month-caption { color: #94A3B8; }
-.app-shell.light-mode .recs-kpi-month-track { background: #F1F5F9; }
-.app-shell.light-mode .recs-kpi-month-track i { background: linear-gradient(90deg, #059669, #10B981); }
+.app-shell.light-mode .recs-kpi-month-track { background: #F1F5F9; box-shadow: inset 0 1px 2px rgba(15, 23, 42, .07); }
+.app-shell.light-mode .recs-kpi-month-track i {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5px, rgba(255, 255, 255, .38) 5px 6px),
+    linear-gradient(90deg, #047857, #10B981 55%, #34D399);
+  box-shadow: 0 0 5px rgba(16, 185, 129, .35);
+}
 .app-shell.light-mode .recs-kpi-delta.up { background: #ECFDF5; color: #059669; }
 .app-shell.light-mode .recs-kpi-delta.down { background: #FEF3C7; color: #B45309; }
-.app-shell.light-mode .recs-kpi-progress-marker { background: #FFFFFF; border-color: #10B981; }
+.app-shell.light-mode .recs-kpi-progress-marker { background: #FFFFFF; border-color: #10B981; box-shadow: 0 1px 4px rgba(15, 23, 42, .15); }
 .app-shell.light-mode .recs-kpi-progress-marker::before { background: #059669; }
 .app-shell.light-mode .recs-kpi-target { color: #7C3AED; }
 .app-shell.light-mode .recs-kpi-target i { background: #7C3AED; }
