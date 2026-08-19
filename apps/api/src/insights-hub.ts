@@ -1030,13 +1030,28 @@ export function generateInsightsApiKey(): string {
 
 /* ── AI narration (language-only, firewall-validated) ──────────────────── */
 
-export type InsightsNarrator = (input: Readonly<{ title: string; description: string; evidenceNumbers: readonly number[]; category: DiscoveryCategory }>) => Promise<{ text: string; model: string } | null>
+export type InsightsNarrator = (input: Readonly<{ title: string; description: string; evidenceNumbers: readonly number[]; category: DiscoveryCategory; language?: 'en' | 'hi' }>) => Promise<{ text: string; model: string } | null>
+
+/**
+ * Narrator system prompt for the merchant's preferred insight language.
+ * The base prompt stays English-tone so narration is consistent across
+ * languages; when the merchant chooses Hindi, an explicit directive tells the
+ * model to respond in Devanagari while keeping every figure in Latin digits —
+ * so the numeric language firewall below can still verify each number against
+ * the engine's evidence pack (Devanagari numerals would slip past it).
+ */
+export function insightsNarratorSystemPrompt(language: 'en' | 'hi' | undefined): string {
+  if (language !== 'hi') return INSIGHTS_HUB_SYSTEM_PROMPT
+  return `${INSIGHTS_HUB_SYSTEM_PROMPT}
+6. Respond in Hindi (Devanagari script), keeping the same curious, precise scientist tone.
+7. Always write numbers with Latin digits (0-9), never Devanagari numerals (०१२३४५६७८९), so every figure can be verified against the source data.`
+}
 
 export function createInsightsNarrator(provider: Pick<OpenRouterClient, 'generate'> | null): InsightsNarrator {
   return async (input) => {
     if (!provider) return null
     try {
-      const generation = await provider.generate(INSIGHTS_HUB_SYSTEM_PROMPT, discoveryExplanationPrompt(input), { maxTokens: 300 })
+      const generation = await provider.generate(insightsNarratorSystemPrompt(input.language), discoveryExplanationPrompt(input), { maxTokens: 300 })
       // Language firewall: every number must come from the evidence set.
       const evidence = input.evidenceNumbers.map((value, index) => ({ key: `n${index}`, label: `evidence-${index}`, value, source: 'insights-engine' }))
       const checked = firewallCheck(generation.text, evidence, input.evidenceNumbers[0] ?? 0)
@@ -1212,7 +1227,7 @@ export class InsightsHubService {
       minConfidence: this.deps.env.minConfidenceScore,
       now: this.iso(),
     })
-    const narrated = await this.narrateDiscoveries(discoveries)
+    const narrated = await this.narrateDiscoveries(discoveries, await this.preferenceLanguage(storeId))
     // Patterns ride along: detection is deterministic and cheap.
     const patterns = detectPatterns(dataset, Number.isFinite(limits.patternsLimit ?? Number.POSITIVE_INFINITY) ? (limits.patternsLimit ?? 5) : 50, this.iso())
     const trends = detectTrends(dataset, this.iso())
@@ -1227,13 +1242,22 @@ export class InsightsHubService {
     return { generated: narrated.length, discoveries: narrated, patternsDetected: storedPatterns.length }
   }
 
-  private async narrateDiscoveries(discoveries: readonly InsightDiscovery[]): Promise<readonly InsightDiscovery[]> {
+  /** The store's stored narration language, defaulting to English on any read failure. */
+  private async preferenceLanguage(storeId: StoreId): Promise<'en' | 'hi'> {
+    try {
+      return (await this.preferences(storeId)).language ?? 'en'
+    } catch {
+      return 'en'
+    }
+  }
+
+  private async narrateDiscoveries(discoveries: readonly InsightDiscovery[], language: 'en' | 'hi' = 'en'): Promise<readonly InsightDiscovery[]> {
     const narrator = this.deps.narrator ?? null
     if (!narrator) return discoveries
     const narrated: InsightDiscovery[] = []
     for (const discovery of discoveries) {
       const evidenceNumbers = [discovery.impactEstimate ?? 0, ...Object.values(discovery.dataEvidence).filter((value): value is number => typeof value === 'number')]
-      const narration = await narrator({ title: discovery.title, description: discovery.description, evidenceNumbers, category: discovery.category })
+      const narration = await narrator({ title: discovery.title, description: discovery.description, evidenceNumbers, category: discovery.category, language })
       narrated.push(narration ? { ...discovery, explanation: narration.text } : discovery)
     }
     return narrated
