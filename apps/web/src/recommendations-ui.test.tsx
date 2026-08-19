@@ -436,8 +436,11 @@ describe('insights sidebar', () => {
   it('renders trend metrics and decision quick stats from real summary data', () => {
     const html = renderToStaticMarkup(createElement(InsightsSidebar, { summary: summary(), plan: 'growth', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
     expect(html).toContain('Your Activity Timeline')
-    expect(html).toContain('>3</strong> found')
-    expect(html).toContain('>2</strong> approved')
+    expect(html).toContain('recs-trend-metric-label')
+    expect(html).toContain('>3</strong>') // found
+    expect(html).toContain('found')
+    expect(html).toContain('>2</strong>') // approved
+    expect(html).toContain('approved')
     expect(html).toContain('Top Categories')
     expect(html).toContain('Recent Decisions')
     expect(html).toContain('75%') // approval-rate quick stat
@@ -462,8 +465,10 @@ describe('insights sidebar', () => {
     expect(html).toContain('recs-trend-area')
     expect(html).toContain('recs-trend-line')
     expect(html).toContain('recs-trend-xlabels')
-    expect(html).toContain('>300</strong> found')
-    expect(html).toContain('>120</strong> approved')
+    expect(html).toContain('>300</strong>') // found
+    expect(html).toContain('found')
+    expect(html).toContain('>120</strong>') // approved
+    expect(html).toContain('approved')
     expect(html).toContain('40%') // 120 approved / 300 found
     expect(html).toContain('conversion')
   })

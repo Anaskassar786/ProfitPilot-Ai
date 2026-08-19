@@ -1245,10 +1245,10 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
           <>
             <ActivityAreaChart trend={trend} />
             <div className="recs-trend-metrics">
-              <span><strong>{trendGenerated}</strong> found</span>
-              <span><strong>{trendApproved}</strong> approved</span>
-              <span className="recs-trend-conversion" title="Approved as a share of everything found this month"><strong>{trendGenerated > 0 ? Math.round((trendApproved / trendGenerated) * 100) : 0}%</strong> conversion</span>
-              <span className="recs-trend-window">last 30 days</span>
+              <span className="recs-trend-metric"><strong>{trendGenerated}</strong><span className="recs-trend-metric-label">found</span></span>
+              <span className="recs-trend-metric"><strong>{trendApproved}</strong><span className="recs-trend-metric-label">approved</span></span>
+              <span className="recs-trend-metric recs-trend-conversion" title="Approved as a share of everything found this month"><strong>{trendGenerated > 0 ? Math.round((trendApproved / trendGenerated) * 100) : 0}%</strong><span className="recs-trend-metric-label">conversion</span></span>
+              <span className="recs-trend-metric recs-trend-window" title="The chart window — the last 30 days of your AI team's activity"><strong>{trend.length}</strong><span className="recs-trend-metric-label">day window</span></span>
             </div>
           </>
         ) : (
@@ -1325,8 +1325,8 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
  *  area, "Approved" as a line. Pure SVG (recharts-free, SSR-safe): every value
  *  comes from summary.generatedTrend, nothing is invented. */
 function ActivityAreaChart({ trend }: { trend: readonly Readonly<{ day: string; generated: number; approved: number }>[] }) {
-  const W = 264
-  const H = 84
+  const W = 280
+  const H = 120
   const pad = 3
   const n = trend.length
   if (n === 0) return null

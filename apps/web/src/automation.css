@@ -4434,3 +4434,85 @@
     margin-left: 0;
   }
 }
+
+/* ==========================================================================
+   Editor dark-theme fix — no more OS-white flash on edit.
+   The editor (.workflow-editor) lives OUTSIDE .automation-page, so the
+   --auto-* design tokens and color-scheme never reached it. Buttons and the
+   automation name therefore painted with the browser's light native control
+   background (white) in dark mode. Defining the tokens on the editor root —
+   plus explicit dark fills on every topbar/panel button — restores the dark
+   surface, borders, and readable text in both themes.
+   ========================================================================== */
+
+.workflow-editor {
+  --auto-card: #1a1d27;
+  --auto-surface: #14161f;
+  --auto-border: #2a2e38;
+  --auto-muted: #9ca3af;
+  --auto-accent: #8b5cf6;
+  --auto-accent-soft: rgba(139, 92, 246, 0.14);
+  color-scheme: dark;
+}
+
+.light-mode .workflow-editor {
+  --auto-card: #ffffff;
+  --auto-surface: #f9fafb;
+  --auto-border: #e5e7eb;
+  --auto-muted: #6b7280;
+  --auto-accent: #7c5cf0;
+  --auto-accent-soft: rgba(124, 92, 240, 0.1);
+  color-scheme: light;
+}
+
+/* Back link, rename button, and automation name must stay transparent so the
+   dark topbar shows through instead of the browser's light button face. */
+.editor-topbar > button,
+.editor-name-button {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+}
+.editor-topbar > button:hover {
+  color: var(--text);
+}
+.editor-name-button strong {
+  color: var(--text);
+}
+
+/* Save Draft / Test Run / Save & Activate — explicit dark fills + borders. */
+.editor-top-actions button {
+  background: #1a1d27;
+  color: #e5e7eb;
+}
+.editor-top-actions button:hover:not(:disabled) {
+  background: #22263a;
+  color: #c4b5fd;
+  border-color: #7c3aed;
+}
+
+/* Property panel actions (Remove step / Done) — no UA-white backgrounds. */
+.property-actions button {
+  background: transparent;
+}
+.property-actions button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Light-theme counterparts for the same surfaces. */
+.light-mode .editor-topbar > button,
+.light-mode .editor-name-button {
+  color: #475569;
+}
+.light-mode .editor-name-button strong {
+  color: #0f172a;
+}
+.light-mode .editor-top-actions button {
+  background: #ffffff;
+  color: #475569;
+}
+.light-mode .editor-top-actions button:hover:not(:disabled) {
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-color: #7c3aed;
+}

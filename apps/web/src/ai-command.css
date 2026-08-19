@@ -2253,3 +2253,39 @@
 .app-shell.light-mode .aic-quickactions-grid button:hover { border-color: #7C3AED; background: #F3E8FF; color: #0F172A; }
 .app-shell.light-mode .aic-activity { background: #FFFFFF; border-color: #E2E8F0; }
 .app-shell.light-mode .aic-activity-footer { color: #475569; }
+
+/* ------------------------------------------------------------------------- */
+/* Daily-command ring — the numbers must never overflow the circle.          */
+/* Growth / Commander plans raise the daily limit; the type scales down by   */
+/* digit count and always clips safely inside the ring.                      */
+/* ------------------------------------------------------------------------- */
+
+.aic-ring {
+  width: 88px;
+  height: 88px;
+}
+.aic-ring-inner {
+  width: 71px;
+  height: 71px;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+.aic-ring-inner strong,
+.aic-ring-inner small {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.aic-ring-inner strong {
+  font-size: 22px;
+  line-height: 1;
+}
+.aic-ring-inner strong.size-sm { font-size: 18px; }
+.aic-ring-inner strong.size-xs { font-size: 14px; }
+.aic-ring-inner small {
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+.aic-ring-inner small.size-sm { font-size: 9.5px; }
+.aic-ring-inner small.size-xs { font-size: 8px; }
