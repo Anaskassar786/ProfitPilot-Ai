@@ -1,5 +1,6 @@
 import { createHmac, createHash, randomUUID } from 'node:crypto'
 import { AppError } from '@profitpilot/types'
+import type { PlanTier } from '@profitpilot/types'
 import { assertClosedPeriod, reportFileName } from './reports.js'
 import type { ClosedPeriod, ReportFrequency } from './reports.js'
 import { writePdf } from './exporters.js'
@@ -35,6 +36,26 @@ export interface ReportEmailDelivery {
 
 export interface ReportDataProvider {
   get(storeId: string, frequency: ReportFrequency, period: ClosedPeriod): Promise<ReportData>
+}
+
+/**
+ * The billing_usage feature key reports are metered against. `null` limit means
+ * unlimited (Commander); `0` means the plan does not include the requested
+ * report kind (e.g. quarterly below Growth).
+ */
+export const REPORT_USAGE_FEATURE = 'reports'
+
+/**
+ * Server-side monthly report quota. `consume` atomically reserves one slot and
+ * reports whether the reservation was allowed; `refund` releases a reserved
+ * slot when generation fails so a failed attempt never burns a merchant's
+ * monthly allowance.
+ */
+export interface ReportQuota {
+  plan(storeId: string): Promise<PlanTier>
+  limitFor(plan: PlanTier, frequency: ReportFrequency): number | null
+  consume(storeId: string, limit: number | null): Promise<Readonly<{ allowed: boolean; used: number }>>
+  refund(storeId: string): Promise<void>
 }
 
 export class InMemoryReportRepository implements ReportRepository {
@@ -105,45 +126,94 @@ export class ReportService {
   private readonly dataProvider: ReportDataProvider
   private readonly delivery: ReportEmailDelivery | null
   private readonly now: () => number
-  public constructor(repository: ReportRepository, objectStore: ReportObjectStore | null, dataProvider: ReportDataProvider, delivery: ReportEmailDelivery | null = null, now: () => number = () => Date.now()) { this.repository = repository; this.objectStore = objectStore; this.dataProvider = dataProvider; this.delivery = delivery; this.now = now }
+  private readonly quota: ReportQuota | null
+  public constructor(repository: ReportRepository, objectStore: ReportObjectStore | null, dataProvider: ReportDataProvider, delivery: ReportEmailDelivery | null = null, now: () => number = () => Date.now(), quota: ReportQuota | null = null) { this.repository = repository; this.objectStore = objectStore; this.dataProvider = dataProvider; this.delivery = delivery; this.now = now; this.quota = quota }
   public async list(storeId: string): Promise<readonly ReportRun[]> { return this.repository.listRuns(storeId) }
   public async get(storeId: string, id: string): Promise<ReportRun> { const run = await this.repository.getRun(storeId, id); if (!run) throw new AppError('NOT_FOUND', 'Report run not found', 404); return run }
   public async generate(input: Readonly<{ storeId: string; frequency: ReportFrequency; period: ClosedPeriod; email: boolean }>): Promise<ReportGeneration> {
-    assertClosedPeriod(input.period, new Date(this.now()))
+    try {
+      assertClosedPeriod(input.period, new Date(this.now()))
+    } catch (error: unknown) {
+      // Invalid periods are a client mistake, not a server fault: surface them
+      // as a 400 validation error instead of a 500 INTERNAL_ERROR.
+      throw new AppError('VALIDATION_ERROR', error instanceof Error && error.message.trim() ? error.message : 'Reports only support closed periods', 400)
+    }
     const idempotencyKey = `${input.frequency}:${input.period.start}:${input.period.end}`
     const existing = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
     if (existing?.status === 'COMPLETED') {
       const stored = await this.readStoredBody(existing)
-      return { run: existing, file: stored ? { filename: existing.filename, contentType: 'application/pdf', body: stored } : null }
+      const file = stored ? { filename: existing.filename, contentType: 'application/pdf', body: stored } : null
+      // Regenerating the same period is idempotent, but a request to email an
+      // already-generated report must still deliver (and persist) the email —
+      // otherwise the vault's "Email" button would report success while
+      // sending nothing.
+      if (input.email && existing.emailStatus !== 'SENT') {
+        const emailed = await this.sendEmail(existing, stored)
+        await this.repository.updateRun(emailed)
+        return { run: emailed, file }
+      }
+      return { run: existing, file }
     }
-    const data = await this.dataProvider.get(input.storeId, input.frequency, input.period)
-    const filename = reportFileName(input.storeId, input.frequency, input.period)
-    const rows: readonly ExportRow[] = [{ section: 'Executive summary', metric: 'summary', value: data.summary, source: 'reporting' }, { section: 'Standard sections', metric: 'currency', value: data.currency, source: 'store configuration' }, ...data.rows]
-    const file = writePdf(filename, rows)
-    const objectKey = `reports/${input.storeId}/${filename}`
-    const hash = createHash('sha256').update(file.body).digest('hex')
-    const now = this.now()
-    const run: ReportRun = { id: existing?.id ?? randomUUID(), storeId: input.storeId, frequency: input.frequency, period: input.period, idempotencyKey, filename, objectKey, contentSha256: hash, status: 'GENERATING', emailStatus: 'NOT_REQUESTED', createdAt: existing?.createdAt ?? now, completedAt: null }
-    if (existing?.status === 'GENERATING' || existing?.status === 'FAILED') await this.repository.updateRun(run)
-    else if (!(await this.repository.createRunIfAbsent(run))) {
-      const concurrent = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
-      if (concurrent?.status === 'COMPLETED') return { run: concurrent, file: null }
-      if (concurrent?.status === 'GENERATING') throw new AppError('CONFLICT', 'Report generation is already in progress', 409)
+    // Reserve the monthly quota before doing any work. The reservation is
+    // atomic (INSERT ... ON CONFLICT DO UPDATE ... WHERE used < limit), so two
+    // concurrent requests can't both claim the last available slot. A reserved
+    // slot is refunded below if generation fails.
+    let reserved = false
+    if (this.quota) {
+      const plan = await this.quota.plan(input.storeId)
+      const limit = this.quota.limitFor(plan, input.frequency)
+      const decision = await this.quota.consume(input.storeId, limit)
+      if (!decision.allowed) {
+        throw new AppError('PAYMENT_REQUIRED', reportQuotaMessage(plan, input.frequency, decision.used, limit), 402, { reason: 'UPGRADE_REQUIRED', feature: REPORT_USAGE_FEATURE, plan, frequency: input.frequency, used: decision.used, limit: limit ?? 0 })
+      }
+      reserved = true
     }
+    let run: ReportRun | null = null
     try {
+      const data = await this.dataProvider.get(input.storeId, input.frequency, input.period)
+      const filename = reportFileName(input.storeId, input.frequency, input.period)
+      const rows: readonly ExportRow[] = [{ section: 'Executive summary', metric: 'summary', value: data.summary, source: 'reporting' }, { section: 'Standard sections', metric: 'currency', value: data.currency, source: 'store configuration' }, ...data.rows]
+      const file = writePdf(filename, rows)
+      const objectKey = `reports/${input.storeId}/${filename}`
+      const hash = createHash('sha256').update(file.body).digest('hex')
+      const now = this.now()
+      run = { id: existing?.id ?? randomUUID(), storeId: input.storeId, frequency: input.frequency, period: input.period, idempotencyKey, filename, objectKey, contentSha256: hash, status: 'GENERATING', emailStatus: 'NOT_REQUESTED', createdAt: existing?.createdAt ?? now, completedAt: null }
+      if (existing?.status === 'GENERATING' || existing?.status === 'FAILED') await this.repository.updateRun(run)
+      else if (!(await this.repository.createRunIfAbsent(run))) {
+        const concurrent = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
+        if (concurrent?.status === 'COMPLETED') {
+          // Another request already finished this exact report and consumed the
+          // quota; release this request's reservation and hand back the result.
+          if (reserved) await this.quota?.refund(input.storeId).catch(() => undefined)
+          return { run: concurrent, file: null }
+        }
+        if (concurrent?.status === 'GENERATING') throw new AppError('CONFLICT', 'Report generation is already in progress', 409)
+      }
       await this.repository.saveBody?.(input.storeId, run.id, file.body)
       if (this.objectStore) {
         try { await this.objectStore.put(objectKey, file.body, file.contentType) } catch { /* PDF remains available from the database vault */ }
       }
-      let emailStatus: ReportEmailStatus = input.email ? 'EMAIL_UNAVAILABLE' : 'NOT_REQUESTED'
-      if (input.email && this.delivery) { try { await this.delivery.send({ storeId: input.storeId, filename, body: file.body, subject: `${input.frequency} ProfitPilot report` }); emailStatus = 'SENT' } catch { emailStatus = 'FAILED' } }
-      const completed: ReportRun = { ...run, status: 'COMPLETED', emailStatus, completedAt: this.now() }
+      let completed: ReportRun = { ...run, status: 'COMPLETED', emailStatus: input.email ? 'EMAIL_UNAVAILABLE' : 'NOT_REQUESTED', completedAt: this.now() }
+      if (input.email && this.delivery) completed = await this.sendEmail(completed, file.body)
       await this.repository.updateRun(completed)
       return { run: completed, file }
     } catch (error: unknown) {
-      const failed: ReportRun = { ...run, status: 'FAILED', emailStatus: 'NOT_REQUESTED', completedAt: this.now() }
-      await this.repository.updateRun(failed)
+      if (reserved) await this.quota?.refund(input.storeId).catch(() => undefined)
+      if (run) {
+        const failed: ReportRun = { ...run, status: 'FAILED', emailStatus: 'NOT_REQUESTED', completedAt: this.now() }
+        await this.repository.updateRun(failed).catch(() => undefined)
+      }
       throw error
+    }
+  }
+
+  private async sendEmail(run: ReportRun, body: Buffer | null): Promise<ReportRun> {
+    if (!this.delivery || !body) return { ...run, emailStatus: 'EMAIL_UNAVAILABLE' }
+    try {
+      await this.delivery.send({ storeId: run.storeId, filename: run.filename, body, subject: `${run.frequency} ProfitPilot report` })
+      return { ...run, emailStatus: 'SENT' }
+    } catch {
+      return { ...run, emailStatus: 'FAILED' }
     }
   }
   public async download(storeId: string, id: string): Promise<Readonly<{ run: ReportRun; body: Buffer }>> {
@@ -164,5 +234,12 @@ export class ReportService {
 }
 
 export function isSixHourlyTick(at: number): boolean { return new Date(at).getUTCHours() % 6 === 0 && new Date(at).getUTCMinutes() === 0 }
+
+function reportQuotaMessage(plan: PlanTier, frequency: ReportFrequency, used: number, limit: number | null): string {
+  if (limit === 0) return frequency === 'QUARTERLY' ? 'Quarterly reports unlock when you Upgrade Plan.' : 'This report unlocks when you Upgrade Plan.'
+  const count = limit ?? 0
+  if (count === 1) return `Your ${plan} plan includes 1 report per month and it has already been generated. Upgrade Plan for more.`
+  return `Your ${plan} plan includes ${count} reports per month and all ${count} are used. Upgrade Plan for more.`
+}
 
 function hmac(key: Buffer | string, value: string): Buffer { return createHmac('sha256', key).update(value).digest() }

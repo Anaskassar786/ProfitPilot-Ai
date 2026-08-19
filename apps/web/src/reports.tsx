@@ -97,7 +97,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
     setRuns(nextRuns.status === 'fulfilled' ? nextRuns.value : [])
     setForecast(nextForecast.status === 'fulfilled' ? nextForecast.value : null)
     setAnalytics(nextAnalytics.status === 'fulfilled' ? nextAnalytics.value : null)
-    if (account.status === 'fulfilled') setPlan(resolveReportPlan(account.value.subscription?.plan ?? (account.value.trial ? 'trial' : 'trial')))
+    if (account.status === 'fulfilled') setPlan(resolveReportPlan(account.value.subscription?.plan))
     if (nextRuns.status === 'rejected') setError(errorMessage(nextRuns.reason, 'Reports could not be loaded from your store.'))
     setLoading(false)
   }
@@ -182,9 +182,17 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
     if (!context.storeId) return
     setBusyId(run.id)
     try {
-      await generateReport(context.storeId, run.frequency, run.period.start, run.period.end, true)
+      const generated = await generateReport(context.storeId, run.frequency, run.period.start, run.period.end, true)
       await refresh()
-      notify('Report emailed to your verified merchant address.', 'success')
+      if (generated.run.emailStatus === 'SENT') {
+        notify('Report emailed to your verified merchant address.', 'success')
+      } else if (generated.run.emailStatus === 'FAILED') {
+        const message = 'Email delivery failed — check your email configuration and retry.'
+        setError(message)
+        notify(message, 'error')
+      } else {
+        notify('Email delivery is not available yet.', 'info')
+      }
     } catch (failure: unknown) {
       const message = errorMessage(failure, 'Email delivery is not available yet.')
       setError(message)
@@ -276,6 +284,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
             description="Last closed month-to-date overview from synced orders."
             gate={monthlyGate}
             generating={generating === 'MONTHLY'}
+            plan={plan}
             onGenerate={() => void generate('MONTHLY')}
             onUpgrade={() => onNavigateBilling?.()}
           />
@@ -285,6 +294,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
             gate={quarterlyGate}
             generating={generating === 'QUARTERLY'}
             locked={!quarterlyGate.allowed && quarterlyGate.limit === 0}
+            plan={plan}
             onGenerate={() => void generate('QUARTERLY')}
             onUpgrade={() => onNavigateBilling?.()}
           />
@@ -294,6 +304,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
             gate={customGate}
             generating={generating === 'CUSTOM'}
             locked={!customGate.allowed}
+            plan={plan}
             onGenerate={() => void generate('CUSTOM')}
             onUpgrade={() => onNavigateBilling?.()}
           />
@@ -521,6 +532,7 @@ function GenerateCard({
   gate,
   generating,
   locked = false,
+  plan,
   onGenerate,
   onUpgrade,
 }: {
@@ -529,6 +541,7 @@ function GenerateCard({
   gate: ReturnType<typeof canGenerateReport>
   generating: boolean
   locked?: boolean
+  plan: ReportPlan
   onGenerate: () => void
   onUpgrade: () => void
 }) {
@@ -542,7 +555,7 @@ function GenerateCard({
       {locked ? (
         <div className="reports-locked-actions">
           <span><LockKeyhole size={13} /> Included when you Upgrade Plan</span>
-          <UpgradePlanButton plan="trial" onUpgrade={onUpgrade} />
+          <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
         </div>
       ) : (
         <button type="button" className="button primary" onClick={onGenerate} disabled={generating || !gate.allowed} title={gate.reason ?? undefined}>

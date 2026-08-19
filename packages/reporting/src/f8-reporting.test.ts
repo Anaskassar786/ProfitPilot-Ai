@@ -50,4 +50,59 @@ describe('F8 deterministic PDF vault', () => {
     expect(Object.keys((calls[0]?.headers ?? {}) as Readonly<Record<string, unknown>>).map((key) => key.toLowerCase())).toContain('authorization')
     await expect(store.get('missing')).resolves.toEqual(Buffer.from(''))
   })
+
+  it('enforces the monthly report quota and never double-charges an idempotent replay', async () => {
+    let consumed = 0
+    const quota = {
+      plan: async () => 'trial' as const,
+      limitFor: () => 1 as const,
+      consume: async () => {
+        if (consumed >= 1) return { allowed: false, used: consumed }
+        consumed += 1
+        return { allowed: true, used: consumed }
+      },
+      refund: async () => { consumed = Math.max(0, consumed - 1) },
+    }
+    const service = new ReportService(new InMemoryReportRepository(), new InMemoryReportObjectStore(), dataProvider, null, () => Date.parse('2024-06-01T00:00:00.000Z'), quota)
+    const first = await service.generate({ storeId: 'store-q', frequency: 'MONTHLY', period, email: false })
+    expect(first.run.status).toBe('COMPLETED')
+    expect(consumed).toBe(1)
+    // Replaying the same period is idempotent: the stored run is returned and
+    // the quota is not charged a second time.
+    const replay = await service.generate({ storeId: 'store-q', frequency: 'MONTHLY', period, email: false })
+    expect(replay.run.id).toBe(first.run.id)
+    expect(consumed).toBe(1)
+    // A different closed period is a fresh report and now exceeds the quota.
+    await expect(service.generate({ storeId: 'store-q', frequency: 'MONTHLY', period: { start: '2024-04-01T00:00:00.000Z', end: '2024-04-30T23:59:59.000Z' }, email: false })).rejects.toMatchObject({ code: 'PAYMENT_REQUIRED', status: 402 })
+  })
+
+  it('refunds the reserved quota slot when generation fails', async () => {
+    let consumed = 0
+    const quota = {
+      plan: async () => 'trial' as const,
+      limitFor: () => 1 as const,
+      consume: async () => { consumed += 1; return { allowed: true, used: consumed } },
+      refund: async () => { consumed = Math.max(0, consumed - 1) },
+    }
+    const failingProvider = { async get() { throw new Error('analytics down') } }
+    const service = new ReportService(new InMemoryReportRepository(), new InMemoryReportObjectStore(), failingProvider, null, () => Date.parse('2024-06-01T00:00:00.000Z'), quota)
+    await expect(service.generate({ storeId: 'store-f', frequency: 'MONTHLY', period, email: false })).rejects.toThrow('analytics down')
+    expect(consumed).toBe(0)
+  })
+
+  it('surfaces invalid periods as a 400 validation error instead of a 500', async () => {
+    const service = new ReportService(new InMemoryReportRepository(), new InMemoryReportObjectStore(), dataProvider, null, () => Date.parse('2024-06-01T00:00:00.000Z'))
+    await expect(service.generate({ storeId: 'store-6', frequency: 'DAILY', period: { start: '2024-07-01', end: '2024-07-02' }, email: false })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+  })
+
+  it('emails an already-completed report on request without regenerating the PDF', async () => {
+    let sends = 0
+    const service = new ReportService(new InMemoryReportRepository(), new InMemoryReportObjectStore(), dataProvider, { send: async () => { sends += 1 } }, () => Date.parse('2024-06-01T00:00:00.000Z'))
+    const first = await service.generate({ storeId: 'store-e', frequency: 'MONTHLY', period, email: false })
+    expect(first.run.emailStatus).toBe('NOT_REQUESTED')
+    const emailed = await service.generate({ storeId: 'store-e', frequency: 'MONTHLY', period, email: true })
+    expect(emailed.run.id).toBe(first.run.id)
+    expect(emailed.run.emailStatus).toBe('SENT')
+    expect(sends).toBe(1)
+  })
 })

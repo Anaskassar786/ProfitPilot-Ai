@@ -16,8 +16,9 @@ import type { AiCommandRouteDependencies } from './ai-command-routes.js'
 import { PostgresAiCommandRepository } from './ai-command-repository.js'
 import { ProductionCommandActions, ProductionCommandTools } from './ai-command-runtime.js'
 import { AiCommandPageMetricsService } from './ai-command-page-metrics.js'
-import { CloudflareR2ObjectStore, ReportService } from '@profitpilot/reporting'
-import type { ReportDataProvider } from '@profitpilot/reporting'
+import { CloudflareR2ObjectStore, ReportService, REPORT_USAGE_FEATURE } from '@profitpilot/reporting'
+import type { ReportDataProvider, ReportQuota } from '@profitpilot/reporting'
+import { PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
 import { OrderInsightsService, PostgresOrderInsightAudit, PostgresOrderInsightUsage, PostgresOrderRepository } from './orders.js'
 import type { OrderRouteDependencies } from './order-routes.js'
 import { PostgresCustomerRepository } from './customers.js'
@@ -204,7 +205,44 @@ function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | un
   const objectStore = r2FromEnv(env)
   const dataProvider: ReportDataProvider = { get: async (storeId, _frequency, period) => { const raw = await f7.dataPlane.analytics.read(storeId as import('@profitpilot/types').StoreId); const startDay = period.start.slice(0, 10); const endDay = period.end.slice(0, 10); const analytics = { revenue: raw.revenue.filter((row) => row.day >= startDay && row.day <= endDay), orders: raw.orders.filter((row) => row.day >= startDay && row.day <= endDay), productSales: raw.productSales.filter((row) => row.day >= startDay && row.day <= endDay), customerCohorts: raw.customerCohorts.filter((row) => row.activityDay >= startDay && row.activityDay <= endDay) }; const scopedAnalytics = { read: async () => analytics, readCatalog: (tenant: import('@profitpilot/types').StoreId) => f7.dataPlane.analytics.readCatalog(tenant) }; const forecast = await computeForecast(storeId, { analytics: scopedAnalytics, customers: (tenant) => customerRfm(f7.database, tenant) }); const rows = [{ metric: 'closed_period_revenue', value: analytics.revenue.length > 0 ? analytics.revenue.reduce((sum, row) => sum + row.grossRevenue, 0) : null, source: 'analytics_revenue_daily' }, { metric: 'closed_period_orders', value: analytics.orders.length > 0 ? analytics.orders.reduce((sum, row) => sum + row.orderCount, 0) : null, source: 'analytics_orders_daily' }, { metric: 'forecast_method', value: forecast.revenue?.method.method ?? 'unavailable', source: 'forecasting' }, { metric: 'forecast_value', value: forecast.revenue?.value ?? null, source: 'forecasting' }]; return { storeId, currency: null, rows, summary: 'Deterministic closed-period ProfitPilot report.' } } }
   const delivery = reportDelivery(f7, env)
-  return new ReportService(new PostgresReportRepository(f7.database), objectStore, dataProvider, delivery)
+  const quota = reportQuota(f7)
+  return new ReportService(new PostgresReportRepository(f7.database), objectStore, dataProvider, delivery, () => Date.now(), quota)
+}
+
+/**
+ * Enforces the canonical monthly `reports` entitlement from `billing_usage`
+ * (trial 1 / start 1 / growth 2 / commander unlimited). Quarterly reports are a
+ * Growth+ feature, so their limit resolves to 0 below Growth. The reservation
+ * is a single atomic upsert guarded by `used < limit`, matching the other
+ * metered features (recommendations, analytics, orders), and is refunded when
+ * generation fails.
+ */
+function reportQuota(f7: F7Bootstrap): ReportQuota {
+  return {
+    plan: async (storeId) => (await f7.billing.repository.get(storeId))?.plan ?? 'trial',
+    limitFor: (plan, frequency) => {
+      if (frequency === 'QUARTERLY' && plan !== 'growth' && plan !== 'commander') return 0
+      return PLAN_ENTITLEMENT_LIMITS[plan][REPORT_USAGE_FEATURE]
+    },
+    consume: async (storeId, limit) => withTenantContext(f7.database, storeId, async (client) => {
+      const reserved = await client.query<QueryResultRow & { used: string | number }>(
+        `INSERT INTO billing_usage (shop_id, feature, period_start, used) VALUES ($1, $2, date_trunc('month', now())::date, 1)
+         ON CONFLICT (shop_id, feature, period_start) DO UPDATE SET used = billing_usage.used + 1
+         WHERE $3::bigint IS NULL OR billing_usage.used < $3::bigint
+         RETURNING used`,
+        [storeId, REPORT_USAGE_FEATURE, limit],
+      )
+      if (reserved.rows[0]) return { allowed: true, used: Number(reserved.rows[0].used) }
+      const current = await client.query<QueryResultRow & { used: string | number }>(
+        `SELECT used FROM billing_usage WHERE shop_id = $1 AND feature = $2 AND period_start = date_trunc('month', now())::date`,
+        [storeId, REPORT_USAGE_FEATURE],
+      )
+      return { allowed: false, used: Number(current.rows[0]?.used ?? 0) }
+    }),
+    refund: async (storeId) => withTenantContext(f7.database, storeId, async (client) => {
+      await client.query(`UPDATE billing_usage SET used = GREATEST(0, used - 1) WHERE shop_id = $1 AND feature = $2 AND period_start = date_trunc('month', now())::date`, [storeId, REPORT_USAGE_FEATURE])
+    }),
+  }
 }
 
 /**

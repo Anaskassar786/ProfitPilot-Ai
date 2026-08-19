@@ -8,7 +8,7 @@ export type ReportStatusTone = 'ready' | 'generating' | 'failed' | 'emailed'
 
 export type ReportAccess = Readonly<{
   monthlyLimit: number | null
-  quarterlyLimit: number | null
+  quarterly: boolean
   custom: boolean
   pdf: boolean
   email: boolean
@@ -46,11 +46,16 @@ export type ReportPreview = Readonly<{
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const
 
+// The monthly limit mirrors the canonical `reports` entitlement in
+// `PLAN_ENTITLEMENT_LIMITS` (packages/types/src/plans.ts) — trial 1, start 1,
+// growth 2, commander unlimited. Quarterly and custom ranges are Growth+
+// features. Keeping these in lockstep means the server-side quota (billing_usage
+// `reports`) and this UI never disagree about how many reports a plan allows.
 const PLAN_ACCESS: Readonly<Record<ReportPlan, ReportAccess>> = {
-  trial: { monthlyLimit: 1, quarterlyLimit: 0, custom: false, pdf: true, email: false, whiteLabel: false, apiAccess: false },
-  start: { monthlyLimit: 3, quarterlyLimit: 1, custom: false, pdf: true, email: false, whiteLabel: false, apiAccess: false },
-  growth: { monthlyLimit: null, quarterlyLimit: null, custom: true, pdf: true, email: true, whiteLabel: false, apiAccess: false },
-  commander: { monthlyLimit: null, quarterlyLimit: null, custom: true, pdf: true, email: true, whiteLabel: true, apiAccess: true },
+  trial: { monthlyLimit: 1, quarterly: false, custom: false, pdf: true, email: false, whiteLabel: false, apiAccess: false },
+  start: { monthlyLimit: 1, quarterly: false, custom: false, pdf: true, email: false, whiteLabel: false, apiAccess: false },
+  growth: { monthlyLimit: 2, quarterly: true, custom: true, pdf: true, email: true, whiteLabel: false, apiAccess: false },
+  commander: { monthlyLimit: null, quarterly: true, custom: true, pdf: true, email: true, whiteLabel: true, apiAccess: true },
 }
 
 export function resolveReportPlan(raw: string | null | undefined): ReportPlan {
@@ -130,11 +135,14 @@ export function reportStatusView(run: Pick<ReportRun, 'status' | 'emailStatus'>)
 
 export function countReportsInWindow(
   runs: readonly Pick<ReportRun, 'frequency' | 'createdAt' | 'status'>[],
-  frequency: ReportRun['frequency'],
+  _frequency: ReportRun['frequency'],
   now: Date = new Date(),
 ): number {
-  const windowStart = frequency === 'QUARTERLY' ? startOfUtcQuarter(now) : startOfUtcMonth(now)
-  return runs.filter((run) => run.frequency === frequency && run.status !== 'FAILED' && run.createdAt >= windowStart.getTime()).length
+  // Every generated report — monthly, quarterly, or custom — draws from the
+  // same monthly `reports` entitlement, so the window is always the current
+  // UTC calendar month regardless of the requested kind.
+  const windowStart = startOfUtcMonth(now).getTime()
+  return runs.filter((run) => run.status !== 'FAILED' && run.createdAt >= windowStart).length
 }
 
 export function canGenerateReport(
@@ -144,24 +152,16 @@ export function canGenerateReport(
   now: Date = new Date(),
 ): ReportGate {
   const access = reportAccessFor(plan)
+  const used = countReportsInWindow(runs, 'MONTHLY', now)
+  const usedUp: ReportGate = { allowed: false, reason: 'You have used this month’s reports. Upgrade Plan for more.', used, limit: access.monthlyLimit }
   if (kind === 'CUSTOM') {
-    return access.custom
-      ? { allowed: true, reason: null, used: 0, limit: null }
-      : { allowed: false, reason: 'Custom date ranges unlock when you Upgrade Plan.', used: 0, limit: 0 }
+    return access.custom ? monthlyGate(access.monthlyLimit, used, usedUp) : { allowed: false, reason: 'Custom date ranges unlock when you Upgrade Plan.', used, limit: 0 }
   }
   if (kind === 'QUARTERLY') {
-    const used = countReportsInWindow(runs, 'QUARTERLY', now)
-    if (access.quarterlyLimit === 0) return { allowed: false, reason: 'Quarterly reports unlock when you Upgrade Plan.', used, limit: 0 }
-    if (access.quarterlyLimit !== null && used >= access.quarterlyLimit) {
-      return { allowed: false, reason: 'You have used this quarter’s reports. Upgrade Plan for more.', used, limit: access.quarterlyLimit }
-    }
-    return { allowed: true, reason: null, used, limit: access.quarterlyLimit }
+    if (!access.quarterly) return { allowed: false, reason: 'Quarterly reports unlock when you Upgrade Plan.', used, limit: 0 }
+    return monthlyGate(access.monthlyLimit, used, usedUp)
   }
-  const used = countReportsInWindow(runs, 'MONTHLY', now)
-  if (access.monthlyLimit !== null && used >= access.monthlyLimit) {
-    return { allowed: false, reason: 'You have used this month’s reports. Upgrade Plan for more.', used, limit: access.monthlyLimit }
-  }
-  return { allowed: true, reason: null, used, limit: access.monthlyLimit }
+  return monthlyGate(access.monthlyLimit, used, usedUp)
 }
 
 export function usageCopy(plan: ReportPlan, runs: readonly Pick<ReportRun, 'frequency' | 'createdAt' | 'status'>[], now: Date = new Date()): string {
@@ -169,6 +169,11 @@ export function usageCopy(plan: ReportPlan, runs: readonly Pick<ReportRun, 'freq
   const used = countReportsInWindow(runs, 'MONTHLY', now)
   if (access.monthlyLimit === null) return 'Unlimited monthly reports this month'
   return `Reports this month: ${used}/${access.monthlyLimit} used`
+}
+
+function monthlyGate(limit: number | null, used: number, usedUp: ReportGate): ReportGate {
+  if (limit !== null && used >= limit) return usedUp
+  return { allowed: true, reason: null, used, limit }
 }
 
 export function closedPeriodFor(kind: ReportKind, now: Date = new Date(), custom?: Readonly<{ start: string; end: string }>): ClosedReportPeriod {
@@ -251,7 +256,7 @@ export function buildReportPreview(
 
 export function higherPlanHighlights(plan: ReportPlan): readonly string[] {
   if (plan === 'trial') return ['More monthly reports', 'Quarterly overviews', 'Custom date ranges', 'Email delivery']
-  if (plan === 'start') return ['Unlimited monthly and quarterly reports', 'Custom date ranges', 'Email delivery']
+  if (plan === 'start') return ['More monthly reports', 'Quarterly overviews', 'Custom date ranges', 'Email delivery']
   if (plan === 'growth') return ['White-label PDFs', 'API access for generated reports']
   return []
 }
