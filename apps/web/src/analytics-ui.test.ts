@@ -190,14 +190,20 @@ describe('analytics page low-data rendering', () => {
     dom.window.close()
   })
 
-  it('shows a focused card for a single category instead of a broken pie', async () => {
+  it('reports the discount waterfall and stock-out risk from synced data only', async () => {
     const { dom, container } = await mount(twoOrderSnapshot, insightsFixture({
       categories: [{ name: 'Apparel', revenue: 150, units: 2 }],
     }))
     expect(container.querySelector('[data-page-error]')).toBeNull()
-    expect(container.textContent).toContain('100% OF CATEGORY REVENUE')
-    expect(container.textContent).toContain('Apparel')
+    // Discount leakage is measured from the synced revenue rows: this fixture
+    // records no discounts, so the card says so instead of drawing a curve.
+    expect(container.textContent).toContain('Discount & revenue leakage')
+    expect(container.textContent).toContain('Merchandise value')
+    expect(container.textContent).toContain('No discount leakage in this period')
     expect(container.textContent).toContain('$150.00')
+    // Inventory is not synced in this fixture, so the risk card stays honest.
+    expect(container.textContent).toContain('Stock-out risk & cover')
+    expect(container.textContent).toContain('Protect your bestsellers')
     dom.window.close()
   })
 

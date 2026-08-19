@@ -338,7 +338,7 @@ describe('every analytics section is individually error-boundaried', () => {
     const source = await (await import('node:fs/promises')).readFile(new URL('./analytics.tsx', import.meta.url), 'utf8')
     for (const label of [
       'analytics header', 'performance overview', 'revenue intelligence', 'orders and AOV',
-      'sales channels', 'category distribution', 'AI business intelligence', 'customer cohorts',
+      'discount leakage', 'stock-out risk', 'AI business intelligence', 'customer cohorts',
       'geographic distribution', 'product performance', 'temporal patterns', 'conversion funnel',
       'advanced comparisons', 'custom AI analyst',
     ]) expect(source, `missing boundary for "${label}"`).toContain(`<Boundary label="${label}">`)
