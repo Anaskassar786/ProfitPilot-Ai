@@ -4082,3 +4082,347 @@
   border-color: #7c3aed;
 }
 
+
+/* ==========================================================================
+   Automation hub overhaul — one contract for every CTA, badge, border & card.
+   (Appended last so it wins the cascade against the older rules above.)
+   ========================================================================== */
+
+/* --- 1. EVERY "Upgrade Plan" button is the SAME green CTA ------------------
+   Template cards, the plan banner, and the template preview modal all share
+   this one style. No yellow, no orange, no purple, no half-visible buttons. */
+
+.automation-page .template-upgrade-btn,
+.automation-page .upgrade-mini.template-upgrade-btn,
+.automation-page .warning-upgrade-btn,
+.automation-page .upgrade-plan-btn,
+.automation-modal .upgrade-plan-btn,
+.light-mode .automation-page .warning-upgrade-btn,
+.light-mode .automation-page .upgrade-plan-btn,
+.light-mode .automation-modal .upgrade-plan-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  min-width: 120px !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 6px 16px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.28) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  cursor: pointer;
+}
+
+.automation-page .template-upgrade-btn:hover,
+.automation-page .warning-upgrade-btn:hover,
+.automation-page .upgrade-plan-btn:hover,
+.automation-modal .upgrade-plan-btn:hover,
+.light-mode .automation-page .warning-upgrade-btn:hover,
+.light-mode .automation-page .upgrade-plan-btn:hover,
+.light-mode .automation-modal .upgrade-plan-btn:hover {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.36) !important;
+  transform: translateY(-1px);
+}
+
+/* Locked cards stay fully opaque — only the CTA communicates the lock. */
+.automation-page .template-card-pro.locked,
+.light-mode .automation-page .template-card-pro.locked {
+  opacity: 1;
+}
+
+/* --- 2. "Set Up →" buttons are identical everywhere ---------------------- */
+
+.automation-page .template-setup-btn,
+.light-mode .automation-page .template-setup-btn {
+  min-width: 96px !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 6px 14px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* --- 3. Card footers can never clip a CTA -------------------------------- */
+
+.automation-page .template-card-pro footer,
+.light-mode .automation-page .template-card-pro footer {
+  align-items: center;
+  gap: 10px;
+}
+
+.automation-page .template-card-pro footer .setup-time,
+.light-mode .automation-page .template-card-pro footer .setup-time {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- 4. Badges: logical per-plan colors, never clipped ------------------- */
+
+.automation-page .template-plan-badge,
+.light-mode .automation-page .template-plan-badge {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- 5. Card borders: one consistent base + one consistent category stripe.
+   Per the spec: Sales=green, Customer=blue, Inventory=orange,
+   Operations=purple, Revenue=red. Icon tints follow the same map. ---------- */
+
+.automation-page .template-card-pro {
+  border: 1px solid var(--auto-border);
+}
+
+.automation-page .template-card.sales-growth::after {
+  background: linear-gradient(90deg, #22c55e, #34d399);
+}
+
+.automation-page .template-card.customer-experience::after {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.automation-page .template-card.inventory-stock::after {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.automation-page .template-card.operations::after {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+
+.automation-page .template-card.revenue-retention::after {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.automation-page .template-card.operations .template-icon {
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.automation-page .template-card.revenue-retention .template-icon {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.light-mode .automation-page .template-card.operations .template-category {
+  color: #6d28d9;
+}
+
+.light-mode .automation-page .template-card.revenue-retention .template-category {
+  color: #b91c1c;
+}
+
+/* --- 6. Equal card heights ------------------------------------------------ */
+
+.automation-page .template-strip,
+.automation-page .template-gallery-grid {
+  align-items: stretch;
+}
+
+.automation-page .template-card-pro,
+.light-mode .automation-page .template-card-pro {
+  height: 100%;
+}
+
+/* --- 7. Workflow cards: topline layout + inline rename --------------------- */
+
+.workflow-card-topline {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 8px;
+}
+
+.workflow-card-icon-btn {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.workflow-card-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.workflow-name-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: text;
+}
+
+.workflow-name-button .workflow-name {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-name-edit-icon {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.workflow-name-button:hover .workflow-name-edit-icon,
+.workflow-name-button:focus-visible .workflow-name-edit-icon {
+  opacity: 1;
+  color: var(--auto-accent);
+}
+
+.workflow-name-input {
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--auto-accent);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--auto-card);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.automation-page .workflow-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 4px 20px 16px;
+  text-align: left;
+}
+
+/* The never-run hint is inside the clickable body: make its affordance
+   obvious and give it a hover state. */
+.automation-page .workflow-empty-hint {
+  cursor: pointer;
+}
+
+.automation-page .workflow-empty-hint span {
+  flex: 1;
+}
+
+.workflow-empty-hint-arrow {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.automation-page .workflow-card-body:hover .workflow-empty-hint {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(252, 211, 77, 0.45);
+}
+
+.light-mode .automation-page .workflow-card-body:hover .workflow-empty-hint {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+/* --- 8. Editor rename ------------------------------------------------------ */
+
+.editor-name-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: text;
+}
+
+.editor-name-button strong {
+  color: var(--text);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.editor-name-button svg {
+  color: var(--text-tertiary);
+  opacity: 0.6;
+}
+
+.editor-name-button:hover svg {
+  color: var(--auto-accent);
+  opacity: 1;
+}
+
+.editor-name-input {
+  width: min(420px, 100%);
+  padding: 7px 11px;
+  border: 1px solid var(--auto-accent);
+  border-radius: 9px;
+  outline: 0;
+  background: var(--auto-card);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* --- 9. Dark-theme focus ring (light theme already has one) ---------------- */
+
+.automation-page button:focus-visible,
+.automation-subpage button:focus-visible,
+.automation-modal button:focus-visible,
+.workflow-editor button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+/* --- 10. Responsive hardening --------------------------------------------- */
+
+.template-tabs {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .automation-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-header-actions,
+  .automation-header > div:last-child {
+    width: 100%;
+  }
+
+  .automation-header-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .automation-plan-banner button,
+  .pending-approval-banner button {
+    margin-left: 0;
+  }
+}

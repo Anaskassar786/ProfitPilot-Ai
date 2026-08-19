@@ -1,3 +1,5 @@
+import { BellRing, Boxes, Repeat, ShoppingCart, Sparkles, Users } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { WorkflowCategory, WorkflowRecord, WorkflowStatus } from './automation-model.js'
 
 /** Minimal node shape used by friendly-label helpers. */
@@ -215,6 +217,25 @@ export function templateToneClass(category: WorkflowCategory | string): string {
   if (category === 'Inventory') return 'inventory-stock'
   if (category === 'Operations') return 'operations'
   return 'revenue-retention'
+}
+
+/**
+ * One distinctive, recognizable icon per workflow category. Shared by template
+ * cards and workflow cards so a category always carries the same icon — no
+ * duplicates across categories.
+ *   Marketing  → ShoppingCart  (sales & growth)
+ *   Customer   → Users         (customer experience)
+ *   Inventory  → Boxes         (inventory & stock)
+ *   Operations → BellRing      (team alerts)
+ *   Revenue    → Repeat        (revenue & retention)
+ */
+export function categoryIcon(category: WorkflowCategory | string): LucideIcon {
+  if (category === 'Marketing') return ShoppingCart
+  if (category === 'Customer') return Users
+  if (category === 'Inventory') return Boxes
+  if (category === 'Operations') return BellRing
+  if (category === 'Revenue') return Repeat
+  return Sparkles
 }
 
 /** Plan-badge class for the real minimum plan on a template. */

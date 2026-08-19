@@ -26,7 +26,7 @@ import { launchControlMiddleware, createF9Router } from './f9.js'
 import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
-import { isApiPath, mountWebApp } from './web-app.js'
+import { isApiPath, mountAutomationSpaFallback, mountWebApp } from './web-app.js'
 import { embeddedEntryMiddleware } from './embedded-entry.js'
 import type { EmbeddedEntryDependencies } from './embedded-entry.js'
 import { createOrderRouter } from './order-routes.js'
@@ -76,6 +76,12 @@ export function createApi(dependencies: ApiDependencies): Express {
   app.use(apiOnly(authenticationMiddleware(security)))
   app.use(apiOnly(tenantContextMiddleware(security.requireAuthentication)))
   app.use(apiOnly(csrfMiddleware(security.csrfSecret)))
+
+  // Automation deep links share their prefix with the JSON API, so the app
+  // shell must be served here — before the routers — for browser navigations
+  // only (Accept: text/html). API clients never request HTML, so the JSON
+  // endpoints below keep answering exactly as before.
+  mountAutomationSpaFallback(app, dependencies.webDistPath)
 
   // API routes must be registered before the static server and SPA fallback so
   // neither a real endpoint nor an unknown API URL can return index.html.

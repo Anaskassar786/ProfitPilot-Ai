@@ -48,4 +48,26 @@ describe('F6 automation and marketing APIs', () => {
     await new Promise<void>((resolve) => second.listen(0, '127.0.0.1', resolve)); const secondAddress = second.address(); if (!secondAddress || typeof secondAddress === 'string') throw new Error('No address')
     try { const verified = await fetch(`http://127.0.0.1:${secondAddress.port}/settings/merchant-email/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }); expect(verified.status).toBe(200); expect((await merchantEmails.get('s'))?.verified).toBe(true) } finally { await new Promise<void>((resolve) => second.close(() => resolve())) }
   })
+  it('returns 404 (never a 500) when cancelling an unknown run', async () => await withServer(async (base) => {
+    const cancelled = await fetch(`${base}/automation/runs/does-not-exist/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 's' }) })
+    expect(cancelled.status).toBe(404)
+    expect((await cancelled.json()).error.code).toBe('NOT_FOUND')
+  }))
+  it('rejects locked-template installs with the upgrade message before the workflow limit', async () => await withServer(async (base) => {
+    const locked = await fetch(`${base}/automation/templates/abandoned-checkout/install`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 's', name: 'X' }) })
+    expect(locked.status).toBe(402)
+    const payload = await locked.json()
+    expect(payload.error.message).toBe('Upgrade Plan to install this template')
+    expect(payload.error.details.reason).toBe('UPGRADE_REQUIRED')
+  }))
+  it('conflicts (409) when cancelling a run that already finished', async () => await withServer(async (base) => {
+    await fetch(`${base}/automation/workflows`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(definition) })
+    await fetch(`${base}/automation/workflows/wf/activate?storeId=s`, { method: 'POST' })
+    const started = await (await fetch(`${base}/automation/workflows/wf/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 's', context: {} }) })).json()
+    const runId = started.data.id as string
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const cancelled = await fetch(`${base}/automation/runs/${runId}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 's' }) })
+    expect(cancelled.status).toBe(409)
+    expect((await cancelled.json()).error.code).toBe('CONFLICT')
+  }))
 })

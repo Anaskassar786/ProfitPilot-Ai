@@ -118,6 +118,9 @@ function EditorInner({
   const [picker, setPicker] = useState<{ group: string | null; replaceId: string | null } | null>(null)
   const [howOpen, setHowOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [draftName, setDraftName] = useState(workflow.name)
+  const [renamingBusy, setRenamingBusy] = useState(false)
   const [testing, setTesting] = useState(false)
   const [search, setSearch] = useState('')
   const [errors, setErrors] = useState<readonly string[]>([])
@@ -266,6 +269,27 @@ function EditorInner({
     setSelected(null)
   }
 
+  const commitRename = async (): Promise<void> => {
+    if (renamingBusy) return
+    const next = draftName.trim()
+    if (!next || next === workflow.name) {
+      setRenaming(false)
+      setDraftName(workflow.name)
+      return
+    }
+    setRenamingBusy(true)
+    try {
+      const updated = await updateAutomationWorkflow(storeId, workflow.id, { name: next })
+      onSaved(updated)
+      onToast('Automation renamed.', 'success')
+      setRenaming(false)
+    } catch (reason: unknown) {
+      onToast(reason instanceof Error ? reason.message : 'Automation could not be renamed.', 'error')
+    } finally {
+      setRenamingBusy(false)
+    }
+  }
+
   const triggerNode = nodes.find((node) => node.data.kind === 'trigger') ?? null
   const checkNodes = nodes.filter((node) => node.data.kind === 'condition' || node.data.kind === 'filter')
   const waitNodes = nodes.filter((node) => node.data.kind === 'wait')
@@ -278,7 +302,37 @@ function EditorInner({
           <ArrowLeft size={16} /> Automations
         </button>
         <div className="editor-title">
-          <strong>{workflow.name}</strong>
+          {renaming ? (
+            <input
+              className="editor-name-input"
+              autoFocus
+              value={draftName}
+              maxLength={120}
+              disabled={renamingBusy}
+              aria-label="Automation name"
+              onChange={(event) => setDraftName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void commitRename()
+                else if (event.key === 'Escape') {
+                  setRenaming(false)
+                  setDraftName(workflow.name)
+                }
+              }}
+              onBlur={() => void commitRename()}
+            />
+          ) : (
+            <button
+              className="editor-name-button"
+              title="Rename automation"
+              onClick={() => {
+                setDraftName(workflow.name)
+                setRenaming(true)
+              }}
+            >
+              <strong>{workflow.name}</strong>
+              <Pencil size={13} aria-hidden="true" />
+            </button>
+          )}
           <span>
             {friendlyStatus(workflow.status)}
             {workflow.status === 'ACTIVE' ? ' · live' : workflow.status === 'DRAFT' ? ' · not active yet' : ''} · updated {relativeTime(workflow.updatedAt)}
