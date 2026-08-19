@@ -1558,3 +1558,37 @@
 @media (prefers-reduced-motion: reduce) {
   .recs-discover { animation: none !important; }
 }
+
+/* Decision-safe KPI empty states and action feedback. */
+.recs-kpi-approved .recs-kpi-row { align-items: center; gap: 10px; }
+.recs-kpi-approved .recs-kpi-value-stack { justify-content: center; }
+.recs-kpi-progress-empty {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  margin-top: 2px;
+  padding: 7px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--border-soft) 42%, transparent);
+}
+.recs-kpi-empty-state {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.recs-usage-limit-message {
+  color: var(--red) !important;
+  font-weight: 650;
+}
+.recs-card-actions button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+.app-shell.light-mode .recs-kpi-progress-empty {
+  border-color: #CBD5E1;
+  background: #F8FAFC;
+}
+.app-shell.light-mode .recs-kpi-empty-state { color: #64748B; }
+.app-shell.light-mode .recs-usage-limit-message { color: #B91C1C !important; }

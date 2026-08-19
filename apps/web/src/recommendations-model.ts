@@ -519,7 +519,18 @@ export function groupRecommendations(items: readonly RecommendationView[], mode:
 export function searchRecommendations(items: readonly RecommendationView[], query: string): readonly RecommendationView[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return items
-  return items.filter((item) => item.title.toLowerCase().includes(needle) || item.reason.toLowerCase().includes(needle) || (item.explanation?.toLowerCase().includes(needle) ?? false))
+  return items.filter((item) => {
+    const searchable = [
+      item.title,
+      item.reason,
+      item.explanation,
+      item.entityKey,
+      item.impactLabel,
+      agentLabel(item.agent),
+      ruleLabel(item.ruleId),
+    ]
+    return searchable.some((value) => typeof value === 'string' && value.toLowerCase().includes(needle))
+  })
 }
 
 /** Impact bar width relative to the page's largest impact, min 4% for visibility. */
