@@ -57,6 +57,7 @@ import {
   formatCoachDate,
   friendlyFeasibility,
   greetingForDaypart,
+  huddleActionLabelForDaypart,
   heatmapPatterns,
   huddleTimeLabel,
   learningMoment,
@@ -400,7 +401,7 @@ function CoachHero({ shop, plan, health, streak, onSettings, onOnboarding, onHud
         </div>
       </div>
       <div className="coach-hero-actions">
-        <button className="button primary" onClick={onHuddle}><Sun size={15} /> Start Morning Huddle</button>
+        <button className="button primary" onClick={onHuddle}><Sun size={15} /> {huddleActionLabelForDaypart(part)}</button>
         <button className="icon-button coach-hero-icon" onClick={onOnboarding} aria-label="Take the two-minute tour" title="Take the two-minute tour"><Sparkles size={16} /></button>
         <button className="icon-button coach-hero-icon" onClick={onSettings} aria-label="Store Coach settings" title="Store Coach settings"><Settings size={16} /></button>
       </div>
@@ -577,7 +578,9 @@ export function CoachGenerationSteps({ stepMs = 2600 }: { stepMs?: number }) {
 
 function BriefingReadyCard({ storeId, huddle, onToast, onReload }: { storeId: string; huddle: CoachHuddle; onToast: CoachToast; onReload: () => void }) {
   const content = huddle.content
-  const greeting = typeof content.greeting === 'string' ? content.greeting : 'Good morning.'
+  // A huddle can be generated in the morning and revisited much later. Its
+  // salutation must describe the merchant's current visit, not its creation time.
+  const greeting = `${greetingForDaypart(daypartForHour(new Date().getHours()))}.`
   const yesterday = typeof content.yesterdaySnapshot === 'string' ? content.yesterdaySnapshot : ''
   const preview = typeof content.todayPreview === 'string' ? content.todayPreview : ''
   const insight = typeof content.keyInsight === 'string' ? content.keyInsight : ''
