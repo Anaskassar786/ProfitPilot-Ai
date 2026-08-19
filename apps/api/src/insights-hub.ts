@@ -1062,6 +1062,53 @@ export function createInsightsNarrator(provider: Pick<OpenRouterClient, 'generat
   }
 }
 
+/* ── Hero trend derivation (real timestamps, never invented) ────────────── */
+
+export type InsightCountTrend = Readonly<{
+  /** Weekly counts of real activity, oldest → newest (up to 8 weeks). */
+  series: readonly number[]
+  /** 'up' | 'down' | 'flat' when there is real activity; 'none' when empty. */
+  direction: 'up' | 'down' | 'flat' | 'none'
+  windowLabel: string
+}>
+
+/**
+ * Builds an honest 8-week activity trend from a list of entity timestamps.
+ * Each week bucket is a real count of rows that landed that week; the
+ * direction compares the recent stretch to the stretch before it and is
+ * reported as 'none' when there is nothing to compare yet — we never invent
+ * movement from an empty store.
+ */
+export function buildInsightTrend(items: readonly Readonly<{ ts: string }>[], nowIso: string, weeks = 8): InsightCountTrend {
+  const now = Date.parse(nowIso)
+  const currentWeek = Number.isNaN(now) ? 0 : Math.floor(Math.floor(now / 86_400_000) / 7)
+  const buckets = new Array<number>(Math.max(weeks, 1)).fill(0)
+  for (const item of items) {
+    const ms = Date.parse(item.ts)
+    if (Number.isNaN(ms)) continue
+    const week = Math.floor(Math.floor(ms / 86_400_000) / 7)
+    const offset = currentWeek - week
+    if (offset < 0 || offset >= buckets.length) continue
+    const index = buckets.length - 1 - offset
+    buckets[index] = (buckets[index] ?? 0) + 1
+  }
+  const recent = sum(buckets.slice(-3))
+  const prior = sum(buckets.slice(-6, -3))
+  let direction: InsightCountTrend['direction'] = 'none'
+  if (recent + prior > 0) {
+    if (recent > prior) direction = 'up'
+    else if (recent < prior) direction = 'down'
+    else direction = 'flat'
+  }
+  return { series: buckets, direction, windowLabel: `Last ${buckets.length} weeks` }
+}
+
+function sum(values: readonly number[]): number {
+  let total = 0
+  for (const value of values) total += value
+  return total
+}
+
 /* ── Service ───────────────────────────────────────────────────────────── */
 
 export type InsightsOverview = Readonly<{
@@ -1070,6 +1117,8 @@ export type InsightsOverview = Readonly<{
   requiredPlans: Readonly<Record<InsightsFeature, PlanTier>>
   usage: Readonly<{ discoveries: Readonly<{ used: number; limit: number | null; remaining: number | null }>; investigations: Readonly<{ used: number; limit: number | null; remaining: number | null }> }>
   counts: Readonly<{ newDiscoveries: number; totalDiscoveries: number; patterns: number; lessons: number; lessonsRead: number; personas: number; investigations: number; trends: number; predictions: number; comparisons: number; knowledge: number }>
+  /** Real 8-week activity trend per hero metric, from stored timestamps. */
+  countsTrends: Readonly<{ discoveries: InsightCountTrend; patterns: InsightCountTrend; personas: InsightCountTrend; investigations: InsightCountTrend; trends: InsightCountTrend; predictions: InsightCountTrend }>
   readiness: InsightsDataReadiness
   preferences: InsightsPreferences
   autoDiscoveryRan: boolean
@@ -1207,6 +1256,14 @@ export class InsightsHubService {
         predictions: predictions.length,
         comparisons: comparisons.length,
         knowledge: knowledgeCount,
+      },
+      countsTrends: {
+        discoveries: buildInsightTrend(allD.map((entry) => ({ ts: entry.discoveredAt })), this.iso()),
+        patterns: buildInsightTrend(patterns.map((entry) => ({ ts: entry.firstDetected })), this.iso()),
+        personas: buildInsightTrend(personas.map((entry) => ({ ts: entry.generatedAt })), this.iso()),
+        investigations: buildInsightTrend(investigations.map((entry) => ({ ts: entry.createdAt })), this.iso()),
+        trends: buildInsightTrend(trends.map((entry) => ({ ts: entry.detectedAt })), this.iso()),
+        predictions: buildInsightTrend(predictions.map((entry) => ({ ts: entry.createdAt })), this.iso()),
       },
       readiness: insightsDataReadiness(dataset),
       preferences,

@@ -35,15 +35,17 @@ import type {
   DiscoveryFunnelStage,
   DiscoveryMomentum,
   DivergingRow,
+  InsightCountTrend,
   MonthlyDiscoveryProgress,
   PatternStrengthRow,
   PersonaRadarTrait,
   WavePoint,
 } from './patternai-model.js'
+import { trendDirection } from './patternai-model.js'
 
 /* ══ 1. Hero KPI micro-visualizations — six different shapes ═══════════ */
 
-export type StatVizProps = Readonly<{ count: number | null; pending: string; label: string }>
+export type StatVizProps = Readonly<{ count: number | null; pending: string; label: string; trend?: InsightCountTrend | undefined }>
 
 const VIEW = { w: 72, h: 26 }
 
@@ -192,8 +194,53 @@ const STAT_VIZ = {
   wave: StatProbabilityWave,
 } as const
 
+/**
+ * Real 8-week activity strip for a hero tile. Every bar is a true count of
+ * rows that landed that week (from stored timestamps); the strip shows at a
+ * glance whether the metric is rising, falling, or steady. When there is no
+ * activity it draws a level baseline and says so honestly — never a fake
+ * trend. This is a unique PatternAI shape: a horizontal weekly staircase, not
+ * a mini bar chart or sparkline owned by another module.
+ */
+export function StatTrendStrip({ trend, label }: { trend: InsightCountTrend; label: string }) {
+  const hasData = trend.series.some((value) => value > 0)
+  const dir = trendDirection(trend)
+  const max = Math.max(...trend.series, 1)
+  const n = Math.max(trend.series.length, 1)
+  const step = VIEW.w / n
+  const barW = Math.max(step * 0.55, 3)
+  return (
+    <span className={`pa-statviz pa-trend ${hasData ? 'has-data' : 'is-empty'}`} title={hasData ? `${label} — ${trend.windowLabel}, ${dir === 'up' ? 'rising' : dir === 'down' ? 'falling' : dir === 'flat' ? 'steady' : 'no activity yet'}` : `${label} — no activity yet in ${trend.windowLabel}`}>
+      <svg viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label={hasData ? `${label}: ${trend.windowLabel} activity ${dir}` : `${label}: no activity in ${trend.windowLabel}`} focusable="false">
+        {trend.series.map((value, index) => {
+          const height = Math.max(value > 0 ? (value / max) * VIEW.h : 2, 1.6)
+          return (
+            <rect
+              key={index}
+              className={`pa-trend-bar ${value > 0 ? 'live' : 'ghost'} dir-${dir}`}
+              x={index * step + (step - barW) / 2}
+              y={VIEW.h - height}
+              width={barW}
+              height={height}
+              rx={1.6}
+            >
+              <title>{`${value} in this week`}</title>
+            </rect>
+          )
+        })}
+      </svg>
+      {hasData && <em className={`pa-trend-dir ${dir}`}>{dir === 'up' ? '▲' : dir === 'down' ? '▼' : '→'} {dir === 'up' ? 'rising' : dir === 'down' ? 'falling' : 'steady'}</em>}
+      {!hasData && <em className="pa-statviz-pending">no activity yet</em>}
+    </span>
+  )
+}
+
 /** Picks the tile's own micro-visualization; each of the six differs. */
-export function StatVisualization({ visual, count, pending, label }: StatVizProps & { visual: keyof typeof STAT_VIZ }) {
+export function StatVisualization({ visual, count, pending, label, trend }: StatVizProps & { visual: keyof typeof STAT_VIZ }) {
+  // Prefer the real 8-week trend strip when the server supplied one — it is
+  // the honest "rising / falling" visual the merchant asked for. The unique
+  // micro-visualizations remain as a graceful fallback for older payloads.
+  if (trend) return <StatTrendStrip trend={trend} label={label} />
   const Component = STAT_VIZ[visual]
   return <Component count={count} pending={pending} label={label} />
 }

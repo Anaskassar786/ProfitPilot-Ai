@@ -627,7 +627,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
               <span className="pa-stat-label">{stat.label}</span>
               <strong className="pa-stat-value">{stat.value}</strong>
               <span className="pa-stat-caption">{stat.caption}</span>
-              <StatVisualization visual={stat.visual} count={stat.count} pending={stat.pending} label={stat.label} />
+              <StatVisualization visual={stat.visual} count={stat.count} pending={stat.pending} label={stat.label} trend={stat.trend} />
             </div>
           ))}
         </div>

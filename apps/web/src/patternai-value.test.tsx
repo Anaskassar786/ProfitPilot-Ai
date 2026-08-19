@@ -33,6 +33,7 @@ import {
   StatNetworkSpark,
   StatPersonaCohort,
   StatProbabilityWave,
+  StatTrendStrip,
   StatVisualization,
 } from './patternai-viz.js'
 import { PatternAiDiscoverGlyph, PatternAiDiscoverIcon, PatternAiMark } from './patternai-logo.js'
@@ -50,6 +51,7 @@ import {
   momentumWidths,
   monthlyDiscoveryProgress,
   patternAiStats,
+  trendDirection,
   patternStrengthRows,
   patternStrengthState,
   personaRadarAverage,
@@ -145,6 +147,29 @@ describe('hero stats and their six distinct micro-visualizations', () => {
       const html = renderToStaticMarkup(createElement(StatVisualization, { visual, count: 3, pending: 'x', label: 'L' }))
       expect(html).not.toContain('<polyline')
     }
+  })
+})
+
+describe('hero real-activity trend strip', () => {
+  it('reads direction from the stored weekly series only', () => {
+    expect(trendDirection({ series: [0, 0, 0, 0, 1, 1, 2, 2], direction: 'up', windowLabel: 'Last 8 weeks' })).toBe('up')
+    expect(trendDirection({ series: [0, 0, 0, 0, 1, 1, 1, 1], direction: 'flat', windowLabel: 'Last 8 weeks' })).toBe('flat')
+    expect(trendDirection(undefined)).toBe('none')
+    expect(trendDirection({ series: [0, 0, 0, 0, 0, 0, 0, 0], direction: 'none', windowLabel: 'Last 8 weeks' })).toBe('none')
+  })
+  it('draws rising bars and an ▲ caption from real counts', () => {
+    const html = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    expect(html).toContain('pa-trend')
+    expect(html).toContain('pa-trend-bar live dir-up')
+    expect(html).toContain('▲')
+    expect(html).toContain('rising')
+  })
+  it('is never a polyline sparkline and says so honestly when empty', () => {
+    const rising = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    const empty = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 0, 0, 0], direction: 'none', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    expect(rising).not.toContain('<polyline')
+    expect(empty).toContain('no activity yet')
+    expect(empty).not.toContain('▲')
   })
 })
 

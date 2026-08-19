@@ -673,3 +673,102 @@ export function useExecutiveSeriesTone(points: readonly number[]): 'up' | 'down'
     return 'flat'
   }, [points])
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Slope / projection-cone chart ("current → next 30")
+//
+// A professional, novel take on the trajectory: instead of a long daily line,
+// it anchors two REAL figures — the current 30-day run-rate and the projected
+// next-30 revenue — and draws the slope between them. The projection dot
+// carries a whisker of the true confidence range (the projection's own band),
+// so direction and uncertainty are both visible at a glance. Nothing here is
+// invented: every value flows from the projection computed from synced days.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type SlopeChartDatum = Readonly<{
+  current: number
+  projected: number
+  growthRatePct: number | null
+  confidencePct: number
+  direction: 'growing' | 'stable' | 'declining'
+  bandLow: number
+  bandHigh: number
+}>
+
+export function ExecutiveSlopeChart({ datum, currency = 'USD', formatValue, height = 236 }: {
+  datum: SlopeChartDatum
+  currency?: string
+  formatValue?: (value: number) => string
+  height?: number
+}) {
+  const width = TRAJECTORY_CHART_WIDTH
+  const padLeft = 64
+  const padRight = 64
+  const padTop = 22
+  const padBottom = 34
+  const leftX = padLeft + 12
+  const rightX = width - padRight - 12
+  const yMaxRaw = Math.max(datum.current, datum.projected, datum.bandHigh, 1)
+  const yTicks = niceTrajectoryTicks(yMaxRaw, 4)
+  const yMax = yTicks[yTicks.length - 1] ?? 1
+  const yAt = (value: number): number => padTop + (1 - Math.max(value, 0) / yMax) * (height - padTop - padBottom)
+  const yCurrent = yAt(datum.current)
+  const yProjected = yAt(datum.projected)
+  const slopeUp = datum.projected >= datum.current
+  const tone = datum.direction === 'growing' ? 'positive' : datum.direction === 'declining' ? 'danger' : 'muted'
+  const fmt = formatValue ?? ((value: number) => formatTrajectoryAxisMoney(value, currency))
+  const midX = (leftX + rightX) / 2
+  const midY = (yCurrent + yProjected) / 2
+  const gid = useId().replace(/[^a-zA-Z0-9]/g, '')
+
+  return (
+    <div className="gq-slope" role="img" aria-label={`Revenue trajectory: current 30-day run-rate ${fmt(datum.current)} toward projected next-30 ${fmt(datum.projected)}, ${datum.confidencePct}% confidence`}>
+      <div className="gq-trajectory-legend" aria-hidden="true">
+        <span className="gq-trajectory-chip"><i className="gq-trajectory-swatch gq-slope-swatch current" />Current run-rate</span>
+        <span className="gq-trajectory-chip"><i className="gq-trajectory-swatch gq-slope-swatch projected" />Projected next 30</span>
+        <span className="gq-trajectory-chip"><i className="gq-slope-whisker-swatch" />Likely range</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ width: '100%', height, display: 'block' }}>
+        <defs>
+          <linearGradient id={`slopeArrow-${gid}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--exec-purple)" />
+            <stop offset="100%" stopColor={slopeUp ? 'var(--exec-positive)' : 'var(--exec-danger)'} />
+          </linearGradient>
+        </defs>
+        {/* Money gridlines across the whole slope. */}
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={padLeft} x2={width - padRight} y1={yAt(tick)} y2={yAt(tick)} className={tick === 0 ? 'gq-axis-baseline' : 'gq-axis-gridline'} />
+            <text x={padLeft - 8} y={yAt(tick) + 3.5} textAnchor="end" className="gq-axis-label">{tick === 0 ? '0' : formatTrajectoryAxisMoney(tick, currency)}</text>
+          </g>
+        ))}
+        {/* Reference columns for the two anchors. */}
+        <line x1={leftX} x2={leftX} y1={padTop - 6} y2={height - padBottom} className="gq-slope-guide current" />
+        <line x1={rightX} x2={rightX} y1={padTop - 6} y2={height - padBottom} className="gq-slope-guide projected" />
+        {/* The slope itself — direction read instantly from its angle & colour. */}
+        <line x1={leftX} y1={yCurrent} x2={rightX} y2={yProjected} className={`gq-slope-line ${tone}`} strokeWidth={3} strokeLinecap="round" />
+        {/* Arrowhead toward the projected value. */}
+        <path d={`M ${midX - 6} ${midY - (slopeUp ? 5 : -5)} L ${midX} ${midY} L ${midX - 6} ${midY + (slopeUp ? 5 : -5)}`} stroke={`url(#slopeArrow-${gid})`} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {/* Projection confidence whisker (real band). */}
+        <line x1={rightX} x2={rightX} y1={yAt(datum.bandHigh)} y2={yAt(datum.bandLow)} className="gq-slope-whisker" strokeWidth={2} />
+        <line x1={rightX - 6} x2={rightX + 6} y1={yAt(datum.bandHigh)} y2={yAt(datum.bandHigh)} className="gq-slope-whisker-cap" strokeWidth={2} />
+        <line x1={rightX - 6} x2={rightX + 6} y1={yAt(datum.bandLow)} y2={yAt(datum.bandLow)} className="gq-slope-whisker-cap" strokeWidth={2} />
+        {/* Current anchor. */}
+        <circle cx={leftX} cy={yCurrent} r={7} className="gq-slope-dot current" />
+        <circle cx={leftX} cy={yCurrent} r={3} className="gq-slope-dot-core current" />
+        {/* Projected anchor. */}
+        <circle cx={rightX} cy={yProjected} r={9} className="gq-slope-dot-ring projected" />
+        <circle cx={rightX} cy={yProjected} r={5.5} className="gq-slope-dot projected" />
+        {/* Value labels above each anchor. */}
+        <text x={leftX} y={Math.max(yCurrent - 16, padTop - 2)} textAnchor="middle" className="gq-slope-value current">{fmt(datum.current)}</text>
+        <text x={rightX} y={Math.max(yProjected - 16, padTop - 2)} textAnchor="middle" className="gq-slope-value projected">{fmt(datum.projected)}</text>
+        {datum.growthRatePct !== null && Number.isFinite(datum.growthRatePct) && (
+          <text x={rightX} y={Math.max(yProjected - 30, padTop - 2)} textAnchor="middle" className={`gq-slope-growth ${tone}`}>{datum.growthRatePct >= 0 ? '▲' : '▼'} {Math.abs(datum.growthRatePct).toFixed(1)}%</text>
+        )}
+        {/* Column captions. */}
+        <text x={leftX} y={height - padBottom + 18} textAnchor="middle" className="gq-slope-col-label">LAST 30 DAYS</text>
+        <text x={rightX} y={height - padBottom + 18} textAnchor="middle" className="gq-slope-col-label">NEXT 30 DAYS</text>
+      </svg>
+    </div>
+  )
+}

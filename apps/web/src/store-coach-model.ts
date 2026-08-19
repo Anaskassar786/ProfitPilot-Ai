@@ -179,6 +179,47 @@ export type CoachReviewView = Readonly<{
   pdfAvailable?: boolean
 }>
 
+/**
+ * The real, deterministic "week in numbers" snapshot attached to every weekly
+ * review on the server. These are the store's actual synced figures — never an
+ * AI estimate. Older saved reviews may not carry one yet, so parsing is
+ * defensive and returns null when absent.
+ */
+export type CoachReviewSnapshot = Readonly<{
+  currency: string
+  revenue7d: number
+  revenue7dChangePct: number
+  orders7d: number
+  orders7dChangePct: number
+  aov30d: number
+  bestDayRevenue: number
+  yesterdayNewCustomers: number
+  streakDays: number
+}>
+
+/** Extracts the real review snapshot from a stored review's content. */
+export function reviewSnapshot(content: Readonly<Record<string, unknown>>): CoachReviewSnapshot | null {
+  const raw = content.snapshot
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  const record = raw as Readonly<Record<string, unknown>>
+  const num = (key: string): number | null => {
+    const value = record[key]
+    return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+  const currency = typeof record.currency === 'string' && record.currency.length > 0 ? record.currency : 'USD'
+  const revenue7d = num('revenue7d')
+  const revenue7dChangePct = num('revenue7dChangePct')
+  const orders7d = num('orders7d')
+  const orders7dChangePct = num('orders7dChangePct')
+  const aov30d = num('aov30d')
+  const bestDayRevenue = num('bestDayRevenue')
+  const yesterdayNewCustomers = num('yesterdayNewCustomers')
+  const streakDays = num('streakDays')
+  if (revenue7d === null && orders7d === null && aov30d === null) return null
+  return { currency, revenue7d: revenue7d ?? 0, revenue7dChangePct: revenue7dChangePct ?? 0, orders7d: orders7d ?? 0, orders7dChangePct: orders7dChangePct ?? 0, aov30d: aov30d ?? 0, bestDayRevenue: bestDayRevenue ?? 0, yesterdayNewCustomers: yesterdayNewCustomers ?? 0, streakDays: streakDays ?? 0 }
+}
+
+
 export type CoachChatDone = Readonly<{ type: 'done'; message: CoachMessage }>
 export type CoachChatDelta = Readonly<{ type: 'delta'; text: string }>
 export type CoachChatError = Readonly<{ type: 'error'; code: string; message: string; status: number; details?: Readonly<Record<string, string | number | boolean | null>> }>

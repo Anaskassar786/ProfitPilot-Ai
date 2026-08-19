@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildTrajectoryHoverPoints,
+  ExecutiveSlopeChart,
   ExecutiveTrajectoryChart,
   formatTrajectoryAxisDay,
   formatTrajectoryAxisMoney,
@@ -94,6 +95,50 @@ describe('GrowthIQ trajectory axis system', () => {
     expect(html).toContain('Today')
     expect(html).toContain('gq-trajectory-today-pill')
     expect(html).toContain('gq-trajectory-projection') // dashed trend extension
+  })
+})
+
+describe('GrowthIQ slope / projection-cone chart', () => {
+  it('anchors the real run-rate and projection with a direction-tinted slope', () => {
+    const html = renderToStaticMarkup(createElement(ExecutiveSlopeChart, {
+      datum: {
+        current: 3000,
+        projected: 3600,
+        growthRatePct: 20,
+        confidencePct: 82,
+        direction: 'growing',
+        bandLow: 3300,
+        bandHigh: 4200,
+      },
+      currency: 'USD',
+      formatValue: (value: number) => `$${value.toLocaleString('en-US')}`,
+    }))
+    expect(html).toContain('gq-slope')
+    expect(html).toContain('LAST 30 DAYS')
+    expect(html).toContain('NEXT 30 DAYS')
+    expect(html).toContain('$3,000')
+    expect(html).toContain('$3,600')
+    expect(html).toContain('20.0%')
+    expect(html).toContain('gq-slope-whisker') // real confidence range
+    expect(html).toContain('gq-slope-line positive')
+  })
+
+  it('uses a real confidence whisker from the projection band and declines honestly', () => {
+    const html = renderToStaticMarkup(createElement(ExecutiveSlopeChart, {
+      datum: {
+        current: 5000,
+        projected: 4200,
+        growthRatePct: -16,
+        confidencePct: 70,
+        direction: 'declining',
+        bandLow: 3900,
+        bandHigh: 4600,
+      },
+      currency: 'USD',
+      formatValue: (value: number) => `$${Math.round(value)}`,
+    }))
+    expect(html).toContain('gq-slope-line danger')
+    expect(html).toContain('16.0%')
   })
 })
 

@@ -840,7 +840,23 @@ export class StoreCoachService {
         attempts: 1,
       }
     }
-    const content = parseWeeklyReviewJson(generation.text, evidence)
+    // The narrative is AI-written, but we always attach a real, deterministic
+    // "week in numbers" snapshot derived from the store's own synced evidence.
+    // This is what powers the right-hand panel of the Weekly Review card so a
+    // merchant always sees their actual figures even if the AI is verbose or
+    // the provider fails (fallback below is deterministic too).
+    const snapshot: Readonly<Record<string, number | string>> = {
+      currency: evidence.currency,
+      revenue7d: evidence.trailing7dRevenue,
+      revenue7dChangePct: evidence.trailing7dRevenueChangePct,
+      orders7d: evidence.trailing7dOrders,
+      orders7dChangePct: evidence.trailing7dOrdersChangePct,
+      aov30d: evidence.aov30d,
+      bestDayRevenue: evidence.bestDayRevenue,
+      yesterdayNewCustomers: evidence.yesterdayNewCustomers,
+      streakDays: evidence.streakDays,
+    }
+    const content = { ...parseWeeklyReviewJson(generation.text, evidence), snapshot }
     const report = await this.deps.reports.save(storeId, { reportType: 'WEEKLY', reportDate: day, content })
     const pdfUrl = plan === 'commander' && this.deps.pdf ? await this.buildReviewPdf(storeId, report.id, report.content) : null
     if (pdfUrl) {

@@ -35,14 +35,12 @@ describe('GrowthIqTrajectorySection', () => {
     const projection = projectTrajectory(realSeries(24, 120))!
     const html = renderToStaticMarkup(<GrowthIqTrajectorySection projection={projection} currency="USD" daysSynced={24} onNavigateReports={() => undefined} />)
     expect(html).toContain('Your business trajectory')
-    expect(html).toContain('gq-trajectory-projection') // dashed trend extension
+    expect(html).toContain('gq-slope') // slope / projection-cone chart
     expect(html).toContain('current monthly run-rate')
     expect(html).toContain('projected next 30 days')
     expect(html).toContain('projection confidence · 24 real days')
     expect(html).toContain('Explore trajectory details')
     expect(html).toMatch(/trajectory/)
-    expect(html).toContain('gq-trajectory-hit')
-    expect(html).toContain('data-testid="gq-trajectory-hit"')
   })
 
   it('degrades to honest education with a single synced day', () => {

@@ -138,7 +138,7 @@ describe('GrowthIQ — thin-data strategic stage', () => {
     expect(text).toContain('4 of 60+ synced days of history')
     // 2. Business trajectory — real 4-day series + dashed projection.
     expect(text).toContain('Your business trajectory')
-    expect(document.querySelector('.gq-trajectory-projection')).not.toBeNull()
+    expect(document.querySelector('.gq-slope')).not.toBeNull()
     expect(text).toContain('current monthly run-rate')
     expect(text).toContain('projected next 30 days')
     expect(text).toContain('4 real days')
@@ -216,7 +216,7 @@ describe('GrowthIQ — rich dashboard', () => {
     // The trajectory slot now carries history + projection.
     expect(text).toContain('Your business trajectory')
     expect(text).toContain('Revenue — last 30 days vs the next 30')
-    expect(document.querySelector('.gq-trajectory-projection')).not.toBeNull()
+    expect(document.querySelector('.gq-slope')).not.toBeNull()
     // Executive actions strip on the dashboard.
     expect(text).toContain('Executive actions')
     // Plan panel collapsed by default even on a rich dashboard.
