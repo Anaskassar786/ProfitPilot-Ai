@@ -675,7 +675,7 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
       <div className="recs-kpi recs-kpi-hero">
         <Tip label={KPI_TOOLTIPS.pendingImpact}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--green)' }}><Gauge size={14} /></span><span className="recs-kpi-label">Revenue opportunity pending</span></span></Tip>
         <div className="recs-kpi-row">
-          <RevenueRing hasImpact={pendingCount > 0} pendingCount={pendingCount} />
+          <RevenueRing hasImpact={pendingCount > 0} pendingCount={pendingCount} totalCount={summary.total} />
           <div className="recs-kpi-value-stack">
             <strong className="recs-kpi-value accent">{summary.pendingImpact.length > 0 ? formatCurrencyAmounts(summary.pendingImpact) : zeroImpact}</strong>
             {pendingCount === 0
@@ -712,7 +712,9 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
         </div>
         <div className="recs-kpi-month">
           <span className="recs-kpi-month-label">{monthName} · DAY {monthDay}</span>
-          <span className="recs-kpi-month-track" aria-hidden><i style={{ width: `${monthElapsed}%` }} /></span>
+          <span className="recs-kpi-month-track" aria-hidden>
+            {Array.from({ length: daysInMonth }, (_, index) => <i key={index} className={index < monthDay ? 'elapsed' : ''} />)}
+          </span>
           <span className="recs-kpi-month-caption">{monthElapsed}% of month elapsed</span>
         </div>
       </div>
@@ -755,26 +757,19 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
 }
 
 /** Per-card unique micro-visualizations (PR light-theme polish pass). */
-function RevenueRing({ hasImpact, pendingCount }: { hasImpact: boolean; pendingCount: number }) {
-  // The ring fills proportionally to the pending count against a 5-item
-  // friendly scale, capped at full. Zero pending shows an empty ring with a
-  // checkmark so empty states still feel intentional, not broken. The count
-  // sits inside the ring so the number and the ring read as one unit.
-  const radius = 18
+function RevenueRing({ hasImpact, pendingCount, totalCount }: { hasImpact: boolean; pendingCount: number; totalCount: number }) {
+  // Honest denominator: the ring shows how much of the store's total
+  // recommendation volume is still waiting on a decision (pending / total).
+  // No invented scale — with no recommendations at all the ring stays empty
+  // and a checkmark replaces the count so the empty state reads intentional.
+  const radius = 19
   const circumference = 2 * Math.PI * radius
-  const ratio = hasImpact ? Math.min(1, pendingCount / 5) : 0
+  const ratio = hasImpact && totalCount > 0 ? Math.min(1, pendingCount / totalCount) : 0
   return (
     <div className="recs-kpi-visual recs-kpi-radial" aria-hidden>
       <svg width="48" height="48" viewBox="0 0 48 48">
-        <defs>
-          <linearGradient id="recs-rev-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#6EE7B7" />
-            <stop offset="55%" stopColor="#10B981" />
-            <stop offset="100%" stopColor="#047857" />
-          </linearGradient>
-        </defs>
-        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="5" />
-        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" stroke="url(#recs-rev-grad)" strokeWidth="5" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-track" strokeWidth="2.5" />
+        <circle cx="24" cy="24" r={radius} fill="none" className="recs-kpi-radial-fill" strokeWidth="2.5" strokeDasharray={`${ratio * circumference} ${circumference}`} transform="rotate(-90 24 24)" />
       </svg>
       {hasImpact
         ? <strong className="recs-kpi-ring-count">{pendingCount}</strong>
