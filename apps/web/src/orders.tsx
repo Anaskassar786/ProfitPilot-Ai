@@ -197,7 +197,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <TopProductInsight insight={available('top_selling_product')} orders={orders ?? []} ordersTotal={ordersTotal ?? 0} onNavigate={onNavigate} />
           <CancellationRateCard insight={available('cancellation_rate')} orders={orders ?? []} />
           <FulfillmentRateCard insight={available('fulfillment_rate')} orders={orders ?? []} />
-          <OrderHealthInsight insight={available('order_health_score')} totalOrders={result.orderCount} />
+          <OrderHealthInsight insight={available('order_health_score')} totalOrders={result.orderCount} orders={orders ?? []} />
         </div>
         <div className="orders-premium-insights">
           <InsightSlot feature="peak_times" title="Peak Order Times" icon={<Clock3 size={16} />} available={available('peak_times')} locked={locked('peak_times')} onUpgrade={onNavigateBilling}><PeakTimeContent insight={available('peak_times')} /></InsightSlot>
@@ -372,7 +372,7 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
     <div className={`rate-status-bar ${status.tone}`}>{status.icon}<span>{status.label}</span></div>
   </article>
 }
-export function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnType<typeof insightByFeature>; totalOrders: number }) {
+export function OrderHealthInsight({ insight, totalOrders, orders = [] }: { insight: ReturnType<typeof insightByFeature>; totalOrders: number; orders?: readonly OrderView[] }) {
   const data = record(insight?.data)
   const insufficient = data.status === 'insufficient_data'
   const score = numberOrNull(data.score)
@@ -383,11 +383,20 @@ export function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnTy
   const gradeColor = grade === 'A' || grade === 'A+' ? 'green' : grade === 'B' ? 'blue' : grade === 'C' ? 'amber' : grade === 'D' || grade === 'F' ? 'red' : 'muted'
   const statusLabel = score === null || insufficient ? 'Awaiting data' : score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 50 ? 'Fair' : 'Needs attention'
   const insightMessage = orderHealthMessage({ insufficient, totalOrders, fulfilledRate, paidRate })
-  const metrics = [
-    { label: 'Fulfilled', value: fulfilledRate, color: 'green', icon: <CheckCircle2 size={13} /> },
-    { label: 'Cancelled', value: cancelledRate, color: 'red', icon: <XCircle size={13} /> },
-    { label: 'Paid', value: paidRate, color: 'blue', icon: <DollarSign size={13} /> },
-  ] as const
+  const currency = currencyOf(orders)
+  const validOrders = orders.filter((o) => o.status !== 'canceled' && o.paymentStatus !== 'refunded')
+  const aov = validOrders.length > 0 ? validOrders.reduce((sum, o) => sum + (o.totalPrice ?? 0), 0) / validOrders.length : null
+  const atRiskOrders = orders.filter((o) => o.status === 'canceled' || o.paymentStatus === 'not_paid' || o.paymentStatus === 'pending')
+  const revenueAtRisk = atRiskOrders.reduce((sum, o) => sum + (o.totalPrice ?? 0), 0)
+  const hasAtRisk = atRiskOrders.length > 0
+  const customerOrders = new Map<string, number>()
+  for (const order of orders) {
+    const key = order.customer?.id ?? order.customer?.email ?? order.customer?.name
+    if (key) customerOrders.set(key, (customerOrders.get(key) ?? 0) + 1)
+  }
+  const totalCustomers = customerOrders.size
+  const repeatCount = [...customerOrders.values()].filter((count) => count > 1).length
+  const repeatRate = totalCustomers > 0 ? Math.round((repeatCount / totalCustomers) * 100) : null
 
   return <article className={`orders-basic-card order-health-card horizontal ${gradeColor}`}>
     <div className="orders-insight-label">
@@ -403,21 +412,29 @@ export function OrderHealthInsight({ insight, totalOrders }: { insight: ReturnTy
       <div className="order-health-scale-track"><i style={{ width: `${score ?? 0}%` }} /></div>
       <div className="order-health-scale-labels"><span>Poor</span><span>Fair</span><span>Good</span><span>Excellent</span></div>
     </div>
-    <ul className="order-health-sliders">
-      {metrics.map((metric) => {
-        const percent = Math.max(0, Math.min(100, metric.value ?? 0))
-        return <li key={metric.label} className={metric.color}>
-          <div className="order-health-slider-label">
-            <span>{metric.icon}{metric.label}</span>
-            <strong>{metric.value === null ? '—' : `${metric.value}%`}</strong>
-          </div>
-          <div className="order-health-slider-track" role="img" aria-label={`${metric.label}: ${metric.value === null ? 'awaiting data' : `${metric.value}%`}`}>
-            <i style={{ width: `${percent}%` }} />
-            {metric.value !== null && <b style={{ left: `${percent}%` }} />}
-          </div>
-        </li>
-      })}
-    </ul>
+    <div className="order-health-metrics">
+      <div className="order-health-metric">
+        <span className="order-health-metric-icon"><DollarSign size={14} /></span>
+        <div className="order-health-metric-body">
+          <strong>{aov === null ? '—' : money(aov, currency)}</strong>
+          <span>Avg Order Value</span>
+        </div>
+      </div>
+      <div className="order-health-metric">
+        <span className={`order-health-metric-icon${hasAtRisk ? ' warning' : ''}`}><AlertTriangle size={14} /></span>
+        <div className="order-health-metric-body">
+          <strong>{hasAtRisk ? money(revenueAtRisk, currency) : '—'}</strong>
+          <span>Revenue at Risk</span>
+        </div>
+      </div>
+      <div className="order-health-metric">
+        <span className="order-health-metric-icon"><Users size={14} /></span>
+        <div className="order-health-metric-body">
+          <strong>{repeatRate === null ? '—' : `${repeatRate}%`}</strong>
+          <span>Repeat Buyers</span>
+        </div>
+      </div>
+    </div>
     <div className={`order-health-insight ${gradeColor}`}><Lightbulb size={13} /><span>{insightMessage}</span></div>
   </article>
 }

@@ -42,8 +42,8 @@ describe('PR #44 professional refinement', () => {
   })
 
   it.each([false, true])('renders Order Health without a circular gauge in %s theme', (light) => {
-    const html = renderToStaticMarkup(shell(light, <OrderHealthInsight totalOrders={6} insight={insight('order_health_score', { status: 'available', score: 80, grade: 'A', tone: 'healthy', fulfilledRate: 0, cancelledRate: 0, paidRate: 100 })} />))
-    for (const contract of ['order-health-score', '80', '/100', 'Excellent', 'order-health-scale-track', 'Poor', 'Fair', 'Good', 'order-health-sliders', '6 orders paid, awaiting fulfillment']) expect(html).toContain(contract)
+    const html = renderToStaticMarkup(shell(light, <OrderHealthInsight totalOrders={6} orders={orders} insight={insight('order_health_score', { status: 'available', score: 80, grade: 'A', tone: 'healthy', fulfilledRate: 0, cancelledRate: 0, paidRate: 100 })} />))
+    for (const contract of ['order-health-score', '80', '/100', 'Excellent', 'order-health-scale-track', 'Poor', 'Fair', 'Good', 'order-health-metrics', 'Avg Order Value', 'Revenue at Risk', 'Repeat Buyers', '6 orders paid, awaiting fulfillment']) expect(html).toContain(contract)
     expect(html).not.toContain('health-gauge')
     expect(html).not.toContain('conic-gradient')
   })
