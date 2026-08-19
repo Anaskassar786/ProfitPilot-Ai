@@ -3,11 +3,13 @@
  *
  * Mirrors `apps/api/src/insights-hub-routes.ts` and `@profitpilot/ai`
  * `insights-hub.ts` (storage names keep the original module id for backend
- * compatibility; the product surface is PatternAI). The workspace NEVER
- * derives a metric, a confidence, or a count of its own — it renders what the
- * API returned. Every figure on screen is computed server-side from real
- * synchronized store data; the AI narrator only restyles deterministic engine
- * output through the language firewall.
+ * compatibility; the product surface is PatternAI). Confidence, impact and
+ * evidence originate in the deterministic API engine; the AI narrator only
+ * restyles that output through the numeric language firewall.
+ *
+ * Client summaries below may count, group or divide returned rows, but never
+ * introduce a source value: samples are excluded where a live KPI is claimed,
+ * currencies stay separate, and missing fields remain visibly unavailable.
  *
  * Voice: discovery-oriented, curious, educational. PatternAI explains what it
  * found and how it knows — it never commands, and it never invents a number.
@@ -1161,6 +1163,97 @@ export function reviewBacklogSummary(discoveries: readonly InsightDiscovery[], f
         ? `${newCount} need review — oldest waiting ${oldestNewLabel}.`
         : `${newCount} new signal${newCount === 1 ? '' : 's'} ready to review.`
   return { total, newCount, reviewedCount, actedOn: funnel.actedOn, conversion: funnel.conversion, oldestNewLabel, oldestNewDays, urgent, hint }
+}
+
+/* ── Merchant value cards beside the lead discovery ───────────────────── */
+
+const DECISION_WINDOW_MS = 7 * 86_400_000
+const ACTIONABLE_DISCOVERY_STATUSES: readonly DiscoveryStatus[] = ['NEW', 'REVIEWED', 'SAVED']
+
+export type DecisionWindowImpact = Readonly<{ currency: string; amount: number }>
+export type DecisionWindowSignal = Readonly<{
+  id: string
+  title: string
+  expiresAt: string
+  remainingMs: number
+  overdue: boolean
+}>
+export type DecisionWindowSummary = Readonly<{
+  /** Real, non-sample, still-actionable signals carrying a valid expiresAt. */
+  withDeadline: number
+  dueSoon: number
+  overdue: number
+  next: DecisionWindowSignal | null
+  /** Impact is grouped by currency; unlike a single total, currencies are never mixed. */
+  urgentImpact: readonly DecisionWindowImpact[]
+  excludedSamples: number
+}>
+
+/**
+ * The next explicit action window. Samples, terminal statuses and invalid or
+ * missing dates are excluded. "Due soon" means a future expiresAt no more
+ * than seven days away; overdue and due-soon amounts are grouped by currency.
+ */
+export function decisionWindowSummary(discoveries: readonly InsightDiscovery[], now = Date.now()): DecisionWindowSummary {
+  const excludedSamples = discoveries.filter((discovery) => discovery.sample).length
+  const dated = discoveries.flatMap((discovery) => {
+    if (discovery.sample || !ACTIONABLE_DISCOVERY_STATUSES.includes(discovery.status) || !discovery.expiresAt) return []
+    const expiresAtMs = Date.parse(discovery.expiresAt)
+    if (!Number.isFinite(expiresAtMs)) return []
+    return [{ discovery, expiresAtMs, remainingMs: expiresAtMs - now }]
+  }).sort((left, right) => left.expiresAtMs - right.expiresAtMs)
+  const overdue = dated.filter((entry) => entry.remainingMs <= 0)
+  const dueSoon = dated.filter((entry) => entry.remainingMs > 0 && entry.remainingMs <= DECISION_WINDOW_MS)
+  const urgent = [...overdue, ...dueSoon]
+  const byCurrency = new Map<string, number>()
+  for (const { discovery } of urgent) {
+    if (typeof discovery.impactEstimate !== 'number' || !Number.isFinite(discovery.impactEstimate)) continue
+    byCurrency.set(discovery.impactCurrency, (byCurrency.get(discovery.impactCurrency) ?? 0) + discovery.impactEstimate)
+  }
+  const first = dated[0]
+  return {
+    withDeadline: dated.length,
+    dueSoon: dueSoon.length,
+    overdue: overdue.length,
+    next: first ? { id: first.discovery.id, title: first.discovery.title, expiresAt: first.discovery.expiresAt!, remainingMs: first.remainingMs, overdue: first.remainingMs <= 0 } : null,
+    urgentImpact: [...byCurrency.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([currency, amount]) => ({ currency, amount })),
+    excludedSamples,
+  }
+}
+
+export type SignalFeedbackSummary = Readonly<{
+  kept: number
+  dismissed: number
+  classified: number
+  keptShare: number | null
+  topKeptCategory: Readonly<{ category: DiscoveryCategory; label: string; count: number }> | null
+  excludedSamples: number
+}>
+
+/**
+ * A factual record of current discovery statuses — not a model-learning score.
+ * "Kept" means the signal is currently Saved or Acted on; samples are never
+ * counted, and views/reviews do not imply a preference.
+ */
+export function signalFeedbackSummary(discoveries: readonly InsightDiscovery[]): SignalFeedbackSummary {
+  const real = discoveries.filter((discovery) => !discovery.sample)
+  const keptSignals = real.filter((discovery) => discovery.status === 'SAVED' || discovery.status === 'ACTED_ON')
+  const dismissed = real.filter((discovery) => discovery.status === 'DISMISSED').length
+  const kept = keptSignals.length
+  const classified = kept + dismissed
+  const categoryCounts = new Map<DiscoveryCategory, number>()
+  for (const discovery of keptSignals) categoryCounts.set(discovery.category, (categoryCounts.get(discovery.category) ?? 0) + 1)
+  const top = DISCOVERY_CATEGORIES
+    .map((category) => ({ category, label: DISCOVERY_CATEGORY_LABELS[category], count: categoryCounts.get(category) ?? 0 }))
+    .sort((left, right) => right.count - left.count || DISCOVERY_CATEGORIES.indexOf(left.category) - DISCOVERY_CATEGORIES.indexOf(right.category))[0]
+  return {
+    kept,
+    dismissed,
+    classified,
+    keptShare: classified > 0 ? kept / classified : null,
+    topKeptCategory: top && top.count > 0 ? top : null,
+    excludedSamples: discoveries.length - real.length,
+  }
 }
 
 /* ── Monthly discovery allowance ───────────────────────────────────────── */

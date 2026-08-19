@@ -9,8 +9,8 @@
  *    approval dot grids (Automation), no trajectory area charts (GrowthIQ).
  *    What lives here instead: bubble clusters, node webs, persona cohorts,
  *    answer meters, arrow clusters, probability waves, a horizontal discovery
- *    funnel, before/after momentum bars, a pattern-strength ladder and a
- *    dashed-segment discovery ring.
+ *    funnel, before/after momentum bars, a pattern-strength ladder, a
+ *    dashed-segment discovery ring and a merchant-feedback balance beam.
  *  - Zero invented data. Every component renders numbers it is handed and
  *    nothing else; when there is no data it draws an explicitly empty outline
  *    with an honest caption instead of a plausible-looking shape.
@@ -479,7 +479,40 @@ export function MiniProbabilityWave({ points, emptyLabel = 'Forecast ranges appe
   )
 }
 
-/* ══ 7. Impact summary helpers ═════════════════════════════════════════ */
+/* ══ 7. Merchant feedback balance ══════════════════════════════════════ */
+
+/**
+ * A balance beam unique to PatternAI: the heavier side reflects the current
+ * count of real signals kept versus dismissed. It is deliberately not a bar,
+ * ring, funnel or gauge. With no classified signals it stays level and says so.
+ */
+export function FeedbackBalance({ kept, dismissed }: { kept: number; dismissed: number }) {
+  const total = Math.max(0, kept) + Math.max(0, dismissed)
+  const tilt = total > 0 ? ((Math.max(0, kept) - Math.max(0, dismissed)) / total) * 11 : 0
+  const keptY = 40 + tilt
+  const dismissedY = 40 - tilt
+  return (
+    <div className={`pa-feedback-balance ${total === 0 ? 'is-empty' : ''}`}>
+      <svg viewBox="0 0 220 108" role="img" aria-label={total === 0 ? 'No real signals have a kept or dismissed outcome' : `${kept} kept and ${dismissed} dismissed signals`} focusable="false">
+        <line className="pa-feedback-beam" x1="42" y1={keptY} x2="178" y2={dismissedY} />
+        <line className="pa-feedback-cord kept" x1="56" y1={keptY + 1} x2="56" y2={keptY + 22} />
+        <line className="pa-feedback-cord dismissed" x1="164" y1={dismissedY + 1} x2="164" y2={dismissedY + 22} />
+        <path className="pa-feedback-tray kept" d={`M34 ${keptY + 22} Q56 ${keptY + 36} 78 ${keptY + 22} Z`} />
+        <path className="pa-feedback-tray dismissed" d={`M142 ${dismissedY + 22} Q164 ${dismissedY + 36} 186 ${dismissedY + 22} Z`} />
+        <path className="pa-feedback-pivot" d="M110 39 L92 84 H128 Z" />
+        <circle className="pa-feedback-pin" cx="110" cy="40" r="5" />
+        {total > 0 && <>
+          <text className="pa-feedback-count kept" x="56" y={keptY + 48} textAnchor="middle">{formatInsightNumber(kept)}</text>
+          <text className="pa-feedback-count dismissed" x="164" y={dismissedY + 48} textAnchor="middle">{formatInsightNumber(dismissed)}</text>
+        </>}
+      </svg>
+      <div className="pa-feedback-labels"><span><i className="kept" /> Kept</span><span><i className="dismissed" /> Dismissed</span></div>
+      {total === 0 && <em>No real signal outcomes yet</em>}
+    </div>
+  )
+}
+
+/* ══ 8. Impact summary helpers ═════════════════════════════════════════ */
 
 /** Money strip used under the impact treemap; renders nothing without money. */
 export function MoneyInPlay({ amount, currency }: { amount: number | null; currency: string }) {

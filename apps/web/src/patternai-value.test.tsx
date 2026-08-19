@@ -16,6 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
   DiscoveryPipelineFunnel,
+  FeedbackBalance,
   MiniCauseWeb,
   MiniDivergingBars,
   MiniProbabilityWave,
@@ -35,8 +36,9 @@ import {
   StatVisualization,
 } from './patternai-viz.js'
 import { PatternAiDiscoverGlyph, PatternAiDiscoverIcon, PatternAiMark } from './patternai-logo.js'
-import { DiscoveryCard, ExploreFurther, navBadgeCount } from './patternai.js'
+import { DecisionWindowKpi, DiscoveryCard, ExploreFurther, navBadgeCount, SignalFeedbackKpi } from './patternai.js'
 import {
+  decisionWindowSummary,
   discoveryFunnel,
   discoveryHeadline,
   discoveryImpactSummary,
@@ -52,6 +54,7 @@ import {
   patternStrengthState,
   personaRadarAverage,
   predictionWavePoints,
+  signalFeedbackSummary,
   trendDivergingRows,
   INSIGHTS_FEATURE_MIN_PLAN,
 } from './patternai-model.js'
@@ -226,6 +229,63 @@ describe('human discovery card', () => {
     expect(html).toContain('Prior 14 days')
     expect(html).toContain('Last 14 days')
     expect(html).toContain('3 sold')
+  })
+})
+
+/* ── Lead-row merchant value cards ────────────────────────────────────── */
+
+describe('decision window and factual signal outcomes', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z')
+
+  it('uses only explicit real deadlines and keeps currencies separate', () => {
+    const summary = decisionWindowSummary([
+      discovery({ id: 'overdue', expiresAt: '2026-08-18T00:00:00.000Z', status: 'SAVED', impactEstimate: 50, impactCurrency: 'USD' }),
+      discovery({ id: 'soon-usd', expiresAt: '2026-08-20T00:00:00.000Z', impactEstimate: 100, impactCurrency: 'USD' }),
+      discovery({ id: 'soon-inr', expiresAt: '2026-08-21T00:00:00.000Z', impactEstimate: 800, impactCurrency: 'INR' }),
+      discovery({ id: 'dismissed', expiresAt: '2026-08-20T00:00:00.000Z', status: 'DISMISSED', impactEstimate: 999 }),
+      discovery({ id: 'sample', expiresAt: '2026-08-20T00:00:00.000Z', sample: true, impactEstimate: 999 }),
+      discovery({ id: 'invalid', expiresAt: 'not-a-date' }),
+    ], now)
+    expect(summary.withDeadline).toBe(3)
+    expect(summary.overdue).toBe(1)
+    expect(summary.dueSoon).toBe(2)
+    expect(summary.next?.id).toBe('overdue')
+    expect(summary.excludedSamples).toBe(1)
+    expect(summary.urgentImpact).toEqual([{ currency: 'INR', amount: 800 }, { currency: 'USD', amount: 150 }])
+  })
+
+  it('reports current explicit outcomes without inventing a learning score', () => {
+    const summary = signalFeedbackSummary([
+      discovery({ id: 'saved', status: 'SAVED', category: 'PRODUCTS' }),
+      discovery({ id: 'acted', status: 'ACTED_ON', category: 'PRODUCTS' }),
+      discovery({ id: 'dismissed', status: 'DISMISSED', category: 'REVENUE' }),
+      discovery({ id: 'viewed', status: 'REVIEWED', category: 'TIME' }),
+      discovery({ id: 'sample', status: 'ACTED_ON', sample: true }),
+    ])
+    expect(summary).toMatchObject({ kept: 2, dismissed: 1, classified: 3, excludedSamples: 1 })
+    expect(summary.keptShare).toBeCloseTo(2 / 3)
+    expect(summary.topKeptCategory).toEqual({ category: 'PRODUCTS', label: 'Products', count: 2 })
+  })
+
+  it('draws a unique balance only from supplied counts and an honest empty state', () => {
+    const filled = renderToStaticMarkup(createElement(FeedbackBalance, { kept: 2, dismissed: 1 }))
+    const empty = renderToStaticMarkup(createElement(FeedbackBalance, { kept: 0, dismissed: 0 }))
+    expect(filled).toContain('2 kept and 1 dismissed signals')
+    expect(filled).toContain('pa-feedback-pivot')
+    expect(filled).not.toContain('learning score')
+    expect(empty).toContain('No real signal outcomes yet')
+    expect(empty).toContain('is-empty')
+  })
+
+  it('keeps sample-only KPI cards visibly empty rather than fabricating value', () => {
+    const sample = discovery({ sample: true, expiresAt: null, status: 'NEW' })
+    const deadline = renderToStaticMarkup(createElement(DecisionWindowKpi, { discoveries: [sample], onOpen: noop }))
+    const outcomes = renderToStaticMarkup(createElement(SignalFeedbackKpi, { discoveries: [sample] }))
+    expect(deadline).toContain('No deadline')
+    expect(deadline).toContain('This sample is excluded')
+    expect(outcomes).toContain('0')
+    expect(outcomes).toContain('Sample cards do not count')
+    expect(outcomes).toContain('reports choices, not model training')
   })
 })
 
