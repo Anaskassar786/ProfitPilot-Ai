@@ -22,6 +22,8 @@ let savedEmail: { shopId: string; email: string; fromName: string } | null = nul
 let workspaceSaved: Record<string, unknown> | null = null
 let jarvisSaved: Record<string, unknown> | null = null
 let verified = false
+let coachPatchFails = false
+let jarvisPutFails = false
 
 function json(data: unknown, status = 200): Promise<Response> {
   return Promise.resolve({
@@ -29,6 +31,15 @@ function json(data: unknown, status = 200): Promise<Response> {
     status,
     headers: new Headers({ 'content-type': 'application/json' }),
     json: async () => ({ ok: true, data }),
+  } as Response)
+}
+
+function jsonError(message: string, status = 500): Promise<Response> {
+  return Promise.resolve({
+    ok: false,
+    status,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => ({ ok: false, error: { code: 'INTERNAL_ERROR', message } }),
   } as Response)
 }
 
@@ -58,11 +69,15 @@ function setupFetch() {
     }
     if (url.startsWith('/settings/workspace')) return json({ storeId: 's1', ...DEFAULT_WORKSPACE_SETTINGS })
     if (url.startsWith('/jarvis/preferences') && method === 'PUT') {
+      if (jarvisPutFails) return jsonError('jarvis save failed')
       jarvisSaved = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
       return json({ storeId: 's1', addressing: 'Sir', language: 'en', engagementMode: 'balanced', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: Date.now() })
     }
     if (url.startsWith('/jarvis/preferences')) return json({ storeId: 's1', addressing: 'Sir', language: 'en', engagementMode: 'balanced', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: Date.now() })
-    if (url.startsWith('/store-coach/preferences') && method === 'PATCH') return json({ storeId: 's1', personality: 'PROFESSIONAL', huddleTimeMinutes: 420, huddleEnabled: true, weeklyEmailEnabled: false, voiceEnabled: false, widgetEnabled: true, language: 'en', notificationFrequency: 'NORMAL', updatedAt: Date.now(), plan: 'start' })
+    if (url.startsWith('/store-coach/preferences') && method === 'PATCH') {
+      if (coachPatchFails) return jsonError('coach save failed')
+      return json({ storeId: 's1', personality: 'PROFESSIONAL', huddleTimeMinutes: 420, huddleEnabled: true, weeklyEmailEnabled: false, voiceEnabled: false, widgetEnabled: true, language: 'en', notificationFrequency: 'NORMAL', updatedAt: Date.now(), plan: 'start' })
+    }
     if (url.startsWith('/store-coach/preferences')) return json({ storeId: 's1', personality: 'PROFESSIONAL', huddleTimeMinutes: 420, huddleEnabled: true, weeklyEmailEnabled: false, voiceEnabled: false, widgetEnabled: true, language: 'en', notificationFrequency: 'NORMAL', updatedAt: Date.now(), plan: 'start' })
     if (url.startsWith('/ai-command/preferences') && method === 'PATCH') return json({ storeId: 's1', defaultResponseStyle: 'CONCISE', quickCommandsEnabled: true, autoSuggestionsEnabled: true, thinkingAnimationEnabled: true, conversationMemoryEnabled: true, notificationOnActionComplete: true })
     if (url.startsWith('/ai-command/preferences')) return json({ storeId: 's1', defaultResponseStyle: 'CONCISE', quickCommandsEnabled: true, autoSuggestionsEnabled: true, thinkingAnimationEnabled: true, conversationMemoryEnabled: true, notificationOnActionComplete: true })
@@ -82,6 +97,8 @@ describe('Settings complete functional testing', () => {
     workspaceSaved = null
     jarvisSaved = null
     verified = false
+    coachPatchFails = false
+    jarvisPutFails = false
     try { window.localStorage.clear() } catch { /* jsdom */ }
     console.error = (...args: unknown[]) => {
       consoleErrors.push(args.map(String).join(' '))
@@ -243,6 +260,33 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
       const stored = JSON.parse(window.localStorage.getItem(settingsStorageKey('s1')) ?? '{}') as { bubbleEnabled?: boolean; assistantMode?: string }
       expect(stored.bubbleEnabled).toBe(false)
       expect(stored.assistantMode).toBe('quiet')
+    })
+
+    it('does not claim success when a secondary AI server save fails (500)', async () => {
+      coachPatchFails = true
+      const container = await mount(true)
+      await act(async () => { tabButton(container, 'AI Preferences').click() })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save AI preferences') as HTMLButtonElement
+      await act(async () => { save.click() })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(toasts.some((toast) => toast.includes('AI preferences saved.'))).toBe(false)
+      expect(toasts.some((toast) => toast.includes('could not be saved right now'))).toBe(true)
+      // The workspace save still landed locally so the page state is not lost.
+      const stored = JSON.parse(window.localStorage.getItem(settingsStorageKey('s1')) ?? '{}') as { assistantMode?: string }
+      expect(stored.assistantMode).toBe('balanced')
+    })
+
+    it('surfaces a hard error when the core Jarvis save fails', async () => {
+      jarvisPutFails = true
+      const container = await mount(true)
+      await act(async () => { tabButton(container, 'AI Preferences').click() })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save AI preferences') as HTMLButtonElement
+      await act(async () => { save.click() })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(toasts.some((toast) => toast.includes('AI preferences saved.'))).toBe(false)
+      expect(toasts.some((toast) => toast.includes('jarvis save failed'))).toBe(true)
     })
   })
 

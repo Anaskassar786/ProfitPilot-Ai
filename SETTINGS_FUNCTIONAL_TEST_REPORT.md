@@ -1,17 +1,18 @@
 # Settings page — complete testing report
 
-Date: 2026-08-18  
+Date: 2026-08-19 (updated — final audit pass)  
 Scope: Settings workspace only (all six tabs, both themes).
 
 ## How this was tested
 
 - Unit model tests: `apps/web/src/settings.test.ts` (13)
 - Light/dark CSS contracts: `apps/web/src/settings-light.test.ts` (3)
-- Functional UI sweep (jsdom, mocked real APIs): `apps/web/src/settings-functional.test.tsx` (11)
+- Functional UI sweep (jsdom, mocked real APIs): `apps/web/src/settings-functional.test.tsx` (13, including new partial-failure regression tests)
 - Backend settings routes: `apps/api/src/automation-routes.test.ts` (10, including the new GET email + workspace persist case)
 - `tsc -p apps/web` and `tsc -p apps/api` clean for the changed files
+- Full workspace: `corepack pnpm build`, `corepack pnpm typecheck`, `corepack pnpm test` — 2664 tests pass
 
-**37 Settings-related tests passed. Zero fake store metrics were introduced.**
+**39 Settings-related tests passed. Zero fake store metrics were introduced.**
 
 ## General tab
 
@@ -143,6 +144,7 @@ Scope: Settings workspace only (all six tabs, both themes).
 9. **Store URL was not clickable** — now opens Shopify admin.
 10. **Team / Security / Danger were empty** — implemented with real context, honest empty states, and confirmations.
 11. **Light theme forms/toggles were underspecified** — dedicated Settings CSS for both themes.
+12. **AI Preferences save swallowed server failures** (final audit pass) — a 500 from the Store Coach or AI Command preferences endpoint was silently ignored and the page still claimed “AI preferences saved.” Save now uses `Promise.allSettled`: a plan gate (402) still shows the upgrade prompt, a core Jarvis failure shows an error, and any other partial failure shows an honest warning instead of a false success. Two regression tests added (coach PATCH 500 → warning; Jarvis PUT 500 → error).
 
 ## Zero fake data / Upgrade Plan
 

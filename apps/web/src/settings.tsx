@@ -469,7 +469,7 @@ function AiPreferencesTab({
     setSaving(true)
     try {
       const silenceUntil = quietHoursSilenceUntil(settings)
-      await Promise.all([
+      const [workspaceOutcome, jarvisOutcome, coachOutcome, commandOutcome] = await Promise.allSettled([
         persistWorkspaceSettings(context.storeId, settings),
         saveJarvisPreferences({
           storeId: context.storeId,
@@ -477,23 +477,29 @@ function AiPreferencesTab({
           onlyAnswerWhenAsked: settings.assistantMode === 'quiet',
           silenceUntil,
         }),
-        updateCoachPreferences(context.storeId, { personality }).catch((error: unknown) => {
-          if (error instanceof ApiClientError && error.status === 402) throw error
-        }),
+        updateCoachPreferences(context.storeId, { personality }),
         updateAiCommandPreferences(context.storeId, {
           defaultResponseStyle: settings.responseStyle,
           autoSuggestionsEnabled: settings.autoSuggestions,
-        }).catch((error: unknown) => {
-          if (error instanceof ApiClientError && error.status === 402) throw error
         }),
       ])
-      onSettings(settings)
-      onToast('AI preferences saved.', 'success')
-    } catch (error: unknown) {
-      if (error instanceof ApiClientError && error.status === 402) {
+      // A plan gate (402) from the coach or AI Command server is surfaced as an
+      // upgrade prompt; the other saves still go through.
+      const planGate = [coachOutcome, commandOutcome].find((outcome) => outcome.status === 'rejected' && outcome.reason instanceof ApiClientError && outcome.reason.status === 402)
+      if (planGate) {
         onToast('That AI setting unlocks with a plan upgrade.', 'warning')
         onUpgrade()
-      } else onToast(errorMessage(error), 'error')
+        return
+      }
+      onSettings(settings)
+      if (jarvisOutcome.status === 'rejected') {
+        onToast(errorMessage(jarvisOutcome.reason), 'error')
+        return
+      }
+      const partialFailures = [workspaceOutcome, coachOutcome, commandOutcome].filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected').length
+      onToast(partialFailures > 0
+        ? 'Saved on this device, but some AI server settings could not be saved right now. Try again in a moment.'
+        : 'AI preferences saved.', partialFailures > 0 ? 'warning' : 'success')
     } finally {
       setSaving(false)
     }
