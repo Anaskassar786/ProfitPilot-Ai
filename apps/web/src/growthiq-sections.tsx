@@ -61,7 +61,7 @@ export function GrowthIqTrajectorySection({ projection, currency, daysSynced, on
         />
       ) : (
         <>
-          <ExecutiveTrajectoryChart data={projection} formatValue={(value) => formatExecutiveMoney(value, currency, 0)} label="Revenue trajectory with 30-day trend projection" />
+          <ExecutiveTrajectoryChart data={projection} currency={currency} formatValue={(value) => formatExecutiveMoney(value, currency, 0)} label="Revenue trajectory with 30-day trend projection" />
           <div className="gq-trajectory-insight">
             <p>
               Based on your current trend, the business is on a <strong className={`gq-direction ${projection.direction}`}>{projection.direction}</strong> trajectory.
