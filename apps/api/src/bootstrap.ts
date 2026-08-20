@@ -3,6 +3,7 @@ import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from 
 import type { StoreDirectory } from '@profitpilot/db'
 import { PostgresOAuthStateStore, PostgresTokenRecordStore, PostgresWebhookProcessingStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
+import { parseShopifyScopes } from './app-store-assets.js'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
 import { PostgresCustomerPrivacyRepository, ShopifyComplianceService } from './shopify-compliance.js'
 
@@ -34,7 +35,10 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // The store directory is what registers the tenant (stores row) during OAuth
   // and resolves shop <-> storeId for the session context endpoint.
   const sessionToken = { apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET') }
-  const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
+  // parseShopifyScopes always includes the required registry (write_price_rules
+  // included) so a stale SHOPIFY_SCOPES value cannot produce an install that
+  // 403s the first time a discount action runs.
+  const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseShopifyScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, sessionToken.apiKey, sessionToken.apiSecret)
   // Managed installation uses the same credentials to validate the id_token,
   // exchange it for a non-expiring offline token, and persist via this vault.
@@ -55,10 +59,6 @@ function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: Req
   const value = env[key]?.trim()
   if (!value) throw new Error(`Missing required environment variable ${key}`)
   return value
-}
-
-function parseScopes(value: string | undefined): readonly string[] {
-  return (value ?? '').split(',').map((scope) => scope.trim()).filter((scope) => scope.length > 0)
 }
 
 async function exchangeCode(shop: string, code: string, apiKey: string, apiSecret: string): Promise<string> {
