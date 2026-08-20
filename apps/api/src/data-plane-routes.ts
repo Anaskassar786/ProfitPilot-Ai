@@ -30,7 +30,7 @@ export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Rout
     try {
       const body = request.body as unknown
       if (!isRecord(body) || typeof body.storeId !== 'string' || typeof body.module !== 'string' || !isSyncModule(body.module)) throw new AppError('VALIDATION_ERROR', 'storeId and a valid sync module are required', 400)
-      const idToken = shopifySessionToken(request)
+      const idToken = shopifySessionToken(request) ?? verifiedEmbeddedSessionToken(request)
       const result = await dependencies.sync.runModule(storeId(body.storeId), body.module, idToken ?? undefined)
       response.status(202).json(success(result, requestIdFrom(request)))
     } catch (error: unknown) {
@@ -44,7 +44,7 @@ export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Rout
       const body = request.body as unknown
       if (!isRecord(body) || typeof body.storeId !== 'string' || !body.storeId.trim()) throw new AppError('VALIDATION_ERROR', 'storeId is required', 400)
       const tenant = storeId(body.storeId)
-      const idToken = shopifySessionToken(request)
+      const idToken = shopifySessionToken(request) ?? verifiedEmbeddedSessionToken(request)
       const modules: Array<Readonly<{ module: SyncModule; status: 'succeeded'; result: SyncRunResult }> | Readonly<{ module: SyncModule; status: 'failed'; error: Readonly<{ code: string; message: string }> }>> = []
       for (const module of SYNC_MODULES) {
         try {
@@ -182,6 +182,22 @@ function shopifySessionToken(request: Request): string | null {
   // Reject an oversized header instead of forwarding attacker-controlled data.
   if (!value || value.length > 8_192) return null
   return value
+}
+
+/**
+ * The `Authorization` bearer, but ONLY when the authentication middleware
+ * already established a `shopify-session-token` context for this request.
+ * That guarantee means the value is a Shopify session token the token
+ * exchange can legitimately use — never a first-party app JWT — so sync's
+ * one-shot RFC 8693 retry keeps working after the URL `id_token` disappears.
+ */
+function verifiedEmbeddedSessionToken(request: Request): string | null {
+  const context = getAuthContext(request)
+  if (context?.method !== 'shopify-session-token') return null
+  const value = request.header('authorization')?.trim()
+  if (!value || value.length > 8_192) return null
+  const [scheme, token] = value.split(' ')
+  return scheme?.toLowerCase() === 'bearer' && token?.trim() ? token.trim() : null
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

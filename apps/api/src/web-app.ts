@@ -45,7 +45,9 @@ const WEB_CONTENT_SECURITY_POLICY = [
   'frame-ancestors https://admin.shopify.com https://*.myshopify.com',
   "form-action 'self'",
   "img-src 'self' data: https:",
-  "script-src 'self'",
+  // Shopify App Bridge ships as the official CDN script (index.html). It must
+  // be allowed or embedded session-token auth silently disappears.
+  "script-src 'self' https://cdn.shopify.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https: wss:",

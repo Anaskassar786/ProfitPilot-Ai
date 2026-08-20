@@ -13,8 +13,11 @@ redirect_urls = [
   "https://REPLACE_WITH_APP_HOST/shopify/callback"
 ]
 
+# Must stay identical to PROFITPILOT_SHOPIFY_SCOPES in apps/api/src/app-store-assets.ts.
+# write_price_rules powers the discount actions run by the AI Command Center and
+# the Automation Engine (discountCodeBasicCreate / discountCodeDeactivate).
 [access_scopes]
-scopes = "read_products,read_orders,read_customers"
+scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_checkouts,read_price_rules,write_price_rules"
 
 [webhooks]
 api_version = "2025-10"

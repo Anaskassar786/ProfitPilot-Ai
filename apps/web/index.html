@@ -7,6 +7,10 @@
     <meta name="description" content="ProfitPilot — your AI employee for Shopify." />
     <link rel="icon" type="image/svg+xml" href="/ai-command-mark.svg" />
     <title>ProfitPilot — AI Employee</title>
+    <!-- Shopify App Bridge (official CDN build). Embedded API calls mint a
+         fresh session token via shopify.idToken() so auth survives blocked
+         third-party cookies. Loaded deferred; the API client waits for it. -->
+    <script defer src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
   </head>
   <body>
     <div id="root"></div>
