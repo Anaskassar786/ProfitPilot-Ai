@@ -18,7 +18,15 @@ export function createF7Bootstrap(env: Readonly<Record<string, string | undefine
   const auth = jwtSecret
     ? { jwt: new JwtService({ secret: jwtSecret, issuer: env.JWT_ISSUER?.trim() || 'profitpilot', accessTtlSeconds: positiveNumber(env.JWT_ACCESS_TTL_SECONDS, 900), refreshTtlSeconds: positiveNumber(env.JWT_REFRESH_TTL_SECONDS, 604_800) }), sessions: new PostgresSessionRepository(f6.database) }
     : undefined
-  const security = securityOptionsFromEnv(env, auth)
+  // Embedded auth: the same public/secret key pair that signs OAuth HMACs and
+  // the first-load id_token verifies App Bridge session tokens on every API
+  // call, resolving the token's `dest` shop back to the stores row.
+  const apiKey = env.SHOPIFY_API_KEY?.trim()
+  const apiSecret = env.SHOPIFY_API_SECRET?.trim()
+  const shopifySessionToken = apiKey && apiSecret
+    ? { config: { apiKey, apiSecret }, directory: f6.storeDirectory }
+    : undefined
+  const security = securityOptionsFromEnv(env, auth, shopifySessionToken)
   return { ...f6, legal: { config: legalConfigFromEnv(env) }, accessReview: new AccessReviewService(new PostgresAccessReviewRepository(f6.database)), security }
 }
 

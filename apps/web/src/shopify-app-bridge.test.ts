@@ -1,0 +1,87 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { embeddedHost, getShopifySessionToken, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+
+/**
+ * App Bridge integration (embedded session tokens). jsdom so the module's
+ * `window`/`window.shopify` paths run for real; no network calls are made.
+ */
+
+beforeEach(() => resetShopifyAppBridgeStateForTests())
+afterEach(() => resetShopifyAppBridgeStateForTests())
+
+describe('embedded detection', () => {
+  it('recognizes the Shopify host query parameter', () => {
+    expect(embeddedHost('?host=abc123&shop=shop.myshopify.com')).toBe('abc123')
+    expect(embeddedHost('?shop=shop.myshopify.com')).toBeNull()
+    expect(embeddedHost('?host=%20%20')).toBeNull()
+    expect(embeddedHost('')).toBeNull()
+  })
+
+  it('reports standalone mode without a host parameter (local dev)', () => {
+    expect(isEmbeddedShopifyApp('?shop=shop.myshopify.com')).toBe(false)
+    expect(isEmbeddedShopifyApp('?host=abc123')).toBe(true)
+  })
+})
+
+describe('getShopifySessionToken', () => {
+  it('is a no-op when the app is not embedded', async () => {
+    const result = await getShopifySessionToken('?shop=shop.myshopify.com', 'test-api-key')
+    expect(result).toEqual({ status: 'not-embedded' })
+  })
+
+  it('reports a missing build-time API key instead of crashing', async () => {
+    const result = await getShopifySessionToken('?host=abc123', null)
+    expect(result).toEqual({ status: 'unavailable', message: expect.stringContaining('VITE_SHOPIFY_API_KEY') })
+  })
+
+  it('returns a fresh token from the App Bridge createApp API', async () => {
+    const idToken = vi.fn(async () => 'signed-shopify-session-token')
+    const createApp = vi.fn(() => ({ idToken }))
+    ;(window as unknown as { shopify: unknown }).shopify = { default: createApp }
+    const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(result).toEqual({ status: 'ok', token: 'signed-shopify-session-token' })
+    expect(createApp).toHaveBeenCalledWith({ apiKey: 'test-api-key', host: 'abc123' })
+    expect(idToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses one App Bridge app instance across token requests', async () => {
+    const idToken = vi.fn(async () => 'signed-shopify-session-token')
+    const createApp = vi.fn(() => ({ idToken }))
+    ;(window as unknown as { shopify: unknown }).shopify = { default: createApp }
+    await getShopifySessionToken('?host=abc123', 'test-api-key')
+    await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(createApp).toHaveBeenCalledTimes(1)
+    expect(idToken).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the legacy window.shopify.idToken() API', async () => {
+    const idToken = vi.fn(async () => 'legacy-signed-token')
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken }
+    const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(result).toEqual({ status: 'ok', token: 'legacy-signed-token' })
+  })
+
+  it('returns unavailable when App Bridge is missing or broken', async () => {
+    ;(window as unknown as { shopify: unknown }).shopify = undefined
+    // The CDN script is absent; the readiness poll must give up rather than hang.
+    setAppBridgeReadyTimingForTests(60, 10)
+    const missing = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(missing.status).toBe('unavailable')
+    ;(window as unknown as { shopify: unknown }).shopify = { default: () => ({}) }
+    const broken = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(broken.status).toBe('unavailable')
+  })
+
+  it('never lets a throwing bridge escape as an exception', async () => {
+    overrideShopifyAppBridgeForTests({ idToken: async () => { throw new Error('idToken rejected') } })
+    const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(result).toEqual({ status: 'unavailable', message: 'idToken rejected' })
+  })
+
+  it('supports a test-injected bridge for header-level tests', async () => {
+    overrideShopifyAppBridgeForTests({ idToken: async () => 'injected-token' })
+    const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
+    expect(result).toEqual({ status: 'ok', token: 'injected-token' })
+  })
+})
