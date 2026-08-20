@@ -15,7 +15,10 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain('client_id = "public-client-id"')
     expect(toml).toContain('https://app.example/shopify/callback')
     expect(toml).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
-    expect(toml).toContain('compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]')
+    expect(toml).toContain('[webhooks.privacy]')
+    expect(toml).toContain('customer_data_request_url = "https://app.example/shopify/webhooks"')
+    expect(toml).toContain('customer_deletion_url = "https://app.example/shopify/webhooks"')
+    expect(toml).toContain('shop_deletion_url = "https://app.example/shopify/webhooks"')
     expect(toml).toContain('topics = ["app/uninstalled"]')
     expect(toml).toContain('uri = "/shopify/webhooks"')
     expect(toml).not.toContain('client_secret')
@@ -25,6 +28,15 @@ describe('F7 Shopify App Store assets', () => {
     expect(shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', APP_URL: 'https://app.example' }).redirectUrls[0]).toBe('https://app.example/shopify/callback')
     expect(() => shopifyAppConfigFromEnv({ APP_URL: 'https://app.example' })).toThrow('SHOPIFY_API_KEY')
     expect(() => shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key' })).toThrow('SHOPIFY_APP_URL')
+  })
+
+  it('derives privacy webhook URLs from the app host and honors an explicit override', () => {
+    const derived = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://profitpilot-ai-production.up.railway.app' })
+    expect(derived.privacyWebhookUrl).toBe('https://profitpilot-ai-production.up.railway.app/shopify/webhooks')
+    expect(renderShopifyAppToml(derived)).toContain('customer_data_request_url = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
+
+    const pinned = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example', SHOPIFY_PRIVACY_WEBHOOK_URL: 'https://profitpilot-ai-production.up.railway.app/shopify/webhooks' })
+    expect(renderShopifyAppToml(pinned)).toContain('customer_deletion_url = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
   })
 
   it('publishes screenshot specs and an honest listing template', () => {

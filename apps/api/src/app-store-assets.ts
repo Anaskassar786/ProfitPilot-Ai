@@ -68,6 +68,7 @@ export type ShopifyAppTomlConfig = Readonly<{
   redirectUrls: readonly string[]
   scopes: readonly string[]
   apiVersion: string
+  privacyWebhookUrl: string
 }>
 
 export type AppStoreScreenshotSpec = Readonly<{ name: string; width: number; height: number; format: 'PNG' | 'JPG'; maxBytes: number; description: string }>
@@ -87,12 +88,14 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
   // with the required registry, so the generated TOML always declares the full
   // set of scopes the app actually calls.
   const scopes = parseShopifyScopes(env.SHOPIFY_SCOPES)
-  return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10' }
+  const privacyWebhookUrl = env.SHOPIFY_PRIVACY_WEBHOOK_URL?.trim() || `${applicationUrl.replace(/\/$/, '')}/shopify/webhooks`
+  return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', privacyWebhookUrl }
 }
 
 export function renderShopifyAppToml(config: ShopifyAppTomlConfig): string {
   const redirects = config.redirectUrls.map((url) => `  "${tomlEscape(url)}"`).join(',\n')
-  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[[webhooks.subscriptions]]\ncompliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]\nuri = "/shopify/webhooks"\n\n[[webhooks.subscriptions]]\ntopics = ["app/uninstalled"]\nuri = "/shopify/webhooks"\n`
+  const privacyWebhookUrl = config.privacyWebhookUrl
+  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[webhooks.privacy]\ncustomer_data_request_url = "${tomlEscape(privacyWebhookUrl)}"\ncustomer_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\nshop_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\n\n[[webhooks.subscriptions]]\ntopics = ["app/uninstalled"]\nuri = "/shopify/webhooks"\n`
 }
 
 export function appListingMetadata(): Readonly<{ name: string; tagline: string; category: string; description: string; complianceLinks: readonly string[] }> {
