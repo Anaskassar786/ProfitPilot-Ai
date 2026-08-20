@@ -51,6 +51,7 @@ const PAGE_ALIASES: readonly Readonly<{ page: JarvisWorkspacePage; pattern: RegE
 
 const NAVIGATE = /\b(take me|open|go to|show me the|le jao|le chalo|le jaao|खोलो|ले जाओ|ले चलो)\b/i
 const CREATE_AUTOMATION = /\b(create|make|add|bana|banao|बना|बनाओ|बना दो)\b.*\b(automation|workflow|ऑटोमेशन)\b|\b(automation|workflow|ऑटोमेशन)\b.*\b(create|make|bana|banao|बना)\b/i
+const PAGE_WALKTHROUGH = /\b(explain( this)? page|walk me through|what('?s| is).*(important|key).*(page|here)|brief( me)?|guide me|tell me about this page|is page pe kya|iss page pe kya|yahan kya|yahaan kya|samjhao|बताओ.*इंपोर्टेंट|समझाओ|इस पेज पर क्या)\b/i
 
 export function canExecuteJarvisActions(plan: JarvisPlan): boolean {
   return plan === 'commander'
@@ -73,6 +74,10 @@ export function parseJarvisVoiceIntent(text: string): JarvisVoiceIntent {
   }
 
   return { type: 'ask', text: query }
+}
+
+export function wantsPageWalkthrough(text: string): boolean {
+  return PAGE_WALKTHROUGH.test(text.trim())
 }
 
 export function matchWorkspacePage(text: string): JarvisWorkspacePage | null {

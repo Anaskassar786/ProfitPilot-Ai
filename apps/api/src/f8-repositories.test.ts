@@ -23,7 +23,7 @@ describe('F8 Postgres repositories', () => {
     const { executor, queries } = makeExecutor()
     const repository = new PostgresJarvisRepository(executor)
     expect((await repository.getPreferences('store-1' as never))?.addressing).toBe('Sir')
-    expect((await repository.savePreferences({ storeId: 'store-1' as never, addressing: 'Boss', language: 'en', engagementMode: 'quiet', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: 200 })).addressing).toBe('Boss')
+    expect((await repository.savePreferences({ storeId: 'store-1' as never, addressing: 'Commander', language: 'en', engagementMode: 'quiet', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: 200 })).addressing).toBe('Commander')
     expect((await repository.getActiveSession('store-1' as never))?.plan).toBe('growth')
     expect((await repository.getSession('store-1' as never, 'session-1'))?.id).toBe('session-1')
     await repository.saveSession({ id: 'session-1', storeId: 'store-1' as never, plan: 'growth', active: true, paused: false, startedAt: 100, lastActivityAt: 100, lastPage: 'dashboard', memoryExpiresAt: 1000, undoWindowSeconds: 120, nonsenseCount: 0, pendingAction: null, endedAt: null })

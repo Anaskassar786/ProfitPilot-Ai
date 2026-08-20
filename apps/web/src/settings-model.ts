@@ -14,6 +14,7 @@ export type WorkspacePlan = 'trial' | 'start' | 'growth' | 'commander'
 export type BubblePosition = 'bottom-right' | 'bottom-left'
 export type AssistantMode = 'active' | 'balanced' | 'quiet'
 export type ResponseStyle = 'CONCISE' | 'DETAILED' | 'TECHNICAL'
+export type JarvisVoiceGender = 'feminine' | 'masculine'
 export type EmailVerificationState = 'unconfigured' | 'required' | 'pending' | 'verified'
 
 export type NotificationPreferences = Readonly<{
@@ -37,6 +38,7 @@ export type WorkspaceSettings = Readonly<{
   quietHoursEnd: string
   responseStyle: ResponseStyle
   autoSuggestions: boolean
+  jarvisVoiceGender: JarvisVoiceGender
 }>
 
 export type MerchantEmailView = Readonly<{
@@ -88,6 +90,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   quietHoursEnd: '07:00',
   responseStyle: 'CONCISE',
   autoSuggestions: true,
+  jarvisVoiceGender: 'feminine',
 }
 
 export function settingsStorageKey(storeId: string | null): string {
@@ -195,6 +198,7 @@ export function parseWorkspaceSettings(value: unknown, fallback: WorkspaceSettin
     quietHoursEnd: isTime(record.quietHoursEnd) ? record.quietHoursEnd : fallback.quietHoursEnd,
     responseStyle: record.responseStyle === 'DETAILED' || record.responseStyle === 'TECHNICAL' ? record.responseStyle : 'CONCISE',
     autoSuggestions: record.autoSuggestions !== false,
+    jarvisVoiceGender: record.jarvisVoiceGender === 'masculine' || record.jarvisVoiceGender === 'male' ? 'masculine' : 'feminine',
   }
 }
 
