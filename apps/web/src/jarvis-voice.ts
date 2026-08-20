@@ -66,8 +66,15 @@ let startGeneration = 0
 // browser voice. Reset by retryCloudSpeech() on the next user gesture.
 let cloudTtsDisabled = false
 let cloudAudio: HTMLAudioElement | null = null
+let lastDedupText = ''
+let lastDedupAt = 0
 
 export function retryCloudSpeech(): void { cloudTtsDisabled = false }
+
+export function __resetJarvisVoiceDedupForTests(): void {
+  lastDedupText = ''
+  lastDedupAt = 0
+}
 
 let state = {
   active: false,
@@ -309,7 +316,7 @@ export const jarvisVoiceController: VoiceController = {
     if (needsBridge) {
       teardownRecognition()
       teardownBridge()
-      const popup = reserveVoiceBridge(window)
+      const popup = reserveVoiceBridge(window, language)
       const session = popup ? startVoiceBridge({
         scope: window,
         popup,
@@ -362,6 +369,8 @@ export const jarvisVoiceController: VoiceController = {
     currentUtterance = null
     onTranscriptRef = null
     onErrorRef = null
+    lastDedupText = ''
+    lastDedupAt = 0
     setState({ active: false, status: 'idle', error: null })
   },
   setProcessing() {
@@ -380,6 +389,12 @@ export const jarvisVoiceController: VoiceController = {
       onEnd?.()
       return
     }
+    if (clean === lastDedupText && Date.now() - lastDedupAt < 2000) {
+      onEnd?.()
+      return
+    }
+    lastDedupText = clean
+    lastDedupAt = Date.now()
     speakGeneration += 1
     const generation = speakGeneration
     pendingLanguage = language
