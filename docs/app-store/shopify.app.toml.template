@@ -22,6 +22,11 @@ scopes = "read_products,read_orders,read_customers,read_inventory,read_locations
 [webhooks]
 api_version = "2025-10"
 
+[webhooks.privacy]
+customer_data_request_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
+customer_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
+shop_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
+
 [[webhooks.subscriptions]]
-compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+topics = ["app/uninstalled"]
 uri = "/shopify/webhooks"
