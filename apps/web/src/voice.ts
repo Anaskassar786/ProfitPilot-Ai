@@ -19,7 +19,8 @@ export function microphonePreflight(scope: Window | undefined, documentScope: Do
   if (!scope?.isSecureContext) return { allowed: false, framed, code: 'insecure', message: 'Voice requires a secure HTTPS connection.' }
   const policy = (documentScope as (Document & { permissionsPolicy?: PermissionsPolicyLike }) | undefined)?.permissionsPolicy
   if (policy && !safeAllowsMicrophone(policy) && !framed) return { allowed: false, framed, code: 'policy-denied', message: 'Microphone access is blocked by this page policy.' }
-  if (!navigatorScope?.mediaDevices) return { allowed: false, framed, code: 'media-devices-unavailable', message: 'This browser does not expose a microphone device. Use AI Command to type a question.' }
+  // Framed previews often hide mediaDevices even though a same-origin popup can still capture audio.
+  if (!navigatorScope?.mediaDevices && !framed) return { allowed: false, framed, code: 'media-devices-unavailable', message: 'This browser does not expose a microphone device. Use AI Command to type a question.' }
   return { allowed: true, framed, code: 'ready', message: null }
 }
 
@@ -39,13 +40,13 @@ export async function requestMicrophoneAccess(scope: Window | undefined, navigat
     return { ok: false, framed, code: 'unavailable', message: 'This browser does not expose a microphone device. Use AI Command to type a question.' }
   }
   try {
-    heldMicrophoneStream = await getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+    heldMicrophoneStream = await openMicrophoneStream(getUserMedia)
     return { ok: true, framed, code: 'granted', message: null }
   } catch (error: unknown) {
     const name = error instanceof DOMException ? error.name : ''
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
       const message = framed
-        ? 'Microphone is blocked in this embedded view. Allow the mic, or open ProfitPilot in a new tab to use voice.'
+        ? 'Tap the microphone again so Jarvis can ask for voice access.'
         : 'Microphone permission was blocked. Allow the mic in the browser prompt, then tap the microphone again.'
       return { ok: false, framed, code: 'denied', message }
     }
@@ -53,6 +54,16 @@ export async function requestMicrophoneAccess(scope: Window | undefined, navigat
       return { ok: false, framed, code: 'unavailable', message: 'No working microphone was found. Check the selected input device and try again.' }
     }
     return { ok: false, framed, code: 'unavailable', message: 'Could not open the microphone. Allow access and try again, or ask in AI Command.' }
+  }
+}
+
+async function openMicrophoneStream(getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>): Promise<MediaStream> {
+  try {
+    return await getUserMedia({ audio: true, video: false })
+  } catch (error: unknown) {
+    const name = error instanceof DOMException ? error.name : ''
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'DevicesNotFoundError') throw error
+    return await getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
   }
 }
 
@@ -78,7 +89,7 @@ export function standaloneAppUrl(location: Pick<Location, 'href'>): string {
   return url.toString()
 }
 
-function isFramed(scope: Window | undefined): boolean {
+export function isFramed(scope: Window | undefined): boolean {
   if (!scope) return false
   try { return scope.self !== scope.top } catch { return true }
 }
@@ -226,7 +237,7 @@ export function transcriptFromEvent(event: NativeSpeechEvent): string {
 export function speechRecognitionFailure(codeValue: string | undefined): SpeechRecognitionFailure {
   const code = codeValue?.trim() || 'unknown'
   const messages: Readonly<Record<string, string>> = {
-    'not-allowed': 'Microphone permission was denied. Allow the mic in your browser, then tap the microphone again. If you are in a preview or Shopify Admin, open ProfitPilot in a new tab.',
+    'not-allowed': 'Microphone permission was denied. Allow the mic in your browser, then tap the microphone again.',
     'service-not-allowed': 'Your browser blocked its speech-recognition service. Check browser privacy settings or ask in AI Command instead.',
     'audio-capture': 'No working microphone was found. Check the selected input device and system permissions.',
     'no-speech': 'No speech was detected. Try again and speak after the listening indicator appears.',

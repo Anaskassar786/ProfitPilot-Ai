@@ -5,6 +5,7 @@ import { askCopilot, exportCopilotThread, fetchBilling, fetchCopilotMessages, fe
 import { reduceJarvisSession } from './f8-model.js'
 import type { CopilotAnswer, CopilotThread, JarvisEvidence, JarvisPreference, JarvisResponse, JarvisSession } from './f8-model.js'
 import { microphonePreflight, speechRecognitionAvailable } from './voice.js'
+import { framedMicrophoneNeedsBridge } from './jarvis-voice-bridge.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
 import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
@@ -193,11 +194,11 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     jarvisVoiceController.unlock()
     const preflight = microphonePreflight(window, document, navigator)
     jarvisVoiceController.setBlock(preflight.code === 'ready' ? null : preflight.code, preflight.framed)
-    if (!preflight.allowed) {
+    if (!preflight.allowed && !framedMicrophoneNeedsBridge(window, document)) {
       onToast(preflight.message ?? 'Microphone is unavailable here.', 'warning')
       return
     }
-    if (!speechRecognitionAvailable(window)) {
+    if (!speechRecognitionAvailable(window) && !framedMicrophoneNeedsBridge(window, document)) {
       onToast('Voice input is not available in this browser. Use AI Command to type a question.', 'warning')
       return
     }

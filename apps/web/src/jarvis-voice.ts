@@ -6,6 +6,7 @@ import {
   pickSpeechVoice,
   releaseMicrophoneAccess,
   requestMicrophoneAccess,
+  speechRecognitionAvailable,
   speechRecognitionFailure,
   speechSentences,
   spokenReplyText,
@@ -13,6 +14,8 @@ import {
   unlockSpeechSynthesis,
 } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
+import { framedMicrophoneNeedsBridge, reserveVoiceBridge, startVoiceBridge } from './jarvis-voice-bridge.js'
+import type { VoiceBridgeSession } from './jarvis-voice-bridge.js'
 
 /**
  * Voice status shown by the floating strip.
@@ -47,6 +50,7 @@ type VoiceController = Readonly<{
 }>
 
 let recognition: NativeSpeechRecognition | null = null
+let bridgeSession: VoiceBridgeSession | null = null
 let onTranscriptRef: TranscriptHandler | null = null
 let onErrorRef: ((message: string) => void) | null = null
 let currentUtterance: SpeechSynthesisUtterance | null = null
@@ -84,6 +88,21 @@ function teardownRecognition(): void {
     try { recognition.abort() } catch { /* ignore */ }
     recognition = null
   }
+}
+
+function teardownBridge(): void {
+  if (!bridgeSession) return
+  const session = bridgeSession
+  bridgeSession = null
+  session.close()
+}
+
+function pauseBridge(): void {
+  bridgeSession?.pause()
+}
+
+function resumeBridge(): void {
+  bridgeSession?.resume()
 }
 
 function clearSpeakKeepAlive(): void {
@@ -189,21 +208,67 @@ export const jarvisVoiceController: VoiceController = {
     startGeneration += 1
     const generation = startGeneration
     if (typeof window !== 'undefined') unlockSpeechSynthesis(window)
+
+    // Iframes (preview / Shopify Admin) usually cannot own the microphone.
+    // Open a same-origin popup while we still have the click gesture.
+    const needsBridge = typeof window !== 'undefined' && framedMicrophoneNeedsBridge(window, typeof document === 'undefined' ? undefined : document)
+    if (needsBridge) {
+      teardownRecognition()
+      teardownBridge()
+      const popup = reserveVoiceBridge(window)
+      const session = popup ? startVoiceBridge({
+        scope: window,
+        popup,
+        language,
+        onTranscript: (transcript) => { if (onTranscriptRef) void onTranscriptRef(transcript) },
+        onError: (message) => {
+          setState({ status: 'error', error: message })
+          onErrorRef?.(message)
+        },
+        onListening: () => setState({ status: 'listening', error: null }),
+        onClosed: () => {
+          if (bridgeSession?.popup === popup) {
+            bridgeSession = null
+            updateState((current) => ({ active: false, status: current.status === 'speaking' ? current.status : 'idle' }))
+          }
+        },
+      }) : null
+      if (session && generation === startGeneration) {
+        bridgeSession = session
+        setState({ active: true, status: 'listening', error: null, framed: true })
+        return true
+      }
+    }
+
     const access = await requestMicrophoneAccess(typeof window === 'undefined' ? undefined : window, typeof navigator === 'undefined' ? undefined : navigator)
     if (generation !== startGeneration) return false
-    if (!access.ok) {
-      setState({ active: false, status: 'error', error: access.message, framed: access.framed })
-      onError?.(access.message ?? 'Microphone permission was denied.')
-      return false
+    if (access.ok) {
+      teardownBridge()
+      setState({ active: true, error: null, framed: access.framed })
+      startRecognition(language)
+      return true
     }
-    setState({ active: true, error: null, framed: access.framed })
-    startRecognition(language)
-    return true
+
+    // Only fall back to in-page recognition when the page itself can own the mic.
+    if (access.code !== 'denied' && typeof window !== 'undefined' && speechRecognitionAvailable(window)) {
+      teardownBridge()
+      setState({ active: true, error: null, framed: access.framed })
+      startRecognition(language)
+      return true
+    }
+
+    const message = needsBridge
+      ? 'Tap the microphone again so Jarvis can ask for voice access.'
+      : (access.message ?? 'Microphone permission was denied.')
+    setState({ active: false, status: 'error', error: message, framed: access.framed })
+    onError?.(message)
+    return false
   },
   stop() {
     startGeneration += 1
     speakGeneration += 1
     teardownRecognition()
+    teardownBridge()
     clearSpeakKeepAlive()
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
     releaseMicrophoneAccess()
@@ -215,6 +280,7 @@ export const jarvisVoiceController: VoiceController = {
   setProcessing() {
     if (state.active) {
       teardownRecognition()
+      pauseBridge()
       setState({ status: 'processing' })
     }
   },
@@ -231,6 +297,7 @@ export const jarvisVoiceController: VoiceController = {
     const generation = speakGeneration
     pendingLanguage = language
     teardownRecognition()
+    pauseBridge()
     setState({ status: 'speaking', lastSpoken: clean })
     unlockSpeechSynthesis(window)
     window.speechSynthesis.cancel()
@@ -280,12 +347,14 @@ export const jarvisVoiceController: VoiceController = {
     if (paused) {
       speakGeneration += 1
       teardownRecognition()
+      pauseBridge()
       clearSpeakKeepAlive()
       stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
       setState({ status: 'paused' })
     } else if (state.active) {
       setState({ status: 'idle' })
-      startRecognition(pendingLanguage)
+      if (bridgeSession) resumeBridge()
+      else startRecognition(pendingLanguage)
     }
   },
   setBlock(block, framed) {
@@ -313,6 +382,10 @@ export function useJarvisVoiceSnapshot(): typeof state {
  */
 export function resumeJarvisListening(language: 'en' | 'hi'): void {
   if (!state.active || state.status === 'paused' || state.status === 'speaking' || state.status === 'processing') return
+  if (bridgeSession) {
+    resumeBridge()
+    return
+  }
   startRecognition(language)
 }
 
@@ -321,6 +394,7 @@ export function useJarvisVoiceTeardown(): void {
     startGeneration += 1
     speakGeneration += 1
     teardownRecognition()
+    teardownBridge()
     clearSpeakKeepAlive()
     releaseMicrophoneAccess()
     onTranscriptRef = null

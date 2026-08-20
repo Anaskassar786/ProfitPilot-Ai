@@ -22,6 +22,7 @@ function installBrowserMocks(getUserMedia: () => Promise<{ getTracks: () => read
     isSecureContext: true,
     navigator: navigatorLike,
   })
+  vi.stubGlobal('document', {})
   vi.stubGlobal('navigator', navigatorLike)
   vi.stubGlobal('SpeechSynthesisUtterance', class {
     public lang = ''
@@ -101,6 +102,43 @@ describe('Shared Jarvis voice controller', () => {
     expect(jarvisVoiceController.status).toBe('error')
     expect(jarvisVoiceController.error).not.toMatch(/not-allowed/i)
     expect(jarvisVoiceController.error).toContain('Microphone')
+    expect(jarvisVoiceController.error).not.toMatch(/new tab|embedded view/i)
     expect(onError).toHaveBeenCalledOnce()
+  })
+
+  it('starts through a voice-bridge popup when the iframe blocks the microphone', async () => {
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      focus: vi.fn(),
+      document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
+      postMessage: vi.fn(),
+    }
+    const top = {}
+    const windowLike = {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [] },
+      isSecureContext: true,
+      location: { origin: 'https://app.test' },
+      open: vi.fn(() => popup),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setInterval: vi.fn(() => 7),
+      clearInterval: vi.fn(),
+      navigator: { mediaDevices: { getUserMedia: async () => { throw new DOMException('blocked', 'NotAllowedError') } } },
+    }
+    Object.defineProperties(windowLike, { self: { value: windowLike }, top: { value: top } })
+    vi.stubGlobal('window', windowLike)
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } })
+    vi.stubGlobal('navigator', windowLike.navigator)
+    jarvisVoiceController.stop()
+    const started = await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    expect(started).toBe(true)
+    expect(jarvisVoiceController.active).toBe(true)
+    expect(jarvisVoiceController.status).toBe('listening')
+    expect(jarvisVoiceController.error).toBeNull()
+    expect(windowLike.open).toHaveBeenCalledOnce()
+    expect(popup.document.write).toHaveBeenCalledOnce()
+    jarvisVoiceController.stop()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognition, microphonePreflight, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
+import { createSpeechRecognition, isFramed, microphonePreflight, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 class FakeRecognition implements NativeSpeechRecognition {
@@ -32,7 +32,8 @@ describe('F8 browser-native voice contracts', () => {
 
   it('preserves recognition error codes and gives failure-specific recovery guidance', () => {
     expect(speechRecognitionFailure('not-allowed')).toMatchObject({ code: 'not-allowed' })
-    expect(speechRecognitionFailure('not-allowed').message).toContain('new tab')
+    expect(speechRecognitionFailure('not-allowed').message).toContain('Allow the mic')
+    expect(speechRecognitionFailure('not-allowed').message).not.toContain('new tab')
     expect(speechRecognitionFailure('audio-capture').message).toContain('microphone')
     expect(speechRecognitionFailure('no-speech').message).toContain('No speech')
     expect(speechRecognitionFailure('network').message).toContain('connectivity')

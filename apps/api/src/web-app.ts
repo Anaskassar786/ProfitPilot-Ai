@@ -145,7 +145,7 @@ function isWebNavigation(request: Request): boolean {
 
 function setWebHeaders(response: Response, filePath: string): void {
   response.setHeader('Content-Security-Policy', WEB_CONTENT_SECURITY_POLICY)
-  response.setHeader('Permissions-Policy', 'microphone=(self "https://admin.shopify.com"), geolocation=(), payment=()')
+  response.setHeader('Permissions-Policy', 'microphone=(self *), geolocation=(), payment=()')
   // X-Frame-Options cannot express Shopify's required allowlist. CSP
   // frame-ancestors above is the modern control used for embedded apps.
   response.removeHeader('X-Frame-Options')
