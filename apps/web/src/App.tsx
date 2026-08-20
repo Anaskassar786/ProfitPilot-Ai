@@ -83,7 +83,8 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { PhaseNotImplementedError } from '@profitpilot/types'
+import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
+import type { EntitlementKey, PlanTier } from '@profitpilot/types'
 import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -826,6 +827,20 @@ function ExportsPage({ context, onToast, onNavigateBilling }: { context: Workspa
   </PageLayout>
 }
 
+const BILLING_FEATURE_MATRIX: readonly Readonly<{
+  id: string
+  label: string
+  trial: string | boolean
+  start: string | boolean
+  growth: string | boolean
+  commander: string | boolean
+}>[] = [
+  { id: 'stores', label: 'Stores Included', trial: '1', start: '1', growth: '3', commander: 'Unlimited' },
+  { id: 'ai_commands', label: 'AI Commands / Day', trial: '10', start: '100', growth: '300', commander: 'Unlimited' },
+  { id: 'automations', label: 'Automations', trial: '2', start: '5', growth: '20', commander: 'Unlimited' },
+  { id: 'auto_execution', label: 'AI Auto-execution', trial: false, start: false, growth: false, commander: true },
+]
+
 const BILLING_AGENT_MATRIX: readonly Readonly<{ id: string; label: string; trial: boolean; start: boolean; growth: boolean; commander: boolean }>[] = [
   { id: 'REVENUE_AGENT', label: 'Revenue Agent', trial: true, start: true, growth: true, commander: true },
   { id: 'INVENTORY_AGENT', label: 'Inventory Agent', trial: true, start: true, growth: true, commander: true },
@@ -939,6 +954,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
       }
       onToast(charge.message ?? `[DEV] Upgraded to ${plan} locally. Shopify Billing Integration Pending.`, 'success')
       await reload()
+      const tier = plan.toLowerCase() as Exclude<PlanTier, 'trial'>
+      setUsage((current) => {
+        const meters = current.length > 0 ? current : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))
+        return meters.map((meter) => {
+          const key = meter.feature as EntitlementKey
+          const nextLimit = key in PLAN_ENTITLEMENT_LIMITS[tier] ? PLAN_ENTITLEMENT_LIMITS[tier][key] : meter.limit
+          return { ...meter, limit: nextLimit }
+        })
+      })
     } catch (error: unknown) {
       onToast(errorMessage(error), 'error')
     } finally {
@@ -962,9 +986,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   }
 
   const displayPlans = plans.length > 0 ? plans : ([
-    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 49, annualPrice: 490, annualMonthsFree: 2, headline: 'Basic analytics for one store', features: ['3 AI agents: Revenue, Inventory, Customer', '100 AI Command / day', 'Email support'], limits: {} },
-    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 149, annualPrice: 1490, annualMonthsFree: 2, recommended: true, headline: 'AI agents and advanced analytics', features: ['4 AI agents: adds Pricing', '300 AI Command / day', 'Forecasting and attribution'], limits: {} },
-    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 349, annualPrice: 3490, annualMonthsFree: 2, headline: 'Full AI employee, unlimited stores', features: ['All 6 AI agents', 'Unlimited AI Command', 'Priority support'], limits: {} },
+    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 49, annualPrice: 490, annualMonthsFree: 2, headline: 'Basic analytics for one store', features: ['Basic analytics for 1 store', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', '5 Automation workflows', 'Standard Email Support'], limits: {} },
+    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 149, annualPrice: 1490, annualMonthsFree: 2, recommended: true, headline: 'AI agents and advanced analytics', features: ['Advanced analytics for up to 3 stores', '4 AI agents: adds Pricing Agent', '300 AI Commands / day', '20 Automation workflows', 'Advanced Forecasting & ROI tracking', 'Priority 12-hour Support'], limits: {} },
+    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 349, annualPrice: 3490, annualMonthsFree: 2, headline: 'Full AI employee for unlimited stores', features: ['Full AI employee for unlimited stores', 'All 6 AI agents (Product & Executive unlocked)', 'Unlimited AI Commands & Automations', 'Auto-execution (AI takes action for you)', 'VIP 4-hour Support'], limits: {} },
   ])
 
   return (
@@ -1072,16 +1096,16 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
           <section className="card billing-matrix">
             <div className="billing-section-head inline">
               <div>
-                <div className="section-kicker"><span className="kicker-dot blue" /> AI AGENTS</div>
+                <div className="section-kicker"><span className="kicker-dot blue" /> FEATURES & AGENTS</div>
                 <h3>What each plan unlocks</h3>
-                <p>Trial 2 · Start 3 · Growth 4 · Commander 6. Campaign Agent has been retired — recovery and welcome live under Customer Agent.</p>
+                <p>Compare stores, command quotas, automations, auto-execution, and the 6-agent roster across every tier.</p>
               </div>
             </div>
             <div className="billing-matrix-table-wrap">
               <table className="billing-matrix-table">
                 <thead>
                   <tr>
-                    <th scope="col">Agent</th>
+                    <th scope="col">Feature</th>
                     <th scope="col">Trial</th>
                     <th scope="col">Start</th>
                     <th scope="col">Growth</th>
@@ -1089,6 +1113,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                   </tr>
                 </thead>
                 <tbody>
+                  {BILLING_FEATURE_MATRIX.map((row) => (
+                    <tr key={row.id}>
+                      <th scope="row">{row.label}</th>
+                      <td><BillingCell value={row.trial} /></td>
+                      <td><BillingCell value={row.start} /></td>
+                      <td><BillingCell value={row.growth} /></td>
+                      <td><BillingCell value={row.commander} /></td>
+                    </tr>
+                  ))}
                   {BILLING_AGENT_MATRIX.map((agent) => (
                     <tr key={agent.id}>
                       <th scope="row">{agent.label}</th>
@@ -1182,7 +1215,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
               <input
                 value={giftCode}
                 onChange={(event) => setGiftCode(event.target.value.toUpperCase())}
-                placeholder="e.g. KASSAR786"
+                placeholder="e.g. VIP2026"
                 aria-label="Gift code"
                 disabled={giftLoading}
               />
@@ -1224,6 +1257,11 @@ function BillingCheck({ ok }: { ok: boolean }) {
   return ok
     ? <span className="billing-check ok" aria-label="Included"><Check size={15} strokeWidth={2.75} /></span>
     : <span className="billing-check no" aria-label="Not included"><X size={14} strokeWidth={2.5} /></span>
+}
+
+function BillingCell({ value }: { value: string | boolean }) {
+  if (typeof value === 'boolean') return <BillingCheck ok={value} />
+  return <span className="billing-matrix-text">{value}</span>
 }
 
 function PageLayout({ eyebrow, title, description, actions, children }: { eyebrow: ReactNode; title: string; description: string; actions?: ReactNode; children: ReactNode }) { return <div className="page-content"><div className="page-header"><div><div className="page-eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>{children}</div> }
