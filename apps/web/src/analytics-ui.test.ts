@@ -248,7 +248,10 @@ describe('analytics sort-dropdown regression contract', () => {
     for (const file of ['inventory.tsx', 'products.tsx', 'orders.tsx', 'customers.tsx'] as const) {
       const source = await fs.readFile(new URL(`./${file}`, import.meta.url), 'utf8')
       expect(source).not.toContain('triggerLabel="Sort"')
-      expect(source).toContain('label="Sort"')
+      // Inventory and Customers spell the visible label "Sort by"; Products and
+      // Orders use "Sort". Either is fine — the contract is that a real label
+      // is rendered instead of the old compact trigger-only variant.
+      expect(source).toMatch(/label="Sort( by)?"/)
     }
   })
 })

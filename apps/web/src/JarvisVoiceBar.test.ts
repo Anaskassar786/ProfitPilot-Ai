@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { clampPosition, defaultCenterPosition, loadPosition } from './FloatingVoiceWidget.js'
+import { clampPosition, defaultCenterPosition, loadPosition } from './JarvisVoiceBar.js'
 
-describe('Floating voice widget position persistence', () => {
+describe('Jarvis voice bar position persistence', () => {
   const viewport = { width: 1280, height: 800 }
 
-  it('centers the widget by default', () => {
+  it('centers the bar by default', () => {
     const position = defaultCenterPosition(viewport)
     expect(position.x).toBe(Math.round((1280 - 220) / 2))
     expect(position.y).toBe(Math.round((800 - 76) / 2))

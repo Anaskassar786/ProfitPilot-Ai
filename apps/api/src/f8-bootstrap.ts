@@ -1,4 +1,5 @@
-import { createBrevoMailer } from '@profitpilot/automation'
+import { randomUUID } from 'node:crypto'
+import { createBrevoMailer, installTemplate, planAllowsTemplate, validateWorkflow, WORKFLOW_TEMPLATES } from '@profitpilot/automation'
 import { sha256Hex } from '@profitpilot/crypto'
 import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
@@ -19,6 +20,7 @@ import { AiCommandPageMetricsService } from './ai-command-page-metrics.js'
 import { CloudflareR2ObjectStore, ReportService, REPORT_USAGE_FEATURE } from '@profitpilot/reporting'
 import type { ReportDataProvider, ReportQuota } from '@profitpilot/reporting'
 import { PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
+import type { StoreId } from '@profitpilot/types'
 import { OrderInsightsService, PostgresOrderInsightAudit, PostgresOrderInsightUsage, PostgresOrderRepository } from './orders.js'
 import type { OrderRouteDependencies } from './order-routes.js'
 import { PostgresCustomerRepository } from './customers.js'
@@ -47,10 +49,11 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     ...(logger ? { onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => logger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }) } : {}),
   })
   if (logger) void validateOpenRouterModels(provider, logger)
-  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
+  const reports = createReports(f7, env)
+  const inventoryRepository = new PostgresInventoryRepository(f7.database)
+  const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7, { inventory: inventoryRepository, reports }), jarvisActionAudit(f7, logger ?? new Logger()))
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
-  const reports = createReports(f7, env)
   const orderRepository = new PostgresOrderRepository(f7.database)
   const orderInsights = new OrderInsightsService(
     orderRepository,
@@ -74,7 +77,6 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
     ),
   }
-  const inventoryRepository = new PostgresInventoryRepository(f7.database)
   const inventory: InventoryRouteDependencies = {
     repository: inventoryRepository,
     // Locked premium metadata must reflect the tenant's real plan, so the
@@ -251,7 +253,7 @@ function reportQuota(f7: F7Bootstrap): ReportQuota {
  * The plan check happens inside JarvisService before the tool runs, so these
  * tools are only ever reached for Commander stores that have confirmed.
  */
-function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, JarvisActionTool>>> {
+function jarvisActionTools(f7: F7Bootstrap, deps: Readonly<{ inventory: PostgresInventoryRepository; reports: ReportService }>): Readonly<Partial<Record<string, JarvisActionTool>>> {
   const decide = async (storeId: string, recommendationId: string, status: 'APPROVED' | 'REJECTED') => {
     // PR #46: single atomic UPDATE guarded by status = 'PENDING'. The old
     // SELECT-version-then-UPDATE pattern had a race window that could clobber
@@ -274,7 +276,102 @@ function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, Jar
     // boundaries from Jarvis scope, we report the action honestly as a
     // suggestion the merchant can trigger from the workspace.
     trigger_sync: async () => ({ message: 'I can queue a fresh sync for you from the Dashboard — use "Sync all" to pull the latest Shopify data.' }),
+
+    /**
+     * Reads the merchant's real low-stock rows so Jarvis can name the products
+     * that need reordering instead of quoting a bare count.
+     */
+    low_stock_report: async (storeId, parameters) => {
+      const threshold = typeof parameters.threshold === 'number' && parameters.threshold > 0 ? Math.min(1_000, Math.round(parameters.threshold)) : 10
+      const dataset = await deps.inventory.list(storeId as StoreId, threshold)
+      const low = dataset.items
+        .filter((item) => item.tracked && item.quantity !== null && item.quantity <= threshold)
+        .sort((left, right) => (left.quantity ?? 0) - (right.quantity ?? 0))
+      if (low.length === 0) return { message: `Nothing is under ${threshold} units right now — inventory looks healthy.` }
+      const named = low.slice(0, 3).map((item) => `${item.title} at ${item.quantity ?? 0}`).join(', ')
+      const rest = low.length > 3 ? `, plus ${low.length - 3} more` : ''
+      return { message: `${low.length} product${low.length === 1 ? '' : 's'} ${low.length === 1 ? 'is' : 'are'} low: ${named}${rest}.` }
+    },
+
+    /** Reads existing automations so Jarvis can answer "what is running?". */
+    list_automations: async (storeId) => {
+      const page = await f7.automation.workflows.list(storeId as StoreId, { limit: 50 })
+      if (page.items.length === 0) return { message: 'You have no automations yet. I can set one up from a template whenever you like.' }
+      const active = page.items.filter((workflow) => workflow.status === 'ACTIVE').length
+      const paused = page.items.filter((workflow) => workflow.status === 'PAUSED').length
+      const draft = page.items.filter((workflow) => workflow.status === 'DRAFT').length
+      return { message: `You have ${page.items.length} automation${page.items.length === 1 ? '' : 's'}: ${active} active, ${paused} paused, ${draft} in draft.` }
+    },
+
+    /**
+     * Creates a real workflow from the built-in template library as a DRAFT.
+     * Drafts never run on their own, so a voice command can never fire an
+     * email or a discount without the merchant activating it on the
+     * Automation page — the safest possible "Jarvis built it for me".
+     */
+    create_automation: async (storeId, parameters) => {
+      const requested = typeof parameters.template === 'string' ? parameters.template : ''
+      const template = matchWorkflowTemplate(requested)
+      if (!template) throw new Error(`I could not match "${requested}" to an automation template. Try abandoned checkout recovery, low-stock alert, or welcome new customer.`)
+      const plan = (await f7.billing.repository.get(storeId as StoreId))?.plan ?? 'trial'
+      if (!planAllowsTemplate(plan, template.minimumPlan)) throw new Error(`The ${template.name} template needs the ${template.minimumPlan} plan.`)
+      const name = typeof parameters.name === 'string' && parameters.name.trim() ? parameters.name.trim().slice(0, 80) : template.name
+      const definition = installTemplate(template, { id: randomUUID(), storeId, name, actor: 'jarvis' })
+      validateWorkflow(definition)
+      const record = await f7.automation.workflows.put(definition, 'jarvis')
+      return { message: `Done — ${record.name} is saved as a draft on the Automation page. Review it and switch it on when you're happy.` }
+    },
+
+    /** Pauses or activates an existing automation by id. */
+    set_automation_status: async (storeId, parameters) => {
+      const workflowId = typeof parameters.workflowId === 'string' ? parameters.workflowId : ''
+      const requested = typeof parameters.status === 'string' ? parameters.status.trim().toUpperCase() : ''
+      if (!workflowId) throw new Error('I need to know which automation you mean.')
+      if (requested !== 'ACTIVE' && requested !== 'PAUSED' && requested !== 'ARCHIVED') throw new Error('I can set an automation to active, paused, or archived.')
+      const updated = await f7.automation.workflows.setStatus(storeId as StoreId, workflowId, requested, 'jarvis')
+      if (!updated) throw new Error('I could not find that automation.')
+      return { message: `${updated.name} is now ${updated.status.toLowerCase()}.` }
+    },
+
+    /** Generates a real closed-period report through the existing service. */
+    generate_report: async (storeId, parameters) => {
+      const raw = typeof parameters.frequency === 'string' ? parameters.frequency.trim().toUpperCase() : ''
+      const frequency = raw === 'DAILY' || raw === 'WEEKLY' || raw === 'MONTHLY' || raw === 'QUARTERLY' ? raw : null
+      if (!frequency) throw new Error('Tell me the period — daily, weekly, monthly, or quarterly.')
+      const period = reportPeriod(frequency, typeof parameters.month === 'string' ? parameters.month : null)
+      const generated = await deps.reports.generate({ storeId: storeId as StoreId, frequency, period, email: false })
+      return { message: `Your ${frequency.toLowerCase()} report is generated and waiting on the Reports page.${generated.run.status === 'FAILED' ? ' It finished with errors, so check the page.' : ''}` }
+    },
   }
+}
+
+/** Resolves loose voice phrasing ("abandoned checkout") to a template id. */
+function matchWorkflowTemplate(requested: string): (typeof WORKFLOW_TEMPLATES)[number] | null {
+  const needle = requested.trim().toLowerCase()
+  if (!needle) return null
+  const direct = WORKFLOW_TEMPLATES.find((template) => template.id === needle || template.name.toLowerCase() === needle)
+  if (direct) return direct
+  const words = needle.split(/[^a-z0-9]+/).filter((word) => word.length > 2)
+  let best: { template: (typeof WORKFLOW_TEMPLATES)[number]; score: number } | null = null
+  for (const template of WORKFLOW_TEMPLATES) {
+    const haystack = `${template.id} ${template.name} ${template.description}`.toLowerCase()
+    const score = words.filter((word) => haystack.includes(word)).length
+    if (score > 0 && (!best || score > best.score)) best = { template, score }
+  }
+  return best?.template ?? null
+}
+
+/** Closed-period window for a spoken report request (defaults to yesterday back). */
+function reportPeriod(frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY', month: string | null): Readonly<{ start: string; end: string }> {
+  if (frequency === 'MONTHLY' && month && /^\d{4}-\d{2}$/.test(month)) {
+    const start = new Date(`${month}-01T00:00:00.000Z`)
+    const end = new Date(start); end.setUTCMonth(end.getUTCMonth() + 1); end.setUTCDate(0)
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+  const end = new Date(); end.setUTCHours(0, 0, 0, 0); end.setUTCDate(end.getUTCDate() - 1)
+  const days = frequency === 'DAILY' ? 1 : frequency === 'WEEKLY' ? 7 : frequency === 'MONTHLY' ? 30 : 90
+  const start = new Date(end); start.setUTCDate(start.getUTCDate() - days + 1)
+  return { start: start.toISOString(), end: end.toISOString() }
 }
 
 /**

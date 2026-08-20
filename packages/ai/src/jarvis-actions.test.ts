@@ -35,10 +35,14 @@ describe('Jarvis plan-gated store actions', () => {
   it('describes available actions and the action protocol for the prompt', () => {
     const description = describeActionsForPrompt('commander')
     expect(description).toContain('approve_recommendation')
-    expect(description).toContain('confirmation')
+    expect(description).toContain('confirm out loud')
     const trial = describeActionsForPrompt('trial')
     expect(trial).toContain('show_revenue')
-    expect(trial).not.toContain('approve_recommendation')
+    // Navigation is browser-side and risk-free, so every plan can be taken to a page.
+    expect(trial).toContain('navigate_page')
+    expect(trial).not.toContain('- approve_recommendation')
+    // Lower plans are told what is locked so Jarvis advises instead of pretending.
+    expect(trial).toContain('Locked on this plan')
   })
 
   it('refuses write actions on lower plans and names the required plan', async () => {
@@ -74,13 +78,48 @@ describe('Jarvis plan-gated store actions', () => {
     expect(log.entries[0]?.outcome).toBe('EXECUTED')
   })
 
-  it('validates required parameters before executing', async () => {
+  it('asks a spoken follow-up question instead of failing when a detail is missing', async () => {
     const tool = vi.fn(approveTool)
-    const registry = new JarvisActionRegistry({ approve_recommendation: tool })
+    const log = audit()
+    const registry = new JarvisActionRegistry({ approve_recommendation: tool }, log)
     const result = await registry.invoke({ storeId: 'store-1' as never, plan: 'commander', confirmed: true, tools: {} }, { actionId: 'approve_recommendation', parameters: {} })
     expect(result.executed).toBe(false)
-    expect(result.message).toContain('recommendationId')
+    expect(result.needsDetails).toBe(true)
+    expect(result.missingParameter).toBe('recommendationId')
+    expect(result.message).toBe('Which recommendation should I approve?')
     expect(tool).not.toHaveBeenCalled()
+    expect(log.entries[0]?.outcome).toBe('DETAILS_REQUIRED')
+  })
+
+  it('asks which automation to build before creating anything', async () => {
+    const registry = new JarvisActionRegistry({})
+    const result = await registry.invoke({ storeId: 'store-1' as never, plan: 'commander', confirmed: true, tools: {} }, { actionId: 'create_automation', parameters: {} })
+    expect(result.needsDetails).toBe(true)
+    expect(result.message).toContain('Which automation')
+  })
+
+  it('asks which period a report should cover before generating it', async () => {
+    const registry = new JarvisActionRegistry({})
+    const result = await registry.invoke({ storeId: 'store-1' as never, plan: 'commander', confirmed: true, tools: {} }, { actionId: 'generate_report', parameters: {} })
+    expect(result.needsDetails).toBe(true)
+    expect(result.message).toContain('daily, weekly, monthly, or quarterly')
+  })
+
+  it('lets every plan be taken to a page because navigation runs in the browser', async () => {
+    const registry = new JarvisActionRegistry({})
+    const result = await registry.invoke({ storeId: 'store-1' as never, plan: 'trial', confirmed: false, tools: {} }, { actionId: 'navigate_page', parameters: { page: 'products' } })
+    expect(result.executed).toBe(true)
+    expect(result.clientExecuted).toBe(true)
+  })
+
+  it('reads low stock on any plan but refuses to create automations below Commander', async () => {
+    const registry = new JarvisActionRegistry({ low_stock_report: async () => ({ message: '3 products are low.' }) })
+    const read = await registry.invoke({ storeId: 'store-1' as never, plan: 'start', confirmed: false, tools: {} }, { actionId: 'low_stock_report', parameters: {} })
+    expect(read.executed).toBe(true)
+    expect(read.message).toContain('3 products are low.')
+    const write = await registry.invoke({ storeId: 'store-1' as never, plan: 'growth', confirmed: true, tools: {} }, { actionId: 'create_automation', parameters: { template: 'abandoned-checkout' } })
+    expect(write.executed).toBe(false)
+    expect(write.requiredPlan).toBe('commander')
   })
 
   it('never pretends an action ran when its tool is not connected', async () => {

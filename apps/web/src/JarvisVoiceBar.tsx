@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react'
+import { Mic, MicOff, Pause, Play, X } from 'lucide-react'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { JarvisOrbState } from './JarvisOrb.js'
-import { jarvisVoiceController, useJarvisVoiceSnapshot } from './jarvis-voice.js'
 import type { FloatingVoiceStatus } from './jarvis-voice.js'
+
+/**
+ * The Jarvis voice bar.
+ *
+ * Jarvis is a voice assistant, not a second chat window — the merchant already
+ * has AI Command for typing. So this is a small draggable strip: the orb, one
+ * word of state, and exactly three controls (microphone, pause, close). Every
+ * answer is spoken; nothing is transcribed on screen.
+ */
 
 const STORAGE_KEY = 'profitpilot:jarvis:floating-widget-position'
 const WIDGET_WIDTH = 220
@@ -14,15 +22,20 @@ const MARGIN = 12
 
 type SavedPosition = Readonly<{ x: number; y: number }>
 
-export type FloatingVoiceWidgetProps = Readonly<{
-  /** Visible only while a voice session is active (the chat panel may be closed). */
+export type JarvisVoiceBarProps = Readonly<{
+  /** Visible only while a voice session is running. */
   visible: boolean
-  address: string
+  status: FloatingVoiceStatus
+  orbState: JarvisOrbState
+  micEnabled: boolean
   paused: boolean
-  onPause: () => void
-  onResume: () => void
+  /** Short spoken-state label ("Listening", "Thinking"…). Never an answer. */
+  label: string
+  /** Hover/assistive detail, typically the current error. */
+  detail?: string | null
+  onToggleMic: () => void
+  onTogglePause: () => void
   onClose: () => void
-  onOpenPanel: () => void
 }>
 
 type DragState = Readonly<{
@@ -43,10 +56,11 @@ export function loadPosition(storage?: Pick<Storage, 'getItem'>, viewport: { wid
         return clampPosition((parsed as SavedPosition).x, (parsed as SavedPosition).y, viewport)
       }
     }
-  } catch { /* storage disabled — fall through to default center position */ }
+  } catch { /* storage disabled — fall through to the default position */ }
   return defaultCenterPosition(viewport)
 }
 
+/** Default resting place: just above the launcher, bottom-right. */
 export function defaultCenterPosition(viewport: { width: number; height: number } = defaultViewport()): SavedPosition {
   return {
     x: Math.max(MARGIN, Math.round((viewport.width - WIDGET_WIDTH) / 2)),
@@ -69,7 +83,8 @@ function defaultViewport(): { width: number; height: number } {
   return { width: window.innerWidth, height: window.innerHeight }
 }
 
-function orbStateFor(status: FloatingVoiceStatus): JarvisOrbState {
+/** Maps voice state to the orb animation state. */
+export function orbStateFor(status: FloatingVoiceStatus): JarvisOrbState {
   if (status === 'listening') return 'listening'
   if (status === 'processing') return 'thinking'
   if (status === 'speaking') return 'speaking'
@@ -78,27 +93,23 @@ function orbStateFor(status: FloatingVoiceStatus): JarvisOrbState {
   return 'idle'
 }
 
-function statusLabel(status: FloatingVoiceStatus, address: string, error: string | null): string {
-  if (error) return 'Voice unavailable'
-  switch (status) {
-    case 'listening': return `Listening, ${address}…`
-    case 'processing': return 'Thinking…'
-    case 'speaking': return 'Speaking…'
-    case 'paused': return 'Paused'
-    case 'sleeping': return 'Sleeping'
-    case 'error': return 'Voice error'
-    default: return 'Voice ready'
-  }
+/** One or two words — the merchant hears the content, they only see the state. */
+export function statusLabel(status: FloatingVoiceStatus, micEnabled: boolean, paused: boolean): string {
+  if (paused) return 'Paused'
+  if (status === 'error') return 'Voice issue'
+  if (status === 'listening') return 'Listening'
+  if (status === 'processing') return 'Thinking'
+  if (status === 'speaking') return 'Speaking'
+  return micEnabled ? 'Ready' : 'Mic off'
 }
 
-export function FloatingVoiceWidget({ visible, address, paused, onPause, onResume, onClose, onOpenPanel }: FloatingVoiceWidgetProps) {
-  const voice = useJarvisVoiceSnapshot()
+export function JarvisVoiceBar({ visible, status, orbState, micEnabled, paused, label, detail, onToggleMic, onTogglePause, onClose }: JarvisVoiceBarProps) {
   const [position, setPosition] = useState<SavedPosition>(() => loadPosition(typeof window === 'undefined' ? undefined : window.localStorage))
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef<DragState | null>(null)
-  const widgetRef = useRef<HTMLDivElement | null>(null)
+  const barRef = useRef<HTMLDivElement | null>(null)
 
-  // Re-clamp on viewport resize so the widget never gets stranded off-screen.
+  // Re-clamp on resize so the bar is never stranded off-screen.
   useEffect(() => {
     if (!visible) return
     const onResize = () => setPosition((current) => clampPosition(current.x, current.y))
@@ -108,16 +119,12 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
 
   if (!visible || typeof document === 'undefined') return null
 
-  const status: FloatingVoiceStatus = paused ? 'paused' : voice.status
-  const orbState = orbStateFor(status)
-
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // Only the drag handle area starts a drag; buttons stop propagation.
     if ((event.target as HTMLElement).closest('button')) return
     event.preventDefault()
-    const target = widgetRef.current
+    const target = barRef.current
     if (!target) return
-    target.setPointerCapture(event.pointerId)
+    try { target.setPointerCapture(event.pointerId) } catch { /* ignore */ }
     dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y, moved: false }
     setDragging(true)
   }
@@ -135,12 +142,10 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (drag && event.pointerId === drag.pointerId) {
-      try { widgetRef.current?.releasePointerCapture(event.pointerId) } catch { /* ignore */ }
+      try { barRef.current?.releasePointerCapture(event.pointerId) } catch { /* ignore */ }
       const finalPosition = clampPosition(position.x, position.y)
       setPosition(finalPosition)
-      savePosition(finalPosition, typeof window === 'undefined' ? undefined : window.localStorage)
-      // A tap (no real drag) reopens the chat panel.
-      if (!drag.moved) onOpenPanel()
+      if (drag.moved) savePosition(finalPosition, typeof window === 'undefined' ? undefined : window.localStorage)
     }
     dragRef.current = null
     setDragging(false)
@@ -149,31 +154,52 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
   const style: CSSProperties = {
     left: position.x,
     top: position.y,
-    width: WIDGET_WIDTH,
     zIndex: 60,
     touchAction: 'none',
     cursor: dragging ? 'grabbing' : 'grab',
-    opacity: voice.status === 'idle' && !dragging ? 0.92 : 1,
   }
 
-  const control = (
-    <div className="jarvis-floating-widget" ref={widgetRef} style={style} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} role="dialog" aria-label="Jarvis voice is active">
-      <span className="jarvis-floating-orb"><JarvisOrb state={orbState} size={40} label={`Jarvis ${status}`} /></span>
-      <div className="jarvis-floating-copy">
-        <strong>{statusLabel(status, address, voice.error)}</strong>
-        <span>{voice.error ?? 'Tap to open chat · drag to move'}</span>
-      </div>
-      <div className="jarvis-floating-controls">
-        <button type="button" className="icon-button" onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume listening' : 'Pause listening'} title={paused ? 'Resume' : 'Pause'}>
+  const bar = (
+    <div
+      className={`jarvis-voice-bar status-${status}${paused ? ' is-paused' : ''}`}
+      ref={barRef}
+      style={style}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      role="toolbar"
+      aria-label="Jarvis voice controls"
+      title={detail ?? 'Drag to move'}
+    >
+      <span className="jarvis-voice-bar-orb"><JarvisOrb state={orbState} size={30} label={`Jarvis ${status}`} /></span>
+      <span className="jarvis-voice-bar-state" aria-live="polite">{label}</span>
+      <span className="jarvis-voice-bar-controls">
+        <button
+          type="button"
+          className={`icon-button ${micEnabled && !paused ? 'mic-live' : ''}`}
+          onClick={onToggleMic}
+          aria-pressed={micEnabled && !paused}
+          aria-label={micEnabled ? 'Turn microphone off' : 'Turn microphone on'}
+          title={micEnabled ? 'Microphone on' : 'Microphone off'}
+        >
+          {micEnabled && !paused ? <Mic size={14} /> : <MicOff size={14} />}
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={onTogglePause}
+          aria-label={paused ? 'Resume Jarvis' : 'Pause Jarvis'}
+          title={paused ? 'Resume' : 'Pause'}
+        >
           {paused ? <Play size={14} /> : <Pause size={14} />}
         </button>
-        <button type="button" className="icon-button" onClick={() => jarvisVoiceController.setMuted(!voice.muted)} aria-label={voice.muted ? 'Unmute voice' : 'Mute voice'} title={voice.muted ? 'Unmute' : 'Mute'}>
-          {voice.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        <button type="button" className="icon-button" onClick={onClose} aria-label="Close Jarvis" title="Close">
+          <X size={14} />
         </button>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Stop voice and close widget" title="Close"><X size={14} /></button>
-      </div>
+      </span>
     </div>
   )
 
-  return createPortal(control, document.body)
+  return createPortal(bar, document.body)
 }

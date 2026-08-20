@@ -531,14 +531,14 @@ function AiPreferencesTab({
         </div>
       </SettingsPanel>
 
-      <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The voice and chat bubble that lives in the corner of every page.">
+      <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The voice assistant orb that lives in the corner of every page. Tap it to talk; answers are spoken.">
         <ToggleRow
           label="Show floating AI bubble"
-          hint="Hide the bubble if you prefer a quieter workspace."
+          hint="Hide the orb if you prefer a quieter workspace."
           on={settings.bubbleEnabled}
           onChange={(value) => onSettings(mergeWorkspaceSettings(settings, { bubbleEnabled: value }))}
         />
-        <SettingRow label="Position" description="Where the bubble sits on the screen">
+        <SettingRow label="Position" description="Where the orb sits on the screen">
           <CustomSelect
             ariaLabel="Floating assistant position"
             value={settings.bubblePosition}

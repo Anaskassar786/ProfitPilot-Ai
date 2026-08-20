@@ -33,6 +33,12 @@ export type JarvisStoreActionDefinition = Readonly<{
    * supply these; the executor validates presence and type before running.
    */
   parameters: readonly JarvisActionParameter[]
+  /**
+   * Client-executed actions (navigation) never touch store data — the browser
+   * performs them. They are still declared here so the model knows they exist
+   * and so the audit log records every attempt.
+   */
+  clientExecuted?: boolean
 }>
 
 export type JarvisActionParameter = Readonly<{
@@ -40,6 +46,12 @@ export type JarvisActionParameter = Readonly<{
   description: string
   type: 'string' | 'number' | 'boolean'
   required: boolean
+  /**
+   * Spoken follow-up Jarvis asks when the merchant did not supply this detail
+   * ("Which automation should I set up, Sir?"). Voice-first slot filling: one
+   * short question at a time instead of a silent failure.
+   */
+  question?: string
 }>
 
 export type JarvisActionInvocation = Readonly<{
@@ -52,6 +64,12 @@ export type JarvisActionResult = Readonly<{
   message: string
   /** Set when the action needs merchant confirmation before it can run. */
   requiresConfirmation: boolean
+  /** Set when a required detail is missing and Jarvis asked a follow-up question. */
+  needsDetails?: boolean
+  /** The parameter Jarvis is waiting for, when `needsDetails` is true. */
+  missingParameter?: string
+  /** True for navigation-style actions the browser performs. */
+  clientExecuted?: boolean
   /** The plan the action requires, when it was refused. */
   requiredPlan?: JarvisPlan
 }>
@@ -62,7 +80,7 @@ export type JarvisActionAuditEntry = Readonly<{
   actionId: string
   plan: JarvisPlan
   parameters: Readonly<Record<string, string | number | boolean | null>>
-  outcome: 'EXECUTED' | 'REFUSED_PLAN' | 'CONFIRMATION_REQUIRED' | 'FAILED'
+  outcome: 'EXECUTED' | 'REFUSED_PLAN' | 'CONFIRMATION_REQUIRED' | 'DETAILS_REQUIRED' | 'FAILED'
   message: string
   at: number
 }>
@@ -140,6 +158,43 @@ export const JARVIS_STORE_ACTIONS: readonly JarvisStoreActionDefinition[] = [
     parameters: [],
   },
   {
+    id: 'low_stock_report',
+    label: 'Low-stock report',
+    description: 'Name the products that are running low so the merchant can reorder in time.',
+    kind: 'READ',
+    minimumPlan: 'trial',
+    requiresConfirmation: false,
+    parameters: [
+      { name: 'threshold', description: 'Units on hand below which a product counts as low stock (default 10).', type: 'number', required: false },
+    ],
+  },
+  {
+    id: 'list_automations',
+    label: 'List automations',
+    description: 'Read back the automations that already exist and whether they are active, paused, or draft.',
+    kind: 'READ',
+    minimumPlan: 'trial',
+    requiresConfirmation: false,
+    parameters: [],
+  },
+  {
+    /**
+     * Navigation is performed by the browser, never by the server, so it is a
+     * zero-risk READ action available on every plan: opening a page the
+     * merchant already pays for cannot change store data.
+     */
+    id: 'navigate_page',
+    label: 'Open a page',
+    description: 'Open a workspace page for the merchant (dashboard, products, inventory, orders, customers, automation, analytics, reports, recommendations, billing, settings, ai-command).',
+    kind: 'READ',
+    minimumPlan: 'trial',
+    requiresConfirmation: false,
+    clientExecuted: true,
+    parameters: [
+      { name: 'page', description: 'The workspace page to open.', type: 'string', required: true, question: 'Which page would you like me to open?' },
+    ],
+  },
+  {
     id: 'approve_recommendation',
     label: 'Approve recommendation',
     description: 'Approve a pending AI recommendation so its workflow can run.',
@@ -147,7 +202,7 @@ export const JARVIS_STORE_ACTIONS: readonly JarvisStoreActionDefinition[] = [
     minimumPlan: 'commander',
     requiresConfirmation: true,
     parameters: [
-      { name: 'recommendationId', description: 'The id of the pending recommendation to approve.', type: 'string', required: true },
+      { name: 'recommendationId', description: 'The id of the pending recommendation to approve.', type: 'string', required: true, question: 'Which recommendation should I approve?' },
     ],
   },
   {
@@ -158,7 +213,43 @@ export const JARVIS_STORE_ACTIONS: readonly JarvisStoreActionDefinition[] = [
     minimumPlan: 'commander',
     requiresConfirmation: true,
     parameters: [
-      { name: 'recommendationId', description: 'The id of the pending recommendation to reject.', type: 'string', required: true },
+      { name: 'recommendationId', description: 'The id of the pending recommendation to reject.', type: 'string', required: true, question: 'Which recommendation should I reject?' },
+    ],
+  },
+  {
+    id: 'create_automation',
+    label: 'Create an automation',
+    description: 'Create a new automation from the built-in workflow templates as a draft the merchant can review and activate. Templates include: welcome-customer, vip-tagging, high-value-order, low-stock-alert, post-purchase-thanks, abandoned-checkout, review-request, first-purchase-follow-up, win-back, repeat-purchase, back-in-stock, ai-segmentation, smart-discount, slow-moving-promotion, predictive-churn.',
+    kind: 'WRITE',
+    minimumPlan: 'commander',
+    requiresConfirmation: true,
+    parameters: [
+      { name: 'template', description: 'The workflow template id to build from.', type: 'string', required: true, question: 'Which automation should I set up? For example, abandoned checkout recovery, a low-stock alert, or a welcome email for new customers.' },
+      { name: 'name', description: 'A name for the new automation. Defaults to the template name.', type: 'string', required: false },
+    ],
+  },
+  {
+    id: 'set_automation_status',
+    label: 'Pause or activate an automation',
+    description: 'Pause, activate, or archive an existing automation by its id.',
+    kind: 'WRITE',
+    minimumPlan: 'commander',
+    requiresConfirmation: true,
+    parameters: [
+      { name: 'workflowId', description: 'The automation id to change.', type: 'string', required: true, question: 'Which automation should I change?' },
+      { name: 'status', description: 'ACTIVE, PAUSED, or ARCHIVED.', type: 'string', required: true, question: 'Should I pause it or activate it?' },
+    ],
+  },
+  {
+    id: 'generate_report',
+    label: 'Generate a report',
+    description: 'Generate a closed-period business report (daily, weekly, monthly, or quarterly).',
+    kind: 'WRITE',
+    minimumPlan: 'commander',
+    requiresConfirmation: true,
+    parameters: [
+      { name: 'frequency', description: 'DAILY, WEEKLY, MONTHLY, or QUARTERLY.', type: 'string', required: true, question: 'Which period should the report cover — daily, weekly, monthly, or quarterly?' },
+      { name: 'month', description: 'Optional month for a monthly report, as YYYY-MM.', type: 'string', required: false },
     ],
   },
   {
@@ -189,15 +280,20 @@ export function actionsAvailableToPlan(plan: JarvisPlan): readonly JarvisStoreAc
 export function describeActionsForPrompt(plan: JarvisPlan): string {
   const available = actionsAvailableToPlan(plan)
   if (available.length === 0) return 'No store actions are available on this plan. Answer from data only.'
-  return available
+  const lines = available
     .map((action) => {
       const params = action.parameters.length > 0
         ? ` Parameters: ${action.parameters.map((parameter) => `${parameter.name} (${parameter.type}${parameter.required ? ', required' : ''})`).join('; ')}.`
         : ''
-      const confirm = action.kind === 'WRITE' ? ' This requires explicit merchant confirmation before executing.' : ''
+      const confirm = action.kind === 'WRITE' ? ' Requires the merchant to confirm out loud before it runs.' : ''
       return `- ${action.id}: ${action.description}${params}${confirm}`
     })
     .join('\n')
+  if (plan === 'commander') return lines
+  const locked = JARVIS_STORE_ACTIONS.filter((action) => !planAtLeast(plan, action.minimumPlan)).map((action) => action.label.toLowerCase())
+  return locked.length > 0
+    ? `${lines}\nLocked on this plan (offer the advice, never claim you did it): ${locked.join(', ')}. These need the Commander plan.`
+    : lines
 }
 
 export class JarvisActionRegistry {
@@ -226,7 +322,7 @@ export class JarvisActionRegistry {
   public async invoke(context: JarvisActionContext, invocation: JarvisActionInvocation): Promise<JarvisActionResult> {
     const definition = getJarvisStoreAction(invocation.actionId)
     const at = this.now()
-    const audit = (outcome: JarvisActionAuditEntry['outcome'], message: string, requiresConfirmation = false, requiredPlan?: JarvisPlan): JarvisActionResult => {
+    const audit = (outcome: JarvisActionAuditEntry['outcome'], message: string, extra: Readonly<Partial<Omit<JarvisActionResult, 'executed' | 'message'>>> = {}): JarvisActionResult => {
       const entry: JarvisActionAuditEntry = {
         id: this.randomId(),
         storeId: context.storeId,
@@ -238,13 +334,10 @@ export class JarvisActionRegistry {
         at,
       }
       void this.audit?.record(entry)
-      const result: JarvisActionResult = requiredPlan
-        ? { executed: outcome === 'EXECUTED', message, requiresConfirmation, requiredPlan }
-        : { executed: outcome === 'EXECUTED', message, requiresConfirmation }
-      return result
+      return { executed: outcome === 'EXECUTED', message, requiresConfirmation: false, ...extra }
     }
 
-    if (!definition) return audit('FAILED', `Sir, I don't have an action called "${invocation.actionId}".`)
+    if (!definition) return audit('FAILED', `I don't have an action called "${invocation.actionId}".`)
 
     // 1. Plan entitlement check FIRST — never execute past the plan.
     if (!planAtLeast(context.plan, definition.minimumPlan)) {
@@ -252,20 +345,28 @@ export class JarvisActionRegistry {
       const current = planDisplayName(context.plan)
       return audit(
         'REFUSED_PLAN',
-        `Sir, executing store actions requires the ${required} plan. You're currently on ${current}. I can show you the relevant data and suggest what to do instead.`,
-        false,
-        definition.minimumPlan,
+        `Taking that action needs the ${required} plan — you're on ${current} right now. I can still pull up the numbers and tell you exactly what to do.`,
+        { requiredPlan: definition.minimumPlan },
       )
     }
 
-    // 2. Parameter validation.
+    // 2. Parameter validation. A missing required detail is not a failure: it
+    //    is a question. Jarvis asks for one detail at a time, like a person.
     for (const parameter of definition.parameters) {
       const value = invocation.parameters[parameter.name]
       if (parameter.required && (value === null || value === undefined || value === '')) {
-        return audit('FAILED', `Sir, the action "${definition.label}" needs a ${parameter.name}.`)
+        return audit(
+          'DETAILS_REQUIRED',
+          parameter.question ?? `I need one more detail first — what should I use for ${parameter.name}?`,
+          { needsDetails: true, missingParameter: parameter.name },
+        )
       }
       if (value !== null && value !== undefined && typeof value !== parameter.type) {
-        return audit('FAILED', `Sir, ${parameter.name} should be a ${parameter.type}.`)
+        return audit(
+          'DETAILS_REQUIRED',
+          parameter.question ?? `Could you repeat the ${parameter.name}? I need it as a ${parameter.type}.`,
+          { needsDetails: true, missingParameter: parameter.name },
+        )
       }
     }
 
@@ -273,22 +374,24 @@ export class JarvisActionRegistry {
     if (definition.kind === 'WRITE' && !context.confirmed) {
       return audit(
         'CONFIRMATION_REQUIRED',
-        `Sir, I can ${definition.label.toLowerCase()}. Please confirm and I'll make the change.`,
-        true,
+        `I can ${definition.label.toLowerCase()}. Say "confirm" and I'll do it.`,
+        { requiresConfirmation: true },
       )
     }
 
-    // 4. Execute through the wired tool.
+    // 4. Execute through the wired tool. Client-executed actions (navigation)
+    //    have no server tool: the browser performs them after this ack.
     const tool = context.tools[invocation.actionId] ?? this.tools[invocation.actionId]
     if (!tool) {
-      return audit('FAILED', `Sir, the "${definition.label}" action is not connected right now. I won't pretend it ran.`)
+      if (definition.clientExecuted) return audit('EXECUTED', `Opening that for you now.`, { clientExecuted: true })
+      return audit('FAILED', `The "${definition.label}" action is not connected right now, so I won't pretend it ran.`)
     }
     try {
       const output = await tool(context.storeId, invocation.parameters)
-      return audit('EXECUTED', output.message)
+      return audit('EXECUTED', output.message, definition.clientExecuted ? { clientExecuted: true } : {})
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'The action failed.'
-      return audit('FAILED', `Sir, ${message}`)
+      return audit('FAILED', message)
     }
   }
 }

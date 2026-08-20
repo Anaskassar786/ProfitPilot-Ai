@@ -17,7 +17,18 @@ class FakeRecognition {
 function installBrowserMocks(): void {
   vi.stubGlobal('window', {
     SpeechRecognition: FakeRecognition,
-    speechSynthesis: { cancel: vi.fn(), speak: vi.fn() },
+    speechSynthesis: {
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      resume: vi.fn(),
+      getVoices: () => [{ name: 'Google UK English Female', lang: 'en-GB' }],
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    },
+    setTimeout: (handler: () => void) => { void handler; return 1 },
+    clearTimeout: vi.fn(),
+    setInterval: () => 1,
+    clearInterval: vi.fn(),
   })
   vi.stubGlobal('SpeechSynthesisUtterance', class {
     public lang = ''
@@ -57,12 +68,40 @@ describe('Shared Jarvis voice controller', () => {
     expect(jarvisVoiceController.muted).toBe(false)
   })
 
-  it('pauses background listening and can resume', () => {
+  it('pauses listening and resumes hands-free when the merchant unpauses', () => {
     jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
     jarvisVoiceController.setPaused(true)
     expect(jarvisVoiceController.status).toBe('paused')
+    expect(jarvisVoiceController.paused).toBe(true)
     jarvisVoiceController.setPaused(false)
+    // The microphone switch is still on, so Jarvis picks the conversation back up.
+    expect(jarvisVoiceController.paused).toBe(false)
+    expect(jarvisVoiceController.status).toBe('listening')
+  })
+
+  it('turns the microphone off and on from the voice bar without ending the session', () => {
+    jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    jarvisVoiceController.setMicEnabled(false)
+    expect(jarvisVoiceController.micEnabled).toBe(false)
+    expect(jarvisVoiceController.active).toBe(true)
     expect(jarvisVoiceController.status).toBe('idle')
+    jarvisVoiceController.setMicEnabled(true)
+    expect(jarvisVoiceController.micEnabled).toBe(true)
+    expect(jarvisVoiceController.status).toBe('listening')
+  })
+
+  it('can open without listening when the microphone is blocked', () => {
+    jarvisVoiceController.start({ language: 'en', listen: false, onTranscript: vi.fn(), onError: vi.fn() })
+    expect(jarvisVoiceController.active).toBe(true)
+    expect(jarvisVoiceController.micEnabled).toBe(false)
+    expect(jarvisVoiceController.status).toBe('idle')
+  })
+
+  it('stops listening while it speaks so it never transcribes itself', () => {
+    const onEnd = vi.fn()
+    jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Revenue is up today.', language: 'en' }, onEnd)
+    expect(jarvisVoiceController.status).toBe('speaking')
   })
 
   it('does not resume listening when inactive or paused', () => {

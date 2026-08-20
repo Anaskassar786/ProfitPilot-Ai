@@ -1,231 +1,343 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { AlertTriangle, Download, ExternalLink, Headphones, LoaderCircle, Mic, Send, ShieldCheck, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
-import { askCopilot, confirmJarvisAction, exportCopilotThread, fetchBilling, fetchCopilotMessages, fetchCopilotThreads, fetchJarvisBriefing, fetchJarvisMessages, fetchJarvisPreferences, invokeJarvisStoreAction, saveJarvisPreferences, sendJarvisMessage, setJarvisState, startJarvisSession, streamJarvisMessage } from './api.js'
+import { Download, LoaderCircle, Send, ShieldCheck, Sparkles } from 'lucide-react'
+import { askCopilot, exportCopilotThread, fetchBilling, fetchCopilotMessages, fetchCopilotThreads, fetchJarvisBriefing, fetchJarvisPreferences, invokeJarvisStoreAction, setJarvisState, startJarvisSession, sendJarvisMessage } from './api.js'
 import { reduceJarvisSession } from './f8-model.js'
-import type { CopilotAnswer, CopilotThread, JarvisAction, JarvisAddressing, JarvisEvidence, JarvisMessage, JarvisPreference, JarvisResponse, JarvisSession, JarvisSessionLifecycle } from './f8-model.js'
-import { microphonePreflight, speechRecognitionAvailable, speechRecognitionFailure, standaloneAppUrl } from './voice.js'
-import type { VoiceStatus } from './voice.js'
+import type { CopilotAnswer, CopilotThread, JarvisPreference, JarvisResponse, JarvisSession } from './f8-model.js'
+import { microphonePreflight, speechRecognitionAvailable, standaloneAppUrl } from './voice.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { JarvisOrbState } from './JarvisOrb.js'
-import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
-import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { JarvisVoiceBar, orbStateFor, statusLabel } from './JarvisVoiceBar.js'
+import { jarvisVoiceController, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { speechSynthesisAvailable } from './jarvis-speech.js'
 import type { WorkspaceContext } from './model.js'
 
-type JarvisExperienceProps = Readonly<{ open: boolean; context: WorkspaceContext; page: string; onOpen: () => void; onClose: () => void; onEvidence: (evidence?: JarvisEvidence | null) => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void; onPreferenceChange?: (preference: JarvisPreference) => void }>
-type TimelineEntry = Readonly<{ id: string; role: 'merchant' | 'jarvis'; text: string; language: 'en' | 'hi'; mode: JarvisMessage['mode']; evidence: JarvisEvidence | null; action: JarvisAction | null; status: JarvisResponse['status'] | null; createdAt: number; pending?: boolean }>
+/**
+ * Jarvis — the voice layer of ProfitPilot.
+ *
+ * There is no chat window here on purpose: typing lives in AI Command. Tapping
+ * the orb opens a small draggable bar with a microphone, a pause control, and a
+ * close control; everything Jarvis says is spoken out loud and nothing is
+ * transcribed on screen.
+ *
+ * Behaviour contract:
+ *  - Page aware. Opening a page gives one short spoken briefing about THAT
+ *    page, at most once per page per session and never more than once a
+ *    minute, so it helps without nagging.
+ *  - Plan aware. Trial/Start/Growth get insight and suggestions; Commander can
+ *    also have Jarvis act (create an automation, generate a report, approve a
+ *    recommendation) after the merchant confirms out loud.
+ *  - Store only. Off-topic questions are refused server-side before the model
+ *    is called.
+ */
 
-export function JarvisExperience({ open, context, page, onOpen, onClose, onEvidence, onToast, onPreferenceChange }: JarvisExperienceProps) {
+type JarvisExperienceProps = Readonly<{
+  open: boolean
+  context: WorkspaceContext
+  page: string
+  onOpen: () => void
+  onClose: () => void
+  onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
+  /** Lets Jarvis take the merchant to another workspace page on request. */
+  onNavigate?: (page: string) => void
+  onPreferenceChange?: (preference: JarvisPreference) => void
+}>
+
+type PendingAction = Readonly<{ actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>> }>
+
+/** Minimum gap between two unprompted spoken briefings. */
+export const BRIEFING_COOLDOWN_MS = 60_000
+/** Settle time after a navigation before Jarvis speaks about the new page. */
+const BRIEFING_DELAY_MS = 1_400
+
+export function JarvisExperience({ open, context, page, onOpen, onClose, onToast, onNavigate, onPreferenceChange }: JarvisExperienceProps) {
   const [session, setSession] = useState<JarvisSession | null>(null)
   const [lifecycle, dispatchLifecycle] = useReducer(reduceJarvisSession, { status: 'starting', error: null })
   const [startAttempt, setStartAttempt] = useState(0)
   const [preference, setPreference] = useState<JarvisPreference | null>(null)
-  const [timeline, setTimeline] = useState<readonly TimelineEntry[]>([])
-  const [input, setInput] = useState('')
   const voice = useJarvisVoiceSnapshot()
-  const voiceActive = voice.active
-  const voiceStatus = voice.status === 'paused' ? 'sleeping' : voice.status
-  const voiceError = voice.error
-  const voiceFramed = voice.framed
-  const voiceBlock = voice.block
-  const muted = voice.muted
-  const [paused, setPaused] = useState(false)
-  const [pendingStoreAction, setPendingStoreAction] = useState<{ actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>>; timelineId: string } | null>(null)
-  const messageScroll = useRef<HTMLDivElement | null>(null)
+
+  // Voice callbacks are registered once per session, so live values are read
+  // through refs instead of stale closures.
+  const sessionRef = useRef<JarvisSession | null>(null)
+  const pageRef = useRef(page)
+  const preferenceRef = useRef<JarvisPreference | null>(null)
+  const pendingActionRef = useRef<PendingAction | null>(null)
+  const briefedPages = useRef(new Set<string>())
+  const lastBriefingAt = useRef(0)
+  const busy = useRef(false)
   const standaloneUrl = useMemo(() => typeof window === 'undefined' ? '/' : standaloneAppUrl(window.location), [])
 
+  useEffect(() => { sessionRef.current = session }, [session])
+  useEffect(() => { pageRef.current = page }, [page])
+  useEffect(() => { preferenceRef.current = preference }, [preference])
+
+  const speak = useCallback((text: string, language: 'en' | 'hi' = 'en') => {
+    const spoken = text.trim()
+    if (!spoken) return
+    jarvisVoiceController.speak({ text: spoken, language })
+  }, [])
+
+  /** Starts (or restores) the secure Jarvis session for this store. */
   useEffect(() => {
     if (!open || !context.storeId) return
     let cancelled = false
     const storeId = context.storeId
     setSession(null)
-    setTimeline([])
     dispatchLifecycle({ type: 'start' })
     void fetchBilling(storeId).catch(() => null).then((account) => {
       const rawPlan = account?.subscription?.plan?.toLowerCase()
       const plan: JarvisSession['plan'] = rawPlan === 'commander' ? 'commander' : rawPlan === 'growth' ? 'growth' : rawPlan === 'start' ? 'start' : 'trial'
-      const briefing = new Date().getHours() < 12 && (plan === 'growth' || plan === 'commander') ? fetchJarvisBriefing(storeId, page, plan) : Promise.resolve(null)
-      return Promise.all([startJarvisSession(storeId, page, plan), fetchJarvisPreferences(storeId), briefing])
-    }).then(async ([started, preferences, morning]) => {
-      const active = morning?.session ?? started
-      const persisted = await fetchJarvisMessages(storeId, active.id).catch(() => [] as readonly JarvisMessage[])
-      if (!cancelled) {
-        setSession(active)
-        setPreference(preferences)
-        onPreferenceChange?.(preferences)
-        setTimeline(persisted.map(timelineFromPersisted))
-        dispatchLifecycle({ type: 'ready' })
-      }
+      return Promise.all([startJarvisSession(storeId, pageRef.current, plan), fetchJarvisPreferences(storeId)])
+    }).then(([started, preferences]) => {
+      if (cancelled) return
+      setSession(started)
+      sessionRef.current = started
+      setPreference(preferences)
+      preferenceRef.current = preferences
+      onPreferenceChange?.(preferences)
+      jarvisVoiceController.setLanguage(preferences.language === 'hi' ? 'hi' : 'en')
+      dispatchLifecycle({ type: 'ready' })
     }).catch((error: unknown) => {
-      if (!cancelled) {
-        const message = error instanceof Error ? error.message : 'Jarvis could not start.'
-        dispatchLifecycle({ type: 'failed', message })
-        onToast(message, 'error')
-      }
+      if (cancelled) return
+      const message = error instanceof Error ? error.message : 'Jarvis could not start.'
+      dispatchLifecycle({ type: 'failed', message })
+      onToast(message, 'error')
     })
     return () => { cancelled = true }
-  }, [open, context.storeId, page, startAttempt])
+    // onToast/onPreferenceChange are stable callbacks from the shell.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, context.storeId, startAttempt])
 
-  useEffect(() => { if (open && session) setSession((current) => current ? { ...current, lastPage: page } : current) }, [open, page, session?.id])
-  useEffect(() => { messageScroll.current?.scrollTo({ top: messageScroll.current.scrollHeight, behavior: 'smooth' }) }, [timeline.length, voiceActive])
+  /** One voice turn: merchant speaks, Jarvis answers (and may act). */
+  const handleTranscript = useCallback(async (transcript: string) => {
+    const active = sessionRef.current
+    const storeId = context.storeId
+    const spokenLanguage: 'en' | 'hi' = detectSpokenLanguage(transcript, preferenceRef.current?.language ?? 'auto')
+    if (!active || !storeId) { speak('Give me a moment — I am still connecting to your store.', spokenLanguage); return }
+    if (busy.current) return
+    busy.current = true
 
-  const send = async (text = input, fromVoice = false) => {
-    if (lifecycle.status !== 'ready') {
-      onToast(lifecycle.status === 'starting' ? 'Jarvis is starting… Please wait until the session is ready.' : 'Jarvis is not ready. Use Retry to restore the session.', 'info')
-      return
-    }
-    if (!context.storeId || !session || !text.trim()) return
-    const cleanText = text.trim()
-    const language = preference?.language === 'hi' || /[\u0900-\u097F]|\b(kya|mujhe|dikhao|bhej|aaj|kal)\b/i.test(cleanText) ? 'hi' : 'en'
-    setInput('')
-    setTimeline((current) => [...current, { id: `merchant-${Date.now()}-${current.length}`, role: 'merchant', text: cleanText, language, mode: 'ASK', evidence: null, action: null, status: null, createdAt: Date.now() }])
-    if (fromVoice) jarvisVoiceController.setProcessing()
-    const pendingId = `jarvis-${Date.now()}-pending`
-    setTimeline((current) => [...current, { id: pendingId, role: 'jarvis', text: '', language, mode: 'ASK', evidence: null, action: null, status: null, createdAt: Date.now(), pending: true }])
-    const applyResponse = (response: JarvisResponse) => {
-      setSession(response.session)
-      const entry = timelineFromResponse(response)
-      // If the model proposed a Commander write action (emitted as a structured
-      // @jarvis:action line), surface a confirmation card rather than showing
-      // the raw protocol line. The backend re-checks the plan before running.
-      const proposed = extractProposedAction(entry.text)
-      setTimeline((current) => current.map((item) => item.id === pendingId ? { ...entry, id: pendingId, text: proposed ? proposed.cleanText : entry.text, action: proposed ? { id: proposed.actionId, recommendationId: typeof proposed.parameters.recommendationId === 'string' ? proposed.parameters.recommendationId : null, actionType: proposed.actionId, label: actionLabel(proposed.actionId), risk: 'APPROVAL_REQUIRED', undoWindowSeconds: 120, requiresVoiceConfirmation: false } : item.action } : item))
-      if (proposed) setPendingStoreAction({ actionId: proposed.actionId, parameters: proposed.parameters, timelineId: pendingId })
-      dispatchLifecycle({ type: 'recover' })
-      if (response.showEvidence) onEvidence(response.evidence)
-      return response
-    }
+    const pending = pendingActionRef.current
     try {
-      let response: JarvisResponse
-      if (fromVoice) response = await sendJarvisMessage(context.storeId, session.id, cleanText, page, fromVoice)
-      else response = await streamJarvisMessage(context.storeId, session.id, cleanText, page, (fullText) => setTimeline((current) => current.map((entry) => entry.id === pendingId ? { ...entry, text: fullText } : entry)))
-      applyResponse(response)
-      if (fromVoice) {
-        jarvisVoiceController.speak({ text: response.text, language: response.language, muted }, () => {
-          // After Jarvis finishes speaking, resume background listening so the
-          // floating widget keeps the conversation going across navigations.
-          resumeJarvisListening(response.language)
-        })
+      if (pending && isCancellation(transcript)) {
+        pendingActionRef.current = null
+        speak(spokenLanguage === 'hi' ? 'Theek hai, maine wo nahi kiya.' : "Alright, I've left it.", spokenLanguage)
+        return
       }
-    } catch (error: unknown) {
-      if (!fromVoice) {
-        try {
-          applyResponse(await sendJarvisMessage(context.storeId, session.id, cleanText, page, false))
-          return
-        } catch { /* fall through to the error path */ }
+      if (pending && isConfirmation(transcript)) {
+        const result = await invokeJarvisStoreAction(storeId, active.id, pending.actionId, pending.parameters, true)
+        pendingActionRef.current = result.status === 'ACTION_PENDING' || result.status === 'CLARIFY' ? pending : null
+        setSession(result.session)
+        speak(result.text, result.language)
+        return
       }
-      const message = error instanceof Error ? error.message : 'Jarvis could not answer.'
-      setTimeline((current) => current.map((entry) => entry.id === pendingId ? { ...entry, text: message, status: 'DEGRADED' } : entry))
-      if (fromVoice) onToast(message, 'error')
-      onToast(message, 'error')
-    }
-  }
 
-  const beginVoice = () => {
-    if (lifecycle.status !== 'ready') { onToast(lifecycle.status === 'starting' ? 'Jarvis is starting… Voice will unlock when ready.' : 'Jarvis voice is unavailable until you retry the session.', 'info'); return }
+      jarvisVoiceController.setProcessing()
+      const response = await sendJarvisMessage(storeId, active.id, transcript, pageRef.current, true)
+      setSession(response.session)
+      await deliver(response, storeId, spokenLanguage)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Something went wrong.'
+      onToast(message, 'error')
+      speak(spokenLanguage === 'hi' ? 'Maaf kijiye, abhi jawab nahi mil paya. Ek baar phir poochhiye.' : "Sorry, I couldn't get that answer just now. Please ask me again.", spokenLanguage)
+    } finally {
+      busy.current = false
+    }
+
+    /** Speaks a reply and runs whatever the model proposed alongside it. */
+    async function deliver(response: JarvisResponse, storeIdValue: string, fallbackLanguage: 'en' | 'hi'): Promise<void> {
+      const language = response.language ?? fallbackLanguage
+      const proposed = extractProposedAction(response.text)
+      if (!proposed) { speak(response.text, language); return }
+
+      // Navigation never touches store data, so the browser just does it.
+      if (proposed.actionId === 'navigate_page') {
+        const target = resolveNavigationTarget(String(proposed.parameters.page ?? ''))
+        if (!target) { speak(proposed.cleanText || (language === 'hi' ? 'Wo page mujhe nahi mila.' : "I couldn't find that page."), language); return }
+        onNavigate?.(target)
+        briefedPages.current.add(target)
+        lastBriefingAt.current = Date.now()
+        speak(proposed.cleanText || (language === 'hi' ? `${pageTitle(target)} page khol raha hoon.` : `Opening ${pageTitle(target)}.`), language)
+        return
+      }
+
+      const acknowledgement = await invokeJarvisStoreAction(storeIdValue, sessionRef.current?.id ?? '', proposed.actionId, proposed.parameters, false)
+      setSession(acknowledgement.session)
+      // ACTION_PENDING = waiting for a spoken "confirm"; CLARIFY = Jarvis asked
+      // for a missing detail and will retry once the merchant answers.
+      pendingActionRef.current = acknowledgement.status === 'ACTION_PENDING' ? proposed : null
+      speak(joinSpoken(proposed.cleanText, acknowledgement.text), acknowledgement.language ?? language)
+    }
+  }, [context.storeId, onNavigate, onToast, speak])
+
+  const beginVoice = useCallback(() => {
+    if (typeof window === 'undefined') return
     const preflight = microphonePreflight(window, document, navigator)
     jarvisVoiceController.setBlock(preflight.code === 'ready' ? null : preflight.code, preflight.framed)
-    if (!preflight.allowed) {
-      onToast(preflight.message ?? 'Microphone is unavailable here.', 'warning')
-      return
-    }
-    if (!speechRecognitionAvailable(window)) { onToast('Native voice input is not available in this browser. Chat mode remains available.', 'warning'); return }
-    const language: 'en' | 'hi' = preference?.language === 'hi' ? 'hi' : 'en'
+    const canListen = preflight.allowed && speechRecognitionAvailable(window)
+    if (!preflight.allowed) onToast(preflight.framed ? 'Microphone is blocked inside Shopify admin. Open ProfitPilot in a new tab to talk to Jarvis.' : preflight.message ?? 'Microphone is unavailable here.', 'warning')
+    else if (!canListen) onToast('This browser cannot listen. Jarvis will still speak; use Chrome or Edge to talk back.', 'info')
+    if (!speechSynthesisAvailable(window)) onToast('This browser has no speech output, so Jarvis cannot talk here.', 'warning')
     jarvisVoiceController.start({
-      language,
-      onTranscript: (transcript) => void send(transcript, true),
+      language: preferenceRef.current?.language === 'hi' ? 'hi' : 'en',
+      listen: canListen,
+      onTranscript: (transcript) => { void handleTranscript(transcript) },
       onError: (message) => onToast(message, 'warning'),
     })
+  }, [handleTranscript, onToast])
+
+  /** Opening the orb starts the voice session inside the click gesture. */
+  const openJarvis = useCallback(() => {
+    onOpen()
+    if (!jarvisVoiceController.active) beginVoice()
+  }, [beginVoice, onOpen])
+
+  const closeJarvis = useCallback(() => {
+    pendingActionRef.current = null
+    briefedPages.current.clear()
+    jarvisVoiceController.stop()
+    const active = sessionRef.current
+    if (context.storeId && active) void setJarvisState(context.storeId, active.id, 'end').catch(() => undefined)
+    onClose()
+  }, [context.storeId, onClose])
+
+  const toggleMic = useCallback(() => {
+    if (!jarvisVoiceController.active) { beginVoice(); return }
+    jarvisVoiceController.setMicEnabled(!jarvisVoiceController.micEnabled)
+  }, [beginVoice])
+
+  const togglePause = useCallback(() => {
+    const next = !jarvisVoiceController.paused
+    jarvisVoiceController.setPaused(next)
+    const active = sessionRef.current
+    if (context.storeId && active) void setJarvisState(context.storeId, active.id, next ? 'pause' : 'resume').then(setSession).catch(() => undefined)
+  }, [context.storeId])
+
+  /**
+   * Page-aware briefing. Deliberately conservative: once per page, once a
+   * minute at most, never while paused, muted, mid-answer, or when the
+   * merchant has asked Jarvis to only speak when spoken to.
+   */
+  useEffect(() => {
+    if (!open || !context.storeId || lifecycle.status !== 'ready' || !session) return
+    if (!voice.active || voice.paused || voice.muted) return
+    if (voice.status === 'processing' || voice.status === 'speaking') return
+    if (!briefingAllowed(preference, Date.now())) return
+    if (briefedPages.current.has(page)) return
+    if (Date.now() - lastBriefingAt.current < BRIEFING_COOLDOWN_MS) return
+    const storeId = context.storeId
+    const plan = session.plan
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled || busy.current || jarvisVoiceController.paused) return
+      briefedPages.current.add(page)
+      lastBriefingAt.current = Date.now()
+      void fetchJarvisBriefing(storeId, page, plan)
+        .then((briefing) => { if (!cancelled && briefing.text.trim() && briefing.status !== 'SUPPRESSED') speak(briefing.text, briefing.language) })
+        .catch(() => undefined)
+    }, BRIEFING_DELAY_MS)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [open, context.storeId, lifecycle.status, session, page, preference, voice.active, voice.paused, voice.muted, voice.status, speak])
+
+  /** Ending the session releases the microphone and the speech queue. */
+  useEffect(() => () => { jarvisVoiceController.stop() }, [])
+
+  const barStatus = voice.paused ? 'paused' : voice.status
+  const orbState: JarvisOrbState = lifecycle.status === 'starting' && open ? 'activating' : lifecycle.status === 'failed' || lifecycle.status === 'error' ? 'warning' : orbStateFor(barStatus)
+  const blocked = voice.block !== null
+  const detail = voice.error ?? (blocked ? `${voiceBlockMessage(voice.block!)} — open ${standaloneUrl} in a new tab` : lifecycle.status === 'starting' ? 'Connecting to your store…' : 'Drag to move')
+
+  if (!open) {
+    return (
+      <button className="jarvis-orb-wrap" onClick={openJarvis} aria-label="Open Jarvis voice assistant">
+        <JarvisOrb state="idle" size={64} label="Open Jarvis" />
+        <span className="jarvis-orb-label">Jarvis</span>
+      </button>
+    )
   }
 
-  const toggleVoice = () => {
-    if (voiceActive) jarvisVoiceController.stop()
-    else beginVoice()
+  if (!context.storeId) {
+    return (
+      <button className="jarvis-orb-wrap" onClick={onOpen} aria-label="Connect Shopify before using Jarvis">
+        <JarvisOrb state="warning" size={64} label="Connect Shopify for Jarvis" />
+        <span className="jarvis-orb-label">Connect Shopify</span>
+      </button>
+    )
   }
-  const updatePreference = async (patch: Readonly<Partial<JarvisPreference>>) => { if (!context.storeId) return; try { const next = await saveJarvisPreferences({ ...patch, storeId: context.storeId }); setPreference(next); onPreferenceChange?.(next) } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Jarvis preference could not be saved.', 'error') } }
-  const confirmAction = async (actionId: string) => { if (!context.storeId || !session) return; try { const response = await confirmJarvisAction(context.storeId, session.id, actionId); setSession(response.session); setTimeline((current) => [...current, timelineFromResponse(response)]); if (response.showEvidence) onEvidence() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Jarvis action was not confirmed.', 'error') } }
-  const confirmProposedAction = async () => {
-    if (!pendingStoreAction || !context.storeId || !session) return
-    const { actionId, parameters, timelineId } = pendingStoreAction
-    setPendingStoreAction(null)
-    try {
-      const response = await invokeJarvisStoreAction(context.storeId, session.id, actionId, parameters, true)
-      setSession(response.session)
-      setTimeline((current) => current.map((entry) => entry.id === timelineId ? { ...timelineFromResponse(response), id: timelineId, action: null } : entry))
-    } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : 'The action could not be completed.', 'error')
-    }
-  }
-  const pause = async () => { if (!context.storeId || !session) return; const next = await setJarvisState(context.storeId, session.id, paused ? 'resume' : 'pause'); setSession(next); setPaused(!paused); jarvisVoiceController.setPaused(!paused) }
-  // Closing the chat panel must NOT stop an active voice session — the floating
-  // widget takes over so voice keeps listening across page navigations.
-  const closePanel = () => { onClose() }
-  const stopVoice = () => { jarvisVoiceController.stop(); setPaused(false) }
-  const toggleMute = () => jarvisVoiceController.setMuted(!muted)
-  const reopenPanel = () => onOpen()
-  const retry = () => { if (session && lifecycle.status === 'error') dispatchLifecycle({ type: 'recover' }); else setStartAttempt((attempt) => attempt + 1) }
-  const isReady = lifecycle.status === 'ready'
-  const address = preference?.addressing ?? 'Sir'
-  const orbState = jarvisOrbState(lifecycle, voiceStatus, paused)
 
-  const floatingWidget = <FloatingVoiceWidget visible={voiceActive && voiceBlock === null} address={address} paused={paused} onPause={() => void pause()} onResume={() => void pause()} onClose={stopVoice} onOpenPanel={reopenPanel} />
-  if (!open) return <>
-    <button className="jarvis-orb-wrap" onClick={onOpen} aria-label="Open Jarvis"><JarvisOrb state="idle" size={48} label="Open Jarvis" /><span className="jarvis-orb-label">Jarvis</span></button>
-    {floatingWidget}
-  </>
-  if (!context.storeId) return <>
-    <button className="jarvis-orb-wrap" onClick={onOpen} aria-label="Connect Shopify before opening Jarvis"><JarvisOrb state="warning" size={48} label="Connect Shopify for Jarvis" /><span className="jarvis-orb-label">Connect Shopify</span></button>
-    {floatingWidget}
-  </>
-
-  return <>
-    <aside className="jarvis-panel f8-jarvis-panel" aria-busy={lifecycle.status === 'starting'}>
-      <div className="jarvis-panel-header"><div className="jarvis-title"><JarvisOrb state={orbState} size={31} label={`Jarvis ${orbState}`} /><span><strong>Jarvis</strong><small>{lifecycle.status === 'starting' ? 'Starting session…' : lifecycle.status === 'ready' ? `${address} · ${page}-aware` : 'Session unavailable'}</small></span><span className={`phase-tag ${isReady ? '' : 'warning'}`}>{lifecycle.status.toUpperCase()}</span></div><button className="icon-button" onClick={toggleMute} aria-label={muted ? 'Unmute Jarvis' : 'Mute Jarvis'} title={muted ? 'Unmute Jarvis' : 'Mute Jarvis'}>{muted ? <VolumeX size={16} /> : <Volume2 size={16} />}</button><button className="icon-button" onClick={closePanel} aria-label="Close Jarvis panel"><X size={18} /></button></div>
-      <div className="jarvis-context"><span><ShieldCheck size={13} /> Grounded evidence only</span><span>{preference?.engagementMode ?? 'balanced'}</span></div>
-      <div className="jarvis-messages f8-message-scroll" ref={messageScroll}>
-        {!isReady && <JarvisReadiness lifecycle={lifecycle} onRetry={retry} />}
-        {isReady && timeline.length === 0 && <div className="jarvis-message"><span className="message-orb"><Sparkles size={12} /></span><p>{greetingForPage(page, address)} Ask me in English or Hindi. Try “Mujhe dikhao” after I surface an opportunity.</p></div>}
-{timeline.map((message) => <div className={`jarvis-message ${message.role === 'merchant' ? 'merchant-message' : ''} ${message.mode === 'ACTION' ? 'jarvis-action-message' : ''}`} key={message.id}>{message.role === 'jarvis' && <span className="message-orb"><Sparkles size={12} /></span>}<div>{message.pending && !message.text ? <span className="typing-dots" aria-label="Jarvis is typing"><i /><i /><i /></span> : <p>{message.text}</p>}{message.status === 'DEGRADED' && <span className="degraded-indicator" title="AI temporarily unavailable, showing safe fallback"><AlertTriangle size={11} /> Safe fallback</span>}{message.action && <div className="jarvis-action-card"><strong>{message.action.label}</strong><small>{message.action.risk} · undo {message.action.undoWindowSeconds}s</small>{pendingStoreAction && pendingStoreAction.timelineId === message.id ? <div className="jarvis-action-confirm"><button className="button primary" onClick={() => void confirmProposedAction()}>Confirm action</button><button className="button secondary" onClick={() => setPendingStoreAction(null)}>Cancel</button></div> : <button className="button secondary" onClick={() => void confirmAction(message.action!.id)} disabled={message.status === 'ACTION_UNAVAILABLE'}>Bhej do</button>}</div>}</div></div>)}
-      </div>
-      {voiceActive && <section className="jarvis-voice-inline" aria-label="Jarvis voice controls">
-        <JarvisOrb state={orbState} size={48} label={`Voice ${voiceStatus}`} />
-        <div className="voice-inline-copy"><strong>{voiceStatus === 'listening' ? `Listening, ${address}…` : voiceStatus === 'processing' ? 'Checking grounded evidence…' : voiceStatus === 'speaking' ? 'Speaking…' : voiceError ? 'Voice is unavailable here' : 'Voice is ready'}</strong><span>{voiceError ?? 'Spoken transcripts and replies stay in this chat.'}</span>{voiceFramed && voiceError && <a className="button primary open-standalone" href={standaloneUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Open in new tab</a>}</div>
-        <button className="icon-button voice-stop" onClick={stopVoice} aria-label="Turn voice off"><X size={15} /></button>
-      </section>}
-      <div className="jarvis-suggestions f8-suggestions"><button disabled={!isReady} onClick={() => void send('What needs my attention on this page?')}>Page briefing</button><button disabled={!isReady} onClick={() => void send('Mujhe dikhao')}>Mujhe dikhao</button><button disabled={!isReady || voiceBlock !== null} title={voiceBlock !== null ? voiceBlockMessage(voiceBlock) : undefined} onClick={toggleVoice}><Headphones size={12} /> {voiceActive ? 'Voice off' : 'Voice'}</button></div>
-      <form className="jarvis-composer" onSubmit={(event) => { event.preventDefault(); void send() }}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={isReady ? `Ask Jarvis, ${address}…` : 'Jarvis is starting…'} rows={2} aria-label="Message Jarvis" disabled={!isReady} /><div className="jarvis-composer-actions"><button type="button" className={`icon-button ${voiceActive ? 'voice-active' : ''}`} onClick={toggleVoice} disabled={!isReady || voiceBlock !== null} title={voiceBlock !== null ? voiceBlockMessage(voiceBlock) : undefined} aria-label={voiceActive ? 'Stop voice input' : 'Start voice input'}><Mic size={16} /></button><span>{!isReady ? 'Jarvis is starting…' : `English + Hindi · ${page}`}</span><button type="submit" className="send-button" disabled={!isReady || !input.trim()} aria-label="Send message"><Send size={15} /></button></div></form>
-      <div className="jarvis-panel-footer"><span><ShieldCheck size={12} /> No PII to AI</span><label className="f8-pref-select">Address<select aria-label="Jarvis addressing" value={preference?.addressing ?? 'Sir'} onChange={(event) => void updatePreference({ addressing: event.target.value as JarvisAddressing })}><option>Sir</option><option>Ma'am</option><option>Boss</option><option>Miss</option></select></label><label className="f8-pref-select">Mode<select aria-label="Jarvis engagement mode" value={preference?.engagementMode ?? 'balanced'} onChange={(event) => void updatePreference({ engagementMode: event.target.value as JarvisPreference['engagementMode'] })}><option value="proactive">Proactive</option><option value="balanced">Balanced</option><option value="quiet">Quiet</option><option value="answer-only">Answer-only</option></select></label><button onClick={() => void pause()} disabled={!isReady}>{paused ? 'Resume' : '5 min quiet'}</button></div>
-    </aside>
-    {floatingWidget}
-  </>
+  return (
+    <JarvisVoiceBar
+      visible
+      status={barStatus}
+      orbState={orbState}
+      micEnabled={voice.micEnabled}
+      paused={voice.paused}
+      label={lifecycle.status === 'starting' ? 'Starting' : lifecycle.status === 'failed' || lifecycle.status === 'error' ? 'Reconnect' : statusLabel(barStatus, voice.micEnabled, voice.paused)}
+      detail={detail}
+      onToggleMic={lifecycle.status === 'failed' || lifecycle.status === 'error' ? () => setStartAttempt((attempt) => attempt + 1) : toggleMic}
+      onTogglePause={togglePause}
+      onClose={closeJarvis}
+    />
+  )
 }
 
-function timelineFromPersisted(message: JarvisMessage): TimelineEntry { return { id: message.id, role: message.role, text: message.text, language: message.language, mode: message.mode, evidence: message.evidence, action: null, status: null, createdAt: message.createdAt } }
-function timelineFromResponse(response: JarvisResponse): TimelineEntry { return { id: `jarvis-${Date.now()}-${Math.random().toString(36).slice(2)}`, role: 'jarvis', text: response.text, language: response.language, mode: response.mode, evidence: response.evidence, action: response.action, status: response.status, createdAt: Date.now() } }
-function jarvisOrbState(lifecycle: JarvisSessionLifecycle, voiceStatus: VoiceStatus, paused: boolean): JarvisOrbState {
-  if (lifecycle.status === 'starting') return 'activating'
-  if (lifecycle.status === 'failed' || lifecycle.status === 'error' || voiceStatus === 'error') return 'warning'
-  if (paused || voiceStatus === 'sleeping') return 'sleeping'
-  if (voiceStatus === 'listening') return 'listening'
-  if (voiceStatus === 'processing') return 'thinking'
-  if (voiceStatus === 'speaking') return 'speaking'
-  return 'idle'
+/** Proactive speech is a privilege, not a default: preferences decide. */
+export function briefingAllowed(preference: JarvisPreference | null, now: number): boolean {
+  if (!preference) return true
+  if (preference.onlyAnswerWhenAsked) return false
+  if (preference.engagementMode === 'quiet' || preference.engagementMode === 'answer-only') return false
+  return preference.silenceUntil === null || preference.silenceUntil <= now
 }
 
-type JarvisReadinessProps = Readonly<{ lifecycle: JarvisSessionLifecycle; onRetry: () => void }>
-function JarvisReadiness({ lifecycle, onRetry }: JarvisReadinessProps) {
-  if (lifecycle.status === 'starting') return <div className="jarvis-readiness starting" role="status"><LoaderCircle className="spin" size={18} /><div><strong>Jarvis is starting…</strong><span>Chat and voice will unlock when your secure session is ready.</span></div></div>
-  return <div className="jarvis-readiness error" role="alert"><ShieldCheck size={18} /><div><strong>{lifecycle.status === 'failed' ? 'Jarvis could not start' : 'Jarvis needs your attention'}</strong><span>{lifecycle.error ?? 'The session is unavailable. Try again.'}</span><button className="button secondary" onClick={onRetry}>Retry Jarvis</button></div></div>
+/** Merchants say "products page", "le chalo orders", "open my inventory". */
+const NAVIGATION_TARGETS: Readonly<Record<string, string>> = {
+  dashboard: 'dashboard', home: 'dashboard', overview: 'dashboard',
+  products: 'products', product: 'products', catalog: 'products',
+  inventory: 'inventory', stock: 'inventory',
+  orders: 'orders', order: 'orders',
+  customers: 'customers', customer: 'customers',
+  analytics: 'analytics', reports: 'reports', report: 'reports',
+  automation: 'automation', automations: 'automation', workflows: 'automation', workflow: 'automation',
+  recommendations: 'recommendations', recommendation: 'recommendations',
+  billing: 'billing', plans: 'billing', subscription: 'billing',
+  settings: 'settings', support: 'support', help: 'support',
+  'ai-command': 'ai-command', aicommand: 'ai-command', command: 'ai-command',
+  exports: 'exports', export: 'exports',
 }
 
-function greetingForPage(page: string, address: string): string { return `${address}, I’m ready to help with your ${page} workspace.` }
+export function resolveNavigationTarget(raw: string): string | null {
+  const cleaned = raw.trim().toLowerCase().replace(/\s*page\s*$/, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+  if (!cleaned) return null
+  return NAVIGATION_TARGETS[cleaned] ?? NAVIGATION_TARGETS[cleaned.replace(/-/g, '')] ?? null
+}
+
+function pageTitle(page: string): string { return page.replace(/-/g, ' ') }
+
+/** Hindi/Hinglish is detected from what the merchant actually said. */
+export function detectSpokenLanguage(text: string, preference: 'en' | 'hi' | 'auto'): 'en' | 'hi' {
+  if (preference === 'hi') return 'hi'
+  if (preference === 'en') return 'en'
+  return /[\u0900-\u097F]/.test(text) || /\b(kya|mujhe|dikhao|bhej|bhejo|kaise|kitna|kitne|batao|karo|chahiye|nahi|haan)\b/i.test(text) ? 'hi' : 'en'
+}
+
+export function isConfirmation(text: string): boolean {
+  return /\b(confirm|yes|yeah|yep|sure|ok|okay|go ahead|do it|please do|haan|han|ji|kar do|kardo|karo|theek hai|thik hai|bilkul)\b/i.test(text)
+}
+
+export function isCancellation(text: string): boolean {
+  return /\b(no|nope|cancel|stop|don'?t|do not|forget it|nahi|nahin|mat karo|rehne do|chhodo)\b/i.test(text)
+}
+
+function joinSpoken(...parts: readonly string[]): string {
+  return parts.map((part) => part.trim()).filter(Boolean).join(' ')
+}
 
 /**
- * Extracts a structured `@jarvis:action {...}` line the model may append to a
- * Commander reply. Returns the cleaned (human-visible) text plus the parsed
- * invocation, or null when no action is proposed.
+ * Extracts the structured `@jarvis:action {...}` line the model may append to a
+ * reply. The line is never spoken — only the human sentence before it is.
  */
-function extractProposedAction(text: string): { cleanText: string; actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>> } | null {
+export function extractProposedAction(text: string): { cleanText: string; actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>> } | null {
   const match = text.match(/@jarvis:action\s*(\{.*?\})\s*$/s)
   if (!match) return null
   let payload: unknown
@@ -240,17 +352,11 @@ function extractProposedAction(text: string): { cleanText: string; actionId: str
   return { cleanText: text.slice(0, match.index).trim(), actionId, parameters }
 }
 
-function actionLabel(actionId: string): string {
-  if (actionId === 'approve_recommendation') return 'Approve recommendation'
-  if (actionId === 'reject_recommendation') return 'Reject recommendation'
-  if (actionId === 'trigger_sync') return 'Sync store data'
-  return actionId.replace(/_/g, ' ')
-}
-function voiceBlockMessage(code: 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable'): string {
-  if (code === 'embedded-policy') return 'Voice needs a new tab — microphone is blocked in this embedded view'
+export function voiceBlockMessage(code: 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable'): string {
+  if (code === 'embedded-policy') return 'Microphone is blocked in this embedded view'
   if (code === 'insecure') return 'Voice needs a secure HTTPS connection'
   if (code === 'policy-denied') return 'Microphone access is blocked by this page policy'
-  return 'This browser does not expose a microphone — chat remains available'
+  return 'This browser does not expose a microphone'
 }
 
 type CopilotWorkspaceProps = Readonly<{ context: WorkspaceContext }>
