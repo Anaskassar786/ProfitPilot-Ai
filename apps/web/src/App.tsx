@@ -129,6 +129,13 @@ import { AiCommandIcon } from './ai-command-logo.js'
 import { SettingsPage } from './settings.js'
 import { SETTINGS_EVENT, readWorkspaceSettings } from './settings-model.js'
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * 🛑 Jarvis TEMPORARILY REMOVED from product navigation (Aug 2026).
+ *    To restore: uncomment the `jarvis` item below in the 'AI employee'
+ *    group and add its entry back in `pageMeta` & `PageRouter`.
+ *    All existing Jarvis code, components, routes, APIs, and logic
+ *    remain preserved — nothing was deleted.
+ * ═══════════════════════════════════════════════════════════════════════ */
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
     label: 'Overview',
@@ -148,7 +155,8 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon, tag: 'AI', badge: 'NEW' },
-      { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon, tag: 'Voice' },
+      /* 🛑 Jarvis nav item temporarily removed — restore when Jarvis returns */
+      // { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon, tag: 'Voice' },
     ],
   },
   {
@@ -172,6 +180,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   },
 ]
 
+/* 🛑 Jarvis pageMeta entry temporarily removed — restore when Jarvis returns */
 const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: SectionIcon }>>> = {
   dashboard: { title: 'Dashboard', description: 'A clear view of the store data ProfitPilot is receiving.', icon: LayoutDashboard },
   products: { title: 'Products', description: 'Catalog records synced from Shopify, with no invented inventory.', icon: Package },
@@ -189,6 +198,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: AiCommandIcon },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
+  /* 🛑 Jarvis page — data preserved for type safety but not rendered in UI (removed from navGroups & PageRouter) */
   jarvis: { title: 'Jarvis', description: 'Your spoken store assistant — page-aware briefings, no chat box.', icon: JarvisNavIcon },
   reports: { title: 'Business Reports', description: 'Generate professional reports from your real store data.', icon: FileBarChart },
   exports: { title: 'Data Exports', description: 'Download your real store data anytime — orders, products, activity, and revenue.', icon: Download },
@@ -215,7 +225,8 @@ export default function App() {
   // /ai-growth-command/insights* paths still resolve); its sub-tabs manage
   // their own detail segments from there.
   const [activePage, setActivePage] = useState<SectionId>(() => {
-    if (window.location.hash.startsWith('#/jarvis')) return 'jarvis'
+    /* 🛑 Jarvis hash routing temporarily removed */
+    // if (window.location.hash.startsWith('#/jarvis')) return 'jarvis'
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
@@ -419,7 +430,8 @@ export default function App() {
     // not bounce back; entering it establishes the base route for deep links.
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
-      else if (next === 'jarvis') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/jarvis`)
+      /* 🛑 Jarvis hash navigation temporarily removed */
+      // else if (next === 'jarvis') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/jarvis`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
       else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/growthiq`)
       else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
@@ -437,7 +449,7 @@ export default function App() {
       const onExecutive = isGrowthIqLocation(window.location.pathname, window.location.hash)
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'jarvis' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' /* 🛑 || current === 'jarvis' */ || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -543,8 +555,10 @@ export default function App() {
           />
         </div>
       </main>
-      <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} />
-      {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />}
+      {/* 🛑 JarvisExperience temporarily removed from UI — restore when Jarvis returns */}
+      {/* <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} /> */}
+      {/* 🛑 Passive recommendation card temporarily removed — restore when Jarvis returns */}
+      {/* {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />} */}
       {notificationsOpen && <NotificationDrawer recommendations={data.recommendations} unreadIds={unreadNotificationIds} onOpenRecommendation={(id) => { setReadNotificationIds((current) => new Set([...current, id])); persistReadNotifications([...readNotificationIds, id]); setNotificationsOpen(false); navigate('recommendations') }} onMarkAllRead={() => { const all = data.recommendations.filter((item) => item.status === 'PENDING').map((item) => item.id); setReadNotificationIds(new Set([...readNotificationIds, ...all])); persistReadNotifications([...readNotificationIds, ...all]) }} onClose={() => setNotificationsOpen(false)} />}
       {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
       {/* PR #46: the global drawer only ever shows an explicitly selected
@@ -638,7 +652,8 @@ function PageRouter({
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} onToast={onToast} workspaceSettings={workspaceSettings} /></PageLayout>
+  /* 🛑 Jarvis page route temporarily removed — restore when Jarvis returns */
+  // if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} onToast={onToast} workspaceSettings={workspaceSettings} /></PageLayout>
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
@@ -835,7 +850,10 @@ function BillingPage({ context, onPhaseGate, onToast }: { context: WorkspaceCont
       <div className="billing-current"><div className="billing-plan"><span className="plan-icon"><WalletCards size={19} /></span><div><div className="section-kicker">CURRENT PLAN</div><h2>{account?.subscription ? `${account.subscription.plan} · ${account.subscription.state}` : account?.trial?.state === 'ACTIVE' ? `You're on the Free Trial (${Math.max(0, Math.ceil((account.trial.expiresAt - Date.now()) / 86_400_000))} days remaining)` : 'No active plan — choose a plan below to get started'}</h2><p>{account?.subscription?.currentPeriodEnd ? `Current period ends ${new Date(account.subscription.currentPeriodEnd).toLocaleDateString()}.` : account?.trial?.expiresAt ? `Trial ends ${new Date(account.trial.expiresAt).toLocaleDateString()}. Basic analytics stay available until you choose a plan.` : 'Start a plan or redeem a gift code when you are ready.'}</p></div><span className={`status-badge ${account?.subscription ? 'green' : account?.trial ? 'amber' : 'neutral'}`}>{account?.subscription?.state ?? account?.trial?.state ?? 'Trial'}</span></div></div>
       <div className="billing-grid"><section className="card usage-panel"><CardHeading kicker="Usage meters" dot="blue" title="Current period" />{account?.trial && !account.subscription ? <p className="usage-trial-note">Free trial includes limited analytics. Usage meters fill in after a paid plan starts.</p> : null}{usage.length ? usage.map((meter) => <Quota key={meter.feature} label={meter.feature} value={`${meter.used}${meter.limit === null ? '' : ` / ${meter.limit}`}`} percent={meter.limit ? Math.min(100, meter.used / meter.limit * 100) : 0} />) : <EmptySmall icon={Gauge} text="No usage recorded yet for this period." />}</section><section className="card roi-panel"><CardHeading kicker="Return on AI" dot="gold" title="Verified attribution" /><p className="roi-help">Revenue that can be tied to an approved ProfitPilot action. $0 means no attributed outcomes yet — not a billing error.</p>{roi ? <div className="roi-live"><strong>{formatMoney(roi.attributedRevenue)}</strong><span>AI-attributed revenue</span><div className="roi-breakdown"><MetricLine label="AI operational cost" value={formatMoney(roi.aiCostDollars)} /><MetricLine label="Net return" value={formatMoney(roi.netReturn)} /><MetricLine label="Multiple" value={roi.multiple === null ? '—' : `${roi.multiple.toFixed(1)}×`} /></div></div> : <EmptySmall icon={Sparkles} text="No attributed outcomes yet." />}</section></div>
       <section className="card gift-panel"><div><div className="section-kicker"><Tag size={13} /> GIFT ACCESS</div><h3>Have a gift code?</h3><p>One store can redeem one code. Redemption replaces the limited trial.</p></div><div className="gift-input"><input value={giftCode} onChange={(event) => setGiftCode(event.target.value.toUpperCase())} placeholder="Enter gift code" /><button className="button secondary" onClick={() => void redeem()} disabled={!giftCode.trim()}>Redeem</button></div></section>
-      <div className="plan-comparison"><div className="section-kicker"><span className="kicker-dot purple" /> AVAILABLE PLANS</div><h2>Choose the level of autonomy you need.</h2><div className="plan-cards">{plans.map((plan) => <div className={`plan-card ${plan.recommended ? 'recommended' : ''} ${account?.subscription?.plan === plan.tier ? 'current' : ''}`} key={plan.code}>{plan.recommended && <span className="plan-recommended">Recommended</span>}<h3>{plan.code}</h3><div className="plan-price"><strong>${plan.monthlyPrice}</strong><span>/month</span></div><p>{plan.headline ?? `$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`}</p><ul className="plan-features">{(plan.features ?? [`$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`]).map((feature) => <li key={feature}>{feature}</li>)}</ul><button className="button primary" onClick={() => void startCharge(plan.code)}>{account?.subscription?.plan === plan.tier ? 'Current plan' : 'Choose plan'} <ArrowUpRight size={14} /></button></div>)}</div></div>
+      <div className="plan-comparison"><div className="section-kicker"><span className="kicker-dot purple" /> AVAILABLE PLANS</div><h2>Choose the level of autonomy you need.</h2><div className="plan-cards">{plans.map((plan) => <div className={`plan-card ${plan.recommended ? 'recommended' : ''} ${account?.subscription?.plan === plan.tier ? 'current' : ''}`} key={plan.code}>{plan.recommended && <span className="plan-recommended">Recommended</span>}<h3>{plan.code}</h3><div className="plan-price"><strong>${plan.monthlyPrice}</strong><span>/month</span></div><p>{plan.headline ?? `$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`}</p><ul className="plan-features">{(plan.features ?? [`$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`]).
+              /* 🛑 Jarvis feature references filtered from plan comparison UI — restore when Jarvis returns */
+              filter((feature: string) => !feature.toLowerCase().includes('jarvis')).
+              map((feature: string) => <li key={feature}>{feature}</li>)}</ul><button className="button primary" onClick={() => void startCharge(plan.code)}>{account?.subscription?.plan === plan.tier ? 'Current plan' : 'Choose plan'} <ArrowUpRight size={14} /></button></div>)}</div></div>
     </>}
   </PageLayout>
 }

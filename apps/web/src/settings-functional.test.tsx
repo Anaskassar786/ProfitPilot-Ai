@@ -241,24 +241,20 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
   })
 
   describe('4. AI Preferences tab', () => {
-    it('renames Jarvis, changes mode, and saves assistant preferences', async () => {
+    it('changes assistant mode and saves AI preferences', async () => {
       const container = await mount(true)
       await act(async () => { tabButton(container, 'AI Preferences').click() })
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-      expect(container.textContent).toContain('Floating assistant (Jarvis)')
+      /* 🛑 Jarvis section temporarily hidden — 'Floating assistant (Jarvis)' not visible */
       expect(container.textContent).toContain('Store Coach personality')
       const quiet = Array.from(container.querySelectorAll('.settings-choice')).find((button) => button.textContent?.includes('Quiet')) as HTMLButtonElement
       await act(async () => { quiet.click() })
-      const bubble = container.querySelector('[aria-label="Show floating AI bubble"]') as HTMLButtonElement
-      expect(bubble.getAttribute('aria-checked')).toBe('true')
-      await act(async () => { bubble.click() })
       const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save AI preferences') as HTMLButtonElement
       await act(async () => { save.click() })
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
       expect(toasts).toContain('AI preferences saved.')
       expect(jarvisSaved && jarvisSaved.engagementMode).toBe('quiet')
-      const stored = JSON.parse(window.localStorage.getItem(settingsStorageKey('s1')) ?? '{}') as { bubbleEnabled?: boolean; assistantMode?: string }
-      expect(stored.bubbleEnabled).toBe(false)
+      const stored = JSON.parse(window.localStorage.getItem(settingsStorageKey('s1')) ?? '{}') as { assistantMode?: string }
       expect(stored.assistantMode).toBe('quiet')
     })
 

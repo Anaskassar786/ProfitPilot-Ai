@@ -531,7 +531,8 @@ function AiPreferencesTab({
         </div>
       </SettingsPanel>
 
-      <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The spoken store assistant in the corner of every page. Chat lives in AI Command.">
+      {/* 🛑 Floating assistant (Jarvis) section temporarily removed — restore when Jarvis returns */}
+      {/* <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The spoken store assistant in the corner of every page. Chat lives in AI Command.">
         <ToggleRow
           label="Show floating AI bubble"
           hint="Hide the bubble if you prefer a quieter workspace."
@@ -560,7 +561,7 @@ function AiPreferencesTab({
             </div>
           </SettingRow>
         )}
-      </SettingsPanel>
+      </SettingsPanel> */}
 
       <SettingsPanel icon={Users} title="Store Coach personality" description={`Currently: ${PERSONALITY_META[personality].label}`}>
         <div className="settings-personality">
