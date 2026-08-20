@@ -1,5 +1,5 @@
 .jarvis-particle-orb {
-  --jarvis-orb-size: 48px;
+  --jarvis-orb-size: 64px;
   position: relative;
   display: inline-grid;
   width: var(--jarvis-orb-size);

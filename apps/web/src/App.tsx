@@ -88,6 +88,7 @@ import { AutomationWorkspace } from './automation.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import { JarvisExperience } from './f8.js'
+import { JarvisNavIcon, JarvisWorkspace } from './jarvis-page.js'
 import { ReportsWorkspace } from './reports.js'
 import { AdminOpsWorkspace } from './f9.js'
 import type { JarvisEvidence, JarvisPreference } from './f8-model.js'
@@ -147,6 +148,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
       { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
       { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon, tag: 'AI', badge: 'NEW' },
+      { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon, tag: 'Voice' },
     ],
   },
   {
@@ -187,6 +189,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: AiCommandIcon },
   copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
   'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
+  jarvis: { title: 'Jarvis', description: 'Your spoken store assistant — page-aware briefings, no chat box.', icon: JarvisNavIcon },
   reports: { title: 'Business Reports', description: 'Generate professional reports from your real store data.', icon: FileBarChart },
   exports: { title: 'Data Exports', description: 'Download your real store data anytime — orders, products, activity, and revenue.', icon: Download },
   support: { title: 'Support tickets', description: 'A direct, auditable line to the ProfitPilot team.', icon: LifeBuoy },
@@ -212,6 +215,7 @@ export default function App() {
   // /ai-growth-command/insights* paths still resolve); its sub-tabs manage
   // their own detail segments from there.
   const [activePage, setActivePage] = useState<SectionId>(() => {
+    if (window.location.hash.startsWith('#/jarvis')) return 'jarvis'
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
     if (isAiCommandHash(window.location.hash) || window.location.pathname.startsWith('/ai-command')) return 'ai-command'
@@ -415,6 +419,7 @@ export default function App() {
     // not bounce back; entering it establishes the base route for deep links.
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
+      else if (next === 'jarvis') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/jarvis`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
       else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/growthiq`)
       else if (hashSection(window.location.hash) !== null || isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
@@ -432,7 +437,7 @@ export default function App() {
       const onExecutive = isGrowthIqLocation(window.location.pathname, window.location.hash)
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' || current === 'jarvis' || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -533,10 +538,11 @@ export default function App() {
             onPhaseGate={phaseGate}
             lightMode={lightMode}
             onTheme={() => setLightMode((value) => !value)}
+            onOpenJarvis={() => setJarvisOpen(true)}
           />
         </div>
       </main>
-      <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} />
+      <JarvisExperience open={jarvisOpen} context={context} page={activePage} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} />
       {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />}
       {notificationsOpen && <NotificationDrawer recommendations={data.recommendations} unreadIds={unreadNotificationIds} onOpenRecommendation={(id) => { setReadNotificationIds((current) => new Set([...current, id])); persistReadNotifications([...readNotificationIds, id]); setNotificationsOpen(false); navigate('recommendations') }} onMarkAllRead={() => { const all = data.recommendations.filter((item) => item.status === 'PENDING').map((item) => item.id); setReadNotificationIds(new Set([...readNotificationIds, ...all])); persistReadNotifications([...readNotificationIds, ...all]) }} onClose={() => setNotificationsOpen(false)} />}
       {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
@@ -586,6 +592,7 @@ function PageRouter({
   onPhaseGate,
   lightMode,
   onTheme,
+  onOpenJarvis,
 }: {
   active: SectionId
   context: WorkspaceContext
@@ -601,6 +608,7 @@ function PageRouter({
   onPhaseGate: (phase: string, capability: string) => void
   lightMode: boolean
   onTheme: () => void
+  onOpenJarvis: () => void
 }) {
   if (active === 'dashboard')
     return (
@@ -627,6 +635,7 @@ function PageRouter({
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} /></PageLayout>
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />

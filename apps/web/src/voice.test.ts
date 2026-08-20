@@ -36,7 +36,7 @@ describe('F8 browser-native voice contracts', () => {
     expect(speechRecognitionFailure('audio-capture').message).toContain('microphone')
     expect(speechRecognitionFailure('no-speech').message).toContain('No speech')
     expect(speechRecognitionFailure('network').message).toContain('connectivity')
-    expect(speechRecognitionFailure('vendor-code')).toEqual({ code: 'vendor-code', message: 'Speech recognition failed (vendor-code). You can retry or type your message.' })
+    expect(speechRecognitionFailure('vendor-code')).toEqual({ code: 'vendor-code', message: 'Speech recognition failed (vendor-code). You can retry voice or ask in AI Command.' })
     expect(speechRecognitionFailure(undefined).code).toBe('unknown')
   })
 

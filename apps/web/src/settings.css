@@ -624,7 +624,9 @@
 }
 
 .app-shell.hide-jarvis .jarvis-orb-wrap,
-.app-shell.hide-jarvis .jarvis-orb-label {
+.app-shell.hide-jarvis .jarvis-orb-label,
+.app-shell.hide-jarvis .jarvis-floating-widget,
+.app-shell.hide-jarvis .jarvis-retry-chip {
   display: none !important;
 }
 

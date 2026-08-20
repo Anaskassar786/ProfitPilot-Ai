@@ -531,7 +531,7 @@ function AiPreferencesTab({
         </div>
       </SettingsPanel>
 
-      <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The voice and chat bubble that lives in the corner of every page.">
+      <SettingsPanel icon={Bot} title="Floating assistant (Jarvis)" description="The spoken store assistant in the corner of every page. Chat lives in AI Command.">
         <ToggleRow
           label="Show floating AI bubble"
           hint="Hide the bubble if you prefer a quieter workspace."

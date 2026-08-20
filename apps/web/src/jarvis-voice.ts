@@ -1,10 +1,10 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { VoiceStatus as NativeVoiceStatus } from './voice.js'
-import { createSpeechRecognition, stopNativeSpeech } from './voice.js'
+import { createSpeechRecognition, pickSpeechVoice, spokenReplyText, stopNativeSpeech, unlockSpeechSynthesis } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 /**
- * Voice status shown by both the inline chat strip and the floating widget.
+ * Voice status shown by the floating strip.
  * `paused` means the user asked Jarvis to stay quiet in the background.
  */
 export type FloatingVoiceStatus = NativeVoiceStatus | 'paused'
@@ -12,7 +12,7 @@ export type FloatingVoiceStatus = NativeVoiceStatus | 'paused'
 export type VoiceBlock = 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable' | null
 
 type TranscriptHandler = (transcript: string) => void | Promise<void>
-type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted: boolean }>
+type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean }>
 
 type VoiceController = Readonly<{
   active: boolean
@@ -21,6 +21,7 @@ type VoiceController = Readonly<{
   block: VoiceBlock
   muted: boolean
   framed: boolean
+  lastSpoken: string | null
   start: (options: Readonly<{ language: 'en' | 'hi'; onTranscript: TranscriptHandler; onError: (message: string) => void }>) => void
   stop: () => void
   setProcessing: () => void
@@ -30,11 +31,18 @@ type VoiceController = Readonly<{
   /** Pauses background listening without tearing the session down. */
   setPaused: (paused: boolean) => void
   setBlock: (block: VoiceBlock, framed: boolean) => void
+  /** Must run inside a click handler so the browser allows speech + mic. */
+  unlock: () => void
 }>
 
 let recognition: NativeSpeechRecognition | null = null
 let onTranscriptRef: TranscriptHandler | null = null
 let onErrorRef: ((message: string) => void) | null = null
+let currentUtterance: SpeechSynthesisUtterance | null = null
+let speakGeneration = 0
+let resumeTimer: ReturnType<typeof setInterval> | null = null
+let speakEndTimer: ReturnType<typeof setTimeout> | null = null
+let pendingLanguage: 'en' | 'hi' = 'en'
 
 let state = {
   active: false,
@@ -43,6 +51,7 @@ let state = {
   block: null as VoiceBlock,
   muted: false,
   framed: false,
+  lastSpoken: null as string | null,
 }
 const listeners = new Set<() => void>()
 function setState(patch: Partial<typeof state>): void {
@@ -65,12 +74,24 @@ function teardownRecognition(): void {
   }
 }
 
+function clearSpeakKeepAlive(): void {
+  if (resumeTimer !== null) {
+    clearInterval(resumeTimer)
+    resumeTimer = null
+  }
+  if (speakEndTimer !== null) {
+    clearTimeout(speakEndTimer)
+    speakEndTimer = null
+  }
+}
+
 function startRecognition(language: 'en' | 'hi'): void {
   teardownRecognition()
   if (typeof window === 'undefined') return
+  pendingLanguage = language
   const next = createSpeechRecognition(window)
   if (!next) {
-    setState({ status: 'error', error: 'Native voice input is not available in this browser. Chat mode remains available.' })
+    setState({ status: 'error', error: 'Voice input is not available in this browser. Use AI Command to type a question.' })
     return
   }
   recognition = next
@@ -83,13 +104,15 @@ function startRecognition(language: 'en' | 'hi'): void {
     if (transcript && onTranscriptRef) void onTranscriptRef(transcript)
   }
   next.onerror = (event) => {
+    if (event.error === 'aborted' || event.error === 'no-speech') {
+      updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
+      return
+    }
     const message = event.error ? `Voice error: ${event.error}` : 'Voice recognition failed.'
     setState({ status: 'error', error: message })
     onErrorRef?.(message)
   }
   next.onend = () => {
-    // Keep the active session alive (the widget stays visible) but return to
-    // idle unless we are processing/speaking/paused.
     updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
     recognition = null
   }
@@ -97,8 +120,16 @@ function startRecognition(language: 'en' | 'hi'): void {
   try {
     next.start()
   } catch {
-    setState({ status: 'error', error: 'Could not start voice input. Try again or type your message.' })
+    setState({ status: 'error', error: 'Could not start the microphone. Allow access and try again.' })
   }
+}
+
+function finishSpeaking(generation: number, onEnd?: () => void): void {
+  if (generation !== speakGeneration) return
+  clearSpeakKeepAlive()
+  currentUtterance = null
+  updateState((current) => ({ status: current.status === 'speaking' ? 'idle' : current.status }))
+  onEnd?.()
 }
 
 export const jarvisVoiceController: VoiceController = {
@@ -108,15 +139,25 @@ export const jarvisVoiceController: VoiceController = {
   get block() { return state.block },
   get muted() { return state.muted },
   get framed() { return state.framed },
+  get lastSpoken() { return state.lastSpoken },
+  unlock() {
+    if (typeof window === 'undefined') return
+    unlockSpeechSynthesis(window)
+  },
   start({ language, onTranscript, onError }) {
     onTranscriptRef = onTranscript
     onErrorRef = onError
+    pendingLanguage = language
+    if (typeof window !== 'undefined') unlockSpeechSynthesis(window)
     setState({ active: true, error: null })
     startRecognition(language)
   },
   stop() {
+    speakGeneration += 1
     teardownRecognition()
+    clearSpeakKeepAlive()
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+    currentUtterance = null
     onTranscriptRef = null
     onErrorRef = null
     setState({ active: false, status: 'idle', error: null })
@@ -125,36 +166,88 @@ export const jarvisVoiceController: VoiceController = {
     if (state.active) setState({ status: 'processing' })
   },
   speak({ text, language, muted }, onEnd) {
-    if (!state.active || muted || typeof window === 'undefined' || !window.speechSynthesis) {
+    const clean = spokenReplyText(text)
+    if (clean) setState({ lastSpoken: clean })
+    const silenced = muted ?? state.muted
+    if (!clean || silenced || typeof window === 'undefined' || !window.speechSynthesis) {
       onEnd?.()
       return
     }
-    setState({ status: 'speaking' })
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
-    utterance.onend = () => {
-      updateState((current) => ({ status: current.status === 'speaking' ? 'idle' : current.status }))
-      onEnd?.()
-    }
+    speakGeneration += 1
+    const generation = speakGeneration
+    pendingLanguage = language
+    setState({ status: 'speaking', lastSpoken: clean })
+    unlockSpeechSynthesis(window)
     window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(utterance)
+    // Chrome drops the next utterance if speak() runs in the same turn as cancel().
+    setTimeout(() => {
+      if (generation !== speakGeneration) return
+      if (typeof window === 'undefined' || !window.speechSynthesis) {
+        finishSpeaking(generation, onEnd)
+        return
+      }
+      const utterance = new SpeechSynthesisUtterance(clean)
+      const voice = pickSpeechVoice(window, language)
+      if (voice) {
+        utterance.voice = voice
+        utterance.lang = voice.lang || (language === 'hi' ? 'hi-IN' : 'en-IN')
+      } else {
+        utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
+      }
+      utterance.rate = 1.02
+      utterance.pitch = 1
+      utterance.volume = 1
+      utterance.onend = () => finishSpeaking(generation, onEnd)
+      utterance.onerror = () => finishSpeaking(generation, onEnd)
+      currentUtterance = utterance
+      try {
+        window.speechSynthesis.speak(utterance)
+      } catch {
+        finishSpeaking(generation, onEnd)
+        return
+      }
+      // Chrome silently pauses long utterances. Keep the queue alive.
+      clearSpeakKeepAlive()
+      resumeTimer = setInterval(() => {
+        if (generation !== speakGeneration || typeof window === 'undefined') return
+        if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+          try { window.speechSynthesis.resume() } catch { /* ignore */ }
+        }
+      }, 4_000)
+      const estimatedMs = Math.min(60_000, Math.max(4_000, clean.length * 70))
+      speakEndTimer = setTimeout(() => {
+        if (generation !== speakGeneration) return
+        if (typeof window !== 'undefined' && window.speechSynthesis.speaking) return
+        finishSpeaking(generation, onEnd)
+      }, estimatedMs)
+    }, 80)
   },
   stopSpeaking() {
+    speakGeneration += 1
+    clearSpeakKeepAlive()
+    currentUtterance = null
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
     if (state.active && state.status === 'speaking') setState({ status: 'idle' })
   },
   setMuted(muted) {
     setState({ muted })
-    if (muted) stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+    if (muted) {
+      speakGeneration += 1
+      clearSpeakKeepAlive()
+      stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+      if (state.status === 'speaking') setState({ status: state.active ? 'idle' : 'idle' })
+    }
   },
   setPaused(paused) {
     if (paused) {
+      speakGeneration += 1
       teardownRecognition()
+      clearSpeakKeepAlive()
       stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
       setState({ status: 'paused' })
     } else if (state.active) {
-      // Resume: kick off a fresh recognition pass if we were the active session.
       setState({ status: 'idle' })
+      startRecognition(pendingLanguage)
     }
   },
   setBlock(block, framed) {
@@ -167,33 +260,29 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/**
- * Shared voice controller so the floating widget keeps listening after the
- * chat panel unmounts. Both surfaces read the same snapshot.
- */
 export function useJarvisVoice(): VoiceController {
   useSyncExternalStore(subscribe, () => state, () => state)
   return jarvisVoiceController
 }
 
-/** Convenience selector hook for components that only need the snapshot. */
 export function useJarvisVoiceSnapshot(): typeof state {
   return useSyncExternalStore(subscribe, () => state, () => state)
 }
 
 /**
- * Restarts recognition after a spoken exchange so Jarvis keeps listening in
- * the background across page navigations. No-op when voice is inactive or paused.
+ * Restarts recognition after a spoken exchange so Jarvis keeps listening
+ * across page navigations. No-op when voice is inactive or paused.
  */
 export function resumeJarvisListening(language: 'en' | 'hi'): void {
-  if (!state.active || state.status === 'paused') return
+  if (!state.active || state.status === 'paused' || state.status === 'speaking' || state.status === 'processing') return
   startRecognition(language)
 }
 
-/** Cleans up recognition when the app unmounts (tests / hot reload). */
 export function useJarvisVoiceTeardown(): void {
   useEffect(() => () => {
+    speakGeneration += 1
     teardownRecognition()
+    clearSpeakKeepAlive()
     onTranscriptRef = null
     onErrorRef = null
   }, [])

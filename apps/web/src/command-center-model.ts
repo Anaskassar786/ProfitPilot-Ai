@@ -350,9 +350,9 @@ export function agentGuide(id: string): AgentGuide {
 
 /* ── AI Growth Command modules (all shipped — links open the real pages) ── */
 
-export type GrowthModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'PATTERN_AI' | 'AI_COMMAND'
+export type GrowthModuleId = 'STORE_COACH' | 'AI_EXECUTIVE' | 'PATTERN_AI' | 'AI_COMMAND' | 'JARVIS'
 /** Sidebar section id each module's "Open" action navigates to. */
-export type GrowthModulePath = 'store-coach' | 'ai-executive' | 'patternai' | 'ai-command'
+export type GrowthModulePath = 'store-coach' | 'ai-executive' | 'patternai' | 'ai-command' | 'jarvis'
 export type GrowthModule = Readonly<{
   id: GrowthModuleId
   label: string
@@ -403,6 +403,15 @@ export const GROWTH_MODULES: readonly GrowthModule[] = [
     planTiers: { trial: 'Info only', start: 'Info only', growth: 'Info only', commander: '+ Full Actions' },
     features: ['Universal text command for your store', 'Evidence-backed answers, never invented', 'Full store actions on Commander'],
   },
+  {
+    id: 'JARVIS',
+    label: 'Jarvis',
+    description: 'Spoken store assistant — page-aware briefings without a chat box.',
+    sampleInsight: 'You are on Inventory. Three products have seven or fewer days of cover.',
+    path: 'jarvis',
+    planTiers: { trial: 'Voice + suggest', start: 'Voice + suggest', growth: 'Voice + suggest', commander: '+ Actions' },
+    features: ['Speaks a page briefing wherever you are', 'Suggestions on Trial, Start, and Growth', 'Commander can navigate and create draft automations'],
+  },
 ]
 
 export type GrowthAccess = Readonly<{
@@ -427,7 +436,7 @@ export function growthModuleAccess(module: GrowthModule, plan: PlanTier): Growth
       upgradePlan: 'growth',
     }
   }
-  if (module.id === 'AI_COMMAND') {
+  if (module.id === 'AI_COMMAND' || module.id === 'JARVIS') {
     const actions = plan === 'commander'
     return {
       tierLabel: module.planTiers[plan],

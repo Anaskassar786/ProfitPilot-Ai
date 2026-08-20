@@ -1,6 +1,19 @@
 /* F8 Jarvis, Copilot, and Reports surfaces. The orb is an animated identity mark, never a microphone icon. */
-.jarvis-orb-wrap { position: fixed; right: 24px; bottom: 22px; z-index: 44; width: 84px; height: 84px; display: grid; place-items: center; padding: 0; color: var(--text-secondary); background: transparent; }
-.jarvis-orb-label { position: absolute; bottom: -1px; color: var(--blue-bright); font-family: var(--font-mono); font-size: 8px; font-weight: 700; letter-spacing: .03em; }
+.jarvis-orb-wrap { position: fixed; right: 20px; bottom: 18px; z-index: 44; width: 128px; height: 128px; display: grid; place-items: center; padding: 0; color: var(--text-secondary); background: transparent; }
+.jarvis-orb-label { position: absolute; bottom: -1px; color: var(--blue-bright); font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .03em; }
+.jarvis-retry-chip { position: fixed; right: 24px; bottom: 154px; z-index: 45; min-height: 28px; padding: 0 10px; color: #E6F6FF; border: 1px solid rgba(61,194,245,.28); border-radius: 999px; background: rgba(13,33,54,.92); font-size: 10px; }
+.jarvis-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 28px 16px 48px; text-align: center; }
+.jarvis-stage-orb { padding: 0; background: transparent; border-radius: 50%; }
+.jarvis-stage-copy { max-width: 460px; display: flex; flex-direction: column; gap: 8px; }
+.jarvis-stage-copy h2 { margin: 0; color: var(--text); font-size: 22px; letter-spacing: -.03em; }
+.jarvis-stage-copy p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.jarvis-stage-grid { width: min(860px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.jarvis-stage-grid article { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; text-align: left; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--card); }
+.jarvis-stage-grid strong { color: var(--text); font-size: 13px; }
+.jarvis-stage-grid span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.jarvis-stage-grid svg { color: var(--blue-bright); }
+.jarvis-stage-hint { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text-tertiary); font-size: 12px; }
+@media (max-width: 800px) { .jarvis-stage-grid { grid-template-columns: 1fr; } }
 .jarvis-mini-orb { position: relative; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 33% 28%, #C8DCFF 0 3%, #72A7FF 8%, #3B82F6 30%, #213C9A 61%, #151D4A 100%); box-shadow: 0 0 18px rgba(59,130,246,.62), inset 0 0 18px rgba(255,255,255,.28); }
 .f8-pref-select { display: inline-flex; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 7px; }
 .f8-pref-select select { max-width: 62px; padding: 2px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; background: var(--card); font-size: 7px; }
@@ -126,8 +139,19 @@
 .jarvis-floating-copy strong { color: #E6F6FF; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jarvis-floating-copy span { color: var(--text-secondary); font-size: 8px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jarvis-floating-controls { display: flex; align-items: center; gap: 2px; }
-.jarvis-floating-controls .icon-button { width: 26px; height: 26px; color: var(--text-secondary); background: transparent; }
+.jarvis-floating-controls .icon-button { width: 28px; height: 28px; color: var(--text-secondary); background: transparent; }
 .jarvis-floating-controls .icon-button:hover { color: #E6F6FF; background: rgba(255,255,255,.06); }
+.jarvis-floating-controls .icon-button.voice-active { color: #DFF8FF; background: rgba(48,189,240,.2); box-shadow: 0 0 12px rgba(48,189,240,.22); }
+.light-mode .jarvis-floating-widget,
+.app-shell.light-mode .jarvis-floating-widget {
+  border-color: rgba(37, 99, 235, .22);
+  background: linear-gradient(135deg, rgba(248, 250, 252, .96), rgba(239, 246, 255, .94));
+  box-shadow: 0 12px 36px rgba(15, 23, 42, .12), 0 0 18px rgba(59, 130, 246, .1);
+}
+.light-mode .jarvis-floating-copy strong,
+.app-shell.light-mode .jarvis-floating-copy strong { color: #0F172A; }
+.light-mode .jarvis-floating-controls .icon-button:hover,
+.app-shell.light-mode .jarvis-floating-controls .icon-button:hover { color: #0F172A; background: rgba(15, 23, 42, .06); }
 @media (prefers-reduced-motion: reduce) {
   .jarvis-floating-widget { transition: none; }
   .jarvis-floating-widget:active { transform: none; }

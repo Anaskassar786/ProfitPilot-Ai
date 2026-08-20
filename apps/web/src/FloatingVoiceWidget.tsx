@@ -1,28 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react'
+import { Mic, MicOff, Pause, Play, X } from 'lucide-react'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { JarvisOrbState } from './JarvisOrb.js'
-import { jarvisVoiceController, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { useJarvisVoiceSnapshot } from './jarvis-voice.js'
 import type { FloatingVoiceStatus } from './jarvis-voice.js'
 
 const STORAGE_KEY = 'profitpilot:jarvis:floating-widget-position'
-const WIDGET_WIDTH = 220
-const WIDGET_HEIGHT = 76
+export const WIDGET_WIDTH = 340
+export const WIDGET_HEIGHT = 78
 const MARGIN = 12
 
 type SavedPosition = Readonly<{ x: number; y: number }>
 
 export type FloatingVoiceWidgetProps = Readonly<{
-  /** Visible only while a voice session is active (the chat panel may be closed). */
   visible: boolean
   address: string
+  page: string
+  caption: string
   paused: boolean
+  micOn: boolean
+  onMic: () => void
   onPause: () => void
   onResume: () => void
   onClose: () => void
-  onOpenPanel: () => void
 }>
 
 type DragState = Readonly<{
@@ -50,7 +52,7 @@ export function loadPosition(storage?: Pick<Storage, 'getItem'>, viewport: { wid
 export function defaultCenterPosition(viewport: { width: number; height: number } = defaultViewport()): SavedPosition {
   return {
     x: Math.max(MARGIN, Math.round((viewport.width - WIDGET_WIDTH) / 2)),
-    y: Math.max(MARGIN, Math.round((viewport.height - WIDGET_HEIGHT) / 2)),
+    y: Math.max(MARGIN, Math.round(viewport.height - WIDGET_HEIGHT - 28)),
   }
 }
 
@@ -82,23 +84,22 @@ function statusLabel(status: FloatingVoiceStatus, address: string, error: string
   if (error) return 'Voice unavailable'
   switch (status) {
     case 'listening': return `Listening, ${address}…`
-    case 'processing': return 'Thinking…'
+    case 'processing': return 'Checking store data…'
     case 'speaking': return 'Speaking…'
     case 'paused': return 'Paused'
-    case 'sleeping': return 'Sleeping'
+    case 'sleeping': return 'Paused'
     case 'error': return 'Voice error'
-    default: return 'Voice ready'
+    default: return 'Ready'
   }
 }
 
-export function FloatingVoiceWidget({ visible, address, paused, onPause, onResume, onClose, onOpenPanel }: FloatingVoiceWidgetProps) {
+export function FloatingVoiceWidget({ visible, address, page, caption, paused, micOn, onMic, onPause, onResume, onClose }: FloatingVoiceWidgetProps) {
   const voice = useJarvisVoiceSnapshot()
   const [position, setPosition] = useState<SavedPosition>(() => loadPosition(typeof window === 'undefined' ? undefined : window.localStorage))
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef<DragState | null>(null)
   const widgetRef = useRef<HTMLDivElement | null>(null)
 
-  // Re-clamp on viewport resize so the widget never gets stranded off-screen.
   useEffect(() => {
     if (!visible) return
     const onResize = () => setPosition((current) => clampPosition(current.x, current.y))
@@ -110,9 +111,9 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
 
   const status: FloatingVoiceStatus = paused ? 'paused' : voice.status
   const orbState = orbStateFor(status)
+  const detail = voice.error ?? caption ?? `${page.replace(/-/g, ' ')} · drag to move`
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // Only the drag handle area starts a drag; buttons stop propagation.
     if ((event.target as HTMLElement).closest('button')) return
     event.preventDefault()
     const target = widgetRef.current
@@ -139,8 +140,6 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
       const finalPosition = clampPosition(position.x, position.y)
       setPosition(finalPosition)
       savePosition(finalPosition, typeof window === 'undefined' ? undefined : window.localStorage)
-      // A tap (no real drag) reopens the chat panel.
-      if (!drag.moved) onOpenPanel()
     }
     dragRef.current = null
     setDragging(false)
@@ -153,24 +152,24 @@ export function FloatingVoiceWidget({ visible, address, paused, onPause, onResum
     zIndex: 60,
     touchAction: 'none',
     cursor: dragging ? 'grabbing' : 'grab',
-    opacity: voice.status === 'idle' && !dragging ? 0.92 : 1,
+    opacity: voice.status === 'idle' && !dragging ? 0.96 : 1,
   }
 
   const control = (
-    <div className="jarvis-floating-widget" ref={widgetRef} style={style} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} role="dialog" aria-label="Jarvis voice is active">
-      <span className="jarvis-floating-orb"><JarvisOrb state={orbState} size={40} label={`Jarvis ${status}`} /></span>
+    <div className="jarvis-floating-widget" ref={widgetRef} style={style} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} role="dialog" aria-label="Jarvis voice assistant">
+      <span className="jarvis-floating-orb"><JarvisOrb state={orbState} size={48} label={`Jarvis ${status}`} /></span>
       <div className="jarvis-floating-copy">
         <strong>{statusLabel(status, address, voice.error)}</strong>
-        <span>{voice.error ?? 'Tap to open chat · drag to move'}</span>
+        <span>{detail}</span>
       </div>
       <div className="jarvis-floating-controls">
-        <button type="button" className="icon-button" onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume listening' : 'Pause listening'} title={paused ? 'Resume' : 'Pause'}>
-          {paused ? <Play size={14} /> : <Pause size={14} />}
+        <button type="button" className={`icon-button ${micOn && !paused ? 'voice-active' : ''}`} onClick={onMic} aria-label={micOn ? 'Turn microphone off' : 'Turn microphone on'} title={micOn ? 'Mic off' : 'Mic on'}>
+          {micOn && !paused ? <Mic size={15} /> : <MicOff size={15} />}
         </button>
-        <button type="button" className="icon-button" onClick={() => jarvisVoiceController.setMuted(!voice.muted)} aria-label={voice.muted ? 'Unmute voice' : 'Mute voice'} title={voice.muted ? 'Unmute' : 'Mute'}>
-          {voice.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        <button type="button" className="icon-button" onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume Jarvis' : 'Pause Jarvis'} title={paused ? 'Resume' : 'Pause'}>
+          {paused ? <Play size={15} /> : <Pause size={15} />}
         </button>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Stop voice and close widget" title="Close"><X size={14} /></button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="Close Jarvis" title="Close"><X size={15} /></button>
       </div>
     </div>
   )
