@@ -78,7 +78,6 @@ import {
   Users,
   Volume2,
   WalletCards,
-  WandSparkles,
   Workflow,
   X,
   Zap,
@@ -87,6 +86,7 @@ import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
 import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
+import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import { JarvisExperience } from './f8.js'
@@ -153,34 +153,47 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI employee',
     items: [
-      { id: 'command-center', label: 'AI Command Center', icon: Bot, tag: 'AI' },
-      { id: 'recommendations', label: 'Recommendations', icon: WandSparkles, tag: 'AI' },
-      { id: 'automation', label: 'Automation', icon: Workflow, tag: 'Automate' },
-      { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon, tag: 'AI', badge: 'NEW' },
+      { id: 'command-center', label: 'AI Command Center', icon: Bot },
+      { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
+      { id: 'automation', label: 'Automation', icon: Workflow },
+      { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon },
       /* 🛑 Jarvis nav item temporarily removed — restore when Jarvis returns */
-      // { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon, tag: 'Voice' },
+      // { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon },
     ],
   },
   {
     label: 'AI Growth Command',
     items: [
-      { id: 'store-coach', label: 'Store Coach', icon: GraduationCap, tag: 'NEW' },
-      { id: 'ai-executive', label: 'GrowthIQ', icon: GrowthIqNavIcon, tag: 'NEW' },
-      { id: 'patternai', label: 'PatternAI', icon: PatternAiIcon, tag: 'NEW' },
+      { id: 'store-coach', label: 'Store Coach', icon: GraduationCap },
+      { id: 'ai-executive', label: 'GrowthIQ', icon: GrowthIqNavIcon },
+      { id: 'patternai', label: 'PatternAI', icon: PatternAiIcon },
     ],
   },
   {
     label: 'Business',
     items: [
-      { id: 'reports', label: 'Reports', icon: FileBarChart, tag: 'Reports' },
+      { id: 'reports', label: 'Reports', icon: FileBarChart },
       { id: 'exports', label: 'Exports', icon: Download },
       { id: 'support', label: 'Help & Support', icon: LifeBuoy },
-      { id: 'billing', label: 'Billing', icon: WalletCards, tag: 'Plans' },
+      { id: 'billing', label: 'Billing', icon: WalletCards },
       { id: 'settings', label: 'Settings', icon: Settings },
-      { id: 'admin-ops', label: 'Admin Ops', icon: ShieldCheck, tag: 'Admin' },
+      /* Operator-only console — filtered out for regular merchants (see visibleNavGroups). */
+      { id: 'admin-ops', label: 'Admin Ops', icon: ShieldCheck, devOnly: true },
     ],
   },
 ]
+
+/**
+ * Nav groups a given workspace may see. `devOnly` items (Admin Ops) are
+ * stripped for regular merchants — only the app owner / developer workspace
+ * (see `isDeveloperWorkspace`) ever renders them.
+ */
+function visibleNavGroups(devWorkspace: boolean): ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> {
+  if (devWorkspace) return navGroups
+  return navGroups
+    .map((group) => ({ label: group.label, items: group.items.filter((item) => !item.devOnly) }))
+    .filter((group) => group.items.length > 0)
+}
 
 /* 🛑 Jarvis pageMeta entry temporarily removed — restore when Jarvis returns */
 const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: SectionIcon }>>> = {
@@ -191,7 +204,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
   'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
-  recommendations: { title: 'Recommendations', description: 'Your AI team has been watching your store. Review opportunities and take action.', icon: WandSparkles },
+  recommendations: { title: 'Recommendations', description: 'Your AI team has been watching your store. Review opportunities and take action.', icon: Sparkles },
   'ai-growth-command': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'ai-executive': { title: 'GrowthIQ', description: 'Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports from your real store data.', icon: GrowthIqNavIcon },
@@ -210,7 +223,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'admin-ops': { title: 'Admin Ops', description: 'Launch controls, merchant flags, queue inspection, and retries.', icon: ShieldCheck },
 }
 
-type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; tag?: string; badge?: string }>
+type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; devOnly?: boolean }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 type ToastState = Readonly<{ message: string; kind: ToastKind }>
@@ -562,7 +575,7 @@ export default function App() {
       {/* 🛑 Passive recommendation card temporarily removed — restore when Jarvis returns */}
       {/* {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />} */}
       {notificationsOpen && <NotificationDrawer recommendations={data.recommendations} unreadIds={unreadNotificationIds} onOpenRecommendation={(id) => { setReadNotificationIds((current) => new Set([...current, id])); persistReadNotifications([...readNotificationIds, id]); setNotificationsOpen(false); navigate('recommendations') }} onMarkAllRead={() => { const all = data.recommendations.filter((item) => item.status === 'PENDING').map((item) => item.id); setReadNotificationIds(new Set([...readNotificationIds, ...all])); persistReadNotifications([...readNotificationIds, ...all]) }} onClose={() => setNotificationsOpen(false)} />}
-      {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
+      {commandOpen && <CommandPalette devWorkspace={isDeveloperWorkspace(context)} onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
       {/* PR #46: the global drawer only ever shows an explicitly selected
           recommendation (passive Jarvis review) or Jarvis page evidence — the
           old `?? data.recommendations[0]` fallback showed the wrong record. */}
@@ -577,14 +590,15 @@ export default function App() {
 }
 
 function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCollapse, onClose, onOpenCommand, onOnboarding }: { activePage: SectionId; collapsed: boolean; mobileOpen: boolean; context: WorkspaceContext; onNavigate: (page: SectionId) => void; onCollapse: () => void; onClose: () => void; onOpenCommand: () => void; onOnboarding: () => void }) {
+  const devWorkspace = isDeveloperWorkspace(context)
   return <>
     {mobileOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={onClose} />}
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="brand-row"><button className="brand-lockup" onClick={() => onNavigate('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><span /></span>{!collapsed && <span className="brand-name">Profit<span>Pilot</span></span>}</button><button className="sidebar-collapse" onClick={onCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><button className="mobile-close" onClick={onClose} aria-label="Close navigation"><X size={18} /></button></div>
       {!collapsed ? <button className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></button> : <button className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></button>}
       {!collapsed && <button className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></button>}
-      <nav className="side-nav" aria-label="Primary navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && item.tag && <span className={`nav-tag ${item.tag === 'AI' ? 'purple' : ''}`}>{item.tag}</span>}{!collapsed && item.badge && <span className="nav-tag new">{item.badge}</span>}{collapsed && (item.tag || item.badge) && <i className="collapsed-badge" />}</button> })}</div>)}</nav>
-      <div className="sidebar-footer">{!collapsed && <div className="version-card"><div><span className="live-dot" />Shopify data</div><strong>{context.storeId ? 'Store context ready' : 'Awaiting Shopify'}</strong><small>{context.storeId ? 'API-backed workspace' : 'Use the install flow to connect'}</small>{!context.storeId && <button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button>}</div>}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
+      <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; const showBillingDevDot = item.id === 'billing' && devWorkspace; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && showBillingDevDot && <span className="nav-dev-dot" role="img" aria-label="Real Shopify Checkout pending (Phase 2)" title="Real Shopify Checkout pending (Phase 2)" />}</button> })}</div>)}</nav>
+      <div className="sidebar-footer">{!collapsed && (context.storeId ? <div className="connection-card" role="status"><div className="connection-card-head"><span className="live-dot" /><strong>Shopify Connected</strong></div><span className="connection-card-domain" title={context.shop ?? undefined}>{context.shop ?? 'Your Shopify store'}</span><small className="connection-card-status">Synced · All systems active</small></div> : <div className="connection-card idle"><div className="connection-card-head"><span className="live-dot idle" /><strong>Shopify Not Connected</strong></div><span className="connection-card-domain">No store linked yet</span><small className="connection-card-status">Connect your store to get started</small><button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button></div>)}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
     </aside>
   </>
 }
@@ -657,7 +671,13 @@ function PageRouter({
   /* 🛑 Jarvis page route temporarily removed — restore when Jarvis returns */
   // if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} onToast={onToast} workspaceSettings={workspaceSettings} /></PageLayout>
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
-  if (active === 'admin-ops') return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
+  if (active === 'admin-ops') {
+    // Operator console is developer/app-owner only — regular merchants never
+    // see the nav item, and a direct navigation lands on a restricted notice.
+    // (Server-side, every /admin/* route additionally requires the ADMIN_KEY step-up.)
+    if (!isDeveloperWorkspace(context)) return <PageLayout eyebrow="Workspace" title="Page not available" description="This area is reserved for the ProfitPilot operations team."><EmptyState icon={LockKeyhole} title="Restricted section" description="Your workspace does not have access to operator controls." action="Back to dashboard" onAction={() => onNavigate('dashboard')} /></PageLayout>
+    return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
+  }
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
   if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'support') return <HelpSupportPage context={context} onToast={onToast} onNavigate={onNavigate} onNavigateBilling={() => onNavigate('billing')} />
@@ -783,7 +803,7 @@ function RecommendationsPage({ context, recommendations, onEvidence, onDecide, o
   const modeledImpact = recommendations.reduce((sum, item) => sum + item.impactValue, 0)
   return <PageLayout eyebrow="AI employee" title="Recommendations" description="Real deterministic signals with immutable evidence packs. AI language is optional and never supplies the numbers." actions={<><button className="button secondary" onClick={onEvidence}><Eye size={15} /> Evidence drawer</button><button className="button primary" onClick={onRefresh}><RefreshCw size={15} /> Refresh decisions</button></>}>
     <div className="recommendation-summary"><div><strong>{recommendations.length}</strong><span>recommendations returned</span></div><div className="summary-divider" /><div className="summary-stat"><span className="confidence-dot purple" /><strong>{pending.length}</strong><small>pending approval</small></div><div className="summary-stat"><span className="confidence-dot high" /><strong>{formatMoney(modeledImpact)}</strong><small>deterministic impact</small></div><div className="summary-spacer" /><span className="data-contract"><ShieldCheck size={14} /> Tenant-scoped API</span></div>
-    {recommendations.length === 0 ? <EmptyState icon={WandSparkles} title="No recommendations yet" description="Evidence is generated from your synced Shopify snapshot. After products and orders sync, click Generate recommendations. ProfitPilot will not invent a recommendation without store rows." action="How evidence works" onAction={onEvidence} /> : <div className="recommendation-list">{recommendations.map((item) => <RecommendationCard key={item.id} recommendation={item} onEvidence={onEvidence} onDecide={onDecide} />)}</div>}
+    {recommendations.length === 0 ? <EmptyState icon={Sparkles} title="No recommendations yet" description="Evidence is generated from your synced Shopify snapshot. After products and orders sync, click Generate recommendations. ProfitPilot will not invent a recommendation without store rows." action="How evidence works" onAction={onEvidence} /> : <div className="recommendation-list">{recommendations.map((item) => <RecommendationCard key={item.id} recommendation={item} onEvidence={onEvidence} onDecide={onDecide} />)}</div>}
   </PageLayout>
 }
 
@@ -914,6 +934,10 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const [roiPeriod, setRoiPeriod] = useState<'this_month' | 'last_month' | 'all_time'>('this_month')
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [loading, setLoading] = useState(false)
+  // Phase 2 developer reminder — never rendered for regular merchants.
+  const devWorkspace = isDeveloperWorkspace(context)
+  const [devNoteDismissed, setDevNoteDismissed] = useState(() => { try { return window.localStorage.getItem('pp-billing-phase2-note-dismissed') === '1' } catch { return false } })
+  const dismissDevNote = () => { setDevNoteDismissed(true); try { window.localStorage.setItem('pp-billing-phase2-note-dismissed', '1') } catch { /* storage unavailable — dismiss for this session only */ } }
 
   const reload = async () => {
     if (!context.storeId) return
@@ -1012,6 +1036,13 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
         </button>
       }
     >
+      {devWorkspace && !devNoteDismissed && (
+        <div className="billing-dev-note" role="note">
+          <AlertTriangle size={14} aria-hidden />
+          <span><strong>DEV NOTE:</strong> Billing is currently in mock mode. Phase 2 (Real Shopify Checkout) is pending.</span>
+          <button type="button" onClick={dismissDevNote} aria-label="Dismiss developer note"><X size={13} /></button>
+        </div>
+      )}
       {!context.storeId ? (
         <EmptyState icon={WalletCards} title="Connect Shopify to view billing" description="Billing never assumes a plan. Complete the signed install flow to load a real subscription." action="Connect from Settings" onAction={() => onToast('Open the Shopify install flow from the workspace context.', 'info')} />
       ) : (
@@ -1332,9 +1363,9 @@ function PassiveRecommendationCard({ recommendation, onReview, onDismiss, onSnoo
 function NotificationDrawer({ recommendations, unreadIds, onOpenRecommendation, onMarkAllRead, onClose }: { recommendations: readonly Recommendation[]; unreadIds: ReadonlySet<string>; onOpenRecommendation: (id: string) => void; onMarkAllRead: () => void; onClose: () => void }) {
   const pending = recommendations.filter((item) => item.status === 'PENDING').slice(0, 10)
   const unreadCount = pending.filter((item) => unreadIds.has(item.id)).length
-  return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><WandSparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</button>)}{unreadCount > 0 && <button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></button>}</div>}<button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></>
+  return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><Sparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</button>)}{unreadCount > 0 && <button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></button>}</div>}<button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></>
 }
-function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = navGroups.flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span>{item.tag && <small>{item.tag}</small>}<ChevronRight size={15} /></button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
+function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: boolean; onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = visibleNavGroups(devWorkspace).flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span><ChevronRight size={15} /></button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
 function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></button></div></div></div> }
 function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><button className="button primary full-width" onClick={onClose}>Done</button></div></div> }
 function Shortcut({ keys, label }: { keys: string; label: string }) { return <div className="shortcut-row"><kbd>{keys}</kbd><span>{label}</span><Check size={14} /></div> }
