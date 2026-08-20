@@ -24,7 +24,7 @@ export type BillingRouteDependencies = Readonly<{
   trials: TrialGiftSurface
   funnel: FunnelLedger
   createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>
-  verifyCharge: (shopId: string, chargeId: string, plan: PlanCode, interval: BillingInterval) => Promise<RecurringCharge>
+  verifyCharge: (shopId: string, chargeId: string, plan?: PlanCode, interval?: BillingInterval) => Promise<RecurringCharge>
   usage: (shopId: string) => Promise<readonly Readonly<{ feature: string; used: number; limit: number | null }>[]>
   roi: (shopId: string) => Promise<RoiMetrics>
   ensureTrial?: (shopId: string) => Promise<TrialRecord>
@@ -115,6 +115,16 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       }
 
       const charge = await createChargeOrExplain(dependencies, shopId, body.plan, body.interval, body.returnUrl)
+      const existing = await dependencies.repository.get(shopId)
+      await dependencies.repository.put({
+        storeId: shopId,
+        plan: body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander',
+        state: 'PENDING_CONFIRMATION',
+        currentPeriodEnd: existing?.currentPeriodEnd ?? null,
+        version: (existing?.version ?? 0) + 1,
+        interval: body.interval,
+        chargeId: charge.id,
+      })
       dependencies.funnel.record(shopId, 'install')
       response.status(201).json(success(charge, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
@@ -145,22 +155,30 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
     try {
       const shopId = queryShop(request)
       const body = request.body as unknown
-      if (!isRecord(body) || typeof body.chargeId !== 'string' || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL')) {
-        throw new AppError('VALIDATION_ERROR', 'chargeId, plan, and interval are required', 400)
+      if (!isRecord(body) || typeof body.chargeId !== 'string' || !body.chargeId.trim()) {
+        throw new AppError('VALIDATION_ERROR', 'chargeId is required', 400)
       }
-      const charge = await dependencies.verifyCharge(shopId, body.chargeId, body.plan, body.interval)
-      const state = body.interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
+      const existing = await dependencies.repository.get(shopId)
+      const plan = isPlan(body.plan) ? body.plan : planFromRecord(existing, chargeNameHint(body))
+      const interval = body.interval === 'ANNUAL' || body.interval === 'MONTHLY' ? body.interval : intervalFromRecord(existing)
+      const known = isPlan(body.plan) || Boolean(existing?.plan)
+      const charge = await dependencies.verifyCharge(shopId, body.chargeId, known ? plan : undefined, known ? interval : undefined)
+      const resolvedPlan = planFromRecord(existing, charge.name || chargeNameHint(body))
+      const resolvedInterval = charge.name.includes('ANNUAL') ? 'ANNUAL' : interval
+      const state = resolvedInterval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
+      const periodEnd = charge.billingOn ? Date.parse(charge.billingOn) : Date.now() + (resolvedInterval === 'ANNUAL' ? 365 : 30) * 86_400_000
       await dependencies.repository.put({
         storeId: shopId,
-        plan: body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander',
+        plan: resolvedPlan === 'START' ? 'start' : resolvedPlan === 'GROWTH' ? 'growth' : 'commander',
         state,
-        currentPeriodEnd: charge.billingOn ? Date.parse(charge.billingOn) : null,
-        version: 0,
-        interval: body.interval,
+        currentPeriodEnd: Number.isFinite(periodEnd) ? periodEnd : null,
+        version: (existing?.version ?? 0) + 1,
+        interval: resolvedInterval,
         chargeId: charge.id,
       })
       dependencies.funnel.record(shopId, 'oauth_complete')
-      response.status(200).json(success(charge, requestIdFrom(request)))
+      const account = await dependencies.repository.get(shopId)
+      response.status(200).json(success({ charge, subscription: account }, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
 
@@ -217,3 +235,19 @@ function queryShop(request: Request): string { const value = request.query.shopI
 function requestIdFrom(request: Request) { return requestId(request.header('x-request-id') || randomUUID()) }
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isPlan(value: unknown): value is PlanCode { return value === 'START' || value === 'GROWTH' || value === 'COMMANDER' }
+function planFromRecord(record: Awaited<ReturnType<BillingRepository['get']>>, hint: string): PlanCode {
+  const fromHint = hint.toUpperCase()
+  if (fromHint.includes('COMMANDER')) return 'COMMANDER'
+  if (fromHint.includes('GROWTH')) return 'GROWTH'
+  if (fromHint.includes('START')) return 'START'
+  const plan = record?.plan
+  if (plan === 'commander') return 'COMMANDER'
+  if (plan === 'growth') return 'GROWTH'
+  return 'START'
+}
+function intervalFromRecord(record: Awaited<ReturnType<BillingRepository['get']>>): BillingInterval {
+  return record?.interval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
+}
+function chargeNameHint(body: Readonly<Record<string, unknown>>): string {
+  return typeof body.name === 'string' ? body.name : ''
+}

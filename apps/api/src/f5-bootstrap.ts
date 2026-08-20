@@ -56,7 +56,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
       // tested end-to-end without Shopify Billing. Flip via BILLING_MOCK_CHARGES=false.
       mockCharges: env.BILLING_MOCK_CHARGES?.trim().toLowerCase() !== 'false',
       createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
-      verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, { plan, interval }),
+      verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, plan && interval ? { plan, interval } : undefined),
       usage: async (shopId) => usage(f4.database, shopId),
       roi: async (shopId) => roi(f4.database, f4.ai, shopId),
       ensureTrial,
