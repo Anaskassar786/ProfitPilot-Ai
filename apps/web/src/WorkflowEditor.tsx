@@ -129,7 +129,7 @@ function EditorInner({
 
   const connect = useCallback((connection: Connection) => setEdges((items) => addEdge({ ...connection, id: `${connection.source}-${connection.target}-${Date.now()}` }, items)), [setEdges])
 
-  const addNode = (item: LibraryItem, position = { x: 220 + nodes.length * 24, y: 120 + nodes.length * 50 }): void => {
+  const addNode = (item: LibraryItem, position: { x: number; y: number } | null = null): void => {
     if (item.kind === 'ai' && !commander) {
       onToast('AI steps are available with an upgraded subscription.', 'info')
       return
@@ -139,7 +139,18 @@ function EditorInner({
       return
     }
     const id = `${item.kind}-${crypto.randomUUID().slice(0, 8)}`
-    setNodes((items) => [...items, { id, type: 'automationNode', position, data: { label: item.label, summary: item.summary, kind: item.kind, config: { ...item.config } } }])
+    // Position the new node in a deterministic, non-stacking grid so rapid
+    // clicks don't overlap each other on the canvas. The setter callback form
+    // is used so we get the current node count, not the stale closure value.
+    setNodes((items) => [
+      ...items,
+      {
+        id,
+        type: 'automationNode',
+        position: position ?? { x: 220 + (items.length % 8) * 36, y: 120 + Math.floor(items.length / 8) * 70 },
+        data: { label: item.label, summary: item.summary, kind: item.kind, config: { ...item.config } },
+      },
+    ])
     setSelected(id)
   }
 
@@ -215,6 +226,15 @@ function EditorInner({
   }
 
   const save = async (publish = false): Promise<void> => {
+    // Even saving as a draft must keep a trigger — without one the workflow is
+    // unsaveable garbage that confuses the merchant when they come back later.
+    // We surface the same validation error toast that publish uses, so the
+    // user gets a clear "add a starting point" message instead of a 400 from
+    // the server with the same info but in JSON form.
+    if (nodes.length === 0 || !nodes.some((node) => node.data.kind === 'trigger')) {
+      onToast('Add a starting point (When this happens) before saving.', 'info')
+      return
+    }
     if (publish && !validate()) return
     setSaving(true)
     try {
@@ -339,7 +359,20 @@ function EditorInner({
           </span>
         </div>
         <div className="editor-top-actions">
-          <button className="mode-toggle" onClick={() => setMode((value) => (value === 'simple' ? 'advanced' : 'simple'))} title="Toggle guided or full editor">
+          <button className="mode-toggle" onClick={() => {
+            // Going from advanced (free-form graph) to simple (linear recipe) can
+            // silently drop YES/NO branches the merchant drew. Ask before
+            // throwing that work away — going the other way is always safe.
+            if (mode === 'advanced') {
+              const hasCondition = nodes.some((node) => node.data.kind === 'condition')
+              const hasNoBranch = edges.some((edge) => edge.sourceHandle === 'no')
+              if (hasCondition && hasNoBranch) {
+                const proceed = window.confirm('Switching to Simple mode will collapse the YES/NO branching you built in Advanced. Continue?')
+                if (!proceed) return
+              }
+            }
+            setMode((value) => (value === 'simple' ? 'advanced' : 'simple'))
+          }} title="Toggle guided or full editor">
             {mode === 'simple' ? <SlidersHorizontal size={15} /> : <Sparkles size={15} />}
             {mode === 'simple' ? 'Switch to Advanced' : 'Back to Simple'}
           </button>
@@ -513,6 +546,20 @@ function EditorInner({
               fitView
               deleteKeyCode={['Backspace', 'Delete']}
               onNodesDelete={(deleted) => {
+                // Block deletion of the trigger — without one, the workflow
+                // can't run. We silently keep the trigger and remove any
+                // other nodes the user asked to delete, instead of letting
+                // the merchant break their own automation with a key press.
+                const deletingTrigger = deleted.some((node) => node.data.kind === 'trigger')
+                if (deletingTrigger) {
+                  onToast('The starting point cannot be removed. Change it instead.', 'info')
+                  const deletable = deleted.filter((node) => node.data.kind !== 'trigger')
+                  if (deletable.length === 0) return
+                  const ids = new Set(deletable.map((node) => node.id))
+                  setNodes((items) => items.filter((node) => !ids.has(node.id)))
+                  setEdges((items) => items.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target)))
+                  return
+                }
                 const ids = new Set(deleted.map((node) => node.id))
                 setEdges((items) => items.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target)))
               }}

@@ -348,4 +348,63 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
     await click(aiButton)
     expect(toasts.some((t) => t.message.includes('upgraded subscription') || t.message.includes('Upgrade'))).toBe(true)
   })
+
+  it('blocks Save Draft when the workflow has no trigger (prevents unsaveable garbage)', async () => {
+    // Even a "Save Draft" must require a trigger — otherwise the merchant
+    // comes back to a broken workflow and the server-side validator rejects
+    // the next save with a confusing 400.
+    const store = setup({
+      nodes: [
+        {
+          id: 'email',
+          type: 'action',
+          config: { action: 'internal_notification', message: 'orphan' },
+          next: [],
+        },
+      ],
+    })
+    const container = await mount(store)
+    toasts.length = 0
+    await click(findButton(container, 'Save Draft'))
+    expect(store.patchBodies.length).toBe(0)
+    expect(toasts.some((t) => t.message.toLowerCase().includes('starting point'))).toBe(true)
+  })
+
+  it('blocks Save & Activate when the workflow has zero nodes', async () => {
+    const store = setup({ nodes: [] })
+    const container = await mount(store)
+    toasts.length = 0
+    await click(findButton(container, 'Save & Activate'))
+    expect(store.patchBodies.length).toBe(0)
+    expect(store.commands.some((c) => c.command === 'activate')).toBe(false)
+    expect(toasts.some((t) => t.message.toLowerCase().includes('starting point'))).toBe(true)
+  })
+
+  it('mode toggle from advanced to simple asks for confirmation when branching exists', async () => {
+    // Seed a workflow that has a YES/NO branch in the advanced graph. The
+    // toggle to simple mode should ask before collapsing the branch.
+    const store = setup({
+      nodes: [
+        { id: 'trigger', type: 'trigger', config: { trigger: 'manual' }, next: ['condition'] },
+        {
+          id: 'condition',
+          type: 'condition',
+          config: { field: 'order.total', operator: 'greater_than', value: 100 },
+          next: ['yes', 'no'],
+        },
+        { id: 'yes', type: 'action', config: { action: 'tag_customer', tag: 'VIP', operation: 'add' }, next: [] },
+        { id: 'no', type: 'action', config: { action: 'internal_notification', message: 'skipped' }, next: [] },
+      ],
+    })
+    const container = await mount(store)
+    // Switch to advanced first.
+    await click(findButton(container, 'Switch to Advanced'))
+    // Stub window.confirm to capture whether the prompt is shown.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await click(findButton(container, 'Back to Simple'))
+    expect(confirmSpy).toHaveBeenCalled()
+    // When the user declines, we stay in advanced.
+    expect(container.textContent).toContain('Step library')
+    confirmSpy.mockRestore()
+  })
 })
