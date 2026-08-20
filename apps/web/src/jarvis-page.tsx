@@ -33,6 +33,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
   const [preference, setPreference] = useState<JarvisPreference | null>(null)
   const [addressing, setAddressing] = useState<JarvisAddressing>('Sir')
   const [voiceGender, setVoiceGender] = useState<WorkspaceSettings['jarvisVoiceGender']>(baseSettings.jarvisVoiceGender)
+  const [language, setLanguage] = useState<JarvisPreference['language']>('auto')
   const [offerGuidance, setOfferGuidance] = useState(true)
   const [answerOnly, setAnswerOnly] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -54,6 +55,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
       if (cancelled) return
       setPreference(next)
       setAddressing(next.addressing)
+      setLanguage(next.language)
       setOfferGuidance(next.navigationSuggestions)
       setAnswerOnly(next.onlyAnswerWhenAsked)
     }).catch(() => undefined)
@@ -76,6 +78,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
           saveJarvisPreferences({
             storeId: context.storeId,
             addressing,
+            language,
             navigationSuggestions: offerGuidance,
             onlyAnswerWhenAsked: answerOnly,
             engagementMode,
@@ -137,6 +140,19 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
               <ChoiceButton selected={voiceGender === 'feminine'} onClick={() => setVoiceGender('feminine')} label="Female" hint="Softer, assistant-style voice" />
               <ChoiceButton selected={voiceGender === 'masculine'} onClick={() => setVoiceGender('masculine')} label="Male" hint="Deeper, assistant-style voice" />
             </div>
+          </div>
+
+          <div className="jarvis-settings-card">
+            <div className="jarvis-settings-label"><Mic size={15} /> Conversation language</div>
+            <label className="jarvis-language-select">
+              <span className="sr-only">Jarvis conversation language</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value as JarvisPreference['language'])}>
+                <option value="auto">Auto-detect (English or Hindi)</option>
+                <option value="en">English</option>
+                <option value="hi">Hindi / Hinglish</option>
+              </select>
+            </label>
+            <small className="jarvis-setting-help">Hindi voice input uses hi-IN. For best results, speak after the listening indicator appears.</small>
           </div>
 
           <div className="jarvis-settings-card">

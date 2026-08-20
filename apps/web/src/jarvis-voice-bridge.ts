@@ -136,10 +136,13 @@ export function voiceBridgeDocumentHtml(language: 'en' | 'hi', parentOrigin: str
     h1 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.03em; }
     p { margin: 0; color: #9fb4c8; font-size: 13px; line-height: 1.45; }
     #heard { min-height: 18px; margin-top: 10px; color: #dff8ff; font-size: 12px; }
+    .actions { display: flex; justify-content: center; gap: 8px; }
     button {
       margin-top: 16px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px;
       background: rgba(48,189,240,.18); color: #e6f6ff; font-weight: 650; cursor: pointer;
     }
+    button.primary { background: rgba(48,189,240,.34); }
+    button:hover { background: rgba(48,189,240,.44); }
     @keyframes pulse { 50% { transform: scale(1.06); } }
     @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
   </style>
@@ -150,7 +153,10 @@ export function voiceBridgeDocumentHtml(language: 'en' | 'hi', parentOrigin: str
     <h1>Jarvis is listening</h1>
     <p id="status">Allow the microphone if the browser asks, then speak.</p>
     <p id="heard"></p>
-    <button type="button" id="done">Done</button>
+    <div class="actions">
+      <button type="button" class="primary" id="retry">Allow mic / Retry</button>
+      <button type="button" id="done">Done</button>
+    </div>
   </main>
   <script>
     (function () {
@@ -161,6 +167,7 @@ export function voiceBridgeDocumentHtml(language: 'en' | 'hi', parentOrigin: str
       var paused = false;
       var rec = null;
       var stream = null;
+      var booting = false;
       var status = document.getElementById('status');
       var heard = document.getElementById('heard');
       function post(kind, extra) {
@@ -216,16 +223,24 @@ export function voiceBridgeDocumentHtml(language: 'en' | 'hi', parentOrigin: str
         try { rec.start(); } catch (e) { window.setTimeout(startRec, 240); }
       }
       async function boot() {
+        if (booting || stopped) return;
+        booting = true;
+        stopped = false;
+        teardownRec();
+        stopTracks();
         post('ready');
         try {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            booting = false;
             startRec();
             return;
           }
           stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          booting = false;
           setStatus('Listening… speak now.');
           startRec();
         } catch (error) {
+          booting = false;
           setStatus('Allow the microphone for this window to talk to Jarvis.');
           post('denied', { message: 'Allow the microphone in the Jarvis window, then tap the microphone again.' });
         }
@@ -236,6 +251,11 @@ export function voiceBridgeDocumentHtml(language: 'en' | 'hi', parentOrigin: str
         if (event.data.kind === 'pause') { paused = true; teardownRec(); setStatus('Paused while Jarvis speaks.'); }
         if (event.data.kind === 'resume') { paused = false; setStatus('Listening… speak now.'); startRec(); }
         if (event.data.kind === 'stop') { stopped = true; teardownRec(); stopTracks(); window.close(); }
+      });
+      document.getElementById('retry').addEventListener('click', function () {
+        stopped = false;
+        setStatus('Requesting microphone access…');
+        boot();
       });
       document.getElementById('done').addEventListener('click', function () {
         stopped = true;
