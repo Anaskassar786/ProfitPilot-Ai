@@ -8,7 +8,7 @@ import { microphonePreflight, speechRecognitionAvailable } from './voice.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
 import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
-import { canExecuteJarvisActions, pageSpokenName, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
+import { canExecuteJarvisActions, jarvisStartupGreeting, pageSpokenName, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 import type { WorkspaceContext } from './model.js'
 import type { WorkspaceSettings } from './settings-model.js'
 
@@ -202,7 +202,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
       return
     }
     const language: 'en' | 'hi' = preference?.language === 'hi' ? 'hi' : 'en'
-    jarvisVoiceController.start({
+    void jarvisVoiceController.start({
       language,
       onTranscript: (transcript) => void handleTranscript(transcript),
       onError: (message) => onToast(message, 'warning'),
@@ -226,16 +226,9 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     if (previousPage === page) return
     lastBriefedPage.current = page
     if (previousPage === null) {
-      // First open: give a short time-based greeting, then stay quiet.
       const addressing = preference?.addressing ?? 'Sir'
       const language = ambientLanguage()
-      const hour = new Date().getHours()
-      const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-      if (language === 'hi') {
-        speakReply(`${timeGreeting}, ${addressing}. Jarvis ready hoon. Jab bhi kuch poochna ho, bas boliye.`, language)
-      } else {
-        speakReply(`${timeGreeting}, ${addressing}. I'm here whenever you need me — just ask.`, language)
-      }
+      speakReply(jarvisStartupGreeting(addressing, language), language)
       return
     }
     // Page changes: Jarvis stays quiet. It only speaks when the user asks.

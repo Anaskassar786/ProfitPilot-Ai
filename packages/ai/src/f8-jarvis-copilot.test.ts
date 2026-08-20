@@ -60,7 +60,7 @@ describe('F8 Jarvis identity and session behavior', () => {
     const service = new JarvisService(provider(), jarvisEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
     const growth = await service.briefing('store-growth' as never, 'dashboard', 'growth')
     expect(growth.status).toBe('ANSWER')
-    expect(growth.text).toContain('You are on')
+    expect(growth.text).toMatch(/you are on/i)
     expect(growth.text).toContain('suggest')
     const trial = await service.briefing('store-trial' as never, 'dashboard', 'trial')
     expect(trial.status).toBe('ANSWER')

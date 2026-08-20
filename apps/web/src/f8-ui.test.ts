@@ -38,6 +38,7 @@ describe('Jarvis voice-strip UI', () => {
     expect(source).toContain('size={80}')
     expect(source).toContain('beginVoice')
     expect(source).toContain('jarvisVoiceController.unlock')
+    expect(source).toContain('jarvisStartupGreeting')
     expect(source).toContain('fetchJarvisBriefing')
   })
 
