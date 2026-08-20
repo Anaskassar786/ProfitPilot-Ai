@@ -294,12 +294,6 @@ export default function App() {
   // refresh inside Shopify admin keeps the workspace attached.
   const urlContext = useMemo(() => workspaceContext(window.location.search), [])
   const [resolvedContext, setResolvedContext] = useState<WorkspaceContext>({ storeId: null, shop: null })
-  const = useState<WorkspaceData>({ analytics: null, catalog: [], agents: [], recommendations: [], inventory: null, loadState: 'idle', error: null })
-  // Tenant context comes first from the URL (the post-OAuth redirect carries
-  // storeId/shop/host), then from the session cookie via /session/context so a
-  // refresh inside Shopify admin keeps the workspace attached.
-  const urlContext = useMemo(() => workspaceContext(window.location.search), [])
-  const [resolvedContext, setResolvedContext] = useState<WorkspaceContext>({ storeId: null, shop: null })
   const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
 
   useEffect(() => {
