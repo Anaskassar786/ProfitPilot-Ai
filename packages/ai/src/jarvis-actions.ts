@@ -7,9 +7,8 @@ import type { JarvisPlan } from './jarvis.js'
  * the EXISTING plan definitions in @profitpilot/billing — no plan features or
  * pricing are changed here. The capability ladder is:
  *
- *   trial/start  → read-only answers (Jarvis describes and suggests, never writes)
- *   growth       → can propose safe actions and recommend them (approval required)
- *   commander    → can execute write actions after explicit confirmation
+ *   trial/start/growth → spoken recommendations only (Jarvis describes and suggests, never writes or navigates)
+ *   commander          → can navigate pages and execute write actions after explicit confirmation
  *
  * Every action is either READ (safe, all plans) or WRITE (Commander-only and
  * confirmation-required). The registry never bypasses the existing entitlement

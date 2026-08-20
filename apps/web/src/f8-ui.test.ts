@@ -39,7 +39,10 @@ describe('Jarvis voice-strip UI', () => {
     expect(source).toContain('beginVoice')
     expect(source).toContain('jarvisVoiceController.unlock')
     expect(source).toContain('jarvisStartupGreeting')
+    expect(source).toContain('claimStartupGreeting')
     expect(source).toContain('fetchJarvisBriefing')
+    expect(source).toContain('resolveJarvisSpokenLanguage')
+    expect(source).toContain('canNavigateWithJarvis')
   })
 
   it('renders the floating strip when open so chat is not required', () => {

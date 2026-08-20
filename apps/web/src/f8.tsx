@@ -9,9 +9,21 @@ import { framedMicrophoneNeedsBridge } from './jarvis-voice-bridge.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
 import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
-import { canExecuteJarvisActions, jarvisStartupGreeting, pageSpokenName, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
+import { canExecuteJarvisActions, canNavigateWithJarvis, jarvisStartupGreeting, pageSpokenName, parseJarvisVoiceIntent, resolveJarvisSpokenLanguage, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 import type { WorkspaceContext } from './model.js'
 import type { WorkspaceSettings } from './settings-model.js'
+
+let greetedSessionKey: string | null = null
+
+function claimStartupGreeting(key: string): boolean {
+  if (greetedSessionKey === key) return false
+  greetedSessionKey = key
+  return true
+}
+
+function releaseStartupGreeting(): void {
+  greetedSessionKey = null
+}
 
 type JarvisExperienceProps = Readonly<{
   open: boolean
@@ -69,12 +81,21 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     return () => { cancelled = true }
   }, [open, context.storeId, startAttempt])
 
-  const ambientLanguage = (): 'en' | 'hi' => preference?.language === 'hi' ? 'hi' : 'en'
+  const ambientLanguage = (): 'en' | 'hi' => {
+    if (workspaceSettings?.jarvisLanguage === 'hi' || preference?.language === 'hi') return 'hi'
+    return 'en'
+  }
 
-  const speakReply = (text: string, language: 'en' | 'hi') => {
+  const speakReply = (text: string, language: 'en' | 'hi', interrupt = true) => {
     const spoken = spokenReplyText(text)
     if (spoken) setCaption(spoken)
-    const options: { text: string; language: 'en' | 'hi'; muted: boolean; voiceGender: 'feminine' | 'masculine'; storeId?: string } = { text: spoken, language, muted: voice.muted, voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine' }
+    const options: { text: string; language: 'en' | 'hi'; muted: boolean; voiceGender: 'feminine' | 'masculine'; storeId?: string; interrupt: boolean } = {
+      text: spoken,
+      language,
+      muted: voice.muted,
+      voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine',
+      interrupt,
+    }
     if (context.storeId) options.storeId = context.storeId
     jarvisVoiceController.speak(options, () => {
       resumeJarvisListening(language)
@@ -104,7 +125,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
       pendingTranscript.current = cleanText
       return
     }
-    const language = preference?.language === 'hi' || /[\u0900-\u097F]|\b(kya|mujhe|dikhao|bhej|aaj|kal)\b/i.test(cleanText) ? 'hi' : 'en'
+    const language = resolveJarvisSpokenLanguage(workspaceSettings?.jarvisLanguage ?? preference?.language, cleanText)
     const intent = parseJarvisVoiceIntent(cleanText)
     const commander = canExecuteJarvisActions(current.plan)
 
@@ -121,8 +142,8 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
         const response = await invokeJarvisStoreAction(context.storeId, current.id, pendingStoreAction.actionId, pendingStoreAction.parameters, true)
         setSession(response.session)
         setPendingStoreAction(null)
-        if (pendingStoreAction.actionId === 'navigate_page' && typeof pendingStoreAction.parameters.page === 'string') onNavigate?.(pendingStoreAction.parameters.page)
-        if (pendingStoreAction.actionId === 'create_automation') onNavigate?.('automation')
+        if (canNavigateWithJarvis(current.plan) && pendingStoreAction.actionId === 'navigate_page' && typeof pendingStoreAction.parameters.page === 'string') onNavigate?.(pendingStoreAction.parameters.page)
+        if (canNavigateWithJarvis(current.plan) && pendingStoreAction.actionId === 'create_automation') onNavigate?.('automation')
         speakReply(response.text, response.language)
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'The action could not be completed.'
@@ -145,11 +166,11 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     }
 
     if (intent.type === 'navigate') {
-      if (commander) {
+      if (commander && canNavigateWithJarvis(current.plan)) {
         onNavigate?.(intent.page)
         speakReply(`${preference?.addressing ?? 'Sir'}, opening ${pageSpokenName(intent.page)}.`, language)
       } else {
-        speakReply(`${preference?.addressing ?? 'Sir'}, I can suggest opening ${pageSpokenName(intent.page)} from the sidebar. Commander can take you there.`, language)
+        speakReply(`${preference?.addressing ?? 'Sir'}, I can suggest opening ${pageSpokenName(intent.page)} from the sidebar. Upgrade to Commander if you want me to take you there.`, language)
       }
       return
     }
@@ -180,12 +201,13 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     dispatchLifecycle({ type: 'recover' })
     const proposed = extractProposedAction(response.text)
     const spoken = proposed?.cleanText || response.text
-    if (proposed) {
+    const commander = canExecuteJarvisActions(response.session.plan)
+    if (proposed && commander) {
       setPendingStoreAction({ actionId: proposed.actionId, parameters: proposed.parameters })
-      if (proposed.actionId === 'navigate_page' && canExecuteJarvisActions(response.session.plan) && typeof proposed.parameters.page === 'string') {
+      if (proposed.actionId === 'navigate_page' && canNavigateWithJarvis(response.session.plan) && typeof proposed.parameters.page === 'string') {
         onNavigate?.(proposed.parameters.page)
       }
-    } else if (response.action?.actionType === 'navigate_page' && canExecuteJarvisActions(response.session.plan)) {
+    } else if (response.action?.actionType === 'navigate_page' && canNavigateWithJarvis(response.session.plan)) {
       const pageName = response.action.recommendationId
       if (pageName) onNavigate?.(pageName)
     }
@@ -205,7 +227,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
       onToast('Voice input is not available in this browser. Use AI Command to type a question.', 'warning')
       return
     }
-    const language: 'en' | 'hi' = preference?.language === 'hi' ? 'hi' : 'en'
+    const language: 'en' | 'hi' = ambientLanguage()
     void jarvisVoiceController.start({
       language,
       onTranscript: (transcript) => void handleTranscript(transcript),
@@ -224,7 +246,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     const language = ambientLanguage()
     pendingPageOffer.current = pageToOffer
     offeredPages.current = new Set([...offeredPages.current, pageToOffer])
-    speakReply(pageOfferPrompt(pageToOffer, addressing, language), language)
+    speakReply(pageOfferPrompt(pageToOffer, addressing, language), language, false)
   }
 
   useEffect(() => {
@@ -239,12 +261,12 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     lastBriefedPage.current = page
     const guidanceEnabled = preference?.navigationSuggestions !== false && !preference?.onlyAnswerWhenAsked
     if (previousPage === null) {
-      // First open: time-based greeting only, then optionally offer the page.
-      const addressing = preference?.addressing ?? 'Sir'
-      const language = ambientLanguage()
-      speakReply(jarvisStartupGreeting(addressing, language), language)
-      if (guidanceEnabled) {
-        window.setTimeout(() => { if (pageRef.current === page && !pendingPageOffer.current) offerPageGuidance(page) }, 500)
+      // First open: one greeting only. Never stack a page offer on top of it —
+      // that used to cut the greeting off and replay "Hello Sir" two or three times.
+      if (claimStartupGreeting(context.storeId)) {
+        const addressing = preference?.addressing ?? 'Sir'
+        const language = ambientLanguage()
+        speakReply(jarvisStartupGreeting(addressing, language), language)
       }
       return
     }
@@ -254,15 +276,21 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     if (guidanceEnabled && !offeredPages.current.has(page) && !pendingPageOffer.current) {
       offerPageGuidance(page)
     }
-  }, [open, lifecycle.status, session?.id, page, context.storeId, paused, preference?.navigationSuggestions, preference?.onlyAnswerWhenAsked, preference?.engagementMode])
+  }, [open, lifecycle.status, session?.id, page, context.storeId, preference?.navigationSuggestions, preference?.onlyAnswerWhenAsked])
 
   useEffect(() => {
     if (!open) {
       lastBriefedPage.current = null
       pendingPageOffer.current = null
       offeredPages.current = new Set()
+      releaseStartupGreeting()
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open || paused) return
+    jarvisVoiceController.setLanguage(ambientLanguage())
+  }, [open, paused, workspaceSettings?.jarvisLanguage, preference?.language])
 
   const toggleMic = () => {
     if (paused) {
@@ -301,6 +329,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     setCaption('Store assistant')
     lastBriefedPage.current = null
     offeredPages.current = new Set()
+    releaseStartupGreeting()
     onClose()
   }
 

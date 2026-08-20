@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { Check, Mic, Settings2, ShieldCheck, Sparkles, Volume2, Workflow } from 'lucide-react'
+import { Check, Languages, Mic, Settings2, ShieldCheck, Sparkles, Volume2, Workflow } from 'lucide-react'
 import { fetchJarvisPreferences, saveJarvisPreferences, saveWorkspaceSettings } from './api.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { WorkspaceContext } from './model.js'
@@ -28,18 +28,27 @@ type JarvisWorkspaceProps = Readonly<{
 
 const ADDRESSING_OPTIONS: readonly JarvisAddressing[] = ['Sir', "Ma'am", 'Commander', 'Miss']
 
+const VOICE_OPTIONS: readonly Readonly<{ language: 'en' | 'hi'; gender: WorkspaceSettings['jarvisVoiceGender']; label: string; hint: string }>[] = [
+  { language: 'en', gender: 'feminine', label: 'English · Female', hint: 'Natural English assistant' },
+  { language: 'en', gender: 'masculine', label: 'English · Male', hint: 'Natural English assistant' },
+  { language: 'hi', gender: 'feminine', label: 'Hindi · Female', hint: 'Natural Hindi / Hinglish' },
+  { language: 'hi', gender: 'masculine', label: 'Hindi · Male', hint: 'Natural Hindi / Hinglish' },
+]
+
 export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings }: JarvisWorkspaceProps) {
   const baseSettings = useMemo(() => workspaceSettings ?? defaultWorkspaceSettings(), [workspaceSettings])
   const [preference, setPreference] = useState<JarvisPreference | null>(null)
   const [addressing, setAddressing] = useState<JarvisAddressing>('Sir')
   const [voiceGender, setVoiceGender] = useState<WorkspaceSettings['jarvisVoiceGender']>(baseSettings.jarvisVoiceGender)
+  const [voiceLanguage, setVoiceLanguage] = useState<WorkspaceSettings['jarvisLanguage']>(baseSettings.jarvisLanguage)
   const [offerGuidance, setOfferGuidance] = useState(true)
   const [answerOnly, setAnswerOnly] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setVoiceGender(baseSettings.jarvisVoiceGender)
-  }, [baseSettings.jarvisVoiceGender])
+    setVoiceLanguage(baseSettings.jarvisLanguage)
+  }, [baseSettings.jarvisVoiceGender, baseSettings.jarvisLanguage])
 
   useEffect(() => {
     if (!context.storeId) {
@@ -56,12 +65,13 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
       setAddressing(next.addressing)
       setOfferGuidance(next.navigationSuggestions)
       setAnswerOnly(next.onlyAnswerWhenAsked)
+      if (next.language === 'hi' || next.language === 'en') setVoiceLanguage(next.language)
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [context.storeId])
 
   const saveSettings = async () => {
-    const nextSettings = mergeWorkspaceSettings(baseSettings, { jarvisVoiceGender: voiceGender })
+    const nextSettings = mergeWorkspaceSettings(baseSettings, { jarvisVoiceGender: voiceGender, jarvisLanguage: voiceLanguage })
     writeWorkspaceSettings(context.storeId, nextSettings)
     setSaving(true)
     try {
@@ -76,6 +86,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
           saveJarvisPreferences({
             storeId: context.storeId,
             addressing,
+            language: voiceLanguage,
             navigationSuggestions: offerGuidance,
             onlyAnswerWhenAsked: answerOnly,
             engagementMode,
@@ -101,7 +112,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
       <div className="jarvis-stage-copy">
         <span className="section-kicker">SPOKEN STORE ASSISTANT</span>
         <h2>{context.storeId ? 'Tap the orb to speak' : 'Connect Shopify to wake Jarvis'}</h2>
-        <p>Jarvis now speaks more naturally, asks before over-explaining a new page, and lets you choose a male or female voice right here.</p>
+        <p>Jarvis now speaks more naturally, asks before over-explaining a new page, and lets you pick English or Hindi — male or female — right here.</p>
       </div>
       <div className="jarvis-stage-grid">
         <article>
@@ -131,11 +142,23 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
         </div>
 
         <div className="jarvis-settings-grid">
-          <div className="jarvis-settings-card">
-            <div className="jarvis-settings-label"><Volume2 size={15} /> Voice style</div>
-            <div className="jarvis-choice-row" role="radiogroup" aria-label="Jarvis voice style">
-              <ChoiceButton selected={voiceGender === 'feminine'} onClick={() => setVoiceGender('feminine')} label="Female" hint="Softer, assistant-style voice" />
-              <ChoiceButton selected={voiceGender === 'masculine'} onClick={() => setVoiceGender('masculine')} label="Male" hint="Deeper, assistant-style voice" />
+          <div className="jarvis-settings-card jarvis-settings-card-wide">
+            <div className="jarvis-settings-label"><Volume2 size={15} /> <Languages size={15} /> Voice</div>
+            <p className="jarvis-settings-hint">Four voices: English and Hindi, male and female. This is the voice Jarvis uses when it talks to you.</p>
+            <div className="jarvis-choice-row jarvis-choice-row-voices" role="radiogroup" aria-label="Jarvis voice">
+              {VOICE_OPTIONS.map((option) => (
+                <ChoiceButton
+                  key={`${option.language}-${option.gender}`}
+                  selected={voiceLanguage === option.language && voiceGender === option.gender}
+                  onClick={() => {
+                    setVoiceLanguage(option.language)
+                    setVoiceGender(option.gender)
+                    writeWorkspaceSettings(context.storeId, mergeWorkspaceSettings(baseSettings, { jarvisVoiceGender: option.gender, jarvisLanguage: option.language }))
+                  }}
+                  label={option.label}
+                  hint={option.hint}
+                />
+              ))}
             </div>
           </div>
 

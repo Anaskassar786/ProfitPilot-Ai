@@ -33,6 +33,8 @@ describe('Jarvis plan-gated store actions', () => {
     expect(commander).toContain('create_automation')
     expect(commander).toContain('navigate_page')
     expect(actionsAvailableToPlan('growth').map((action) => action.id)).not.toContain('create_automation')
+    expect(actionsAvailableToPlan('growth').map((action) => action.id)).not.toContain('navigate_page')
+    expect(actionsAvailableToPlan('trial').map((action) => action.id)).not.toContain('navigate_page')
   })
 
   it('describes available actions and the action protocol for the prompt', () => {

@@ -89,6 +89,8 @@ describe('Settings model', () => {
     expect(parsed.theme).toBe('dark')
     expect(parsed.bubblePosition).toBe('bottom-right')
     expect(parsed.jarvisVoiceGender).toBe('masculine')
+    expect(parseWorkspaceSettings({ jarvisLanguage: 'hi' }).jarvisLanguage).toBe('hi')
+    expect(parseWorkspaceSettings({}).jarvisLanguage).toBe('en')
     expect(parsed.notifications.weeklyAiDigest).toBe(false)
     expect(parsed.notifications.securityAlerts).toBe(true)
   })
