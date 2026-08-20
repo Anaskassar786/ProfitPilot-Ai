@@ -238,18 +238,19 @@
 .billing-plan-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 20px;
+  align-items: stretch;
 }
 
 .billing-plan-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 520px;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border-soft);
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--card);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
@@ -260,10 +261,13 @@
 }
 
 .billing-plan-card.recommended {
+  min-height: 560px;
+  transform: translateY(-8px) scale(1.03);
+  z-index: 1;
   border-color: rgba(59, 130, 246, 0.55);
   box-shadow:
     0 0 0 1px rgba(59, 130, 246, 0.18),
-    0 14px 36px rgba(59, 130, 246, 0.12);
+    0 18px 44px rgba(59, 130, 246, 0.18);
 }
 
 .billing-plan-card.current {
@@ -301,7 +305,7 @@
 }
 
 .billing-plan-card-head {
-  padding: 22px 22px 16px;
+  padding: 28px 26px 20px;
   border-bottom: 1px solid var(--border-soft);
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), transparent);
 }
@@ -328,7 +332,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 18px 22px 0;
+  padding: 22px 26px 0;
 }
 
 .billing-plan-price strong {
@@ -343,7 +347,7 @@
 }
 
 .billing-plan-annual-note {
-  padding: 6px 22px 0;
+  padding: 6px 26px 0;
   color: #059669;
   font-size: 12px;
   font-weight: 600;
@@ -351,8 +355,8 @@
 
 .billing-plan-features {
   list-style: none;
-  margin: 16px 0 0;
-  padding: 0 22px 8px;
+  margin: 18px 0 0;
+  padding: 0 26px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -375,8 +379,8 @@
 }
 
 .billing-plan-cta {
-  width: calc(100% - 44px);
-  margin: 12px 22px 22px;
+  width: calc(100% - 52px);
+  margin: 16px 26px 26px;
   height: 42px;
   font-size: 14px !important;
   font-weight: 600;
@@ -446,6 +450,12 @@
 .billing-check.no {
   color: #9ca3af;
   background: rgba(107, 114, 128, 0.1);
+}
+
+.billing-matrix-text {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Usage + ROI split ─────────────────────────────────────────────────── */
@@ -765,6 +775,11 @@
     grid-template-columns: 1fr;
   }
 
+  .billing-plan-card.recommended {
+    transform: none;
+    min-height: 520px;
+  }
+
   .billing-split {
     grid-template-columns: 1fr;
   }
@@ -804,6 +819,37 @@
 
   .billing-interval-toggle button {
     flex: 1;
+    justify-content: center;
+  }
+
+  .billing-section-head.inline {
+    flex-direction: column;
+  }
+}
+
+/* Ensure page header description is readable on Billing too */
+.page-content:has(.billing-v2) .page-header h1 {
+  font-size: 28px;
+}
+
+.page-content:has(.billing-v2) .page-header p {
+  font-size: 14px !important;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+: 1;
     justify-content: center;
   }
 
