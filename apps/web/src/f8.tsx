@@ -226,12 +226,20 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     if (previousPage === page) return
     lastBriefedPage.current = page
     if (previousPage === null) {
-      void deliverBriefing(page)
+      // First open: give a short time-based greeting, then stay quiet.
+      const addressing = preference?.addressing ?? 'Sir'
+      const language = ambientLanguage()
+      const hour = new Date().getHours()
+      const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+      if (language === 'hi') {
+        speakReply(`${timeGreeting}, ${addressing}. Jarvis ready hoon. Jab bhi kuch poochna ho, bas boliye.`, language)
+      } else {
+        speakReply(`${timeGreeting}, ${addressing}. I'm here whenever you need me — just ask.`, language)
+      }
       return
     }
-    if (paused || preference?.navigationSuggestions === false || preference?.onlyAnswerWhenAsked || preference?.engagementMode === 'quiet' || preference?.engagementMode === 'answer-only') return
-    pendingPageOffer.current = page
-    speakReply(pageOfferPrompt(page, preference?.addressing ?? 'Sir', ambientLanguage()), ambientLanguage())
+    // Page changes: Jarvis stays quiet. It only speaks when the user asks.
+    // No automatic briefing, no page offer prompt.
   }, [open, lifecycle.status, session?.id, page, context.storeId, paused, preference?.navigationSuggestions, preference?.onlyAnswerWhenAsked, preference?.engagementMode])
 
   useEffect(() => {
@@ -324,16 +332,15 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   )
 }
 
-function pageOfferPrompt(page: string, addressing: string, language: 'en' | 'hi'): string {
-  const pageName = pageSpokenName(page)
-  if (language === 'hi') return `${addressing}, ab hum ${pageName} page par hain. Agar aap chahen to main jaldi se bata doon yahan kya important hai. Bas haan bol dijiye.`
-  return `${addressing}, we are on ${pageName}. If you want, I can quickly point out what matters on this page. Just say yes.`
+function pageOfferPrompt(_page: string, addressing: string, language: 'en' | 'hi'): string {
+  if (language === 'hi') return `${addressing}, aap kuch poochna chahte hain is page ke baare mein? Bas boliye.`
+  return `${addressing}, would you like me to explain this page? Just say yes.`
 }
 
 function fallbackBriefing(page: string, addressing: string, language: 'en' | 'hi'): string {
   const pageName = pageSpokenName(page)
-  if (language === 'hi') return `${addressing}, abhi hum ${pageName} par hain. Aap chahein to mujhse is page ke important numbers ya next step ke baare mein pooch sakte hain.`
-  return `${addressing}, you are on ${pageName}. Ask me what matters here and I will keep it short.`
+  if (language === 'hi') return `${addressing}, yeh ${pageName} page hai. Aap mujhse kuch bhi pooch sakte hain — main sirf zaroori baatein bataunga.`
+  return `${addressing}, this is ${pageName}. Ask me anything specific and I will keep it short and useful.`
 }
 
 function extractProposedAction(text: string): { cleanText: string; actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>> } | null {

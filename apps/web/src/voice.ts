@@ -9,8 +9,7 @@ export function microphonePreflight(scope: Window | undefined, documentScope: Do
   const framed = isFramed(scope)
   if (!scope?.isSecureContext) return { allowed: false, framed, code: 'insecure', message: 'Voice requires a secure HTTPS connection.' }
   const policy = (documentScope as (Document & { permissionsPolicy?: PermissionsPolicyLike }) | undefined)?.permissionsPolicy
-  if (framed && (!policy || !safeAllowsMicrophone(policy))) return { allowed: false, framed, code: 'embedded-policy', message: 'Microphone unavailable in embedded view. Open ProfitPilot in a new tab to use voice.' }
-  if (policy && !safeAllowsMicrophone(policy)) return { allowed: false, framed, code: 'policy-denied', message: 'Microphone access is blocked by this page policy.' }
+  if (policy && !safeAllowsMicrophone(policy) && !framed) return { allowed: false, framed, code: 'policy-denied', message: 'Microphone access is blocked by this page policy.' }
   if (!navigatorScope?.mediaDevices) return { allowed: false, framed, code: 'media-devices-unavailable', message: 'This browser does not expose a microphone device. Use AI Command to type a question.' }
   return { allowed: true, framed, code: 'ready', message: null }
 }
@@ -100,10 +99,11 @@ function scoreVoice(voice: SpeechSynthesisVoice, preferredTags: readonly string[
     else if (lang.startsWith(`${normalized}-`) || lang.startsWith(normalized)) score = Math.max(score, 180 - index * 18)
   })
   if (voice.default) score += 14
-  if (/natural|neural|enhanced|premium|google|microsoft|siri/i.test(name)) score += 18
+  if (/natural|neural|enhanced|premium|google|microsoft|siri|azure|wavenet/i.test(name)) score += 30
   if (/india|bharat|hindi|hinglish|indian/i.test(name)) score += 12
-  if (preferredGender === 'feminine' && /female|woman|zira|aria|samantha|serena|heera|priya|sonia|susan|natasha|hazel|jenny|katja|sabrina|ava|alloy/i.test(name)) score += 26
-  if (preferredGender === 'masculine' && /male|man|david|mark|ravi|aarav|george|adam|daniel|james|ryan|alex|guy|raj/i.test(name)) score += 26
+  if (/online|network/i.test(name)) score += 10
+  if (preferredGender === 'feminine' && /female|woman|zira|aria|samantha|serena|heera|priya|sonia|susan|natasha|hazel|jenny|katja|sabrina|ava|alloy|neerja|swara/i.test(name)) score += 26
+  if (preferredGender === 'masculine' && /male|man|david|mark|ravi|aarav|george|adam|daniel|james|ryan|alex|guy|raj|guy|neural/i.test(name)) score += 26
   if (preferredGender === 'feminine' && /male|man\b/.test(name)) score -= 10
   if (preferredGender === 'masculine' && /female|woman\b/.test(name)) score -= 10
   if (/novelty|whisper|child|kid|cartoon|monster|robot/i.test(name)) score -= 40
@@ -125,8 +125,8 @@ export function speakNative(scope: Window | undefined, text: string, language: '
   } else {
     utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
   }
-  utterance.rate = language === 'hi' ? 0.94 : 0.98
-  utterance.pitch = preferredGender === 'feminine' ? 1.08 : 0.96
+  utterance.rate = language === 'hi' ? 1.0 : 1.02
+  utterance.pitch = preferredGender === 'feminine' ? 1.12 : 1.02
   utterance.volume = 1
   utterance.onend = () => onEnd?.()
   utterance.onerror = () => onEnd?.()

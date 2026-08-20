@@ -405,26 +405,26 @@ export function detectLanguage(text: string, preference: JarvisPreference['langu
 
 export function greeting(now = new Date(), addressing: JarvisAddressing = 'Sir'): string {
   const hour = now.getHours()
-  const time = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const time = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   return `${time}, ${addressing}.`
 }
 
 export function spokenPageBriefing(page: JarvisPage, addressing: JarvisAddressing, evidence: JarvisEvidence, plan: JarvisPlan, now = new Date()): string {
   const highlights = evidence.facts
     .filter((fact) => fact.value !== null && !String(fact.key).startsWith('page_'))
-    .slice(0, 2)
+    .slice(0, 3)
     .map((fact) => `${fact.label} is ${String(fact.value)}`)
   const purpose = evidence.facts.find((fact) => fact.key === 'page_purpose')?.value
   const suggestion = evidence.facts.find((fact) => fact.key === 'page_suggestion')?.value
   const pageName = typeof purpose === 'string' && purpose.trim() ? purpose : String(page).replace(/-/g, ' ')
-  const data = highlights.length > 0 ? `Right now I can see ${highlights.join(', ')}.` : 'I do not have fresh store numbers for this page yet.'
+  const data = highlights.length > 0 ? `Here is what I see: ${highlights.join(', ')}.` : 'I do not have fresh numbers for this page yet.'
   const next = typeof suggestion === 'string' && suggestion.trim()
-    ? `${suggestion}.`
-    : 'If you want, I can point out what matters most on this page.'
+    ? `I'd suggest: ${suggestion}.`
+    : 'Ask me anything specific about this page and I will keep it short.'
   const capability = plan === 'commander'
-    ? 'If you want me to take an action, just say it and I will confirm before doing anything.'
-    : 'If you want, I can suggest the next best step from here.'
-  return `${greeting(now, addressing)} You are on ${pageName}. ${data} ${next} ${capability}`.replace(/\s+/g, ' ').trim()
+    ? 'I can also take actions here — just say the word and I will confirm first.'
+    : 'I can suggest the best next step from here.'
+  return `${addressing}, you are on ${pageName}. ${data} ${next} ${capability}`.replace(/\s+/g, ' ').trim()
 }
 
 function safeParseAction(text: string): { cleanText: string; invocation: JarvisActionInvocation | null } {
