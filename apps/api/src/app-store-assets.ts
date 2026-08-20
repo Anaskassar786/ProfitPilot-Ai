@@ -1,3 +1,66 @@
+/**
+ * Single source of truth for the Shopify access scopes ProfitPilot requests.
+ *
+ * Every scope declaration in the repository (.env.example, the OAuth install
+ * URL built in bootstrap.ts, the generated shopify.app.toml, and the checked-in
+ * docs/app-store/shopify.app.toml.template) is derived from — or verified
+ * against — this list, so a stale copy can no longer drift out of sync.
+ *
+ * Why each scope exists:
+ * - read_products / read_orders / read_customers: core analytics + sync.
+ * - read_inventory / read_locations: inventory health and stockout features.
+ * - read_checkouts: abandoned-checkout recovery reporting.
+ * - read_price_rules: reading existing discounts before recommending changes.
+ * - write_price_rules: REQUIRED to run discountCodeBasicCreate and
+ *   discountCodeDeactivate from the AI Command Center and Automation Engine.
+ *   Without it Shopify answers those mutations with 403 Access Denied.
+ *
+ * NOTE: this module is imported directly by scripts/generate-shopify-app-toml.ts
+ * through Node's type stripping, so it must stay dependency-free (no imports).
+ */
+export const PROFITPILOT_SHOPIFY_SCOPES = [
+  'read_products',
+  'read_orders',
+  'read_customers',
+  'read_inventory',
+  'read_locations',
+  'read_checkouts',
+  'read_price_rules',
+  'write_price_rules',
+] as const
+
+/** Comma-separated form used by SHOPIFY_SCOPES and the `access_scopes` TOML field. */
+export const PROFITPILOT_SHOPIFY_SCOPES_CSV: string = PROFITPILOT_SHOPIFY_SCOPES.join(',')
+
+/**
+ * Normalize a comma-separated scope string into the effective scope list.
+ *
+ * The required registry is always included: an operator whose SHOPIFY_SCOPES
+ * value predates a new capability (for example a deployment still requesting
+ * only read_price_rules) would otherwise install the app without the write
+ * scope and hit a 403 the first time a discount action runs. Any extra scope
+ * supplied through the environment is preserved after the required ones.
+ */
+export function parseShopifyScopes(value: string | undefined): readonly string[] {
+  const requested = (value ?? '')
+    .split(',')
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0)
+  const merged = new Set<string>(PROFITPILOT_SHOPIFY_SCOPES)
+  for (const scope of requested) merged.add(scope)
+  return [...merged]
+}
+
+/**
+ * Scopes ProfitPilot needs that a Shopify installation did not grant. Empty
+ * means the installation can run every feature, discount actions included.
+ */
+export function missingShopifyScopes(granted: readonly string[] | string | undefined): readonly string[] {
+  const list = typeof granted === 'string' ? granted.split(',') : (granted ?? [])
+  const present = new Set(list.map((scope) => scope.trim()).filter((scope) => scope.length > 0))
+  return PROFITPILOT_SHOPIFY_SCOPES.filter((scope) => !present.has(scope))
+}
+
 export type ShopifyAppTomlConfig = Readonly<{
   clientId: string
   name: string
@@ -20,8 +83,10 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
   const applicationUrl = required(env, 'SHOPIFY_APP_URL', 'APP_URL')
   const clientId = required(env, 'SHOPIFY_API_KEY')
   const callback = env.SHOPIFY_REDIRECT_URI?.trim() || `${applicationUrl.replace(/\/$/, '')}/shopify/callback`
-  const scopes = (env.SHOPIFY_SCOPES ?? 'read_products,read_orders,read_customers,read_inventory,read_locations,read_checkouts,read_price_rules').split(',').map((scope) => scope.trim()).filter((scope) => scope.length > 0)
-  if (scopes.length === 0) throw new Error('SHOPIFY_SCOPES must contain at least one scope')
+  // Never empty and never partial: parseShopifyScopes merges SHOPIFY_SCOPES
+  // with the required registry, so the generated TOML always declares the full
+  // set of scopes the app actually calls.
+  const scopes = parseShopifyScopes(env.SHOPIFY_SCOPES)
   return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10' }
 }
 

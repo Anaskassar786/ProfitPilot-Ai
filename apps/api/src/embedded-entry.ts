@@ -3,6 +3,7 @@ import type { Logger } from '@profitpilot/logger'
 import type { StoreConnection, StoreDirectory } from '@profitpilot/db'
 import { verifyEmbeddedRequest } from '@profitpilot/shopify'
 import type { OfflineTokenResult, SessionTokenConfig } from '@profitpilot/shopify'
+import { missingShopifyScopes } from './app-store-assets.js'
 import { setSessionCookie } from './cookies.js'
 import { isApiPath } from './web-app.js'
 
@@ -118,6 +119,19 @@ async function registerTenant(
       scopes: result.scopes.join(','),
       requestId: requestIdFrom(response),
     })
+    // A grant that predates a scope change (for example an install made before
+    // write_price_rules was requested) keeps working for reads and then fails
+    // with 403 on discount actions. Surface it here instead of at execution.
+    const missing = result.scopes.length > 0 ? missingShopifyScopes(result.scopes) : []
+    if (missing.length > 0) {
+      dependencies.logger?.warn('Shopify installation is missing required access scopes', {
+        shopDomain: tenant.shopDomain,
+        storeId: tenant.storeId,
+        missingScopes: missing.join(','),
+        action: 'REINSTALL_TO_GRANT_SCOPES',
+        requestId: requestIdFrom(response),
+      })
+    }
   } catch (error: unknown) {
     // upstreamStatus/upstreamCode are what distinguish "the merchant's id_token
     // expired" from "SHOPIFY_API_SECRET is wrong" from "Shopify is down". They
