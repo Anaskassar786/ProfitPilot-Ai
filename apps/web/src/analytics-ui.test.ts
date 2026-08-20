@@ -247,8 +247,12 @@ describe('analytics sort-dropdown regression contract', () => {
     const fs = await import('node:fs/promises')
     for (const file of ['inventory.tsx', 'products.tsx', 'orders.tsx', 'customers.tsx'] as const) {
       const source = await fs.readFile(new URL(`./${file}`, import.meta.url), 'utf8')
+      // The sort control must not collapse to a compact "Sort" trigger; it
+      // keeps the shared CustomSelect with a sort label prefix and always
+      // renders the selected option label (inventory/customers use the
+      // "Sort by" prefix, products/orders use "Sort").
       expect(source).not.toContain('triggerLabel="Sort"')
-      expect(source).toContain('label="Sort"')
+      expect(source).toContain('label="Sort')
     }
   })
 })

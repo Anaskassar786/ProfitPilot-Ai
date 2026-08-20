@@ -38,7 +38,7 @@ describe('F4 decision engine', () => {
     const engine = new DecisionEngine(new OpenRouterClient({ keys: ['key'], models: ['model'], fetcher, sleep: async () => undefined }), new CostMeter(), new CalibrationLedger(), new InMemoryRecommendationRepository(), {}, () => 100)
     expect((await engine.run(snapshot)).recommendations[0]?.explanationStatus).toBe('AI_REJECTED')
   })
-  it('returns seven explicit agent statuses', () => expect(new DecisionEngine(new OpenRouterClient({ keys: [] }), new CostMeter(), new CalibrationLedger(), new InMemoryRecommendationRepository()).statuses()).toHaveLength(7))
+  it('returns six explicit agent statuses', () => expect(new DecisionEngine(new OpenRouterClient({ keys: [] }), new CostMeter(), new CalibrationLedger(), new InMemoryRecommendationRepository()).statuses()).toHaveLength(6))
   it('marks agents unconfigured without OpenRouter keys', () => expect(new DecisionEngine(new OpenRouterClient({ keys: [] }), new CostMeter(), new CalibrationLedger(), new InMemoryRecommendationRepository()).statuses()[0]?.execution).toBe('UNCONFIGURED'))
   it('uses calibration caps in recommendation confidence', async () => {
     const calibration = new CalibrationLedger()

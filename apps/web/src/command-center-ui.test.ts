@@ -169,7 +169,7 @@ describe('PR45 component rendering', () => {
   it('renders real KPI data in the hero, not hard-coded strings', () => {
     const html = renderToStaticMarkup(createElement(CommandCenterHero, {
       health: { score: 74, method: 'deterministic-v1', components: [{ key: 'revenue_momentum', score: 80, weight: .35, reason: '' }] },
-      summary: { counts: { PENDING: 0, APPROVED: 2, REJECTED: 0, EXECUTED: 1, FAILED: 0, EXPIRED: 0 }, total: 3, pendingImpact: [], approvedThisMonth: { count: 2, impact: [] }, byAgent: [], byRule: [], approvalRate: { allTime: 100, last30d: 100 }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [{ day: '2026-08-18', generated: 2, approved: 1 }, { day: '2026-08-17', generated: 1, approved: 1 }], plan: 'growth', usage: { feature: 'ai_recommendations_month', used: 3, limit: 150, remaining: 147 } },
+      summary: { counts: { PENDING: 0, APPROVED: 2, REJECTED: 0, EXECUTED: 1, FAILED: 0, EXPIRED: 0 }, total: 3, pendingImpact: [], approvedThisMonth: { count: 2, impact: [] }, byAgent: [], byRule: [], approvalRate: { allTime: 100, last30d: 100 }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [{ day: '2026-08-18', generated: 2, approved: 1 }, { day: '2026-08-17', generated: 1, approved: 1 }], plan: 'growth', usage: { feature: 'ai_recommendations_month', used: 3, limit: 300, remaining: 297 } },
       overview: { plan: 'growth', unlockedCount: 4, totalCount: 6, agents: [...overviewFor('growth')] },
     }))
     expect(html).toContain('74')

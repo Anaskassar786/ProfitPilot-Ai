@@ -121,7 +121,7 @@ describe('Recommendations workspace — runtime flow', () => {
     expect(container.querySelector('.recs-sort-wrap')?.getAttribute('data-tip')).toContain('ranks this list')
     // Sidebar education: all seven agents listed with zero pending
     const roster = [...container.querySelectorAll('.recs-agent-row')]
-    expect(roster).toHaveLength(7)
+    expect(roster).toHaveLength(6)
     expect(text).toContain('No recommendations yet — your team reports here after the first look.')
     expect(text).toContain('See sample activity')
   })

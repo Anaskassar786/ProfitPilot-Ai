@@ -273,17 +273,17 @@ describe('AI Command Center Complete Functional Testing', () => {
       expect(tip?.getAttribute('data-tip')).toContain('Recommendations your AI agents generated today')
     })
 
-    it('renders Active Agents card with "2 of 5", dots (2 green, 3 gray), and "Trial plan" badge', async () => {
+    it('renders Active Agents card with "2 of 6", dots (2 green, 4 gray), and "Trial plan" badge', async () => {
       const container = await mountWorkspace(true)
       const agentsKpi = container.querySelector('.cc-kpi:nth-child(4)')
       expect(agentsKpi).toBeTruthy()
-      expect(agentsKpi?.textContent).toContain('2 of 5')
+      expect(agentsKpi?.textContent).toContain('2 of 6')
       expect(agentsKpi?.textContent).toContain('Trial plan')
       expect(agentsKpi?.textContent).toContain('Active agents')
       const activeDots = agentsKpi?.querySelectorAll('.cc-agent-dots i.active')
       const lockedDots = agentsKpi?.querySelectorAll('.cc-agent-dots i.locked')
       expect(activeDots).toHaveLength(2)
-      expect(lockedDots).toHaveLength(3)
+      expect(lockedDots).toHaveLength(4)
     })
   })
 
@@ -448,7 +448,7 @@ describe('AI Command Center Complete Functional Testing', () => {
 
       const groupTitle = prodCard?.closest('.cc-locked-group')?.querySelector('.cc-locked-group-title')
       expect(groupTitle?.textContent).toContain('Available in Commander')
-      expect(groupTitle?.textContent).toContain('$349/mo')
+      expect(groupTitle?.textContent).toContain('$399/mo')
 
       const upgradeBtn = prodCard?.querySelector('.cc-button.upgrade') as HTMLButtonElement
       expect(upgradeBtn).toBeTruthy()

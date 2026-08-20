@@ -43,7 +43,7 @@ describe('errors and entitlements', () => {
     expect(error.phase).toBe('F1')
     expect(error.status).toBe(501)
   })
-  it('returns a known plan limit', () => expect(limitFor('growth', 'aiRecommendations')).toBe(150))
+  it('returns a known plan limit', () => expect(limitFor('growth', 'aiRecommendations')).toBe(300))
   it('returns unlimited as null for Commander', () => expect(limitFor('commander', 'jarvisMessages')).toBeNull())
   it('returns zero for an unknown entitlement', () => expect(limitFor('start', 'missing')).toBe(0))
 })
