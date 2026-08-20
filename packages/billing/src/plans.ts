@@ -27,7 +27,12 @@ const COMMANDER_AGENTS: readonly AgentName[] = [...GROWTH_AGENTS, 'PRODUCT_AGENT
 /**
  * Per-plan entitlement limits come from `PLAN_ENTITLEMENT_LIMITS` in
  * `@profitpilot/types` so billing and plan-display logic can never drift.
+ *
+ * Re-export the fair-use constants so backend code (admin / alerts / future
+ * throttling) can `import { FAIR_USE_ORDERS_30D } from '@profitpilot/billing'`
+ * without pulling `@profitpilot/types` directly.
  */
+export { FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS, HIDDEN_METER_KEYS } from '@profitpilot/types'
 export const PLAN_DEFINITIONS: Readonly<Record<PlanCode, PlanDefinition>> = {
   START: {
     code: 'START',
@@ -103,6 +108,13 @@ export function agentsForPlan(tier: PlanTier): readonly AgentName[] {
   if (tier === 'start') return START_AGENTS
   if (tier === 'growth') return GROWTH_AGENTS
   return COMMANDER_AGENTS
+}
+
+/** Numeric count of agents a plan unlocks (2/3/4/6). Powers the
+ *  "X of Y agents available" Billing meter without ever rendering a
+ *  fake `0/2` progress bar — agents are capacity, not consumption. */
+export function agentsForPlanCount(tier: PlanTier): number {
+  return agentsForPlan(tier).length
 }
 
 /** The cheapest tier that unlocks a given agent — powers "Upgrade to X" CTAs. */

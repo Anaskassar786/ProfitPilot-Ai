@@ -1,8 +1,8 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
-import { PostgresStoreDirectory } from '@profitpilot/db'
+import { PostgresStoreDirectory, withTenantContext } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 import { Logger } from '@profitpilot/logger'
-import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
+import { AdminStepUpSessions, agentsForPlanCount, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
 import type { TrialRecord } from '@profitpilot/billing'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
@@ -15,6 +15,8 @@ export type F5Bootstrap = Readonly<F4Bootstrap & { billing: BillingRouteDependen
 
 type UsageRow = QueryResultRow & { feature: string; used: string | number }
 type RevenueRow = QueryResultRow & { revenue: string | number }
+type CountRow = QueryResultRow & { total: string | number }
+type CommandCountRow = QueryResultRow & { total: string | number | null }
 
 export function createF5Bootstrap(env: Readonly<Record<string, string | undefined>>): F5Bootstrap | null {
   const f4 = createF4Bootstrap(env)
@@ -72,21 +74,42 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
 }
 
 async function usage(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, shopId: string) {
-  let result: { readonly rows: readonly UsageRow[] }
-  try {
-    result = await database.query<UsageRow>('SELECT feature, used FROM billing_usage WHERE shop_id = $1 AND period_start = date_trunc(\'month\', now())::date', [shopId])
-  } catch {
-    result = { rows: [] }
-  }
+  // Resolve the tier first — every meter needs a limit and Commander fairness
+  // flags are tier-relative.
   let account: Awaited<ReturnType<PostgresBillingRepository['get']>> = null
   try {
     account = await new PostgresBillingRepository(database).get(shopId)
   } catch {
     account = null
   }
-  const tier = account?.plan ?? 'trial'
+  const tier: 'trial' | 'start' | 'growth' | 'commander' = account?.plan ?? 'trial'
+
+  // Pull every live counter under a single tenant context. The sync tables
+  // (`catalog_products`, `sync_records`, `workflows`) and the `ai_command_usage`
+  // table are RLS-gated, so we MUST run them through `withTenantContext` or
+  // the rows are silently invisible. The local `billing_usage` rows below
+  // are for features that are not stored in domain tables (e.g. AI recs,
+  // email sends).
+  const liveCounts: Record<string, number> = { ...(await readLiveCounts(database, shopId)) }
+
+  // `active_agents` is a capacity meter, not consumption. We render the
+  // number of named agents a plan unlocks (Trial 2 / Start 3 / Growth 4 /
+  // Commander 6) so the UI can show "3 of 3 agents available" — never a
+  // fake 0/2 progress bar. Commander's full 6 always count.
+  liveCounts.active_agents = agentsForPlanCount(tier)
+
+  // billing_usage is the canonical counter for things that are not 1:1
+  // with another table (recommendations, email sends). Read what's there
+  // for the current calendar month; missing rows become 0.
+  let periodUsage = new Map<string, number>()
+  try {
+    const result = await database.query<UsageRow>('SELECT feature, used FROM billing_usage WHERE shop_id = $1 AND period_start = date_trunc(\'month\', now())::date', [shopId])
+    periodUsage = new Map(result.rows.map((row) => [row.feature, Number(row.used)]))
+  } catch { /* billing_usage rows are best-effort */ }
+
   // Always surface every metered entitlement so the Billing UI can render a
   // complete usage dashboard even when no rows exist yet for the period.
+  // The UI additionally filters out hidden/dead keys (`HIDDEN_METER_KEYS`).
   const features = [
     'orders_sync_month',
     'products_sync',
@@ -105,12 +128,73 @@ async function usage(database: { query<Row extends QueryResultRow>(text: string,
     'attribution',
     'ai_command_daily',
   ] as const
-  const usedByFeature = new Map(result.rows.map((row) => [row.feature, Number(row.used)]))
-  return features.map((feature) => ({
-    feature,
-    used: usedByFeature.get(feature) ?? 0,
-    limit: featureLimit(tier, feature),
-  }))
+  return features.map((feature) => {
+    const live = liveCounts[feature]
+    const used = live !== undefined ? live : (periodUsage.get(feature) ?? 0)
+    return {
+      feature,
+      used: Number.isFinite(used) ? Math.max(0, used) : 0,
+      limit: featureLimit(tier, feature),
+    }
+  })
+}
+
+/**
+ * Live counter source per meter key. Backed by the actual domain tables so
+ * the Billing page never lies. Falls back to 0 when the table does not exist
+ * yet or the count query throws (e.g. fresh install before a sync). Wraps
+ * the whole read in `withTenantContext` so every query sees the right RLS
+ * tenant — no per-row `shop_id = $1` is needed beyond the table key.
+ */
+async function readLiveCounts(
+  database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> },
+  shopId: string,
+): Promise<Readonly<Record<string, number>>> {
+  const out: Record<string, number> = {}
+  const safe = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0)
+  try {
+    await withTenantContext(database, shopId, async (client) => {
+      // Products synced → catalog_products (active rows)
+      const products = await client.query<CountRow>('SELECT COUNT(*)::text AS total FROM catalog_products WHERE store_id = $1', [shopId]).catch(() => ({ rows: [{ total: '0' }] as readonly CountRow[] }))
+      out.products_sync = safe(Number(products.rows[0]?.total ?? 0))
+
+      // Customers synced → sync_records where module = 'customers'
+      const customers = await client.query<CountRow>("SELECT COUNT(*)::text AS total FROM sync_records WHERE store_id = $1 AND module = 'customers'", [shopId]).catch(() => ({ rows: [{ total: '0' }] as readonly CountRow[] }))
+      out.customers_sync = safe(Number(customers.rows[0]?.total ?? 0))
+
+      // Orders synced / month → sync_records where module='orders' and the
+      // Shopify order's created_at falls in the current calendar month (UTC).
+      // The JSON payload's `created_at` is the merchant-visible order date; we
+      // fall back to `processed_at` then `synced_at` so older imports without
+      // a `created_at` still get counted in the right month.
+      const orders = await client.query<CountRow>(
+        `SELECT COUNT(*)::text AS total
+         FROM sync_records
+         WHERE store_id = $1
+           AND module = 'orders'
+           AND date_trunc('month', COALESCE(
+                 (payload->>'created_at')::timestamptz,
+                 (payload->>'processed_at')::timestamptz,
+                 synced_at
+               )) = date_trunc('month', now())`,
+        [shopId],
+      ).catch(() => ({ rows: [{ total: '0' }] as readonly CountRow[] }))
+      out.orders_sync_month = safe(Number(orders.rows[0]?.total ?? 0))
+
+      // Automation workflows → workflows table (any status; merchants see
+      // how many they have created, not just active ones)
+      const workflows = await client.query<CountRow>('SELECT COUNT(*)::text AS total FROM workflows WHERE store_id = $1', [shopId]).catch(() => ({ rows: [{ total: '0' }] as readonly CountRow[] }))
+      out.automation_workflows = safe(Number(workflows.rows[0]?.total ?? 0))
+
+      // AI Command / day → ai_command_usage for today (commands_used column)
+      const aiCommand = await client.query<CommandCountRow>(
+        'SELECT COALESCE(commands_used, 0)::text AS total FROM ai_command_usage WHERE store_id = $1 AND usage_date = CURRENT_DATE',
+        [shopId],
+      ).catch(() => ({ rows: [{ total: '0' }] as readonly CommandCountRow[] }))
+      out.ai_command_daily = safe(Number(aiCommand.rows[0]?.total ?? 0))
+    })
+  } catch { /* RLS or table not ready — return whatever we already have */ }
+  return out
 }
 
 async function roi(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, ai: F4Bootstrap['ai'], shopId: string) {
@@ -149,3 +233,9 @@ function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: str
 
 // Re-export for tests that previously imported the private ensureTrial helper shape.
 export type { TrialRecord }
+
+// Re-export the usage resolver + live-count helper so unit tests can drive
+// them with a fake executor and assert the SQL/used mapping without booting
+// a real Postgres. The functions stay internal to BillingRouteDependencies
+// in production; the named exports only exist to keep the test surface small.
+export { readLiveCounts, usage }

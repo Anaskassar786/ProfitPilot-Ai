@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { PLAN_ENTITLEMENT_LIMITS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS, HIDDEN_METER_KEYS } from '@profitpilot/types'
 import { assertAccess, UpgradeRequiredError, accessGate, limitForPlan } from './entitlements.js'
 import { AdminStepUpSessions, FunnelLedger, FUNNEL_MILESTONES, calculateRoi, lockPrice, priceForRenewal } from './growth.js'
-import { PLAN_DEFINITIONS, entitlementsFor, planFor, priceFor } from './plans.js'
+import { agentsForPlanCount, PLAN_DEFINITIONS, entitlementsFor, planFor, priceFor } from './plans.js'
 import { TrialAndGiftLedger, subscriptionForTrial } from './trials.js'
 import type { Subscription } from './billing.js'
 
@@ -26,6 +27,74 @@ describe('F5 plans and entitlements', () => {
   it('returns remaining limited quota', () => expect(accessGate(active, { feature: 'ai_recommendations_month', used: 2 }).remaining).toBe(298))
   it('blocks disabled trial features', () => expect(accessGate({ ...active, plan: 'trial', state: 'TRIAL_LIMITED' }, { feature: 'exports', used: 0 }).reason).toBe('UPGRADE_REQUIRED'))
   it('keeps support and legal accessible in read-only mode', () => { expect(accessGate({ ...active, state: 'CANCELLED' }, { feature: 'reports', used: 0, support: true }).allowed).toBe(true); expect(accessGate({ ...active, state: 'CANCELLED' }, { feature: 'reports', used: 0, legal: true }).allowed).toBe(true) })
+})
+
+describe('Entitlement meter audit — sync caps (PR)', () => {
+  it('Trial gets real headroom on sync caps (250 each, not 100)', () => {
+    expect(limitForPlan('trial', 'orders_sync_month')).toBe(250)
+    expect(limitForPlan('trial', 'products_sync')).toBe(250)
+    expect(limitForPlan('trial', 'customers_sync')).toBe(250)
+  })
+  it('Start sync caps are 1k/1.5k/2.5k', () => {
+    expect(limitForPlan('start', 'orders_sync_month')).toBe(1_000)
+    expect(limitForPlan('start', 'products_sync')).toBe(1_500)
+    expect(limitForPlan('start', 'customers_sync')).toBe(2_500)
+  })
+  it('Growth sync caps are 5k/5k/10k', () => {
+    expect(limitForPlan('growth', 'orders_sync_month')).toBe(5_000)
+    expect(limitForPlan('growth', 'products_sync')).toBe(5_000)
+    expect(limitForPlan('growth', 'customers_sync')).toBe(10_000)
+  })
+  it('Commander sync caps are null (unlimited) — never 0', () => {
+    expect(limitForPlan('commander', 'orders_sync_month')).toBeNull()
+    expect(limitForPlan('commander', 'products_sync')).toBeNull()
+    expect(limitForPlan('commander', 'customers_sync')).toBeNull()
+  })
+  it('Recommendation quotas stay locked (Trial 10 / Start 150 / Growth 300 / Commander unlimited)', () => {
+    expect(limitForPlan('trial', 'ai_recommendations_month')).toBe(10)
+    expect(limitForPlan('start', 'ai_recommendations_month')).toBe(150)
+    expect(limitForPlan('growth', 'ai_recommendations_month')).toBe(300)
+    expect(limitForPlan('commander', 'ai_recommendations_month')).toBeNull()
+  })
+  it('Agent counts stay locked (Trial 2 / Start 3 / Growth 4 / Commander 6)', () => {
+    expect(agentsForPlanCount('trial')).toBe(2)
+    expect(agentsForPlanCount('start')).toBe(3)
+    expect(agentsForPlanCount('growth')).toBe(4)
+    expect(agentsForPlanCount('commander')).toBe(6)
+  })
+  it('AI Command daily stays locked (Trial 10 / Start 100 / Growth 300 / Commander unlimited)', () => {
+    expect(limitForPlan('trial', 'ai_command_daily')).toBe(10)
+    expect(limitForPlan('start', 'ai_command_daily')).toBe(100)
+    expect(limitForPlan('growth', 'ai_command_daily')).toBe(300)
+    expect(limitForPlan('commander', 'ai_command_daily')).toBeNull()
+  })
+  it('Automation workflows stay locked (Trial 2 / Start 5 / Growth 20 / Commander unlimited)', () => {
+    expect(limitForPlan('trial', 'automation_workflows')).toBe(2)
+    expect(limitForPlan('start', 'automation_workflows')).toBe(5)
+    expect(limitForPlan('growth', 'automation_workflows')).toBe(20)
+    expect(limitForPlan('commander', 'automation_workflows')).toBeNull()
+  })
+  it('Hidden meter keys hide dead features (no fake 0/0)', () => {
+    expect(HIDDEN_METER_KEYS.has('sms_sends_month')).toBe(true)
+    expect(HIDDEN_METER_KEYS.has('active_campaigns')).toBe(true)
+    expect(HIDDEN_METER_KEYS.has('jarvis_messages_month')).toBe(true)
+    expect(HIDDEN_METER_KEYS.has('orders_sync_month')).toBe(false)
+  })
+  it('exposes Commander fair-use thresholds for admin/UI', () => {
+    expect(FAIR_USE_ORDERS_30D).toBe(100_000)
+    expect(FAIR_USE_PRODUCTS_ACTIVE).toBe(50_000)
+    expect(FAIR_USE_CUSTOMERS).toBe(100_000)
+  })
+  it('PLAN_ENTITLEMENT_LIMITS and PLAN_DEFINITIONS agree on every key', () => {
+    // The two tables must stay in lock-step. PR #46 unified them and this
+    // guard prevents future drift back to the pre-unification era.
+    for (const plan of ['START', 'GROWTH', 'COMMANDER'] as const) {
+      const tier = plan === 'START' ? 'start' : plan === 'GROWTH' ? 'growth' : 'commander'
+      for (const [key, value] of Object.entries(PLAN_DEFINITIONS[plan].limits)) {
+        expect(PLAN_ENTITLEMENT_LIMITS[tier][key as keyof typeof PLAN_ENTITLEMENT_LIMITS[typeof tier]]).toBe(value)
+      }
+    }
+  })
 })
 
 describe('trial and gift redemption', () => {
