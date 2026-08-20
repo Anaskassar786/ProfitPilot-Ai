@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { jarvisVoiceController, resumeJarvisListening, retryCloudSpeech, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { __armJarvisBargeInForTests, jarvisVoiceController, resumeJarvisListening, retryCloudSpeech, useJarvisVoiceSnapshot } from './jarvis-voice.js'
 import { resetApiClientStateForTests } from './api.js'
 
 class FakeRecognition {
@@ -245,6 +245,66 @@ describe('Shared Jarvis voice controller', () => {
     // Let the first utterance queue settle; nativeSpeak should have been called exactly once (not twice)
     await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalledTimes(1))
     expect(onEndFirst).not.toHaveBeenCalled()
+    jarvisVoiceController.stop()
+  })
+
+  it('interrupts speech when the merchant talks over Jarvis (barge-in)', async () => {
+    const created: FakeRecognition[] = []
+    class CapturingRecognition extends FakeRecognition {
+      public constructor() {
+        super()
+        created.push(this)
+      }
+    }
+    const nativeSpeak = vi.fn()
+    const nativeCancel = vi.fn()
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: CapturingRecognition,
+      speechSynthesis: { cancel: nativeCancel, speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class { public lang = ''; public onend: (() => void) | null = null } as unknown as typeof SpeechSynthesisUtterance)
+    const onTranscript = vi.fn()
+    await jarvisVoiceController.start({ language: 'en', onTranscript, onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Here are three good news and three bad news on analytics.', language: 'en' })
+    expect(jarvisVoiceController.status).toBe('speaking')
+    expect(created.length).toBeGreaterThan(0)
+    __armJarvisBargeInForTests()
+    const rec = created[created.length - 1]!
+    rec.onresult?.({ results: [{ 0: { transcript: 'stop tell me revenue instead' }, length: 1 }] })
+    expect(onTranscript).toHaveBeenCalledWith('stop tell me revenue instead')
+    expect(jarvisVoiceController.status).not.toBe('speaking')
+    jarvisVoiceController.stop()
+  })
+
+  it('does not barge in on a short echo of the line Jarvis is speaking', async () => {
+    const created: FakeRecognition[] = []
+    class CapturingRecognition extends FakeRecognition {
+      public constructor() {
+        super()
+        created.push(this)
+      }
+    }
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: CapturingRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class { public lang = ''; public onend: (() => void) | null = null } as unknown as typeof SpeechSynthesisUtterance)
+    const onTranscript = vi.fn()
+    await jarvisVoiceController.start({ language: 'en', onTranscript, onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Hello Sir. Good morning. I am Jarvis your store assistant.', language: 'en' })
+    __armJarvisBargeInForTests()
+    const rec = created[created.length - 1]!
+    rec.onresult?.({ results: [{ 0: { transcript: 'Hello Sir' }, length: 1 }] })
+    expect(onTranscript).not.toHaveBeenCalled()
+    expect(jarvisVoiceController.status).toBe('speaking')
     jarvisVoiceController.stop()
   })
 })

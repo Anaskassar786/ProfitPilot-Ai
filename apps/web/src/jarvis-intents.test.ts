@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { canExecuteJarvisActions, inferAutomationTemplate, jarvisStartupGreeting, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
+import { canExecuteJarvisActions, canNavigateWithJarvis, inferAutomationTemplate, isEchoOfSpoken, isLikelyBargeIn, isStartupGreeting, jarvisStartupGreeting, parseJarvisVoiceIntent, resolveJarvisSpokenLanguage, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 
 describe('Jarvis spoken intents', () => {
-  it('treats Growth and Start as suggestion-only', () => {
+  it('treats Trial, Start, and Growth as suggestion-only; Commander can act and navigate', () => {
     expect(canExecuteJarvisActions('commander')).toBe(true)
+    expect(canNavigateWithJarvis('commander')).toBe(true)
     expect(canExecuteJarvisActions('growth')).toBe(false)
+    expect(canNavigateWithJarvis('growth')).toBe(false)
     expect(canExecuteJarvisActions('start')).toBe(false)
     expect(canExecuteJarvisActions('trial')).toBe(false)
   })
@@ -34,6 +36,23 @@ describe('Jarvis spoken intents', () => {
 
   it('strips action protocol before speech', () => {
     expect(spokenReplyText('Opening products.\n@jarvis:action {"actionId":"navigate_page","parameters":{"page":"products"}}')).toBe('Opening products.')
+  })
+
+  it('resolves spoken language from the selected voice, with Devanagari still flipping a turn to Hindi', () => {
+    expect(resolveJarvisSpokenLanguage('hi', 'show revenue')).toBe('hi')
+    expect(resolveJarvisSpokenLanguage('en', 'show revenue')).toBe('en')
+    expect(resolveJarvisSpokenLanguage('en', 'मुझे बताओ')).toBe('hi')
+    expect(resolveJarvisSpokenLanguage('auto', 'kya revenue hai')).toBe('hi')
+    expect(resolveJarvisSpokenLanguage('auto', 'show revenue')).toBe('en')
+  })
+
+  it('detects startup greetings and barge-in vs echo', () => {
+    expect(isStartupGreeting('Hello Sir. Good morning. I\'m Jarvis')).toBe(true)
+    expect(isStartupGreeting('Revenue is up today')).toBe(false)
+    expect(isLikelyBargeIn('stop')).toBe(false)
+    expect(isLikelyBargeIn('tell me the bad news')).toBe(true)
+    expect(isEchoOfSpoken('hello sir', 'Hello Sir. Good morning. I\'m Jarvis, your store assistant.')).toBe(true)
+    expect(isEchoOfSpoken('three bad news on analytics', 'Hello Sir. Good morning.')).toBe(false)
   })
 
   it('opens with a friendly assistant greeting and then waits to help', () => {

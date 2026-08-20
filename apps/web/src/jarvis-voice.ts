@@ -18,6 +18,7 @@ import type { NativeSpeechRecognition } from './voice.js'
 import { synthesizeJarvisSpeech } from './api.js'
 import { framedMicrophoneNeedsBridge, reserveVoiceBridge, startVoiceBridge } from './jarvis-voice-bridge.js'
 import type { VoiceBridgeSession } from './jarvis-voice-bridge.js'
+import { isEchoOfSpoken, isLikelyBargeIn, isStartupGreeting } from './jarvis-intents.js'
 
 /**
  * Voice status shown by the floating strip.
@@ -28,7 +29,15 @@ export type FloatingVoiceStatus = NativeVoiceStatus | 'paused'
 export type VoiceBlock = 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable' | null
 
 type TranscriptHandler = (transcript: string) => void | Promise<void>
-type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean; voiceGender?: 'feminine' | 'masculine'; storeId?: string }>
+type SpeakOptions = Readonly<{
+  text: string
+  language: 'en' | 'hi'
+  muted?: boolean
+  voiceGender?: 'feminine' | 'masculine'
+  storeId?: string
+  /** When false, a new line will not cut off speech that is already playing. */
+  interrupt?: boolean
+}>
 
 type VoiceController = Readonly<{
   active: boolean
@@ -47,6 +56,8 @@ type VoiceController = Readonly<{
   /** Pauses background listening without tearing the session down. */
   setPaused: (paused: boolean) => void
   setBlock: (block: VoiceBlock, framed: boolean) => void
+  /** Switch recognition language while a session is active. */
+  setLanguage: (language: 'en' | 'hi') => void
   /** Must run inside a click handler so the browser allows speech + mic. */
   unlock: () => void
 }>
@@ -68,12 +79,19 @@ let cloudTtsDisabled = false
 let cloudAudio: HTMLAudioElement | null = null
 let lastDedupText = ''
 let lastDedupAt = 0
+let bargeInArmedAt = 0
+let restartTimer: ReturnType<typeof setTimeout> | null = null
+let pendingBargeIn = ''
 
 export function retryCloudSpeech(): void { cloudTtsDisabled = false }
 
 export function __resetJarvisVoiceDedupForTests(): void {
   lastDedupText = ''
   lastDedupAt = 0
+}
+
+export function __armJarvisBargeInForTests(): void {
+  bargeInArmedAt = 0
 }
 
 let state = {
@@ -95,7 +113,15 @@ function updateState(updater: (current: typeof state) => Partial<typeof state>):
   for (const listener of listeners) listener()
 }
 
+function clearRestartTimer(): void {
+  if (restartTimer === null) return
+  clearTimeout(restartTimer)
+  restartTimer = null
+}
+
 function teardownRecognition(): void {
+  clearRestartTimer()
+  pendingBargeIn = ''
   if (recognition) {
     recognition.onresult = null
     recognition.onerror = null
@@ -132,6 +158,53 @@ function clearSpeakKeepAlive(): void {
   }
 }
 
+function shouldKeepListening(): boolean {
+  return state.active && state.status !== 'paused' && state.status !== 'processing' && state.status !== 'error'
+}
+
+function scheduleRecognitionRestart(language: 'en' | 'hi'): void {
+  clearRestartTimer()
+  restartTimer = setTimeout(() => {
+    restartTimer = null
+    if (!shouldKeepListening() || recognition) return
+    startRecognition(language)
+  }, 160)
+}
+
+function handleHeardSpeech(transcript: string, isFinal: boolean): void {
+  const clean = transcript.replace(/\s+/g, ' ').trim()
+  if (!clean) return
+
+  if (state.status === 'speaking') {
+    if (Date.now() < bargeInArmedAt) return
+    if (isEchoOfSpoken(clean, state.lastSpoken)) return
+    if (!isLikelyBargeIn(clean) && !pendingBargeIn) return
+    interruptSpeaking()
+    if (isFinal) {
+      pendingBargeIn = ''
+      if (onTranscriptRef) void onTranscriptRef(clean)
+      return
+    }
+    pendingBargeIn = clean
+    return
+  }
+
+  if (state.status === 'processing' || state.status === 'paused') return
+  if (!isFinal) return
+  const heard = pendingBargeIn && clean.length < pendingBargeIn.length ? pendingBargeIn : clean
+  pendingBargeIn = ''
+  if (onTranscriptRef) void onTranscriptRef(heard)
+}
+
+function interruptSpeaking(): void {
+  speakGeneration += 1
+  clearSpeakKeepAlive()
+  teardownCloudAudio()
+  currentUtterance = null
+  stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+  if (state.status === 'speaking') setState({ status: 'listening' })
+}
+
 function startRecognition(language: 'en' | 'hi'): void {
   teardownRecognition()
   if (typeof window === 'undefined') return
@@ -143,12 +216,16 @@ function startRecognition(language: 'en' | 'hi'): void {
   }
   recognition = next
   next.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
-  next.continuous = false
-  next.interimResults = false
-  next.onstart = () => setState({ status: 'listening', error: null })
+  next.continuous = true
+  next.interimResults = true
+  next.onstart = () => {
+    if (state.status === 'speaking' || state.status === 'processing' || state.status === 'paused') return
+    setState({ status: 'listening', error: null })
+  }
   next.onresult = (event) => {
-    const transcript = [...event.results].map((result) => result[0]?.transcript ?? '').join(' ').trim()
-    if (transcript && onTranscriptRef) void onTranscriptRef(transcript)
+    const last = event.results[event.results.length - 1]
+    const transcript = last?.[0]?.transcript ?? [...event.results].map((result) => result[0]?.transcript ?? '').join(' ')
+    handleHeardSpeech(transcript, last?.isFinal !== false)
   }
   next.onerror = (event) => {
     if (event.error === 'aborted' || event.error === 'no-speech') {
@@ -160,10 +237,13 @@ function startRecognition(language: 'en' | 'hi'): void {
     onErrorRef?.(failure.message)
   }
   next.onend = () => {
-    updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
     recognition = null
+    if (state.status === 'listening') updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
+    if (shouldKeepListening()) scheduleRecognitionRestart(pendingLanguage)
   }
-  setState({ status: 'listening', error: null })
+  if (state.status !== 'speaking' && state.status !== 'processing' && state.status !== 'paused') {
+    setState({ status: 'listening', error: null })
+  }
   try {
     next.start()
   } catch {
@@ -321,7 +401,7 @@ export const jarvisVoiceController: VoiceController = {
         scope: window,
         popup,
         language,
-        onTranscript: (transcript) => { if (onTranscriptRef) void onTranscriptRef(transcript) },
+        onTranscript: (transcript) => handleHeardSpeech(transcript, true),
         onError: (message) => {
           setState({ status: 'error', error: message })
           onErrorRef?.(message)
@@ -389,7 +469,13 @@ export const jarvisVoiceController: VoiceController = {
       onEnd?.()
       return
     }
-    if (clean === lastDedupText && Date.now() - lastDedupAt < 2000) {
+    const interrupt = options.interrupt !== false
+    if (!interrupt && (state.status === 'speaking' || state.status === 'processing')) {
+      onEnd?.()
+      return
+    }
+    const dedupMs = isStartupGreeting(clean) ? 8_000 : 2_000
+    if (clean === lastDedupText && Date.now() - lastDedupAt < dedupMs) {
       onEnd?.()
       return
     }
@@ -398,8 +484,10 @@ export const jarvisVoiceController: VoiceController = {
     speakGeneration += 1
     const generation = speakGeneration
     pendingLanguage = language
-    teardownRecognition()
-    pauseBridge()
+    pendingBargeIn = ''
+    bargeInArmedAt = Date.now() + 450
+    // Keep the mic open so the merchant can barge in mid-reply.
+    if (state.active && !recognition && !bridgeSession) startRecognition(language)
     setState({ status: 'speaking', lastSpoken: clean })
     unlockSpeechSynthesis(window)
     teardownCloudAudio()
@@ -420,11 +508,8 @@ export const jarvisVoiceController: VoiceController = {
     nativeFallback()
   },
   stopSpeaking() {
-    speakGeneration += 1
-    clearSpeakKeepAlive()
-    teardownCloudAudio()
-    currentUtterance = null
-    stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+    interruptSpeaking()
+    if (state.active && state.status === 'listening') return
     if (state.active && state.status === 'speaking') setState({ status: 'idle' })
   },
   setMuted(muted) {
@@ -455,6 +540,14 @@ export const jarvisVoiceController: VoiceController = {
   setBlock(block, framed) {
     setState({ block, framed })
   },
+  setLanguage(language) {
+    const already = pendingLanguage === language
+    pendingLanguage = language
+    if (!state.active || state.status === 'paused' || state.status === 'processing') return
+    if (bridgeSession) return
+    if (already && recognition) return
+    startRecognition(language)
+  },
 }
 
 function subscribe(listener: () => void): () => void {
@@ -477,10 +570,12 @@ export function useJarvisVoiceSnapshot(): typeof state {
  */
 export function resumeJarvisListening(language: 'en' | 'hi'): void {
   if (!state.active || state.status === 'paused' || state.status === 'speaking' || state.status === 'processing') return
+  pendingLanguage = language
   if (bridgeSession) {
     resumeBridge()
     return
   }
+  if (recognition) return
   startRecognition(language)
 }
 

@@ -59,11 +59,11 @@ export async function requestMicrophoneAccess(scope: Window | undefined, navigat
 
 async function openMicrophoneStream(getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>): Promise<MediaStream> {
   try {
-    return await getUserMedia({ audio: true, video: false })
+    return await getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
   } catch (error: unknown) {
     const name = error instanceof DOMException ? error.name : ''
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'DevicesNotFoundError') throw error
-    return await getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+    return await getUserMedia({ audio: true, video: false })
   }
 }
 
@@ -98,7 +98,7 @@ function safeAllowsMicrophone(policy: PermissionsPolicyLike): boolean {
 }
 
 type NativeSpeechResult = Readonly<{ transcript: string }>
-type NativeSpeechEvent = Readonly<{ results: readonly Readonly<{ 0?: NativeSpeechResult; length: number }>[] }>
+type NativeSpeechEvent = Readonly<{ results: readonly Readonly<{ 0?: NativeSpeechResult; length: number; isFinal?: boolean }>[] }>
 export interface NativeSpeechRecognition {
   lang: string
   continuous: boolean

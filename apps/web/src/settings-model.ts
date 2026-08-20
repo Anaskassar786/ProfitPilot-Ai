@@ -15,6 +15,7 @@ export type BubblePosition = 'bottom-right' | 'bottom-left'
 export type AssistantMode = 'active' | 'balanced' | 'quiet'
 export type ResponseStyle = 'CONCISE' | 'DETAILED' | 'TECHNICAL'
 export type JarvisVoiceGender = 'feminine' | 'masculine'
+export type JarvisVoiceLanguage = 'en' | 'hi'
 export type EmailVerificationState = 'unconfigured' | 'required' | 'pending' | 'verified'
 
 export type NotificationPreferences = Readonly<{
@@ -39,6 +40,7 @@ export type WorkspaceSettings = Readonly<{
   responseStyle: ResponseStyle
   autoSuggestions: boolean
   jarvisVoiceGender: JarvisVoiceGender
+  jarvisLanguage: JarvisVoiceLanguage
 }>
 
 export type MerchantEmailView = Readonly<{
@@ -91,6 +93,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   responseStyle: 'CONCISE',
   autoSuggestions: true,
   jarvisVoiceGender: 'feminine',
+  jarvisLanguage: 'en',
 }
 
 export function settingsStorageKey(storeId: string | null): string {
@@ -199,6 +202,7 @@ export function parseWorkspaceSettings(value: unknown, fallback: WorkspaceSettin
     responseStyle: record.responseStyle === 'DETAILED' || record.responseStyle === 'TECHNICAL' ? record.responseStyle : 'CONCISE',
     autoSuggestions: record.autoSuggestions !== false,
     jarvisVoiceGender: record.jarvisVoiceGender === 'masculine' || record.jarvisVoiceGender === 'male' ? 'masculine' : 'feminine',
+    jarvisLanguage: record.jarvisLanguage === 'hi' || record.jarvisLanguage === 'hindi' ? 'hi' : 'en',
   }
 }
 

@@ -21,6 +21,9 @@
 .jarvis-settings-label { display: inline-flex; align-items: center; gap: 7px; color: var(--text); font-size: 13px; font-weight: 700; }
 .jarvis-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .jarvis-choice-row-compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.jarvis-choice-row-voices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.jarvis-settings-card-wide { grid-column: 1 / -1; }
+.jarvis-settings-hint { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.45; font-weight: 500; }
 .jarvis-choice-button, .jarvis-pill-button, .jarvis-toggle-card { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px; color: var(--text-secondary); border: 1px solid var(--border-soft); border-radius: 12px; background: var(--card); text-align: left; transition: border-color .18s ease, transform .12s ease, box-shadow .18s ease; }
 .jarvis-choice-button:hover, .jarvis-pill-button:hover, .jarvis-toggle-card:hover { border-color: rgba(61,194,245,.3); box-shadow: 0 10px 24px rgba(15,23,42,.08); transform: translateY(-1px); }
 .jarvis-choice-button strong, .jarvis-toggle-card strong { color: var(--text); font-size: 12px; }
