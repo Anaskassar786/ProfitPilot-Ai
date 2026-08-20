@@ -69,7 +69,7 @@ describe('PR46 calibration feedback loop', () => {
 
 describe('PR46 humanization labels', () => {
   it('covers every agent, rule, action, risk, status, and reject reason', () => {
-    expect(Object.keys(AGENT_LABELS)).toHaveLength(7)
+    expect(Object.keys(AGENT_LABELS)).toHaveLength(6)
     expect(Object.keys(RULE_LABELS)).toHaveLength(RULE_IDS.length)
     expect(Object.keys(ACTION_TYPE_LABELS)).toHaveLength(5)
     expect(Object.keys(RISK_LABELS)).toHaveLength(3)

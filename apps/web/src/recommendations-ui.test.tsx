@@ -392,7 +392,7 @@ describe('rule detail modal', () => {
     const html = renderToStaticMarkup(createElement(RuleDetailModal, { ruleId: 'CROSS_SELL', plan: 'start', onClose: noop, onUpgrade: noop }))
     expect(html).toContain('Upgrade Plan')
     expect(html).not.toContain('Upgrade to')
-    expect(html).toContain('needs Growth')
+    expect(html).toContain('needs Commander')
   })
 })
 

@@ -838,7 +838,7 @@ const BILLING_FEATURE_MATRIX: readonly Readonly<{
   { id: 'stores', label: 'Shopify stores', trial: '1', start: '1', growth: '3', commander: 'Unlimited' },
   { id: 'ai_commands', label: 'AI Commands / day', trial: '10', start: '100', growth: '300', commander: 'Unlimited' },
   { id: 'automations', label: 'Automation workflows', trial: '2', start: '5', growth: '20', commander: 'Unlimited' },
-  { id: 'recs', label: 'AI recommendations / mo', trial: '10', start: '30', growth: '150', commander: 'Unlimited' },
+  { id: 'recs', label: 'AI recommendations / mo', trial: '10', start: '150', growth: '300', commander: 'Unlimited' },
   { id: 'auto_execution', label: 'AI auto-execution', trial: false, start: false, growth: false, commander: true },
   { id: 'pricing_agent', label: 'Pricing Agent', trial: false, start: false, growth: true, commander: true },
   { id: 'product_exec', label: 'Product + Executive', trial: false, start: false, growth: false, commander: true },
@@ -996,8 +996,8 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   }
 
   const displayPlans = plans.length > 0 ? plans : ([
-    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 79, annualPrice: 790, annualMonthsFree: 2, headline: 'AI clarity for your Shopify store', features: ['1 Shopify store connected', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', 'Customer insights, churn and win-back signals', 'Cart recovery and welcome flows via Customer Agent', '5 automation workflows', '30 AI recommendations / month', 'Closed-period reports and basic exports', 'Email support'], limits: {} },
-    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 199, annualPrice: 1990, annualMonthsFree: 2, recommended: true, headline: 'Scale decisions across products, pricing & automations', features: ['Up to 3 Shopify stores', '4 AI agents — includes Pricing Agent', '300 AI Commands / day', '20 automation workflows', 'Advanced analytics plus forecasting and ROI attribution', '150 AI recommendations / month', 'Margin-safe pricing opportunities (Pricing Agent)', 'Priority support with a 12-hour target'], limits: {} },
+    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 79, annualPrice: 790, annualMonthsFree: 2, headline: 'AI clarity for your Shopify store', features: ['1 Shopify store connected', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', 'Customer insights, churn and win-back signals', 'Cart recovery and welcome flows via Customer Agent', '5 automation workflows', '150 AI recommendations / month', 'Closed-period reports and basic exports', 'Email support'], limits: {} },
+    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 199, annualPrice: 1990, annualMonthsFree: 2, recommended: true, headline: 'Scale decisions across products, pricing & automations', features: ['Up to 3 Shopify stores', '4 AI agents — includes Pricing Agent', '300 AI Commands / day', '20 automation workflows', 'Advanced analytics plus forecasting and ROI attribution', '300 AI recommendations / month', 'Margin-safe pricing opportunities (Pricing Agent)', 'Priority support with a 12-hour target'], limits: {} },
     { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 399, annualPrice: 3990, annualMonthsFree: 2, headline: 'Full AI employee — insights plus actions', features: ['Unlimited Shopify stores', 'All 6 AI agents (Product + Executive unlocked)', 'Unlimited AI Commands', 'Auto-execution: AI can take store actions for you', 'Unlimited automation workflows', 'Product Agent cross-sell + Executive weekly digest', 'Unlimited AI recommendations', 'Advanced forecasting, attribution, and exports', 'VIP priority support with a 4-hour target'], limits: {} },
   ])
 

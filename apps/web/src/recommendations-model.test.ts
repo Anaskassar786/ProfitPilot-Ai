@@ -68,11 +68,11 @@ describe('currency handling', () => {
 })
 
 describe('plan gating', () => {
-  it('unlocks 2/3/6/7 agents by tier', () => {
+  it('unlocks 2/3/4/6 agents by tier', () => {
     expect(unlockedAgents('trial')).toHaveLength(2)
     expect(unlockedAgents('start')).toHaveLength(3)
-    expect(unlockedAgents('growth')).toHaveLength(6)
-    expect(unlockedAgents('commander')).toHaveLength(7)
+    expect(unlockedAgents('growth')).toHaveLength(4)
+    expect(unlockedAgents('commander')).toHaveLength(6)
   })
   it('locks the executive agent below commander', () => {
     expect(agentLockedForPlan('EXECUTIVE_AGENT', 'growth')).toBe(true)

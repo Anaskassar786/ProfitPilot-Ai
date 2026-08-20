@@ -132,7 +132,7 @@ describe('AI Command page metrics', () => {
     expect(metrics.orders).toEqual({ total: 3, pending: 1, todayCount: 2 })
     expect(metrics.revenue).toEqual({ today: 200, yesterday: 100, changePercent: 100, currency: 'USD' })
     expect(metrics.storeHealth.score).not.toBeNull()
-    expect(metrics.subscription).toEqual({ currentPlan: 'growth', basicAgentCount: 5 })
+    expect(metrics.subscription).toEqual({ currentPlan: 'growth', basicAgentCount: 4 })
     expect(metrics.availability).toEqual({ customers: true, products: true, orders: true, inventoryHistory: true, storeHealth: true })
   })
 

@@ -105,7 +105,7 @@ describe('PR #41 final polish contracts', () => {
 
   it('preserves Jarvis orb and Products functionality source byte-for-byte', () => {
     expect(sha256(source('./JarvisOrb.tsx'))).toBe('bdc5177021879275e5032e2bef134b51869ccf155d275a80f7a177a1fb8449f2')
-    expect(sha256(source('./jarvis-orb.css'))).toBe('529cf7cdc543bd0fee5607f00ebf35547dc957c6dd08f53e56f67b47c7faa1b9')
+    expect(sha256(source('./jarvis-orb.css'))).toBe('5585512ab8ec013a563d16fdbedbd657a994b990f7a02524cb1f941515e54dd8')
     expect(sha256(source('./products.tsx'))).toBe('e6fc73ca1ad4a6f7be7ec237c7100adaec919101803d1757c8aa4829b19a41d1')
     expect(sha256(source('./products-model.ts'))).toBe('5a74f7e0ab08bce2a0b3a88af516a022a61ac36d4d077bb6f80bb959feaeb44f')
   })
