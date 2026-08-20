@@ -2,12 +2,15 @@ import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, PhaseNotImplementedError, requestId, success } from '@profitpilot/types'
-import type { AdminStepUpSessions, FunnelLedger, TrialAndGiftLedger } from '@profitpilot/billing'
+import type { AdminStepUpSessions, FunnelLedger } from '@profitpilot/billing'
 import type { AccessReviewService } from '@profitpilot/monitoring'
 import type { Role } from '@profitpilot/types'
 import { getAuthContext } from './security.js'
 
-export type AdminRouteDependencies = Readonly<{ adminKey: string; stepUp: AdminStepUpSessions; funnel: FunnelLedger; gifts: TrialAndGiftLedger; accessReview?: AccessReviewService }>
+/** Minimal gift admin surface — kill switch only. Backed by Postgres or in-memory. */
+export type GiftAdminSurface = Readonly<{ setGiftKillSwitch: (active: boolean) => void }>
+
+export type AdminRouteDependencies = Readonly<{ adminKey: string; stepUp: AdminStepUpSessions; funnel: FunnelLedger; gifts: GiftAdminSurface; accessReview?: AccessReviewService }>
 
 export function createAdminRouter(dependencies: AdminRouteDependencies): Router {
   const router = Router()

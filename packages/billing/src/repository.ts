@@ -9,7 +9,11 @@ export interface BillingRepository { get(shopId: string): Promise<BillingRecord 
 export class InMemoryBillingRepository implements BillingRepository {
   private readonly records = new Map<string, BillingRecord>()
   public async get(shopId: string): Promise<BillingRecord | null> { return this.records.get(shopId) ?? null }
-  public async put(record: BillingRecord): Promise<void> { if (!this.records.has(record.storeId ?? '')) this.records.set(record.storeId ?? '', record) }
+  public async put(record: BillingRecord): Promise<void> {
+    const key = record.storeId
+    if (!key) throw new AppError('VALIDATION_ERROR', 'storeId is required on billing records', 400)
+    this.records.set(key, record)
+  }
   public async transition(shopId: string, expectedVersion: number, state: BillingState, now: number): Promise<BillingRecord> { const current = this.records.get(shopId); if (!current || current.version !== expectedVersion) throw new AppError('CONFLICT', 'Billing subscription changed; reload before retrying', 409, { shopId, expectedVersion }); const next = { ...current, state, version: current.version + 1, updatedAt: now } as BillingRecord; this.records.set(shopId, next); return next }
 }
 

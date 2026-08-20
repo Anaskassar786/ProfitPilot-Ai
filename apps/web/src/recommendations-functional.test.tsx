@@ -372,7 +372,7 @@ describe('Recommendations — real-click decision and evidence flows', () => {
   })
 
   it('shows the high-risk confirmation and gives a clear limit-reached response without a 500', async () => {
-    const highRisk = recommendation({ id: 'r-risk', title: 'Email at-risk snowboard customers', actionType: 'SEND_EMAIL', actionRisk: 'APPROVAL_REQUIRED', agent: 'CAMPAIGN_AGENT' })
+    const highRisk = recommendation({ id: 'r-risk', title: 'Email at-risk snowboard customers', actionType: 'SEND_EMAIL', actionRisk: 'APPROVAL_REQUIRED', agent: 'CUSTOMER_AGENT' })
     const harness = await mount([highRisk], 10)
     const discover = buttonByText(container, 'Limit reached')
     await click(discover)

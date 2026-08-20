@@ -451,7 +451,14 @@ export function fetchBilling(storeId: string, fetcher: Fetcher = fetch): Promise
 export function fetchBillingUsage(storeId: string, fetcher: Fetcher = fetch): Promise<readonly UsageMeter[]> { return requestJson<readonly UsageMeter[]>(`/billing/usage?shopId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function fetchBillingRoi(storeId: string, fetcher: Fetcher = fetch): Promise<RoiMetrics> { return requestJson<RoiMetrics>(`/billing/roi?shopId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function redeemGiftCode(storeId: string, code: string, fetcher: Fetcher = fetch): Promise<Readonly<{ code: string; expiresAt: number }>> { return requestJson(`/billing/gift?shopId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) }, fetcher) }
-export function createBillingCharge(storeId: string, plan: BillingPlan['code'], interval: 'MONTHLY' | 'ANNUAL', returnUrl: string, fetcher: Fetcher = fetch): Promise<Readonly<{ confirmationUrl: string | null }>> { return requestJson(`/billing/charge?shopId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan, interval, returnUrl }) }, fetcher) }
+/** Phase 1: always request a local mock upgrade (no Shopify Billing redirect). */
+export function createBillingCharge(storeId: string, plan: BillingPlan['code'], interval: 'MONTHLY' | 'ANNUAL', returnUrl: string, fetcher: Fetcher = fetch): Promise<Readonly<{ confirmationUrl: string | null; mock?: boolean; message?: string }>> {
+  return requestJson(`/billing/charge?shopId=${encodeURIComponent(storeId)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ plan, interval, returnUrl, mock: true }),
+  }, fetcher)
+}
 
 export function fetchJarvisPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>(`/jarvis/preferences?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function saveJarvisPreferences(preferences: Readonly<Partial<JarvisPreference> & { storeId: string }>, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>('/jarvis/preferences', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(preferences) }, fetcher) }

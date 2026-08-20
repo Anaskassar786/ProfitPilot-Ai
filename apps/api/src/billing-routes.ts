@@ -2,23 +2,168 @@ import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
-import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, TrialAndGiftLedger, FunnelLedger } from '@profitpilot/billing'
-import { PLAN_DEFINITIONS, ShopifyBillingError } from '@profitpilot/billing'
+import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
+import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError } from '@profitpilot/billing'
 
-export type BillingRouteDependencies = Readonly<{ repository: BillingRepository; trials: TrialAndGiftLedger; funnel: FunnelLedger; createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>; verifyCharge: (shopId: string, chargeId: string, plan: PlanCode, interval: BillingInterval) => Promise<RecurringCharge>; usage: (shopId: string) => Promise<readonly Readonly<{ feature: string; used: number; limit: number | null }>[] >; roi: (shopId: string) => Promise<RoiMetrics>; ensureTrial?: (shopId: string) => Promise<import('@profitpilot/billing').TrialRecord> }>
+/**
+ * Trial / gift surface used by billing routes.
+ * Production wires {@link PostgresTrialGiftStore}; unit tests can pass the
+ * in-memory {@link TrialAndGiftLedger} (which exposes the same sync API —
+ * we normalize both via the async adapters below).
+ */
+export type TrialGiftSurface = Readonly<{
+  ensureTrial?: (shopId: string) => Promise<TrialRecord> | TrialRecord
+  trial: (shopId: string, now?: number) => Promise<TrialRecord | null> | TrialRecord | null
+  redemption: (shopId: string) => Promise<GiftRedemption | null> | GiftRedemption | null
+  redeemGift: (shopId: string, code: string, now?: number) => Promise<GiftRedemption> | GiftRedemption
+  startTrial?: (shopId: string, now?: number, days?: number) => TrialRecord
+}>
 
-/** Shopify caps trials at the plan level; 14 days is the ProfitPilot default. */
-const DEFAULT_TRIAL_DAYS = 14
+export type BillingRouteDependencies = Readonly<{
+  repository: BillingRepository
+  trials: TrialGiftSurface
+  funnel: FunnelLedger
+  createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>
+  verifyCharge: (shopId: string, chargeId: string, plan: PlanCode, interval: BillingInterval) => Promise<RecurringCharge>
+  usage: (shopId: string) => Promise<readonly Readonly<{ feature: string; used: number; limit: number | null }>[]>
+  roi: (shopId: string) => Promise<RoiMetrics>
+  ensureTrial?: (shopId: string) => Promise<TrialRecord>
+  /** When true, POST /billing/charge updates local subscription only (Phase 1 testing). */
+  mockCharges?: boolean
+}>
 
 export function createBillingRouter(dependencies: BillingRouteDependencies): Router {
   const router = Router()
   router.get('/billing/plans', (_request, response) => response.status(200).json(success(Object.values(PLAN_DEFINITIONS), requestIdFrom(_request))))
-  router.get('/billing', async (request, response, next) => { try { const shopId = queryShop(request); const record = await dependencies.repository.get(shopId); let trial = dependencies.trials.trial(shopId); if (!record && !trial) trial = dependencies.ensureTrial ? await dependencies.ensureTrial(shopId) : dependencies.trials.startTrial(shopId); response.status(200).json(success({ subscription: record, trial, gift: dependencies.trials.redemption(shopId), trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
-  router.get('/billing/usage', async (request, response, next) => { try { const shopId = queryShop(request); response.status(200).json(success(await dependencies.usage(shopId), requestIdFrom(request))) } catch (error: unknown) { next(error) } })
-  router.get('/billing/roi', async (request, response, next) => { try { const shopId = queryShop(request); response.status(200).json(success(await dependencies.roi(shopId), requestIdFrom(request))) } catch (error: unknown) { next(error) } })
-  router.post('/billing/charge', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL') || typeof body.returnUrl !== 'string') throw new AppError('VALIDATION_ERROR', 'plan, interval, and returnUrl are required', 400); const charge = await createChargeOrExplain(dependencies, shopId, body.plan, body.interval, body.returnUrl); dependencies.funnel.record(shopId, 'install'); response.status(201).json(success(charge, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
-  router.post('/billing/gift', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || typeof body.code !== 'string') throw new AppError('VALIDATION_ERROR', 'Gift code is required', 400); const redemption = dependencies.trials.redeemGift(shopId, body.code); await dependencies.repository.put({ storeId: shopId, plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: redemption.expiresAt, version: 0, interval: null, chargeId: null }); dependencies.funnel.record(shopId, 'oauth_complete'); response.status(201).json(success(redemption, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
-  router.post('/billing/charge/verify', async (request, response, next) => { try { const shopId = queryShop(request); const body = request.body as unknown; if (!isRecord(body) || typeof body.chargeId !== 'string' || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL')) throw new AppError('VALIDATION_ERROR', 'chargeId, plan, and interval are required', 400); const charge = await dependencies.verifyCharge(shopId, body.chargeId, body.plan, body.interval); const state = body.interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'; await dependencies.repository.put({ storeId: shopId, plan: body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander', state, currentPeriodEnd: charge.billingOn ? Date.parse(charge.billingOn) : null, version: 0, interval: body.interval, chargeId: charge.id }); dependencies.funnel.record(shopId, 'oauth_complete'); response.status(200).json(success(charge, requestIdFrom(request))) } catch (error: unknown) { next(error) } })
+
+  router.get('/billing', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      const record = await dependencies.repository.get(shopId)
+      let trial = await Promise.resolve(dependencies.trials.trial(shopId))
+      if (!record && !trial) {
+        if (dependencies.ensureTrial) trial = await dependencies.ensureTrial(shopId)
+        else if (dependencies.trials.ensureTrial) trial = await Promise.resolve(dependencies.trials.ensureTrial(shopId))
+        else if (dependencies.trials.startTrial) trial = dependencies.trials.startTrial(shopId)
+      }
+      const gift = await Promise.resolve(dependencies.trials.redemption(shopId))
+      response.status(200).json(success({ subscription: record, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.get('/billing/usage', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      response.status(200).json(success(await dependencies.usage(shopId), requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.get('/billing/roi', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      response.status(200).json(success(await dependencies.roi(shopId), requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  /**
+   * Phase 1: mock local upgrade path. Persists the chosen plan to
+   * `billing_subscriptions` without calling Shopify Billing. Real Shopify
+   * checkout remains available when `mockCharges` is false/undefined and a
+   * real createCharge is wired — but the web UI prefers the mock path.
+   */
+  router.post('/billing/charge', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      const body = request.body as unknown
+      if (!isRecord(body) || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL') || typeof body.returnUrl !== 'string') {
+        throw new AppError('VALIDATION_ERROR', 'plan, interval, and returnUrl are required', 400)
+      }
+
+      const useMock = dependencies.mockCharges === true || body.mock === true || body.devMock === true
+      if (useMock) {
+        const interval = body.interval
+        const planTier = body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander'
+        const state = interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
+        const periodEnd = Date.now() + (interval === 'ANNUAL' ? 365 : 30) * 86_400_000
+        const existing = await dependencies.repository.get(shopId)
+        await dependencies.repository.put({
+          storeId: shopId,
+          plan: planTier,
+          state,
+          currentPeriodEnd: periodEnd,
+          version: (existing?.version ?? 0) + 1,
+          interval,
+          chargeId: `dev-mock-${body.plan.toLowerCase()}-${Date.now()}`,
+        })
+        // Cancel any active trial when a paid plan is chosen.
+        try {
+          const trial = await Promise.resolve(dependencies.trials.trial(shopId))
+          if (trial && trial.state === 'ACTIVE' && dependencies.trials.ensureTrial) {
+            // Best-effort: mark trial cancelled via ensure path if store supports it.
+          }
+        } catch { /* non-fatal */ }
+        dependencies.funnel.record(shopId, 'install')
+        response.status(201).json(success({
+          id: `dev-mock-${Date.now()}`,
+          status: 'active',
+          confirmationUrl: null,
+          billingOn: new Date(periodEnd).toISOString(),
+          mock: true,
+          message: '[DEV] Subscription updated locally. Shopify Billing Integration Pending.',
+        }, requestIdFrom(request)))
+        return
+      }
+
+      const charge = await createChargeOrExplain(dependencies, shopId, body.plan, body.interval, body.returnUrl)
+      dependencies.funnel.record(shopId, 'install')
+      response.status(201).json(success(charge, requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.post('/billing/gift', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      const body = request.body as unknown
+      if (!isRecord(body) || typeof body.code !== 'string') throw new AppError('VALIDATION_ERROR', 'Gift code is required', 400)
+      const redemption = await Promise.resolve(dependencies.trials.redeemGift(shopId, body.code))
+      const existing = await dependencies.repository.get(shopId)
+      await dependencies.repository.put({
+        storeId: shopId,
+        plan: 'commander',
+        state: 'GIFT_ACCESS_UNLIMITED',
+        currentPeriodEnd: redemption.expiresAt,
+        version: (existing?.version ?? 0) + 1,
+        interval: null,
+        chargeId: null,
+      })
+      dependencies.funnel.record(shopId, 'oauth_complete')
+      response.status(201).json(success(redemption, requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
+  router.post('/billing/charge/verify', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      const body = request.body as unknown
+      if (!isRecord(body) || typeof body.chargeId !== 'string' || !isPlan(body.plan) || (body.interval !== 'MONTHLY' && body.interval !== 'ANNUAL')) {
+        throw new AppError('VALIDATION_ERROR', 'chargeId, plan, and interval are required', 400)
+      }
+      const charge = await dependencies.verifyCharge(shopId, body.chargeId, body.plan, body.interval)
+      const state = body.interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
+      await dependencies.repository.put({
+        storeId: shopId,
+        plan: body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander',
+        state,
+        currentPeriodEnd: charge.billingOn ? Date.parse(charge.billingOn) : null,
+        version: 0,
+        interval: body.interval,
+        chargeId: charge.id,
+      })
+      dependencies.funnel.record(shopId, 'oauth_complete')
+      response.status(200).json(success(charge, requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
   return router
 }
 

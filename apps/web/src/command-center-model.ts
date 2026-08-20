@@ -155,13 +155,13 @@ export function trendDirection(changePercent: number | null): 'up' | 'down' | 'f
   return 'flat'
 }
 
-/* ── Hidden agents (kept in the backend for future use, hidden from UI) ── */
+/* ── Hidden agents (Campaign Agent purged; Pricing Agent is now visible) ── */
 
-export const HIDDEN_AGENT_IDS: ReadonlySet<string> = new Set(['PRICING_AGENT', 'CAMPAIGN_AGENT'])
+export const HIDDEN_AGENT_IDS: ReadonlySet<string> = new Set()
 
-/** The Command Center only displays a curated subset of the full agent roster. */
+/** The Command Center displays the full 6-agent roster (Campaign Agent removed). */
 export function visibleAgents(agents: readonly AgentOverviewEntry[]): readonly AgentOverviewEntry[] {
-  return agents.filter((agent) => !HIDDEN_AGENT_IDS.has(agent.id))
+  return agents.filter((agent) => !HIDDEN_AGENT_IDS.has(agent.id) && agent.id !== 'CAMPAIGN_AGENT')
 }
 
 export function relativeTime(iso: string, now = Date.now()): string {
@@ -269,8 +269,9 @@ export type AgentCategory = 'AI Employees' | 'Communication' | 'Strategic Overvi
 export const AGENT_CATEGORY_ORDER: readonly AgentCategory[] = ['AI Employees', 'Communication', 'Strategic Overview']
 
 export function agentCategory(agent: Readonly<{ id: string }>): AgentCategory {
-  if (agent.id === 'CAMPAIGN_AGENT') return 'Communication'
   if (agent.id === 'EXECUTIVE_AGENT') return 'Strategic Overview'
+  // Customer Agent now owns recovery/welcome (formerly Campaign Agent).
+  if (agent.id === 'CUSTOMER_AGENT') return 'Communication'
   return 'AI Employees'
 }
 
@@ -308,11 +309,11 @@ export const AGENT_GUIDES: Readonly<Record<string, AgentGuide>> = {
     dataSources: ['products.inventory_units', 'products.average_daily_units', 'products.units_sold_120d'],
   },
   CUSTOMER_AGENT: {
-    description: 'Finds churn risks and reorder windows in your customer base — never using personally identifiable information.',
-    whatItDoes: ['Detects high-value customers going quiet', 'Times reorder nudges for returning customers', 'Works from opaque customer keys — never names or emails'],
-    sampleInsights: ['A high-value customer has gone quiet for 80 days. A win-back nudge is due.', 'A returning customer is outside their reorder window.', 'No churn-risk customers match the current thresholds.'],
-    useCases: ['Win back at-risk customers', 'Time repeat-purchase campaigns', 'Protect customer lifetime value'],
-    dataSources: ['customers.lifetime_value', 'customers.last_order_at', 'customers.order_count'],
+    description: 'Finds churn risks, reorder windows, abandoned checkouts, and welcome moments — never using personally identifiable information.',
+    whatItDoes: ['Detects high-value customers going quiet', 'Times reorder nudges for returning customers', 'Recovers checkouts inside the 48-hour window', 'Welcomes first orders while they are fresh', 'Works from opaque customer keys — never names or emails'],
+    sampleInsights: ['A high-value customer has gone quiet for 80 days. A win-back nudge is due.', 'Three abandoned checkouts are still inside the 48-hour recovery window.', 'A new customer placed their first order two days ago — welcome them.'],
+    useCases: ['Win back at-risk customers', 'Recover abandoned checkouts', 'Welcome new customers', 'Protect customer lifetime value'],
+    dataSources: ['customers.lifetime_value', 'customers.last_order_at', 'customers.order_count', 'checkouts.total', 'checkouts.created_at'],
   },
   PRICING_AGENT: {
     description: 'Spots margin-safe price test opportunities from real cost and demand data.',
@@ -320,13 +321,6 @@ export const AGENT_GUIDES: Readonly<Record<string, AgentGuide>> = {
     sampleInsights: ['A best-seller clears your margin floor — a measured 5% test is available.', 'No pricing opportunities clear the margin threshold right now.', 'Your margin floor is protected across active products.'],
     useCases: ['Test price on proven sellers', 'Protect gross margins', 'Model uplift before changing prices'],
     dataSources: ['products.unit_price', 'products.unit_cost', 'products.average_daily_units'],
-  },
-  CAMPAIGN_AGENT: {
-    description: 'Drafts compliant recovery and welcome campaigns from live checkout and customer signals.',
-    whatItDoes: ['Recovers checkouts inside the 48-hour window', 'Welcomes first orders while they are fresh', 'Writes concise, compliant campaign language'],
-    sampleInsights: ['Three abandoned checkouts are still inside the 48-hour recovery window.', 'A new customer placed their first order two days ago — welcome them.', 'No checkouts are in the recovery window right now.'],
-    useCases: ['Recover abandoned checkouts', 'Welcome new customers', 'Draft campaign copy from real signals'],
-    dataSources: ['checkouts.total', 'checkouts.created_at', 'customers.order_count'],
   },
   PRODUCT_AGENT: {
     description: 'Learns which products travel together and proposes cross-sell pairings.',

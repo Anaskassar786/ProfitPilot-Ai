@@ -34,7 +34,7 @@ const summary = {
     { agent: 'INVENTORY_AGENT', pending: 2, approved: 3, rejected: 0, total: 5 },
     { agent: 'REVENUE_AGENT', pending: 2, approved: 2, rejected: 1, total: 5 },
     { agent: 'PRICING_AGENT', pending: 1, approved: 1, rejected: 1, total: 3 },
-    { agent: 'CAMPAIGN_AGENT', pending: 1, approved: 2, rejected: 0, total: 3 },
+    { agent: 'CUSTOMER_AGENT', pending: 1, approved: 2, rejected: 0, total: 3 },
   ],
   byRule: [
     { ruleId: 'STOCKOUT_RISK', total: 5 },

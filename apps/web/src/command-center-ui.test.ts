@@ -29,7 +29,7 @@ import type { Recommendation } from './model.js'
 
 const AGENT_PLAN: Readonly<Record<string, PlanTier>> = {
   REVENUE_AGENT: 'trial', INVENTORY_AGENT: 'trial', CUSTOMER_AGENT: 'start',
-  PRICING_AGENT: 'growth', CAMPAIGN_AGENT: 'growth', PRODUCT_AGENT: 'commander', EXECUTIVE_AGENT: 'commander',
+  PRICING_AGENT: 'growth', PRODUCT_AGENT: 'commander', EXECUTIVE_AGENT: 'commander',
 }
 const PLAN_ORDER: readonly PlanTier[] = ['trial', 'start', 'growth', 'commander']
 
@@ -49,27 +49,27 @@ function overviewFor(plan: PlanTier): readonly AgentOverviewEntry[] {
 }
 
 describe('PR45 plan view regression matrix', () => {
-  it('trial sees 2 unlocked and 5 locked cards', () => {
+  it('trial sees 2 unlocked and 4 locked cards', () => {
     const agents = overviewFor('trial')
     expect(unlockedAgents(agents)).toHaveLength(2)
-    expect(groupLockedByPlan(agents).flatMap((group) => group.agents)).toHaveLength(5)
-  })
-  it('start sees 3 unlocked and 4 locked cards', () => {
-    const agents = overviewFor('start')
-    expect(unlockedAgents(agents)).toHaveLength(3)
     expect(groupLockedByPlan(agents).flatMap((group) => group.agents)).toHaveLength(4)
   })
-  it('growth sees 5 unlocked and 2 locked cards', () => {
+  it('start sees 3 unlocked and 3 locked cards', () => {
+    const agents = overviewFor('start')
+    expect(unlockedAgents(agents)).toHaveLength(3)
+    expect(groupLockedByPlan(agents).flatMap((group) => group.agents)).toHaveLength(3)
+  })
+  it('growth sees 4 unlocked and 2 locked cards', () => {
     const agents = overviewFor('growth')
-    expect(unlockedAgents(agents)).toHaveLength(5)
+    expect(unlockedAgents(agents)).toHaveLength(4)
     const groups = groupLockedByPlan(agents)
     expect(groups).toHaveLength(1)
     expect(groups[0]?.plan).toBe('commander')
     expect(groups[0]?.agents).toHaveLength(2)
   })
-  it('commander sees all 7 unlocked and no locked groups', () => {
+  it('commander sees all 6 unlocked and no locked groups', () => {
     const agents = overviewFor('commander')
-    expect(unlockedAgents(agents)).toHaveLength(7)
+    expect(unlockedAgents(agents)).toHaveLength(6)
     expect(groupLockedByPlan(agents)).toHaveLength(0)
   })
   it('groups locked agents by the plan that unlocks them, in upgrade order', () => {
@@ -170,7 +170,7 @@ describe('PR45 component rendering', () => {
     const html = renderToStaticMarkup(createElement(CommandCenterHero, {
       health: { score: 74, method: 'deterministic-v1', components: [{ key: 'revenue_momentum', score: 80, weight: .35, reason: '' }] },
       summary: { counts: { PENDING: 0, APPROVED: 2, REJECTED: 0, EXECUTED: 1, FAILED: 0, EXPIRED: 0 }, total: 3, pendingImpact: [], approvedThisMonth: { count: 2, impact: [] }, byAgent: [], byRule: [], approvalRate: { allTime: 100, last30d: 100 }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [{ day: '2026-08-18', generated: 2, approved: 1 }, { day: '2026-08-17', generated: 1, approved: 1 }], plan: 'growth', usage: { feature: 'ai_recommendations_month', used: 3, limit: 150, remaining: 147 } },
-      overview: { plan: 'growth', unlockedCount: 5, totalCount: 7, agents: [...overviewFor('growth')] },
+      overview: { plan: 'growth', unlockedCount: 4, totalCount: 6, agents: [...overviewFor('growth')] },
     }))
     expect(html).toContain('74')
     expect(html).toContain('Store Health Score')
@@ -236,12 +236,11 @@ describe('PR49 section organization', () => {
   it('groups analytics agents under AI Employees', () => {
     expect(agentCategory({ id: 'REVENUE_AGENT' })).toBe('AI Employees')
     expect(agentCategory({ id: 'INVENTORY_AGENT' })).toBe('AI Employees')
-    expect(agentCategory({ id: 'CUSTOMER_AGENT' })).toBe('AI Employees')
     expect(agentCategory({ id: 'PRICING_AGENT' })).toBe('AI Employees')
     expect(agentCategory({ id: 'PRODUCT_AGENT' })).toBe('AI Employees')
   })
-  it('separates the campaign and executive agents', () => {
-    expect(agentCategory({ id: 'CAMPAIGN_AGENT' })).toBe('Communication')
+  it('separates the customer (communication) and executive agents', () => {
+    expect(agentCategory({ id: 'CUSTOMER_AGENT' })).toBe('Communication')
     expect(agentCategory({ id: 'EXECUTIVE_AGENT' })).toBe('Strategic Overview')
   })
 })
@@ -366,11 +365,11 @@ describe('AI actions and insights KPI helpers', () => {
     expect(totals.changePercent).toBeNull()
     expect(trendDirection(totals.changePercent)).toBe('new')
   })
-  it('hides the Pricing and Campaign agents from the display roster', () => {
+  it('shows Pricing Agent and hides purged Campaign Agent from the display roster', () => {
     const visible = visibleAgents(overviewFor('commander'))
-    expect(visible.map((agent) => agent.id)).not.toContain('PRICING_AGENT')
+    expect(visible.map((agent) => agent.id)).toContain('PRICING_AGENT')
     expect(visible.map((agent) => agent.id)).not.toContain('CAMPAIGN_AGENT')
-    expect(visible).toHaveLength(5)
+    expect(visible).toHaveLength(6)
   })
   it('renders a theme-adaptive sparkline with per-day hover labels', () => {
     const html = renderToStaticMarkup(createElement(Sparkline, { points: [{ day: '2026-08-17', value: 2 }, { day: '2026-08-18', value: 4 }], ariaLabel: 'Insights generated' }))

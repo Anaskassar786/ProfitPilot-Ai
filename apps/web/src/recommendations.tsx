@@ -33,7 +33,6 @@ import {
   Repeat,
   RotateCcw,
   Search,
-  Send,
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
@@ -144,7 +143,6 @@ const AGENT_ICONS: Readonly<Record<AgentId, LucideIcon>> = {
   INVENTORY_AGENT: Box,
   CUSTOMER_AGENT: Users,
   PRICING_AGENT: Tag,
-  CAMPAIGN_AGENT: Send,
   PRODUCT_AGENT: Package,
   EXECUTIVE_AGENT: Briefcase,
 }
@@ -154,7 +152,6 @@ const AGENT_COLORS: Readonly<Record<AgentId, string>> = {
   INVENTORY_AGENT: '#3B82F6',
   CUSTOMER_AGENT: '#9B7CF6',
   PRICING_AGENT: '#F59E0B',
-  CAMPAIGN_AGENT: '#57C6E9',
   PRODUCT_AGENT: '#EF4444',
   EXECUTIVE_AGENT: '#FBBF24',
 }

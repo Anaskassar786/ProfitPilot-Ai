@@ -50,7 +50,6 @@ const AGENTS = [
   { id: 'INVENTORY_AGENT', label: 'Inventory Agent', requiredPlan: 'trial', tagline: 'Tracks stock cover so best sellers never run dry and cash is not stuck.', sampleInsight: 'Espresso Grinder Pro has 4 days of cover left at current velocity.' },
   { id: 'CUSTOMER_AGENT', label: 'Customer Agent', requiredPlan: 'start', tagline: 'Spots churn risk and win-back moments across your customer base.', sampleInsight: 'A $612 lifetime-value customer has gone quiet for 81 days.' },
   { id: 'PRICING_AGENT', label: 'Pricing Agent', requiredPlan: 'growth', tagline: 'Finds pricing headroom and discount leakage in closed-period data.', sampleInsight: 'Gooseneck Kettle sustains a 6% price rise with no volume loss modelled.' },
-  { id: 'CAMPAIGN_AGENT', label: 'Campaign Agent', requiredPlan: 'growth', tagline: 'Turns abandoned checkouts and quiet segments into recovery campaigns.', sampleInsight: 'Two abandoned carts worth $303 are still inside the recovery window.' },
   { id: 'PRODUCT_AGENT', label: 'Product Agent', requiredPlan: 'commander', tagline: 'Reviews catalog performance, bundles, and dead stock candidates.', sampleInsight: 'Ceramic Mug Duo has not sold in 140 days — bundle or retire it.' },
   { id: 'EXECUTIVE_AGENT', label: 'Executive Agent', requiredPlan: 'commander', tagline: 'Rolls every agent up into a board-ready read on the business.', sampleInsight: 'Quarter to date is 9% ahead of plan, carried by repeat customers.' },
 ] as const

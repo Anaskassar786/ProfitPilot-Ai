@@ -23,7 +23,7 @@ function view(overrides: Partial<RecommendationView> = {}): RecommendationView {
 const populatedItems: RecommendationView[] = [
   view(),
   view({ id: 'r2', agent: 'CUSTOMER_AGENT', ruleId: 'CHURN_RISK', title: 'Win back a VIP customer who went quiet', reason: 'A customer with $612 lifetime value has not ordered in 81 days — past the 75-day churn window.', impactValue: 480, impactLabel: 'customer LTV at risk', confidence: .64, confidenceLevel: 'MEDIUM', actionType: 'SEND_EMAIL', actionRisk: 'APPROVAL_REQUIRED', createdAt: new Date(now - 26 * 3_600_000).toISOString(), expiresAt: null, explanationStatus: 'AI_UNAVAILABLE', explanation: null }),
-  view({ id: 'r3', agent: 'CAMPAIGN_AGENT', ruleId: 'CART_ABANDONMENT', title: 'Recover an abandoned $214 cart', reason: 'A checkout created 9 hours ago is still inside the 48-hour recovery window.', impactValue: 24, impactLabel: 'expected recovery', confidence: .55, confidenceLevel: 'MEDIUM', status: 'APPROVED', decidedAt: new Date(now - 50 * 60_000).toISOString(), createdAt: new Date(now - 9 * 3_600_000).toISOString() }),
+  view({ id: 'r3', agent: 'CUSTOMER_AGENT', ruleId: 'CART_ABANDONMENT', title: 'Recover an abandoned $214 cart', reason: 'A checkout created 9 hours ago is still inside the 48-hour recovery window.', impactValue: 24, impactLabel: 'expected recovery', confidence: .55, confidenceLevel: 'MEDIUM', status: 'APPROVED', decidedAt: new Date(now - 50 * 60_000).toISOString(), createdAt: new Date(now - 9 * 3_600_000).toISOString() }),
 ]
 
 const emptySummary: RecommendationSummary = {
@@ -49,7 +49,7 @@ const populatedSummary: RecommendationSummary = {
   byAgent: [
     { agent: 'INVENTORY_AGENT', pending: 1, approved: 2, rejected: 0, total: 3 },
     { agent: 'CUSTOMER_AGENT', pending: 1, approved: 1, rejected: 1, total: 3 },
-    { agent: 'CAMPAIGN_AGENT', pending: 0, approved: 1, rejected: 0, total: 2 },
+    { agent: 'CUSTOMER_AGENT', pending: 0, approved: 1, rejected: 0, total: 2 },
   ],
   byRule: [
     { ruleId: 'STOCKOUT_RISK', total: 3 },
