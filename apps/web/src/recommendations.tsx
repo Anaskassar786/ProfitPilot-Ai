@@ -46,7 +46,6 @@ import {
   UserPlus,
   Users,
   UserX,
-  WandSparkles,
   Workflow,
   X,
   XCircle,
@@ -452,7 +451,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
   const pendingSelectable = visibleItems.filter((item) => item.status === 'PENDING')
 
   if (!storeId) {
-    return <div className="recs-workspace"><RecsEmptyCard icon={WandSparkles} title="Connect your store to meet your AI team" description="Your AI assistants only look at your real store data. Connect Shopify and we will start finding opportunities — we never invent filler insights." action={null} /></div>
+    return <div className="recs-workspace"><RecsEmptyCard icon={Sparkles} title="Connect your store to meet your AI team" description="Your AI assistants only look at your real store data. Connect Shopify and we will start finding opportunities — we never invent filler insights." action={null} /></div>
   }
 
   return (
@@ -738,7 +737,7 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
         <div className="recs-kpi-speedo-legend" aria-hidden><span><i className="fast" /> Fast &lt;1h</span><span><i className="mid" /> OK 1–4h</span><span><i className="slow" /> Slow &gt;4h</span></div>
       </div>
       <div className="recs-kpi usage">
-        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--purple)' }}><WandSparkles size={14} /></span><span className="recs-kpi-label">Monthly usage</span></span></Tip>
+        <Tip label={KPI_TOOLTIPS.monthlyUsage}><span className="recs-kpi-head"><span className="recs-kpi-chip" style={{ ['--chip-color' as never]: 'var(--purple)' }}><Sparkles size={14} /></span><span className="recs-kpi-label">Monthly usage</span></span></Tip>
         <div className="recs-usage-row">
           <UsageRing ratio={usage.ratio} atLimit={usage.atLimit} nearLimit={usage.nearLimit} />
           <div className="recs-usage-copy">
@@ -1204,7 +1203,7 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
   return (
     <>
       <div className="card recs-side-card">
-        <div className="recs-side-title"><WandSparkles size={14} /> Your AI Team</div>
+        <div className="recs-side-title"><Sparkles size={14} /> Your AI Team</div>
         <p className="recs-side-lead">Tap a teammate to filter the list. Green dots mean they have something waiting.</p>
         <div className="recs-agent-roster">
           {AGENT_UNLOCK_ORDER.map((agent) => {
@@ -1403,7 +1402,7 @@ function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: {
   return (
     <div className="recs-first-run">
       <div className="recs-first-hero">
-        <span className="recs-first-orb" aria-hidden><WandSparkles size={28} /></span>
+        <span className="recs-first-orb" aria-hidden><Sparkles size={28} /></span>
         <h2>{hasRun ? 'Time to see what your AI team found for you' : "Let's find your growth opportunities! 🚀"}</h2>
         <p>Your smart AI assistants are ready to explore your store and find real opportunities to boost your revenue, retain customers, and grow your business. Just click below to get started!</p>
         <div className="recs-first-actions">
