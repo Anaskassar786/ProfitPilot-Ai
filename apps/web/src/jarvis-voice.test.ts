@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { __armJarvisBargeInForTests, jarvisVoiceController, resumeJarvisListening, retryCloudSpeech, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { __armJarvisBargeInForTests, __resetJarvisVoiceDedupForTests, __resetJarvisVoiceProfileForTests, jarvisVoiceController, resumeJarvisListening, retryCloudSpeech, setJarvisVoiceProfile, useJarvisVoiceSnapshot } from './jarvis-voice.js'
 import { resetApiClientStateForTests } from './api.js'
 
 class FakeRecognition {
@@ -27,7 +27,13 @@ function installBrowserMocks(getUserMedia: () => Promise<{ getTracks: () => read
   vi.stubGlobal('navigator', navigatorLike)
   vi.stubGlobal('SpeechSynthesisUtterance', class {
     public lang = ''
+    public pitch = 1
+    public rate = 1
+    public volume = 1
+    public voice: SpeechSynthesisVoice | null = null
     public onend: (() => void) | null = null
+    public onerror: (() => void) | null = null
+    public constructor(public readonly text = '') {}
   })
 }
 
@@ -35,9 +41,13 @@ describe('Shared Jarvis voice controller', () => {
   beforeEach(() => {
     installBrowserMocks(async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }))
     jarvisVoiceController.stop()
+    __resetJarvisVoiceDedupForTests()
+    __resetJarvisVoiceProfileForTests()
+    retryCloudSpeech()
   })
   afterEach(() => {
     jarvisVoiceController.stop()
+    __resetJarvisVoiceProfileForTests()
     vi.unstubAllGlobals()
   })
 
@@ -219,12 +229,44 @@ describe('Shared Jarvis voice controller', () => {
     vi.stubGlobal('SpeechSynthesisUtterance', class { public lang = ''; public onend: (() => void) | null = null })
     await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
     jarvisVoiceController.speak({ text: 'Hello Sir.', language: 'en', storeId: 'store-1' })
-    // After a 503 the cloud voice is disabled and the native queue takes over.
     await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalled())
     jarvisVoiceController.stop()
   })
 
-  it('de-duplicates identical speech within 2 seconds (React StrictMode guard)', async () => {
+  it('keeps trying cloud TTS after a single 503 and only disables after 3 failures', async () => {
+    resetApiClientStateForTests()
+    retryCloudSpeech()
+    await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    const nativeSpeak = vi.fn()
+    const fetcher = vi.fn(async (input: string) => {
+      if (String(input).includes('/security/csrf')) return new Response(JSON.stringify({ ok: true, data: { csrfToken: 'tok' } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response('unavailable', { status: 503 })
+    })
+    const ttsCalls = (): number => fetcher.mock.calls.filter((call) => String(call[0]).includes('/jarvis/tts')).length
+    vi.stubGlobal('fetch', fetcher)
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class {
+      public lang = ''
+      public pitch = 1
+      public constructor(public readonly text = '') {}
+    })
+    jarvisVoiceController.speak({ text: 'First line of the store briefing', language: 'en', storeId: 'store-1' })
+    await vi.waitFor(() => expect(ttsCalls()).toBe(1))
+    await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalled())
+    __resetJarvisVoiceDedupForTests()
+    jarvisVoiceController.speak({ text: 'Second line of the store briefing', language: 'en', storeId: 'store-1' })
+    await vi.waitFor(() => expect(ttsCalls()).toBe(2))
+    jarvisVoiceController.stop()
+  })
+
+  it('de-duplicates identical speech within 2.5 seconds (React StrictMode guard)', async () => {
     await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
     const nativeSpeak = vi.fn()
     const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
@@ -305,6 +347,58 @@ describe('Shared Jarvis voice controller', () => {
     rec.onresult?.({ results: [{ 0: { transcript: 'Hello Sir' }, length: 1 }] })
     expect(onTranscript).not.toHaveBeenCalled()
     expect(jarvisVoiceController.status).toBe('speaking')
+    jarvisVoiceController.stop()
+  })
+
+  it('speaks the full line as a single native utterance, never a sentence queue', async () => {
+    await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    const nativeSpeak = vi.fn()
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class {
+      public lang = ''
+      public pitch = 1
+      public onend: (() => void) | null = null
+      public constructor(public readonly text = '') {}
+    })
+    jarvisVoiceController.speak({ text: 'Hello there. How are you. Lets go together.', language: 'en' })
+    await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalledTimes(1))
+    const utterance = nativeSpeak.mock.calls[0]?.[0] as { text: string }
+    expect(utterance.text).toBe('Hello there. How are you. Lets go together.')
+    jarvisVoiceController.stop()
+  })
+
+  it('applies a Hindi male profile without Save so pitch is masculine and lang is Hindi', async () => {
+    setJarvisVoiceProfile({ language: 'hi', gender: 'masculine' })
+    await jarvisVoiceController.start({ language: 'hi', onTranscript: vi.fn(), onError: vi.fn() })
+    const nativeSpeak = vi.fn()
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class {
+      public lang = ''
+      public pitch = 1
+      public rate = 1
+      public onend: (() => void) | null = null
+      public constructor(public readonly text = '') {}
+    })
+    jarvisVoiceController.speak({ text: 'Namaste Sir, main Jarvis hoon, bataiye main kya madad karun?' })
+    await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalledTimes(1))
+    const utterance = nativeSpeak.mock.calls[0]?.[0] as { pitch: number; lang: string; text: string }
+    expect(utterance.pitch).toBeLessThan(1)
+    expect(utterance.lang).toMatch(/hi/i)
+    expect(utterance.text).toContain('Namaste')
     jarvisVoiceController.stop()
   })
 })

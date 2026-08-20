@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognition, isFramed, loadSpeechVoices, microphonePreflight, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
+import { createSpeechRecognition, isFramed, loadSpeechVoices, microphonePreflight, pickSpeechVoice, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 class FakeRecognition implements NativeSpeechRecognition {
@@ -97,5 +97,23 @@ describe('F8 browser-native voice contracts', () => {
 
     // No speechSynthesis at all → empty, no throw.
     await expect(loadSpeechVoices(undefined)).resolves.toEqual([])
+  })
+
+  it('picks a male Hindi voice (Ravi) over Heera and unlabeled Google हिन्दी', () => {
+    const heera = { name: 'Microsoft Heera - Hindi (India)', lang: 'hi-IN', default: false } as SpeechSynthesisVoice
+    const ravi = { name: 'Microsoft Ravi - Hindi (India)', lang: 'hi-IN', default: false } as SpeechSynthesisVoice
+    const googleHindi = { name: 'Google हिन्दी', lang: 'hi-IN', default: true } as SpeechSynthesisVoice
+    const scope = { speechSynthesis: { getVoices: () => [heera, googleHindi, ravi] } } as unknown as Window
+    expect(pickSpeechVoice(scope, 'hi', 'masculine')).toBe(ravi)
+    const feminine = pickSpeechVoice(scope, 'hi', 'feminine')
+    expect(feminine === heera || feminine === googleHindi).toBe(true)
+  })
+
+  it('uses a lower masculine pitch, Hindi rate, and prefers en-IN for English', () => {
+    expect(speechProfile('en', 'feminine').pitch).toBe(1.08)
+    expect(speechProfile('en', 'masculine').pitch).toBe(0.92)
+    expect(speechProfile('hi', 'masculine').rate).toBe(0.96)
+    expect(speechProfile('en', 'masculine').lang).toBe('en-IN')
+    expect(speechProfile('hi', 'feminine').lang).toBe('hi-IN')
   })
 })

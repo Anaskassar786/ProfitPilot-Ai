@@ -9,7 +9,6 @@ import {
   requestMicrophoneAccess,
   speechRecognitionAvailable,
   speechRecognitionFailure,
-  speechSentences,
   spokenReplyText,
   stopNativeSpeech,
   unlockSpeechSynthesis,
@@ -31,13 +30,15 @@ export type VoiceBlock = 'insecure' | 'embedded-policy' | 'policy-denied' | 'med
 type TranscriptHandler = (transcript: string) => void | Promise<void>
 type SpeakOptions = Readonly<{
   text: string
-  language: 'en' | 'hi'
+  language?: 'en' | 'hi'
   muted?: boolean
   voiceGender?: 'feminine' | 'masculine'
   storeId?: string
   /** When false, a new line will not cut off speech that is already playing. */
   interrupt?: boolean
 }>
+
+export type JarvisVoiceProfile = Readonly<{ language: 'en' | 'hi'; gender: 'feminine' | 'masculine' }>
 
 type VoiceController = Readonly<{
   active: boolean
@@ -72,22 +73,41 @@ let resumeTimer: ReturnType<typeof setInterval> | null = null
 let speakEndTimer: ReturnType<typeof setTimeout> | null = null
 let pendingLanguage: 'en' | 'hi' = 'en'
 let startGeneration = 0
-// Set to true once the cloud speech endpoint reports it is unavailable, so we
-// stop paying a network round-trip on every reply and go straight to the
-// browser voice. Reset by retryCloudSpeech() on the next user gesture.
+// Disable cloud TTS only after several consecutive failures. A single 503
+// used to pin the session to choppy browser speechSynthesis.
 let cloudTtsDisabled = false
+let cloudTtsFailures = 0
 let cloudAudio: HTMLAudioElement | null = null
 let lastDedupText = ''
 let lastDedupAt = 0
 let bargeInArmedAt = 0
 let restartTimer: ReturnType<typeof setTimeout> | null = null
 let pendingBargeIn = ''
+let voiceProfile: JarvisVoiceProfile = { language: 'en', gender: 'feminine' }
 
-export function retryCloudSpeech(): void { cloudTtsDisabled = false }
+export function setJarvisVoiceProfile(next: Partial<JarvisVoiceProfile>): void {
+  voiceProfile = {
+    language: next.language ?? voiceProfile.language,
+    gender: next.gender ?? voiceProfile.gender,
+  }
+}
+
+export function getJarvisVoiceProfile(): JarvisVoiceProfile {
+  return voiceProfile
+}
+
+export function retryCloudSpeech(): void {
+  cloudTtsDisabled = false
+  cloudTtsFailures = 0
+}
 
 export function __resetJarvisVoiceDedupForTests(): void {
   lastDedupText = ''
   lastDedupAt = 0
+}
+
+export function __resetJarvisVoiceProfileForTests(): void {
+  voiceProfile = { language: 'en', gender: 'feminine' }
 }
 
 export function __armJarvisBargeInForTests(): void {
@@ -295,12 +315,21 @@ function playCloudAudio(url: string, generation: number, fallback: () => void, o
   }, Math.max(8_000, (url.length || 0) * 200))
 }
 
-/** Native browser voice, warmed up so the best available voice is selected. */
+/** Native browser voice — one full utterance, never chopped into sentences. */
 function startNativeQueue(scope: Window, clean: string, language: 'en' | 'hi', gender: 'feminine' | 'masculine', generation: number, onEnd?: () => void): void {
   void loadSpeechVoices(scope).finally(() => {
     if (generation !== speakGeneration) return
-    const sentences = speechSentences(clean)
-    speakSentenceQueue(scope, sentences, language, gender, generation, 0, onEnd)
+    const utterance = new SpeechSynthesisUtterance(clean)
+    applySpeechProfile(utterance, language, gender, pickSpeechVoice(scope, language, gender))
+    utterance.onend = () => finishSpeaking(generation, onEnd)
+    utterance.onerror = () => finishSpeaking(generation, onEnd)
+    currentUtterance = utterance
+    try {
+      scope.speechSynthesis.speak(utterance)
+    } catch {
+      finishSpeaking(generation, onEnd)
+      return
+    }
     clearSpeakKeepAlive()
     resumeTimer = setInterval(() => {
       if (generation !== speakGeneration || typeof window === 'undefined') return
@@ -317,41 +346,24 @@ function startNativeQueue(scope: Window, clean: string, language: 'en' | 'hi', g
   })
 }
 
-/** Fetches the natural cloud voice, disabling it for the session when absent. */
+function noteCloudSpeechFailure(): void {
+  cloudTtsFailures += 1
+  if (cloudTtsFailures >= 3) cloudTtsDisabled = true
+}
+
+/** Fetches the natural cloud voice. Disable only after 3 consecutive failures. */
 async function fetchCloudSpeech(storeId: string, clean: string, gender: 'feminine' | 'masculine', language: 'en' | 'hi', generation: number): Promise<string | null> {
   try {
     const url = await synthesizeJarvisSpeech(storeId, clean, gender, language)
-    if (!url) cloudTtsDisabled = true
+    if (!url) {
+      noteCloudSpeechFailure()
+      return null
+    }
+    cloudTtsFailures = 0
     return generation === speakGeneration ? url : null
   } catch {
-    cloudTtsDisabled = true
+    noteCloudSpeechFailure()
     return null
-  }
-}
-
-function speakSentenceQueue(scope: Window, sentences: readonly string[], language: 'en' | 'hi', gender: 'feminine' | 'masculine', generation: number, index: number, onEnd?: () => void): void {
-  if (generation !== speakGeneration) return
-  const sentence = sentences[index]
-  if (!sentence) {
-    finishSpeaking(generation, onEnd)
-    return
-  }
-  const utterance = new SpeechSynthesisUtterance(sentence)
-  applySpeechProfile(utterance, language, gender, pickSpeechVoice(scope, language, gender))
-  utterance.onend = () => {
-    if (generation !== speakGeneration) return
-    if (index + 1 >= sentences.length) {
-      finishSpeaking(generation, onEnd)
-      return
-    }
-    window.setTimeout(() => speakSentenceQueue(scope, sentences, language, gender, generation, index + 1, onEnd), 160)
-  }
-  utterance.onerror = () => finishSpeaking(generation, onEnd)
-  currentUtterance = utterance
-  try {
-    scope.speechSynthesis.speak(utterance)
-  } catch {
-    finishSpeaking(generation, onEnd)
   }
 }
 
@@ -461,7 +473,9 @@ export const jarvisVoiceController: VoiceController = {
     }
   },
   speak(options, onEnd) {
-    const { text, language, muted } = options
+    const { text, muted } = options
+    const language = options.language ?? voiceProfile.language
+    const gender = options.voiceGender ?? voiceProfile.gender
     const clean = spokenReplyText(text)
     if (clean) setState({ lastSpoken: clean })
     const silenced = muted ?? state.muted
@@ -474,8 +488,9 @@ export const jarvisVoiceController: VoiceController = {
       onEnd?.()
       return
     }
-    const dedupMs = isStartupGreeting(clean) ? 8_000 : 2_000
-    if (clean === lastDedupText && Date.now() - lastDedupAt < dedupMs) {
+    const alreadySpeaking = state.status === 'speaking' && clean === lastDedupText
+    const dedupMs = isStartupGreeting(clean) ? 12_000 : 2_500
+    if (alreadySpeaking || (clean === lastDedupText && Date.now() - lastDedupAt < dedupMs)) {
       onEnd?.()
       return
     }
@@ -485,17 +500,15 @@ export const jarvisVoiceController: VoiceController = {
     const generation = speakGeneration
     pendingLanguage = language
     pendingBargeIn = ''
-    bargeInArmedAt = Date.now() + 450
+    bargeInArmedAt = Date.now() + Math.min(3_500, 600 + 18 * clean.length)
     // Keep the mic open so the merchant can barge in mid-reply.
     if (state.active && !recognition && !bridgeSession) startRecognition(language)
     setState({ status: 'speaking', lastSpoken: clean })
-    unlockSpeechSynthesis(window)
     teardownCloudAudio()
-    window.speechSynthesis.cancel()
-    const gender = options.voiceGender ?? 'feminine'
+    if (interrupt) window.speechSynthesis.cancel()
     const storeId = options.storeId
-    // Natural cloud voice first (like ChatGPT); fall straight back to the
-    // warmed-up browser voice when it is unavailable or not configured.
+    // Natural cloud voice first (like ChatGPT). Do not unlockSpeechSynthesis
+    // here — cancel()+speak() races the real utterance.
     const nativeFallback = (): void => startNativeQueue(window, clean, language, gender, generation, onEnd)
     if (storeId && !cloudTtsDisabled) {
       void fetchCloudSpeech(storeId, clean, gender, language, generation).then((url) => {

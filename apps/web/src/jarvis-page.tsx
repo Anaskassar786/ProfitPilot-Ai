@@ -5,6 +5,7 @@ import { fetchJarvisPreferences, saveJarvisPreferences, saveWorkspaceSettings } 
 import { JarvisOrb } from './JarvisOrb.js'
 import type { WorkspaceContext } from './model.js'
 import type { JarvisAddressing, JarvisPreference } from './f8-model.js'
+import { setJarvisVoiceProfile } from './jarvis-voice.js'
 import { defaultWorkspaceSettings, mergeWorkspaceSettings, writeWorkspaceSettings } from './settings-model.js'
 import type { WorkspaceSettings } from './settings-model.js'
 
@@ -65,7 +66,6 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
       setAddressing(next.addressing)
       setOfferGuidance(next.navigationSuggestions)
       setAnswerOnly(next.onlyAnswerWhenAsked)
-      if (next.language === 'hi' || next.language === 'en') setVoiceLanguage(next.language)
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [context.storeId])
@@ -153,6 +153,7 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
                   onClick={() => {
                     setVoiceLanguage(option.language)
                     setVoiceGender(option.gender)
+                    setJarvisVoiceProfile({ language: option.language, gender: option.gender })
                     writeWorkspaceSettings(context.storeId, mergeWorkspaceSettings(baseSettings, { jarvisVoiceGender: option.gender, jarvisLanguage: option.language }))
                   }}
                   label={option.label}

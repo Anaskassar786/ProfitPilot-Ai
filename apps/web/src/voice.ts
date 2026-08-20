@@ -146,9 +146,9 @@ export function speechSentences(text: string): readonly string[] {
 
 export function speechProfile(language: 'en' | 'hi', preferredGender: VoiceGender, voiceLang?: string): SpeechProfile {
   return {
-    rate: language === 'hi' ? 0.98 : 1.0,
-    pitch: preferredGender === 'feminine' ? 1.06 : 1.0,
-    lang: voiceLang || (language === 'hi' ? 'hi-IN' : 'en-US'),
+    rate: language === 'hi' ? 0.96 : 1.0,
+    pitch: preferredGender === 'feminine' ? 1.08 : 0.92,
+    lang: voiceLang || (language === 'hi' ? 'hi-IN' : 'en-IN'),
   }
 }
 
@@ -201,13 +201,18 @@ export function pickSpeechVoice(scope: Window | undefined, language: 'en' | 'hi'
   if (voices.length === 0) return null
   const preferredTags = language === 'hi'
     ? ['hi-IN', 'hi', 'en-IN', 'en-US', 'en']
-    : ['en-US', 'en-GB', 'en-IN', 'en', 'hi-IN', 'hi']
-  return [...voices].sort((left, right) => scoreVoice(right, preferredTags, preferredGender) - scoreVoice(left, preferredTags, preferredGender))[0] ?? null
+    : ['en-IN', 'en-US', 'en-GB', 'en', 'hi-IN', 'hi']
+  return [...voices].sort((left, right) => scoreVoice(right, preferredTags, preferredGender, language) - scoreVoice(left, preferredTags, preferredGender, language))[0] ?? null
 }
 
-function scoreVoice(voice: SpeechSynthesisVoice, preferredTags: readonly string[], preferredGender: VoiceGender): number {
+const MASCULINE_NAME = /\b(ravi|hemant|pankaj|male|man|david|mark|aarav|george|adam|daniel|james|ryan|alex|guy|raj|matthew|brian|eric)\b/i
+const FEMININE_NAME = /\b(heera|neerja|swara|priya|female|woman|zira|aria|samantha|serena|sonia|susan|natasha|hazel|jenny|katja|sabrina|ava|alloy|salli|joanna|ivy)\b/i
+
+function scoreVoice(voice: SpeechSynthesisVoice, preferredTags: readonly string[], preferredGender: VoiceGender, language: 'en' | 'hi'): number {
   const lang = voice.lang.toLowerCase()
   const name = voice.name.toLowerCase()
+  const masculineName = MASCULINE_NAME.test(name)
+  const feminineName = FEMININE_NAME.test(name)
   let score = 0
   preferredTags.forEach((tag, index) => {
     const normalized = tag.toLowerCase()
@@ -218,11 +223,15 @@ function scoreVoice(voice: SpeechSynthesisVoice, preferredTags: readonly string[
   if (/natural|neural|wavenet|studio|online \(natural\)|premium/i.test(name)) score += 48
   if (/google|microsoft|siri|azure|apple/i.test(name)) score += 28
   if (/online|network/i.test(name)) score += 16
-  if (/india|bharat|hindi|hinglish|indian|neerja|swara|heera|ravi/i.test(name)) score += 12
-  if (preferredGender === 'feminine' && /female|woman|zira|aria|samantha|serena|heera|priya|sonia|susan|natasha|hazel|jenny|katja|sabrina|ava|alloy|neerja|swara|salli|joanna|ivy/i.test(name)) score += 34
-  if (preferredGender === 'masculine' && /male|man|david|mark|ravi|aarav|george|adam|daniel|james|ryan|alex|guy|raj|matthew|brian|eric/i.test(name)) score += 34
-  if (preferredGender === 'feminine' && /male|man\b/.test(name)) score -= 18
-  if (preferredGender === 'masculine' && /female|woman\b/.test(name)) score -= 18
+  if (/india|bharat|hindi|hinglish|indian/i.test(name)) score += 12
+  if (preferredGender === 'masculine') {
+    if (masculineName) score += 80
+    if (feminineName) score -= 90
+    if (language === 'hi' && !masculineName) score -= 40
+  } else {
+    if (feminineName) score += 80
+    if (masculineName) score -= 90
+  }
   if (/compact|espeak|festival|flite/i.test(name)) score -= 30
   if (/novelty|whisper|child|kid|cartoon|monster|robot/i.test(name)) score -= 50
   return score

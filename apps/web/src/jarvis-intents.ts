@@ -120,18 +120,18 @@ export function spokenReplyText(text: string): string {
     .trim()
 }
 
-/** First-open spoken greeting. Jarvis then waits for the merchant to ask. */
+/** First-open spoken greeting. One flowing line — no periods TTS can chop. */
 export function jarvisStartupGreeting(addressing: string, language: 'en' | 'hi', now = new Date()): string {
   const hour = now.getHours()
   const time = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   if (language === 'hi') {
-    return `Hello ${addressing}. ${time}. Main Jarvis hoon, aapka store assistant. Bataiye, main aapki kya madad karun?`
+    return `Namaste ${addressing}, ${time}, main Jarvis hoon, aapka store assistant, bataiye main kya madad karun?`
   }
-  return `Hello ${addressing}. ${time}. I'm Jarvis, your store assistant. How can I help you today?`
+  return `${time} ${addressing}, I'm Jarvis, your store assistant, how can I help you today?`
 }
 
 export function isStartupGreeting(text: string): boolean {
-  return /^hello\s+(sir|ma'?am|commander|miss)\b/i.test(text.trim())
+  return /^(hello|good morning|good afternoon|good evening|namaste)\b/i.test(text.trim())
 }
 
 /**
