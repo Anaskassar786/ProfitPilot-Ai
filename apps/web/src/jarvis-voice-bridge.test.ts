@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { framedMicrophoneNeedsBridge, isVoiceBridgeMessage, reserveVoiceBridge, startVoiceBridge, voiceBridgeDocumentHtml, voiceBridgeEnvelope } from './jarvis-voice-bridge.js'
+import { framedMicrophoneNeedsBridge, isVoiceBridgeMessage, reserveVoiceBridge, startVoiceBridge, voiceBridgeEnvelope, voiceBridgePopupUrl } from './jarvis-voice-bridge.js'
 
 function framedWindow(): Window {
   const top = {} as Window
@@ -15,13 +15,9 @@ describe('Jarvis voice bridge', () => {
     expect(isVoiceBridgeMessage(null)).toBe(false)
   })
 
-  it('renders a standalone listening document that posts transcripts to the opener', () => {
-    const html = voiceBridgeDocumentHtml('en', 'https://app.test')
-    expect(html).toContain('Jarvis is listening')
-    expect(html).toContain('getUserMedia')
-    expect(html).toContain('https://app.test')
-    expect(html).toContain('en-IN')
-    expect(html).toContain('profitpilot:jarvis-voice')
+  it('builds a CSP-safe popup URL that encodes the language', () => {
+    expect(voiceBridgePopupUrl('en')).toBe('/jarvis-mic.html?lang=en-IN')
+    expect(voiceBridgePopupUrl('hi')).toBe('/jarvis-mic.html?lang=hi-IN')
   })
 
   it('prefers a voice bridge only when the iframe policy withholds the microphone', () => {
@@ -34,13 +30,12 @@ describe('Jarvis voice bridge', () => {
     expect(framedMicrophoneNeedsBridge(scope, {} as Document)).toBe(true)
   })
 
-  it('reserves and starts a same-origin popup, then forwards transcripts', () => {
+  it('reserves and starts a same-origin popup via a CSP-safe served page, then forwards transcripts', () => {
     const listeners = new Set<(event: MessageEvent) => void>()
     const popup = {
       closed: false,
       close: vi.fn(() => { popup.closed = true }),
       focus: vi.fn(),
-      document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
       postMessage: vi.fn(),
     }
     const scope = framedWindow()
@@ -51,7 +46,8 @@ describe('Jarvis voice bridge', () => {
       setInterval: vi.fn(() => 1),
       clearInterval: vi.fn(),
     })
-    expect(reserveVoiceBridge(scope)).toBe(popup)
+    expect(reserveVoiceBridge(scope, 'en')).toBe(popup)
+    expect(scope.open).toHaveBeenCalledWith('/jarvis-mic.html?lang=en-IN', 'profitpilot-jarvis-mic', expect.stringContaining('popup=yes'))
     const onTranscript = vi.fn()
     const session = startVoiceBridge({
       scope,
@@ -63,7 +59,6 @@ describe('Jarvis voice bridge', () => {
       onClosed: vi.fn(),
     })
     expect(session).not.toBeNull()
-    expect(popup.document.write).toHaveBeenCalledOnce()
     const listener = [...listeners][0]
     listener?.({
       origin: 'https://app.test',
@@ -73,5 +68,13 @@ describe('Jarvis voice bridge', () => {
     expect(onTranscript).toHaveBeenCalledWith('show revenue')
     session?.close()
     expect(popup.close).toHaveBeenCalled()
+  })
+
+  it('opens the Hindi popup URL when Hindi is requested', () => {
+    const popup = { closed: false, close: vi.fn(), focus: vi.fn(), postMessage: vi.fn() }
+    const scope = framedWindow()
+    Object.assign(scope, { open: vi.fn(() => popup) })
+    reserveVoiceBridge(scope, 'hi')
+    expect(scope.open).toHaveBeenCalledWith('/jarvis-mic.html?lang=hi-IN', expect.any(String), expect.any(String))
   })
 })

@@ -112,7 +112,6 @@ describe('Shared Jarvis voice controller', () => {
       closed: false,
       close: vi.fn(),
       focus: vi.fn(),
-      document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
       postMessage: vi.fn(),
     }
     const top = {}
@@ -139,7 +138,7 @@ describe('Shared Jarvis voice controller', () => {
     expect(jarvisVoiceController.status).toBe('listening')
     expect(jarvisVoiceController.error).toBeNull()
     expect(windowLike.open).toHaveBeenCalledOnce()
-    expect(popup.document.write).toHaveBeenCalledOnce()
+    expect(windowLike.open).toHaveBeenCalledWith('/jarvis-mic.html?lang=en-IN', 'profitpilot-jarvis-mic', expect.stringContaining('popup=yes'))
     jarvisVoiceController.stop()
   })
 
@@ -222,6 +221,30 @@ describe('Shared Jarvis voice controller', () => {
     jarvisVoiceController.speak({ text: 'Hello Sir.', language: 'en', storeId: 'store-1' })
     // After a 503 the cloud voice is disabled and the native queue takes over.
     await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalled())
+    jarvisVoiceController.stop()
+  })
+
+  it('de-duplicates identical speech within 2 seconds (React StrictMode guard)', async () => {
+    await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    const nativeSpeak = vi.fn()
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class { public lang = ''; public onend: (() => void) | null = null } as unknown as typeof SpeechSynthesisUtterance)
+    const onEndFirst = vi.fn()
+    const onEndSecond = vi.fn()
+    jarvisVoiceController.speak({ text: 'Hello Sir same text', language: 'en' }, onEndFirst)
+    // Immediate duplicate within 2s should be dropped and onEnd called synchronously
+    jarvisVoiceController.speak({ text: 'Hello Sir same text', language: 'en' }, onEndSecond)
+    expect(onEndSecond).toHaveBeenCalledOnce()
+    // Let the first utterance queue settle; nativeSpeak should have been called exactly once (not twice)
+    await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalledTimes(1))
+    expect(onEndFirst).not.toHaveBeenCalled()
     jarvisVoiceController.stop()
   })
 })
