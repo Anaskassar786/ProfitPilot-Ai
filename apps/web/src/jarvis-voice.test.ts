@@ -62,7 +62,7 @@ describe('Shared Jarvis voice controller', () => {
     jarvisVoiceController.setPaused(true)
     expect(jarvisVoiceController.status).toBe('paused')
     jarvisVoiceController.setPaused(false)
-    expect(jarvisVoiceController.status).toBe('idle')
+    expect(jarvisVoiceController.status).toBe('listening')
   })
 
   it('does not resume listening when inactive or paused', () => {
@@ -78,5 +78,12 @@ describe('Shared Jarvis voice controller', () => {
   it('exposes a snapshot hook for subscribers', () => {
     const snapshot = useJarvisVoiceSnapshot
     expect(typeof snapshot).toBe('function')
+  })
+
+  it('speaks cleaned store replies and records the last spoken line', () => {
+    jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Sir, revenue is ready.\n@jarvis:action {"actionId":"navigate_page","parameters":{"page":"products"}}', language: 'en' })
+    expect(jarvisVoiceController.lastSpoken).toContain('revenue is ready')
+    expect(jarvisVoiceController.lastSpoken).not.toContain('@jarvis:action')
   })
 })

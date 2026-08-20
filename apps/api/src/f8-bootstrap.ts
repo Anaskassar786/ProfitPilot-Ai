@@ -1,4 +1,5 @@
-import { createBrevoMailer } from '@profitpilot/automation'
+import { randomUUID } from 'node:crypto'
+import { createBrevoMailer, installTemplate, templateFor, validateWorkflow } from '@profitpilot/automation'
 import { sha256Hex } from '@profitpilot/crypto'
 import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
@@ -273,7 +274,21 @@ function jarvisActionTools(f7: F7Bootstrap): Readonly<Partial<Record<string, Jar
     // Sync touches the data-plane module; rather than reach across module
     // boundaries from Jarvis scope, we report the action honestly as a
     // suggestion the merchant can trigger from the workspace.
-    trigger_sync: async () => ({ message: 'I can queue a fresh sync for you from the Dashboard — use "Sync all" to pull the latest Shopify data.' }),
+    create_automation: async (storeId, parameters) => {
+      const requested = typeof parameters.templateId === 'string' ? parameters.templateId : 'low-stock-alert'
+      const template = templateFor(requested) ?? templateFor('low-stock-alert')
+      if (!template) throw new Error('No automation template is available.')
+      const name = typeof parameters.name === 'string' && parameters.name.trim() ? parameters.name.trim() : template.name
+      const definition = installTemplate(template, { id: randomUUID(), storeId, name, actor: 'jarvis' })
+      validateWorkflow(definition)
+      const saved = await f7.automation.workflows.put(definition, 'jarvis')
+      return { message: `I created a draft automation called "${saved.name}" on the Automation page. Review and activate it when you are ready.` }
+    },
+    navigate_page: async (_storeId, parameters) => {
+      const page = typeof parameters.page === 'string' && parameters.page.trim() ? parameters.page.trim() : 'dashboard'
+      return { message: `Opening the ${page.replace(/-/g, ' ')} page now.` }
+    },
+    trigger_sync: async () => ({ message: 'I can queue a fresh sync for you from the Dashboard. Use Sync all to pull the latest Shopify data.' }),
   }
 }
 

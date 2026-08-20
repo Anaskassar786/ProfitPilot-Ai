@@ -33,6 +33,7 @@ import {
   Package,
   Pause,
   Play,
+  Radio,
   RefreshCw,
   Rocket,
   Send,
@@ -101,6 +102,7 @@ export const GROWTH_MODULE_ICONS: Readonly<Record<string, LucideIcon>> = {
   AI_EXECUTIVE: Briefcase,
   PATTERN_AI: Network,
   AI_COMMAND: Command,
+  JARVIS: Radio,
 }
 
 type ToastKind = 'success' | 'info' | 'warning' | 'error'

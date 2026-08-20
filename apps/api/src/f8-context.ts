@@ -72,6 +72,7 @@ export class F8ContextProvider implements JarvisEvidenceProvider, CopilotEvidenc
     if (top) base.push(top)
     const recent = recentRevenueFact(analytics.revenue, analytics.orders, money, currency)
     if (recent) base.push(recent)
+    base.push(...pageHintFacts(page))
     const productSales = [...analytics.productSales].sort((a, b) => b.grossRevenue - a.grossRevenue)
     const topProduct = productSales[0]
     const inventoryRows = catalog.map(toInventoryRow).filter((row): row is InventoryRow => row !== null)
@@ -96,6 +97,31 @@ export class F8ContextProvider implements JarvisEvidenceProvider, CopilotEvidenc
     if (!candidate) return null
     return { id: `recommendation:${candidate.id}`, recommendationId: candidate.id, actionType: candidate.actionType, label: candidate.title, risk: candidate.actionRisk, undoWindowSeconds: 120, requiresVoiceConfirmation: true }
   }
+}
+
+function pageHintFacts(page: JarvisPage): readonly CopilotFact[] {
+  const hints: Readonly<Record<string, readonly [string, string]>> = {
+    dashboard: ['Store overview', 'Review revenue first, then open Analytics if a trend looks off'],
+    products: ['Product catalog', 'Check prices and stock on slow movers'],
+    inventory: ['Inventory workspace', 'Review products with seven or fewer days of cover'],
+    orders: ['Order operations', 'Check unfulfilled or cancelled orders first'],
+    customers: ['Customer intelligence', 'Look at churn-risk recommendations'],
+    analytics: ['Analytics', 'Compare recent revenue days against the prior period'],
+    automation: ['Automation workspace', 'Start with a low-stock alert or welcome-customer workflow'],
+    billing: ['Billing and plans', 'Review usage meters before changing plan'],
+    recommendations: ['AI recommendations', 'Approve only items you have reviewed'],
+    settings: ['Workspace settings', 'Confirm Shopify sync and notification preferences'],
+    'ai-command': ['AI Command', 'Type a store question or approve a grounded action'],
+    jarvis: ['Jarvis voice', 'Tap the orb and ask about this store page'],
+    campaigns: ['AI Command', 'Ask a store question from AI Command'],
+    reports: ['Business reports', 'Generate a closed-period report after you review the latest sync'],
+    exports: ['Data exports', 'Export only the dataset you need for this review'],
+  }
+  const pair = hints[page] ?? ['This workspace page', 'Ask about store performance, inventory, orders, or customers']
+  return [
+    fact('page_purpose', 'Current page', pair[0], 'workspace'),
+    fact('page_suggestion', 'Suggested next step', pair[1], 'workspace'),
+  ]
 }
 
 function fact(key: string, label: string, value: string | number | boolean | null, source: string): CopilotFact { return { key, label, value, source } }

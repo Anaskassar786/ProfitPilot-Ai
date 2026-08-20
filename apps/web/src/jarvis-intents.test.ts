@@ -1,0 +1,32 @@
+import { describe, expect, it } from 'vitest'
+import { canExecuteJarvisActions, inferAutomationTemplate, parseJarvisVoiceIntent, spokenReplyText } from './jarvis-intents.js'
+
+describe('Jarvis spoken intents', () => {
+  it('treats Growth and Start as suggestion-only', () => {
+    expect(canExecuteJarvisActions('commander')).toBe(true)
+    expect(canExecuteJarvisActions('growth')).toBe(false)
+    expect(canExecuteJarvisActions('start')).toBe(false)
+    expect(canExecuteJarvisActions('trial')).toBe(false)
+  })
+
+  it('navigates when the merchant asks to be taken to a store page', () => {
+    expect(parseJarvisVoiceIntent('Take me to the product page')).toEqual({ type: 'navigate', page: 'products' })
+    expect(parseJarvisVoiceIntent('Mujhe inventory pe le jao')).toEqual({ type: 'navigate', page: 'inventory' })
+  })
+
+  it('creates a low-stock automation when asked on the automation page', () => {
+    const intent = parseJarvisVoiceIntent('Automation bana do for low stock')
+    expect(intent).toMatchObject({ type: 'create_automation', templateId: 'low-stock-alert' })
+    expect(inferAutomationTemplate('welcome new customers')).toEqual({ id: 'welcome-customer', name: 'Welcome new customer' })
+  })
+
+  it('recognizes confirm and cancel for Commander actions', () => {
+    expect(parseJarvisVoiceIntent('confirm')).toEqual({ type: 'confirm' })
+    expect(parseJarvisVoiceIntent('cancel')).toEqual({ type: 'cancel' })
+    expect(parseJarvisVoiceIntent('low stock batao')).toEqual({ type: 'ask', text: 'low stock batao' })
+  })
+
+  it('strips action protocol before speech', () => {
+    expect(spokenReplyText('Opening products.\n@jarvis:action {"actionId":"navigate_page","parameters":{"page":"products"}}')).toBe('Opening products.')
+  })
+})

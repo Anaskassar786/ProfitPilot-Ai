@@ -56,13 +56,17 @@ describe('F8 Jarvis identity and session behavior', () => {
     expect(sent.action).toBeNull()
   })
 
-  it('creates a Growth morning briefing from evidence and gates trial briefings', async () => {
+  it('creates a page-aware spoken briefing for every plan', async () => {
     const service = new JarvisService(provider(), jarvisEvidence, new InMemoryJarvisRepository(), null, () => 1_000)
     const growth = await service.briefing('store-growth' as never, 'dashboard', 'growth')
     expect(growth.status).toBe('ANSWER')
-    expect(growth.text).toContain('Quick briefing')
+    expect(growth.text).toContain('You are on')
+    expect(growth.text).toContain('suggest')
     const trial = await service.briefing('store-trial' as never, 'dashboard', 'trial')
-    expect(trial.status).toBe('SUPPRESSED')
+    expect(trial.status).toBe('ANSWER')
+    expect(trial.action).toBeNull()
+    const commander = await service.briefing('store-cmd' as never, 'dashboard', 'commander')
+    expect(commander.text).toContain('action')
   })
 
   it('requires a repeat voice confirmation before executing a risky action', async () => {

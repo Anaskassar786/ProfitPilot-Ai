@@ -162,6 +162,29 @@ export const JARVIS_STORE_ACTIONS: readonly JarvisStoreActionDefinition[] = [
     ],
   },
   {
+    id: 'create_automation',
+    label: 'Create automation',
+    description: 'Create a draft store automation from a known template (low-stock alert, welcome customer, abandoned checkout).',
+    kind: 'WRITE',
+    minimumPlan: 'commander',
+    requiresConfirmation: true,
+    parameters: [
+      { name: 'templateId', description: 'Template id such as low-stock-alert, welcome-customer, or abandoned-checkout.', type: 'string', required: false },
+      { name: 'name', description: 'Optional merchant-facing workflow name.', type: 'string', required: false },
+    ],
+  },
+  {
+    id: 'navigate_page',
+    label: 'Open a workspace page',
+    description: 'Take the merchant to a ProfitPilot page such as products, inventory, orders, or automation.',
+    kind: 'READ',
+    minimumPlan: 'commander',
+    requiresConfirmation: false,
+    parameters: [
+      { name: 'page', description: 'Workspace page id (products, inventory, orders, customers, automation, analytics, billing).', type: 'string', required: true },
+    ],
+  },
+  {
     id: 'trigger_sync',
     label: 'Sync store data',
     description: 'Trigger a fresh data sync from Shopify so reports and analytics are current.',
