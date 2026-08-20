@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canExecuteJarvisActions, inferAutomationTemplate, parseJarvisVoiceIntent, spokenReplyText } from './jarvis-intents.js'
+import { canExecuteJarvisActions, inferAutomationTemplate, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 
 describe('Jarvis spoken intents', () => {
   it('treats Growth and Start as suggestion-only', () => {
@@ -24,6 +24,13 @@ describe('Jarvis spoken intents', () => {
     expect(parseJarvisVoiceIntent('confirm')).toEqual({ type: 'confirm' })
     expect(parseJarvisVoiceIntent('cancel')).toEqual({ type: 'cancel' })
     expect(parseJarvisVoiceIntent('low stock batao')).toEqual({ type: 'ask', text: 'low stock batao' })
+  })
+
+
+  it('detects when the merchant wants a page walkthrough', () => {
+    expect(wantsPageWalkthrough('is page pe kya important hai')).toBe(true)
+    expect(wantsPageWalkthrough('tell me about this page')).toBe(true)
+    expect(wantsPageWalkthrough('take me to products')).toBe(false)
   })
 
   it('strips action protocol before speech', () => {

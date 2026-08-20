@@ -8,7 +8,7 @@ import type { JarvisAddressing, JarvisEngagementMode, JarvisLanguage, JarvisPage
 import type { CopilotIntent, CopilotNumberSlot, CopilotEvidence } from '@profitpilot/ai'
 import type { ReportFrequency } from '@profitpilot/reporting'
 
-type PreferenceRow = QueryResultRow & { store_id: string; addressing: JarvisAddressing; language: JarvisLanguage | 'auto'; engagement_mode: JarvisEngagementMode; silence_until: Date | null; navigation_suggestions: boolean; only_answer_when_asked: boolean; updated_at: Date }
+type PreferenceRow = QueryResultRow & { store_id: string; addressing: JarvisAddressing | 'Boss'; language: JarvisLanguage | 'auto'; engagement_mode: JarvisEngagementMode; silence_until: Date | null; navigation_suggestions: boolean; only_answer_when_asked: boolean; updated_at: Date }
 type SessionRow = QueryResultRow & { id: string; store_id: string; plan: JarvisSession['plan']; active: boolean; paused: boolean; started_at: Date; last_activity_at: Date; last_page: string; memory_expires_at: Date; undo_window_seconds: number; nonsense_count: number; pending_action: unknown; ended_at: Date | null }
 type MessageRow = QueryResultRow & { id: string; session_id: string; store_id: string; role: JarvisMessage['role']; text: string; language: JarvisLanguage; mode: JarvisResponseMode; evidence: unknown; created_at: Date }
 type ThreadRow = QueryResultRow & { id: string; store_id: string; title: string; created_at: Date; updated_at: Date }
@@ -170,7 +170,7 @@ export class PostgresReportRepository implements ReportRepository {
   }
 }
 
-function toPreference(row: PreferenceRow): JarvisPreference { return { storeId: row.store_id as StoreId, addressing: row.addressing, language: row.language, engagementMode: row.engagement_mode, silenceUntil: row.silence_until?.valueOf() ?? null, navigationSuggestions: row.navigation_suggestions, onlyAnswerWhenAsked: row.only_answer_when_asked, updatedAt: row.updated_at.valueOf() } }
+function toPreference(row: PreferenceRow): JarvisPreference { return { storeId: row.store_id as StoreId, addressing: row.addressing === 'Boss' ? 'Commander' : row.addressing, language: row.language, engagementMode: row.engagement_mode, silenceUntil: row.silence_until?.valueOf() ?? null, navigationSuggestions: row.navigation_suggestions, onlyAnswerWhenAsked: row.only_answer_when_asked, updatedAt: row.updated_at.valueOf() } }
 function toSession(row: SessionRow): JarvisSession { return { id: row.id, storeId: row.store_id as StoreId, plan: row.plan, active: row.active, paused: row.paused, startedAt: row.started_at.valueOf(), lastActivityAt: row.last_activity_at.valueOf(), lastPage: row.last_page as JarvisPage, memoryExpiresAt: row.memory_expires_at.valueOf(), undoWindowSeconds: row.undo_window_seconds, nonsenseCount: row.nonsense_count, pendingAction: isAction(row.pending_action) ? row.pending_action : null, endedAt: row.ended_at?.valueOf() ?? null } }
 function toMessage(row: MessageRow): JarvisMessage { return { id: row.id, sessionId: row.session_id, storeId: row.store_id as StoreId, role: row.role, text: row.text, language: row.language, mode: row.mode, evidence: isRecord(row.evidence) ? row.evidence as unknown as JarvisMessage['evidence'] : null, createdAt: row.created_at.valueOf() } }
 function toThread(row: ThreadRow): CopilotThread { return { id: row.id, storeId: row.store_id as StoreId, title: row.title, createdAt: row.created_at.valueOf(), updatedAt: row.updated_at.valueOf() } }

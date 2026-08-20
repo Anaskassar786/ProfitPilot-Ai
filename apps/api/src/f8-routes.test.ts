@@ -44,8 +44,8 @@ describe('F8 API routes', () => {
     const session = (await started.json() as { data: { id: string } }).data
     const message = await fetch(`${base}/jarvis/sessions/${session.id}/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', text: 'show revenue', page: 'dashboard' }) })
     expect(message.status).toBe(200)
-    const saved = await fetch(`${base}/jarvis/preferences`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', addressing: 'Boss', engagementMode: 'quiet' }) })
-    expect((await saved.json()).data.addressing).toBe('Boss')
+    const saved = await fetch(`${base}/jarvis/preferences`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', addressing: 'Commander', engagementMode: 'quiet' }) })
+    expect((await saved.json()).data.addressing).toBe('Commander')
     expect((await fetch(`${base}/jarvis/sessions/${session.id}/pause`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1' }) })).status).toBe(200)
     expect((await fetch(`${base}/jarvis/sessions/${session.id}/messages?storeId=store-1`)).status).toBe(200)
     expect((await fetch(`${base}/jarvis/sessions/${session.id}/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1' }) })).status).toBe(200)

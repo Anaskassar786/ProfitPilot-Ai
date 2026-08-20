@@ -1,4 +1,5 @@
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error' | 'sleeping'
+export type VoiceGender = 'feminine' | 'masculine'
 export type SpeechRecognitionFailure = Readonly<{ code: string; message: string }>
 export type MicrophonePreflight = Readonly<{ allowed: boolean; framed: boolean; code: 'ready' | 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable'; message: string | null }>
 
@@ -79,27 +80,37 @@ export function unlockSpeechSynthesis(scope: Window | undefined): boolean {
   }
 }
 
-export function pickSpeechVoice(scope: Window | undefined, language: 'en' | 'hi'): SpeechSynthesisVoice | null {
+export function pickSpeechVoice(scope: Window | undefined, language: 'en' | 'hi', preferredGender: VoiceGender = 'feminine'): SpeechSynthesisVoice | null {
   if (!scope?.speechSynthesis || typeof scope.speechSynthesis.getVoices !== 'function') return null
   const voices = scope.speechSynthesis.getVoices()
   if (voices.length === 0) return null
-  const preferred = language === 'hi'
-    ? ['hi-IN', 'hi']
-    : ['en-IN', 'en-GB', 'en-US', 'en']
-  for (const tag of preferred) {
-    const exact = voices.find((voice) => voice.lang.toLowerCase() === tag.toLowerCase())
-    if (exact) return exact
-    const prefix = voices.find((voice) => voice.lang.toLowerCase().startsWith(`${tag.toLowerCase()}-`) || voice.lang.toLowerCase().startsWith(tag.toLowerCase()))
-    if (prefix) return prefix
-  }
-  if (language === 'hi') {
-    const named = voices.find((voice) => /hindi|हिन्दी/i.test(voice.name))
-    if (named) return named
-  }
-  return voices.find((voice) => voice.default) ?? voices[0] ?? null
+  const preferredTags = language === 'hi'
+    ? ['hi-IN', 'hi', 'en-IN', 'en']
+    : ['en-IN', 'en-GB', 'en-US', 'en', 'hi-IN', 'hi']
+  return [...voices].sort((left, right) => scoreVoice(right, preferredTags, preferredGender) - scoreVoice(left, preferredTags, preferredGender))[0] ?? null
 }
 
-export function speakNative(scope: Window | undefined, text: string, language: 'en' | 'hi', onEnd?: () => void): boolean {
+function scoreVoice(voice: SpeechSynthesisVoice, preferredTags: readonly string[], preferredGender: VoiceGender): number {
+  const lang = voice.lang.toLowerCase()
+  const name = voice.name.toLowerCase()
+  let score = 0
+  preferredTags.forEach((tag, index) => {
+    const normalized = tag.toLowerCase()
+    if (lang === normalized) score = Math.max(score, 220 - index * 20)
+    else if (lang.startsWith(`${normalized}-`) || lang.startsWith(normalized)) score = Math.max(score, 180 - index * 18)
+  })
+  if (voice.default) score += 14
+  if (/natural|neural|enhanced|premium|google|microsoft|siri/i.test(name)) score += 18
+  if (/india|bharat|hindi|hinglish|indian/i.test(name)) score += 12
+  if (preferredGender === 'feminine' && /female|woman|zira|aria|samantha|serena|heera|priya|sonia|susan|natasha|hazel|jenny|katja|sabrina|ava|alloy/i.test(name)) score += 26
+  if (preferredGender === 'masculine' && /male|man|david|mark|ravi|aarav|george|adam|daniel|james|ryan|alex|guy|raj/i.test(name)) score += 26
+  if (preferredGender === 'feminine' && /male|man\b/.test(name)) score -= 10
+  if (preferredGender === 'masculine' && /female|woman\b/.test(name)) score -= 10
+  if (/novelty|whisper|child|kid|cartoon|monster|robot/i.test(name)) score -= 40
+  return score
+}
+
+export function speakNative(scope: Window | undefined, text: string, language: 'en' | 'hi', onEnd?: () => void, preferredGender: VoiceGender = 'feminine'): boolean {
   if (!scope?.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return false
   const clean = spokenReplyText(text)
   if (!clean) {
@@ -107,14 +118,16 @@ export function speakNative(scope: Window | undefined, text: string, language: '
     return false
   }
   const utterance = new SpeechSynthesisUtterance(clean)
-  const voice = pickSpeechVoice(scope, language)
+  const voice = pickSpeechVoice(scope, language, preferredGender)
   if (voice) {
     utterance.voice = voice
     utterance.lang = voice.lang || (language === 'hi' ? 'hi-IN' : 'en-IN')
   } else {
     utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
   }
-  utterance.rate = 1.02
+  utterance.rate = language === 'hi' ? 0.94 : 0.98
+  utterance.pitch = preferredGender === 'feminine' ? 1.08 : 0.96
+  utterance.volume = 1
   utterance.onend = () => onEnd?.()
   utterance.onerror = () => onEnd?.()
   scope.speechSynthesis.cancel()

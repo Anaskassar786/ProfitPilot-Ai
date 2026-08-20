@@ -85,9 +85,10 @@ describe('Settings model', () => {
   })
 
   it('parses unknown payloads into safe defaults instead of fabricating values', () => {
-    const parsed = parseWorkspaceSettings({ theme: 'neon', bubblePosition: 'top', notifications: { weeklyAiDigest: false } })
+    const parsed = parseWorkspaceSettings({ theme: 'neon', bubblePosition: 'top', jarvisVoiceGender: 'masculine', notifications: { weeklyAiDigest: false } })
     expect(parsed.theme).toBe('dark')
     expect(parsed.bubblePosition).toBe('bottom-right')
+    expect(parsed.jarvisVoiceGender).toBe('masculine')
     expect(parsed.notifications.weeklyAiDigest).toBe(false)
     expect(parsed.notifications.securityAlerts).toBe(true)
   })

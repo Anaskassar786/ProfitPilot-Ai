@@ -12,7 +12,7 @@ export type FloatingVoiceStatus = NativeVoiceStatus | 'paused'
 export type VoiceBlock = 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable' | null
 
 type TranscriptHandler = (transcript: string) => void | Promise<void>
-type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean }>
+type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean; voiceGender?: 'feminine' | 'masculine' }>
 
 type VoiceController = Readonly<{
   active: boolean
@@ -165,7 +165,8 @@ export const jarvisVoiceController: VoiceController = {
   setProcessing() {
     if (state.active) setState({ status: 'processing' })
   },
-  speak({ text, language, muted }, onEnd) {
+  speak(options, onEnd) {
+    const { text, language, muted } = options
     const clean = spokenReplyText(text)
     if (clean) setState({ lastSpoken: clean })
     const silenced = muted ?? state.muted
@@ -187,15 +188,15 @@ export const jarvisVoiceController: VoiceController = {
         return
       }
       const utterance = new SpeechSynthesisUtterance(clean)
-      const voice = pickSpeechVoice(window, language)
+      const voice = pickSpeechVoice(window, language, options.voiceGender ?? 'feminine')
       if (voice) {
         utterance.voice = voice
         utterance.lang = voice.lang || (language === 'hi' ? 'hi-IN' : 'en-IN')
       } else {
         utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
       }
-      utterance.rate = 1.02
-      utterance.pitch = 1
+      utterance.rate = language === 'hi' ? 0.94 : 0.98
+      utterance.pitch = (options.voiceGender ?? 'feminine') === 'feminine' ? 1.08 : 0.96
       utterance.volume = 1
       utterance.onend = () => finishSpeaking(generation, onEnd)
       utterance.onerror = () => finishSpeaking(generation, onEnd)

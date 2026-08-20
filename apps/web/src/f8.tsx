@@ -8,13 +8,15 @@ import { microphonePreflight, speechRecognitionAvailable } from './voice.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
 import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
-import { canExecuteJarvisActions, pageSpokenName, parseJarvisVoiceIntent, spokenReplyText } from './jarvis-intents.js'
+import { canExecuteJarvisActions, pageSpokenName, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 import type { WorkspaceContext } from './model.js'
+import type { WorkspaceSettings } from './settings-model.js'
 
 type JarvisExperienceProps = Readonly<{
   open: boolean
   context: WorkspaceContext
   page: string
+  workspaceSettings?: WorkspaceSettings
   onOpen: () => void
   onClose: () => void
   onEvidence: (evidence?: JarvisEvidence | null) => void
@@ -23,7 +25,7 @@ type JarvisExperienceProps = Readonly<{
   onNavigate?: (page: string) => void
 }>
 
-export function JarvisExperience({ open, context, page, onOpen, onClose, onEvidence, onToast, onPreferenceChange, onNavigate }: JarvisExperienceProps) {
+export function JarvisExperience({ open, context, page, workspaceSettings, onOpen, onClose, onEvidence, onToast, onPreferenceChange, onNavigate }: JarvisExperienceProps) {
   const [session, setSession] = useState<JarvisSession | null>(null)
   const [lifecycle, dispatchLifecycle] = useReducer(reduceJarvisSession, { status: 'starting', error: null })
   const [startAttempt, setStartAttempt] = useState(0)
@@ -36,6 +38,7 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
   const pageRef = useRef(page)
   const pendingTranscript = useRef<string | null>(null)
   const lastBriefedPage = useRef<string | null>(null)
+  const pendingPageOffer = useRef<string | null>(null)
   sessionRef.current = session
   pageRef.current = page
 
@@ -64,12 +67,29 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
     return () => { cancelled = true }
   }, [open, context.storeId, startAttempt])
 
+  const ambientLanguage = (): 'en' | 'hi' => preference?.language === 'hi' ? 'hi' : 'en'
+
   const speakReply = (text: string, language: 'en' | 'hi') => {
     const spoken = spokenReplyText(text)
     if (spoken) setCaption(spoken)
-    jarvisVoiceController.speak({ text: spoken, language, muted: voice.muted }, () => {
+    jarvisVoiceController.speak({ text: spoken, language, muted: voice.muted, voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine' }, () => {
       resumeJarvisListening(language)
     })
+  }
+
+  const deliverBriefing = async (pageToExplain: string) => {
+    const current = sessionRef.current
+    if (!context.storeId || !current) return
+    jarvisVoiceController.setProcessing()
+    try {
+      const briefing = await fetchJarvisBriefing(context.storeId, pageToExplain, current.plan)
+      setSession(briefing.session)
+      pendingPageOffer.current = null
+      speakReply(briefing.text, briefing.language)
+    } catch {
+      pendingPageOffer.current = null
+      speakReply(fallbackBriefing(pageToExplain, preference?.addressing ?? 'Sir', ambientLanguage()), ambientLanguage())
+    }
   }
 
   const handleTranscript = async (text: string) => {
@@ -86,6 +106,7 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
 
     if (intent.type === 'cancel') {
       setPendingStoreAction(null)
+      pendingPageOffer.current = null
       speakReply(`${preference?.addressing ?? 'Sir'}, cancelled.`, language)
       return
     }
@@ -104,6 +125,18 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
         onToast(message, 'error')
         speakReply(message, language)
       }
+      return
+    }
+
+    if (intent.type === 'confirm' && pendingPageOffer.current) {
+      const pageToExplain = pendingPageOffer.current
+      pendingPageOffer.current = null
+      await deliverBriefing(pageToExplain)
+      return
+    }
+
+    if (wantsPageWalkthrough(cleanText)) {
+      await deliverBriefing(pageRef.current)
       return
     }
 
@@ -189,20 +222,23 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
       pendingTranscript.current = null
       void handleTranscript(queued)
     }
-    if (lastBriefedPage.current === page) return
+    const previousPage = lastBriefedPage.current
+    if (previousPage === page) return
     lastBriefedPage.current = page
-    const storeId = context.storeId
-    const plan = session.plan
-    void fetchJarvisBriefing(storeId, page, plan).then((briefing) => {
-      setSession(briefing.session)
-      speakReply(briefing.text, briefing.language)
-    }).catch(() => {
-      speakReply(`${preference?.addressing ?? 'Sir'}, you are on ${pageSpokenName(page)}. Ask me about this page.`, preference?.language === 'hi' ? 'hi' : 'en')
-    })
-  }, [open, lifecycle.status, session?.id, page, context.storeId])
+    if (previousPage === null) {
+      void deliverBriefing(page)
+      return
+    }
+    if (paused || preference?.navigationSuggestions === false || preference?.onlyAnswerWhenAsked || preference?.engagementMode === 'quiet' || preference?.engagementMode === 'answer-only') return
+    pendingPageOffer.current = page
+    speakReply(pageOfferPrompt(page, preference?.addressing ?? 'Sir', ambientLanguage()), ambientLanguage())
+  }, [open, lifecycle.status, session?.id, page, context.storeId, paused, preference?.navigationSuggestions, preference?.onlyAnswerWhenAsked, preference?.engagementMode])
 
   useEffect(() => {
-    if (!open) lastBriefedPage.current = null
+    if (!open) {
+      lastBriefedPage.current = null
+      pendingPageOffer.current = null
+    }
   }, [open])
 
   const toggleMic = () => {
@@ -219,6 +255,7 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
       try { setSession(await setJarvisState(context.storeId, session.id, 'pause')) } catch { /* local pause still applies */ }
     }
     setPaused(true)
+    pendingPageOffer.current = null
     jarvisVoiceController.setPaused(true)
     setCaption('Paused')
   }
@@ -237,6 +274,7 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
     jarvisVoiceController.stop()
     setPaused(false)
     setPendingStoreAction(null)
+    pendingPageOffer.current = null
     setCaption('Store assistant')
     lastBriefedPage.current = null
     onClose()
@@ -284,6 +322,18 @@ export function JarvisExperience({ open, context, page, onOpen, onClose, onEvide
       />
     </>
   )
+}
+
+function pageOfferPrompt(page: string, addressing: string, language: 'en' | 'hi'): string {
+  const pageName = pageSpokenName(page)
+  if (language === 'hi') return `${addressing}, ab hum ${pageName} page par hain. Agar aap chahen to main jaldi se bata doon yahan kya important hai. Bas haan bol dijiye.`
+  return `${addressing}, we are on ${pageName}. If you want, I can quickly point out what matters on this page. Just say yes.`
+}
+
+function fallbackBriefing(page: string, addressing: string, language: 'en' | 'hi'): string {
+  const pageName = pageSpokenName(page)
+  if (language === 'hi') return `${addressing}, abhi hum ${pageName} par hain. Aap chahein to mujhse is page ke important numbers ya next step ke baare mein pooch sakte hain.`
+  return `${addressing}, you are on ${pageName}. Ask me what matters here and I will keep it short.`
 }
 
 function extractProposedAction(text: string): { cleanText: string; actionId: string; parameters: Readonly<Record<string, string | number | boolean | null>> } | null {

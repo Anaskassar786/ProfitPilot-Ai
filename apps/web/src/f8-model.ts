@@ -13,7 +13,7 @@ export function reduceJarvisSession(_current: JarvisSessionLifecycle, action: Ja
   return { status: action.type, error: action.message }
 }
 
-export type JarvisAddressing = 'Sir' | "Ma'am" | 'Boss' | 'Miss'
+export type JarvisAddressing = 'Sir' | "Ma'am" | 'Commander' | 'Miss'
 export type JarvisEngagementMode = 'proactive' | 'balanced' | 'quiet' | 'answer-only'
 export type JarvisPreference = Readonly<{ storeId: string; addressing: JarvisAddressing; language: 'en' | 'hi' | 'auto'; engagementMode: JarvisEngagementMode; silenceUntil: number | null; navigationSuggestions: boolean; onlyAnswerWhenAsked: boolean; updatedAt: number }>
 export type JarvisAction = Readonly<{ id: string; recommendationId: string | null; actionType: string; label: string; risk: 'SAFE' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY'; undoWindowSeconds: number; requiresVoiceConfirmation: boolean }>

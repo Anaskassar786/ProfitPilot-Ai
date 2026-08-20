@@ -29,7 +29,7 @@ describe('F8 Jarvis identity and session behavior', () => {
     expect(detectLanguage('Show revenue', 'auto')).toBe('en')
     expect(detectLanguage('anything', 'hi')).toBe('hi')
     expect(greeting(new Date('2024-01-01T08:00:00'), 'Ma\'am')).toContain('Good morning')
-    expect(greeting(new Date('2024-01-01T14:00:00'), 'Boss')).toContain('Good afternoon')
+    expect(greeting(new Date('2024-01-01T14:00:00'), 'Commander')).toContain('Good afternoon')
     expect(greeting(new Date('2024-01-01T20:00:00'), 'Miss')).toContain('Good evening')
   })
 
