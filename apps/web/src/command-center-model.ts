@@ -67,7 +67,7 @@ export function reduceRunAll(state: RunAllState, event: RunAllEvent): RunAllStat
 }
 
 export const PLAN_LABELS: Readonly<Record<PlanTier, string>> = { trial: 'Trial', start: 'Start', growth: 'Growth', commander: 'Commander' }
-export const PLAN_PRICES: Readonly<Record<PlanTier, string | null>> = { trial: null, start: '$49/mo', growth: '$149/mo', commander: '$349/mo' }
+export const PLAN_PRICES: Readonly<Record<PlanTier, string | null>> = { trial: null, start: '$79/mo', growth: '$199/mo', commander: '$399/mo' }
 
 /** Locked agents grouped by the plan that unlocks them, in upgrade order. */
 export function groupLockedByPlan(agents: readonly AgentOverviewEntry[]): readonly Readonly<{ plan: PlanTier; agents: readonly AgentOverviewEntry[] }>[] {

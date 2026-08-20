@@ -532,7 +532,7 @@ export function StartPlanValueCard({ metrics, onSync }: { metrics: AiCommandPage
       <header className="cc-value-card-header">
         <span className="cc-value-icon start"><Target size={20} /></span>
         <h3>What Start Plan Delivers for YOUR Store</h3>
-        <span className="cc-value-plan-badge start">Start · $49/mo</span>
+        <span className="cc-value-plan-badge start">Start · $79/mo</span>
       </header>
       {hasCustomerData ? (
         <div className="cc-value-stats">
@@ -566,7 +566,7 @@ export function CommanderActionsCard({ metrics, onSync }: { metrics: AiCommandPa
       <header className="cc-value-card-header">
         <span className="cc-value-icon commander"><Crown size={20} /></span>
         <h3>Commander Actions Ready for YOUR Store</h3>
-        <span className="cc-value-plan-badge commander">Commander · $349/mo</span>
+        <span className="cc-value-plan-badge commander">Commander · $399/mo</span>
       </header>
       <div className="cc-action-list">
         <ActionOpportunity icon={ShoppingCart} title="Cross-sell Opportunities">
@@ -653,9 +653,9 @@ function SnapshotTile({ label, value, status, tone = 'muted' }: { label: string;
 export function AiTeamGrowthPath({ currentPlan, basicAgentCount }: { currentPlan: PlanTier; basicAgentCount: number }) {
   const tiers: readonly Readonly<{ plan: PlanTier; name: string; detail: string }>[] = [
     { plan: 'trial', name: 'Basic', detail: `${formatCount(basicAgentCount)} agents unlocked now` },
-    { plan: 'start', name: 'Start · $49/mo', detail: '+1 Customer Agent' },
-    { plan: 'growth', name: 'Growth · $149/mo', detail: '+2 more agents' },
-    { plan: 'commander', name: 'Commander · $349/mo', detail: 'Full AI team + auto actions' },
+    { plan: 'start', name: 'Start · $79/mo', detail: '+1 Customer Agent' },
+    { plan: 'growth', name: 'Growth · $199/mo', detail: '+2 more agents' },
+    { plan: 'commander', name: 'Commander · $399/mo', detail: 'Full AI team + auto actions' },
   ]
   const currentRank = tiers.findIndex((tier) => tier.plan === currentPlan)
   return (

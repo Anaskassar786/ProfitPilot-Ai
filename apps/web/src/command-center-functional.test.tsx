@@ -421,7 +421,7 @@ describe('AI Command Center Complete Functional Testing', () => {
 
   /* ── 6. Unlock More Agents Section ────────────────────────────────── */
   describe('6. Unlock More Agents Section', () => {
-    it('Customer Agent (locked): shows Requires Start badge, $49/mo price, and Upgrade Plan CTA', async () => {
+    it('Customer Agent (locked): shows Requires Start badge, $79/mo price, and Upgrade Plan CTA', async () => {
       const container = await mountWorkspace(true)
       const custCard = Array.from(container.querySelectorAll('.cc-agent-card.locked')).find((card) => card.textContent?.includes('Customer Agent'))
       expect(custCard).toBeTruthy()
@@ -430,7 +430,7 @@ describe('AI Command Center Complete Functional Testing', () => {
 
       const groupTitle = custCard?.closest('.cc-locked-group')?.querySelector('.cc-locked-group-title')
       expect(groupTitle?.textContent).toContain('Available in Start')
-      expect(groupTitle?.textContent).toContain('$49/mo')
+      expect(groupTitle?.textContent).toContain('$79/mo')
 
       const upgradeBtn = custCard?.querySelector('.cc-button.upgrade') as HTMLButtonElement
       expect(upgradeBtn).toBeTruthy()
@@ -439,7 +439,7 @@ describe('AI Command Center Complete Functional Testing', () => {
       expect(navigations).toContain('billing')
     })
 
-    it('Product Agent (locked): shows Requires Commander badge, $349/mo price, and Upgrade Plan CTA', async () => {
+    it('Product Agent (locked): shows Requires Commander badge, $399/mo price, and Upgrade Plan CTA', async () => {
       const container = await mountWorkspace(true)
       const prodCard = Array.from(container.querySelectorAll('.cc-agent-card.locked')).find((card) => card.textContent?.includes('Product Agent'))
       expect(prodCard).toBeTruthy()

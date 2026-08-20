@@ -27,6 +27,21 @@ describe('F5 billing API routes', () => {
   it('validates missing shop context', async () => await withServer(async (base) => expect((await fetch(`${base}/billing`)).status).toBe(400)))
   it('verifies a created charge and stores active state', async () => await withServer(async (base) => { const response = await fetch(`${base}/billing/charge/verify?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chargeId: 'charge-1', plan: 'GROWTH', interval: 'MONTHLY' }) }); expect(response.status).toBe(200) }))
   it('rejects a malformed gift code payload', async () => await withServer(async (base) => expect((await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 12 }) })).status).toBe(400)))
+  it('rejects an invalid gift code with a 400, not 500', async () => await withServer(async (base) => {
+    const response = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT-A-REAL-CODE' }) })
+    expect(response.status).toBe(400)
+    expect((await response.json()).error.message.toLowerCase()).toContain('invalid')
+  }))
+  it('returns the new plan prices', async () => await withServer(async (base) => {
+    const plans = (await (await fetch(`${base}/billing/plans`)).json()).data as readonly { monthlyPrice: number; annualPrice: number }[]
+    expect(plans.map((plan) => plan.monthlyPrice).sort((a, b) => a - b)).toEqual([79, 199, 399])
+    expect(plans.map((plan) => plan.annualPrice).sort((a, b) => a - b)).toEqual([790, 1990, 3990])
+  }))
+  it('applies a mock charge without 500', async () => await withServer(async (base) => {
+    const response = await fetch(`${base}/billing/charge?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan: 'GROWTH', interval: 'MONTHLY', returnUrl: 'https://app.example/return', mock: true }) })
+    expect(response.status).toBe(201)
+    expect((await response.json()).data.mock).toBe(true)
+  }))
 })
 
 async function withCharge<T>(createCharge: BillingRouteDependencies['createCharge'], handler: (base: string) => Promise<T>): Promise<T> {

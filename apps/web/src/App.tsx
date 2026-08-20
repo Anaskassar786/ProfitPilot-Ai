@@ -835,27 +835,31 @@ const BILLING_FEATURE_MATRIX: readonly Readonly<{
   growth: string | boolean
   commander: string | boolean
 }>[] = [
-  { id: 'stores', label: 'Stores Included', trial: '1', start: '1', growth: '3', commander: 'Unlimited' },
-  { id: 'ai_commands', label: 'AI Commands / Day', trial: '10', start: '100', growth: '300', commander: 'Unlimited' },
-  { id: 'automations', label: 'Automations', trial: '2', start: '5', growth: '20', commander: 'Unlimited' },
-  { id: 'auto_execution', label: 'AI Auto-execution', trial: false, start: false, growth: false, commander: true },
+  { id: 'stores', label: 'Shopify stores', trial: '1', start: '1', growth: '3', commander: 'Unlimited' },
+  { id: 'ai_commands', label: 'AI Commands / day', trial: '10', start: '100', growth: '300', commander: 'Unlimited' },
+  { id: 'automations', label: 'Automation workflows', trial: '2', start: '5', growth: '20', commander: 'Unlimited' },
+  { id: 'recs', label: 'AI recommendations / mo', trial: '10', start: '30', growth: '150', commander: 'Unlimited' },
+  { id: 'auto_execution', label: 'AI auto-execution', trial: false, start: false, growth: false, commander: true },
+  { id: 'pricing_agent', label: 'Pricing Agent', trial: false, start: false, growth: true, commander: true },
+  { id: 'product_exec', label: 'Product + Executive', trial: false, start: false, growth: false, commander: true },
 ]
 
-const BILLING_AGENT_MATRIX: readonly Readonly<{ id: string; label: string; trial: boolean; start: boolean; growth: boolean; commander: boolean }>[] = [
-  { id: 'REVENUE_AGENT', label: 'Revenue Agent', trial: true, start: true, growth: true, commander: true },
-  { id: 'INVENTORY_AGENT', label: 'Inventory Agent', trial: true, start: true, growth: true, commander: true },
-  { id: 'CUSTOMER_AGENT', label: 'Customer Agent', trial: false, start: true, growth: true, commander: true },
-  { id: 'PRICING_AGENT', label: 'Pricing Agent', trial: false, start: false, growth: true, commander: true },
-  { id: 'PRODUCT_AGENT', label: 'Product Agent', trial: false, start: false, growth: false, commander: true },
-  { id: 'EXECUTIVE_AGENT', label: 'Executive Agent', trial: false, start: false, growth: false, commander: true },
+const BILLING_AGENT_MATRIX: readonly Readonly<{ id: string; label: string; blurb: string; trial: boolean; start: boolean; growth: boolean; commander: boolean }>[] = [
+  { id: 'REVENUE_AGENT', label: 'Revenue Agent', blurb: 'Sales momentum & drop alerts', trial: true, start: true, growth: true, commander: true },
+  { id: 'INVENTORY_AGENT', label: 'Inventory Agent', blurb: 'Stockout & dead stock risks', trial: true, start: true, growth: true, commander: true },
+  { id: 'CUSTOMER_AGENT', label: 'Customer Agent', blurb: 'Churn, win-back, recovery/welcome', trial: false, start: true, growth: true, commander: true },
+  { id: 'PRICING_AGENT', label: 'Pricing Agent', blurb: 'Margin-safe price tests', trial: false, start: false, growth: true, commander: true },
+  { id: 'PRODUCT_AGENT', label: 'Product Agent', blurb: 'Cross-sell pairings', trial: false, start: false, growth: false, commander: true },
+  { id: 'EXECUTIVE_AGENT', label: 'Executive Agent', blurb: 'Weekly plain-language health digest', trial: false, start: false, growth: false, commander: true },
 ]
 
 const BILLING_FAQ: readonly Readonly<{ q: string; a: string }>[] = [
-  { q: 'How does the 14-day free trial work?', a: 'Every new store starts on a 14-day Free Trial with Revenue and Inventory agents unlocked. No credit card is required. When the trial ends, basic analytics stay available until you choose a paid plan.' },
-  { q: 'Can I cancel or change my plan anytime?', a: 'Yes. You can upgrade, downgrade, or cancel at any time. Changes take effect at the end of the current billing period. Suspended stores keep read-only access to billing and support.' },
-  { q: 'How do gift codes work?', a: 'A gift code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Redemption cancels the free trial and writes a gift subscription to your account.' },
-  { q: 'Are the payments secure?', a: 'Yes. All paid subscriptions are processed securely through Shopify Billing. ProfitPilot never stores your card details — Shopify handles checkout, invoices, and PCI compliance.' },
-  { q: 'What happens when I upgrade during a trial?', a: 'Choosing a paid plan ends the trial immediately and unlocks that plan’s full agent roster and entitlements. In this testing phase, upgrades are applied locally without a Shopify checkout redirect.' },
+  { q: 'How does the 14-day free trial work?', a: 'Every new store starts on a 14-day Free Trial with Revenue and Inventory agents unlocked. No credit card is required. When the trial ends, basic analytics stay available until you choose Start, Growth, or Commander.' },
+  { q: 'What does “1 store” / “3 stores” mean?', a: 'Store limit is how many of your Shopify stores you can connect under one subscription. Each merchant gets their own install. Start includes 1 store, Growth up to 3, and Commander is unlimited.' },
+  { q: 'Can I cancel or change plan anytime?', a: 'Yes. You can upgrade, downgrade, or cancel at any time. Changes take effect at the end of the current billing period. Suspended stores keep read-only access to billing and support.' },
+  { q: 'How do gift/promo codes work?', a: 'A promo code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Redemption replaces the free trial for that store.' },
+  { q: 'Are payments secure?', a: 'Yes. Paid subscriptions are billed securely through Shopify. ProfitPilot never stores your card details — Shopify handles checkout, invoices, and PCI compliance.' },
+  { q: 'What do I get when I upgrade from Trial → Start/Growth/Commander?', a: 'Start unlocks Customer Agent, 100 AI Commands/day, and 5 automations. Growth adds Pricing Agent, 3 stores, 300 commands/day, and 20 automations. Commander unlocks all 6 agents, unlimited stores and commands, and auto-execution so AI can take store actions for you. Recovery and welcome run under Customer Agent.' },
 ]
 
 const USAGE_FEATURE_LABELS: Readonly<Record<string, string>> = {
@@ -866,9 +870,7 @@ const USAGE_FEATURE_LABELS: Readonly<Record<string, string>> = {
   active_agents: 'Active AI agents',
   jarvis_messages_month: 'Jarvis messages / month',
   automation_workflows: 'Automation workflows',
-  active_campaigns: 'Active campaigns',
   email_sends_month: 'Email sends / month',
-  sms_sends_month: 'SMS sends / month',
   team_members: 'Team members',
   reports: 'Reports',
   exports: 'Data exports',
@@ -952,7 +954,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
         window.location.assign(charge.confirmationUrl)
         return
       }
-      onToast(charge.message ?? `[DEV] Upgraded to ${plan} locally. Shopify Billing Integration Pending.`, 'success')
+      onToast(charge.message ?? `Upgraded to ${plan.charAt(0) + plan.slice(1).toLowerCase()}. Billed securely through Shopify when you upgrade.`, 'success')
       await reload()
       const tier = plan.toLowerCase() as Exclude<PlanTier, 'trial'>
       setUsage((current) => {
@@ -979,16 +981,24 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
       setGiftCode('')
       await reload()
     } catch (error: unknown) {
-      onToast(errorMessage(error), 'error')
+      const raw = errorMessage(error)
+      const friendly = /already redeemed/i.test(raw)
+        ? 'This store has already redeemed a promo code.'
+        : /expired|exhausted|invalid/i.test(raw)
+          ? 'That promo code is invalid or no longer available.'
+          : /disabled/i.test(raw)
+            ? 'Promo codes are temporarily unavailable.'
+            : 'We could not redeem that code. Please try again.'
+      onToast(friendly, 'error')
     } finally {
       setGiftLoading(false)
     }
   }
 
   const displayPlans = plans.length > 0 ? plans : ([
-    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 49, annualPrice: 490, annualMonthsFree: 2, headline: 'Basic analytics for one store', features: ['Basic analytics for 1 store', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', '5 Automation workflows', 'Standard Email Support'], limits: {} },
-    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 149, annualPrice: 1490, annualMonthsFree: 2, recommended: true, headline: 'AI agents and advanced analytics', features: ['Advanced analytics for up to 3 stores', '4 AI agents: adds Pricing Agent', '300 AI Commands / day', '20 Automation workflows', 'Advanced Forecasting & ROI tracking', 'Priority 12-hour Support'], limits: {} },
-    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 349, annualPrice: 3490, annualMonthsFree: 2, headline: 'Full AI employee for unlimited stores', features: ['Full AI employee for unlimited stores', 'All 6 AI agents (Product & Executive unlocked)', 'Unlimited AI Commands & Automations', 'Auto-execution (AI takes action for you)', 'VIP 4-hour Support'], limits: {} },
+    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 79, annualPrice: 790, annualMonthsFree: 2, headline: 'AI clarity for your Shopify store', features: ['1 Shopify store connected', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', 'Customer insights, churn and win-back signals', 'Cart recovery and welcome flows via Customer Agent', '5 automation workflows', '30 AI recommendations / month', 'Closed-period reports and basic exports', 'Email support'], limits: {} },
+    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 199, annualPrice: 1990, annualMonthsFree: 2, recommended: true, headline: 'Scale decisions across products, pricing & automations', features: ['Up to 3 Shopify stores', '4 AI agents — includes Pricing Agent', '300 AI Commands / day', '20 automation workflows', 'Advanced analytics plus forecasting and ROI attribution', '150 AI recommendations / month', 'Margin-safe pricing opportunities (Pricing Agent)', 'Priority support with a 12-hour target'], limits: {} },
+    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 399, annualPrice: 3990, annualMonthsFree: 2, headline: 'Full AI employee — insights plus actions', features: ['Unlimited Shopify stores', 'All 6 AI agents (Product + Executive unlocked)', 'Unlimited AI Commands', 'Auto-execution: AI can take store actions for you', 'Unlimited automation workflows', 'Product Agent cross-sell + Executive weekly digest', 'Unlimited AI recommendations', 'Advanced forecasting, attribution, and exports', 'VIP priority support with a 4-hour target'], limits: {} },
   ])
 
   return (
@@ -1051,13 +1061,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
             <div className="billing-section-head">
               <div className="section-kicker"><span className="kicker-dot purple" /> AVAILABLE PLANS</div>
               <h2>Choose the level of autonomy you need.</h2>
-              <p>Upgrade anytime. Phase 1 applies the plan locally for testing — Shopify Billing checkout comes next.</p>
+              <p>Upgrade anytime. Billed securely through Shopify when you upgrade.</p>
+              <p className="billing-store-helper">Store limit = how many of your Shopify stores you can connect under one subscription. Each merchant gets their own install.</p>
             </div>
             <div className="billing-plan-grid">
               {displayPlans.map((plan) => {
                 const isCurrent = activeTier === plan.tier && !isGift
                 const price = billingInterval === 'ANNUAL' ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice
-                const features = (plan.features ?? []).filter((feature) => !feature.toLowerCase().includes('jarvis'))
+                const annualSave = plan.monthlyPrice * 12 - plan.annualPrice
+                const features = (plan.features ?? []).filter((feature) => !feature.toLowerCase().includes('jarvis') && !feature.toLowerCase().includes('campaign'))
                 return (
                   <article key={plan.code} className={`billing-plan-card ${plan.recommended ? 'recommended' : ''} ${isCurrent ? 'current' : ''}`}>
                     {plan.recommended && <span className="billing-plan-ribbon">Recommended</span>}
@@ -1071,7 +1083,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                       <span>/mo{billingInterval === 'ANNUAL' ? ' billed annually' : ''}</span>
                     </div>
                     {billingInterval === 'ANNUAL' && (
-                      <div className="billing-plan-annual-note">${plan.annualPrice}/year · {plan.annualMonthsFree} months free</div>
+                      <div className="billing-plan-annual-note">${plan.annualPrice.toLocaleString('en-US')}/year · save ${annualSave.toLocaleString('en-US')}/yr</div>
                     )}
                     <ul className="billing-plan-features">
                       {features.map((feature) => (
@@ -1086,6 +1098,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                       {isCurrent ? 'Current plan' : upgradeLoading === plan.code ? 'Updating…' : 'Choose plan'}
                       {!isCurrent && <ArrowUpRight size={14} />}
                     </button>
+                    <p className="billing-trust-line">Prices in USD. Applicable taxes appear on your Shopify bill.</p>
                   </article>
                 )
               })}
@@ -1098,7 +1111,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
               <div>
                 <div className="section-kicker"><span className="kicker-dot blue" /> FEATURES & AGENTS</div>
                 <h3>What each plan unlocks</h3>
-                <p>Compare stores, command quotas, automations, auto-execution, and the 6-agent roster across every tier.</p>
+                <p>Trial includes 2 agents, Start 3, Growth 4, Commander 6. Recovery and welcome run under Customer Agent.</p>
               </div>
             </div>
             <div className="billing-matrix-table-wrap">
@@ -1124,7 +1137,10 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                   ))}
                   {BILLING_AGENT_MATRIX.map((agent) => (
                     <tr key={agent.id}>
-                      <th scope="row">{agent.label}</th>
+                      <th scope="row">
+                        <span className="billing-agent-name">{agent.label}</span>
+                        <small className="billing-agent-blurb">{agent.blurb}</small>
+                      </th>
                       <td><BillingCheck ok={agent.trial} /></td>
                       <td><BillingCheck ok={agent.start} /></td>
                       <td><BillingCheck ok={agent.growth} /></td>
@@ -1147,7 +1163,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 </div>
               </div>
               <div className="billing-usage-grid">
-                {(usage.length ? usage : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))).map((meter) => {
+                {(usage.length ? usage : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))).filter((meter) => meter.feature !== 'sms_sends_month' && meter.feature !== 'active_campaigns' && meter.feature !== 'jarvis_messages_month').map((meter) => {
                   const percent = meter.limit && meter.limit > 0 ? Math.min(100, (meter.used / meter.limit) * 100) : 0
                   const tone = usageTone(percent)
                   const label = USAGE_FEATURE_LABELS[meter.feature] ?? meter.feature.replaceAll('_', ' ')
@@ -1155,11 +1171,14 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                     <div key={meter.feature} className={`billing-usage-meter tone-${tone}`}>
                       <div className="billing-usage-meter-top">
                         <span>{label}</span>
-                        <strong>{meter.limit === null ? `${meter.used} · ∞` : `${meter.used} / ${meter.limit}`}</strong>
+                        <strong>{meter.limit === null ? `${meter.used} · Unlimited` : `${meter.used} / ${meter.limit}`}</strong>
                       </div>
                       <div className="billing-usage-bar" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
                         <span style={{ width: `${meter.limit === null ? Math.min(12, meter.used > 0 ? 12 : 0) : percent}%` }} />
                       </div>
+                      {percent >= 100 && meter.limit !== null && (
+                        <button type="button" className="billing-upgrade-link" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Upgrade for higher limits</button>
+                      )}
                     </div>
                   )
                 })}
@@ -1219,7 +1238,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 aria-label="Gift code"
                 disabled={giftLoading}
               />
-              <button className="button primary" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
+              <button className="button primary billing-gift-redeem" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
                 {giftLoading ? <RefreshCw size={14} className="spin" /> : <Gift size={14} />}
                 {giftLoading ? 'Redeeming…' : 'Redeem'}
               </button>

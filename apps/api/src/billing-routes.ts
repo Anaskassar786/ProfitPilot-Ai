@@ -109,7 +109,7 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
           confirmationUrl: null,
           billingOn: new Date(periodEnd).toISOString(),
           mock: true,
-          message: '[DEV] Subscription updated locally. Shopify Billing Integration Pending.',
+          message: 'Plan updated. Billed securely through Shopify when you upgrade.',
         }, requestIdFrom(request)))
         return
       }

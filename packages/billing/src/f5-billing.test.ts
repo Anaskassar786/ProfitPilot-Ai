@@ -9,7 +9,15 @@ const active: Subscription = { storeId: 's', plan: 'growth', state: 'ACTIVE_MONT
 
 describe('F5 plans and entitlements', () => {
   it('contains three paid plans', () => expect(Object.keys(PLAN_DEFINITIONS)).toEqual(['START', 'GROWTH', 'COMMANDER']))
-  it('prices monthly and annual plans', () => { expect(priceFor('START', 'MONTHLY')).toBe(49); expect(priceFor('START', 'ANNUAL')).toBe(490); expect(planFor('COMMANDER').annualMonthsFree).toBe(2) })
+  it('prices monthly and annual plans', () => {
+    expect(priceFor('START', 'MONTHLY')).toBe(79)
+    expect(priceFor('START', 'ANNUAL')).toBe(790)
+    expect(priceFor('GROWTH', 'MONTHLY')).toBe(199)
+    expect(priceFor('GROWTH', 'ANNUAL')).toBe(1_990)
+    expect(priceFor('COMMANDER', 'MONTHLY')).toBe(399)
+    expect(priceFor('COMMANDER', 'ANNUAL')).toBe(3_990)
+    expect(planFor('COMMANDER').annualMonthsFree).toBe(2)
+  })
   it('returns all plan entitlements', () => expect(entitlementsFor('GROWTH').length).toBeGreaterThan(10))
   it('enforces growth recommendation quota', () => expect(limitForPlan('growth', 'ai_recommendations_month')).toBe(150))
   it('keeps billing page accessible for suspended stores', () => expect(accessGate({ ...active, state: 'SUSPENDED' }, { feature: 'orders_sync_month', used: 0, billingPage: true }).allowed).toBe(true))
@@ -34,7 +42,7 @@ describe('trial and gift redemption', () => {
 
 describe('funnel, grandfathering, ROI, admin', () => {
   it('tracks all seven idempotent funnel milestones', () => { const ledger = new FunnelLedger(); FUNNEL_MILESTONES.forEach((milestone) => ledger.record('s', milestone)); expect(ledger.milestones('s')).toHaveLength(7); expect(ledger.record('s', 'install')).toBe(false) })
-  it('locks grandfathered prices for renewal', () => { const locked = lockPrice('s', 'GROWTH', 'MONTHLY', 99, 100); expect(priceForRenewal(locked, 149)).toBe(99); expect(locked.grandfathered).toBe(true) })
+  it('locks grandfathered prices for renewal', () => { const locked = lockPrice('s', 'GROWTH', 'MONTHLY', 99, 100); expect(priceForRenewal(locked, 199)).toBe(99); expect(locked.grandfathered).toBe(true) })
   it('calculates net ROI and multiple', () => expect(calculateRoi(1000, 10_000)).toEqual({ attributedRevenue: 1000, aiCostDollars: .01, netReturn: 999.99, multiple: 100_000 }))
   it('expires admin step-up sessions after fifteen minutes', () => { const sessions = new AdminStepUpSessions(15); const token = sessions.issue('key', 'key', 100); expect(sessions.valid(token, 100)).toBe(true); expect(sessions.valid(token, 900_101)).toBe(false) })
   it('rejects an invalid admin key', () => expect(() => new AdminStepUpSessions().issue('bad', 'good')).toThrow('Invalid'))
