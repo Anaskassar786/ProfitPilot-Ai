@@ -398,20 +398,21 @@ export const GROWTH_MODULES: readonly GrowthModule[] = [
     id: 'AI_COMMAND',
     label: 'AI Command',
     description: 'Universal command center — control your store with text.',
-    sampleInsight: 'Ask “Which products should I reorder this week?” — get an evidence-backed answer.',
+    sampleInsight: 'Ask "Which products should I reorder this week?" — get an evidence-backed answer.',
     path: 'ai-command',
     planTiers: { trial: 'Info only', start: 'Info only', growth: 'Info only', commander: '+ Full Actions' },
     features: ['Universal text command for your store', 'Evidence-backed answers, never invented', 'Full store actions on Commander'],
   },
-  {
-    id: 'JARVIS',
-    label: 'Jarvis',
-    description: 'Spoken store assistant — page-aware briefings without a chat box.',
-    sampleInsight: 'You are on Inventory. Three products have seven or fewer days of cover.',
-    path: 'jarvis',
-    planTiers: { trial: 'Voice + suggest', start: 'Voice + suggest', growth: 'Voice + suggest', commander: '+ Actions' },
-    features: ['Speaks a page briefing wherever you are', 'Suggestions on Trial, Start, and Growth', 'Commander can navigate and create draft automations'],
-  },
+  /* 🛑 Jarvis GROWTH_MODULE temporarily removed — restore when Jarvis returns */
+  // {
+  //   id: 'JARVIS',
+  //   label: 'Jarvis',
+  //   description: 'Spoken store assistant — page-aware briefings without a chat box.',
+  //   sampleInsight: 'You are on Inventory. Three products have seven or fewer days of cover.',
+  //   path: 'jarvis',
+  //   planTiers: { trial: 'Voice + suggest', start: 'Voice + suggest', growth: 'Voice + suggest', commander: '+ Actions' },
+  //   features: ['Speaks a page briefing wherever you are', 'Suggestions on Trial, Start, and Growth', 'Commander can navigate and create draft automations'],
+  // },
 ]
 
 export type GrowthAccess = Readonly<{

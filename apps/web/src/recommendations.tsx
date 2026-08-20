@@ -1113,7 +1113,7 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
               <span><i className="dot" /> Created {new Date(recommendation.createdAt).toLocaleString()}</span>
               {recommendation.expiresAt && <span><i className="dot amber" /> {Date.parse(recommendation.expiresAt) > Date.now() ? 'Expires' : 'Expired'} {new Date(recommendation.expiresAt).toLocaleString()}</span>}
               {recommendation.snoozedUntil && Date.parse(recommendation.snoozedUntil) > Date.now() && <span><i className="dot blue" /> Snoozed until {new Date(recommendation.snoozedUntil).toLocaleString()}</span>}
-              {recommendation.decidedAt && <span><i className={`dot ${recommendation.status === 'REJECTED' ? 'red' : 'green'}`} /> {statusLabel(recommendation.status)} {new Date(recommendation.decidedAt).toLocaleString()}{recommendation.decidedBy === 'jarvis' ? ' via Jarvis' : recommendation.decidedBy === 'system' ? ' automatically' : ''}</span>}
+              {recommendation.decidedAt && <span><i className={`dot ${recommendation.status === 'REJECTED' ? 'red' : 'green'}`} /> {statusLabel(recommendation.status)} {new Date(recommendation.decidedAt).toLocaleString()}{/* 🛑 'via Jarvis' attribution temporarily hidden */ recommendation.decidedBy === 'system' ? ' automatically' : ''}</span>}
               <span><i className="dot" /> Version {recommendation.version} · concurrency-safe decisions</span>
             </div>
           </div>

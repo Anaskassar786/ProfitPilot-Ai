@@ -247,9 +247,10 @@ describe('PR49 section organization', () => {
 })
 
 describe('PR49 shipped AI Growth Command modules', () => {
-  it('defines all five modules with a real destination path', () => {
-    expect(GROWTH_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'PATTERN_AI', 'AI_COMMAND', 'JARVIS'])
-    expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'patternai', 'ai-command', 'jarvis'])
+  it('defines all active modules with a real destination path', () => {
+    /* 🛑 JARVIS module temporarily removed from GROWTH_MODULES array — restore when Jarvis returns */
+    expect(GROWTH_MODULES.map((module) => module.id)).toEqual(['STORE_COACH', 'AI_EXECUTIVE', 'PATTERN_AI', 'AI_COMMAND'])
+    expect(GROWTH_MODULES.map((module) => module.path)).toEqual(['store-coach', 'ai-executive', 'patternai', 'ai-command'])
     expect(GROWTH_MODULES.every((module) => module.description.length > 0 && module.features.length >= 3 && module.sampleInsight.length > 0)).toBe(true)
   })
   it('marks GrowthIQ (formerly AI Executive) as Requires Growth on lower plans only', () => {
@@ -276,7 +277,8 @@ describe('PR49 shipped AI Growth Command modules', () => {
     expect(growthModuleAccess(module, 'trial').note).toContain('Commander')
     expect(growthModuleAccess(module, 'commander').tierLabel).toBe('+ Full Actions')
   })
-  it('lists Jarvis after AI Command and keeps voice available on every plan', () => {
+  /* 🛑 Jarvis module temporarily removed from GROWTH_MODULES — test preserved for restoration */
+  it.skip('lists Jarvis after AI Command and keeps voice available on every plan', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'JARVIS')
     if (!module) throw new Error('missing module')
     expect(module.path).toBe('jarvis')

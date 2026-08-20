@@ -242,6 +242,18 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
               onUpgrade={(plan) => upgrade(plan)}
             />
           ))}
+          {/* 🛑 Jarvis: temporarily shown as Coming Soon */}
+          <article className="cc-agent-card growth coming-soon">
+            <div className="cc-agent-card-top">
+              <span className="cc-agent-icon growth-icon"><Radio size={20} /></span>
+              <span className="cc-status-pill paused"><i />Coming Soon</span>
+            </div>
+            <div className="cc-agent-title as-text">
+              <h3>Jarvis</h3>
+            </div>
+            <p className="cc-agent-tagline">An advanced AI assistant experience is coming to Profit Pilot.</p>
+            <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“Your spoken store assistant — page-aware briefings, no chat box.”</span></blockquote>
+          </article>
         </div>
       </section>
 
