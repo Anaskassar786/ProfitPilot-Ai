@@ -8,9 +8,10 @@
  * key is present, while still working with zero configuration.
  *
  * The provider is OpenAI-compatible, so any endpoint that mirrors
- * `POST {base}/audio/speech` works (OpenAI, Groq, local gateways, …). Voices
- * are mapped to a natural feminine/masculine pair and are fully overridable
- * from configuration.
+ * `POST {base}/audio/speech` works (OpenAI, Groq, local gateways, …). Voices,
+ * model, and audio container are fully overridable from configuration so each
+ * provider's quirks (e.g. Groq's Orpheus model + voice names) are handled by
+ * env vars alone, with no code change.
  */
 
 export type JarvisTtsVoice = 'feminine' | 'masculine'
@@ -32,6 +33,8 @@ export type OpenAiTtsConfig = Readonly<{
   model?: string
   /** feminine / masculine → vendor voice id. */
   voices?: Readonly<{ feminine?: string; masculine?: string }>
+  /** Audio container requested from the provider (mp3, wav, opus, flac…). */
+  responseFormat?: string
   /** Per-request timeout in ms. */
   timeoutMs?: number
   fetcher?: TtsFetcher
@@ -42,6 +45,7 @@ export type OpenAiTtsConfig = Readonly<{
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 const DEFAULT_MODEL = 'gpt-4o-mini-tts'
 const DEFAULT_VOICES: Readonly<Record<JarvisTtsVoice, string>> = { feminine: 'shimmer', masculine: 'echo' }
+const DEFAULT_RESPONSE_FORMAT = 'mp3'
 const MAX_TEXT = 4_000
 const CACHE_LIMIT = 64
 
@@ -50,7 +54,7 @@ interface CacheEntry { readonly audio: Buffer; readonly contentType: string; rea
 
 export class OpenAiTtsProvider implements JarvisTtsProvider {
   private readonly cache = new Map<CacheKey, CacheEntry>()
-  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: Readonly<Record<JarvisTtsVoice, string>>; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
+  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: Readonly<Record<JarvisTtsVoice, string>>; responseFormat: string; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
 
   public constructor(config: OpenAiTtsConfig) {
     const baseUrl = (config.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '')
@@ -63,6 +67,7 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
       baseUrl,
       model: config.model?.trim() || DEFAULT_MODEL,
       voices,
+      responseFormat: config.responseFormat?.trim() || DEFAULT_RESPONSE_FORMAT,
       timeoutMs: config.timeoutMs ?? 15_000,
       fetcher: config.fetcher ?? fetch,
       cacheLimit: Math.max(0, config.cacheLimit ?? CACHE_LIMIT),
@@ -87,7 +92,7 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
         method: 'POST',
         signal: controller.signal,
         headers: { authorization: `Bearer ${this.config.apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: this.config.model, voice: this.config.voices[voice], input: cleaned, response_format: 'mp3', speed: 1 }),
+        body: JSON.stringify({ model: this.config.model, voice: this.config.voices[voice], input: cleaned, response_format: this.config.responseFormat, speed: 1 }),
       })
       if (!response.ok) {
         throw new JarvisTtsUnavailableError(`Speech service responded ${response.status}.`)
@@ -128,11 +133,13 @@ export class JarvisTtsUnavailableError extends Error {
 export function createJarvisTtsProvider(env: Readonly<Record<string, string | undefined>>, fetcher?: TtsFetcher): JarvisTtsProvider | null {
   const apiKey = env.JARVIS_TTS_API_KEY?.trim() || env.OPENAI_TTS_API_KEY?.trim()
   if (!apiKey) return null
-  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string }; fetcher?: TtsFetcher } = { apiKey }
+  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string }; responseFormat?: string; fetcher?: TtsFetcher } = { apiKey }
   const baseUrl = env.JARVIS_TTS_BASE_URL?.trim() || env.OPENAI_TTS_BASE_URL?.trim()
   const model = env.JARVIS_TTS_MODEL?.trim() || env.OPENAI_TTS_MODEL?.trim()
+  const responseFormat = env.JARVIS_TTS_RESPONSE_FORMAT?.trim()
   if (baseUrl) config.baseUrl = baseUrl
   if (model) config.model = model
+  if (responseFormat) config.responseFormat = responseFormat
   const voices: { feminine?: string; masculine?: string } = {}
   const feminine = env.JARVIS_TTS_VOICE_FEMININE?.trim()
   const masculine = env.JARVIS_TTS_VOICE_MASCULINE?.trim()

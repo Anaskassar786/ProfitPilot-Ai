@@ -80,6 +80,17 @@ describe('Jarvis cloud TTS provider', () => {
     expect(captured).toBe('Hello Sir.')
   })
 
+  it('honors a configured response_format', async () => {
+    let captured = ''
+    const fetcher = vi.fn(async (_input: string, init: RequestInit) => {
+      captured = (JSON.parse(String(init.body)) as { response_format: string }).response_format
+      return fakeResponse(Buffer.from([1]))
+    })
+    const provider = new OpenAiTtsProvider({ apiKey: 'sk-test', responseFormat: 'wav', fetcher })
+    await provider.synthesize('hello', 'feminine', 'en')
+    expect(captured).toBe('wav')
+  })
+
   it('createJarvisTtsProvider returns null without a key and a provider with one', () => {
     expect(createJarvisTtsProvider({}, vi.fn())).toBeNull()
     const provider = createJarvisTtsProvider({ JARVIS_TTS_API_KEY: 'sk-test' }, vi.fn())
