@@ -27,7 +27,7 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
 
 export function renderShopifyAppToml(config: ShopifyAppTomlConfig): string {
   const redirects = config.redirectUrls.map((url) => `  "${tomlEscape(url)}"`).join(',\n')
-  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[[webhooks.subscriptions]]\ncompliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]\nuri = "/shopify/webhooks"\n`
+  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[[webhooks.subscriptions]]\ncompliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]\nuri = "/shopify/webhooks"\n\n[[webhooks.subscriptions]]\ntopics = ["app/uninstalled"]\nuri = "/shopify/webhooks"\n`
 }
 
 export function appListingMetadata(): Readonly<{ name: string; tagline: string; category: string; description: string; complianceLinks: readonly string[] }> {

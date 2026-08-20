@@ -8,7 +8,7 @@ import { InMemoryStoreDirectory } from '@profitpilot/db'
 import type { SqlExecutor } from '@profitpilot/db'
 import { storeId } from '@profitpilot/types'
 import { createApi } from './app.js'
-import { InMemoryCustomerPrivacyRepository, PostgresCustomerPrivacyRepository, ShopifyComplianceService } from './shopify-compliance.js'
+import { InMemoryCustomerPrivacyRepository, InMemoryUninstallRepository, PostgresCustomerPrivacyRepository, PostgresUninstallRepository, ShopifyComplianceService } from './shopify-compliance.js'
 
 const tenant = storeId('00000000-0000-4000-8000-000000000001')
 const secret = 'shopify-secret'
@@ -71,5 +71,116 @@ describe('Shopify mandatory privacy compliance', () => {
     expect(calls.some((call) => call.sql.includes("module = 'customers'") && call.sql.includes('DELETE FROM sync_records'))).toBe(true)
     expect(calls.some((call) => call.sql.includes("module = 'orders'") && call.sql.includes("'{\"customer\":null}'"))).toBe(true)
     expect(calls.some((call) => call.sql.includes('DELETE FROM campaign_sends'))).toBe(true)
+  })
+})
+
+describe('app/uninstalled webhook handler', () => {
+  it('revokes access token on app/uninstalled webhook', async () => {
+    const remove = vi.fn(async () => undefined)
+    const compliance = new ShopifyComplianceService(new InMemoryCustomerPrivacyRepository(), { remove }, () => 1_000)
+    const uninstallEvent = event('app/uninstalled', JSON.stringify({ shop_domain: 'demo.myshopify.com', shop_id: 1 }))
+    await compliance.handle(uninstallEvent)
+    expect(remove).toHaveBeenCalledWith('demo.myshopify.com')
+  })
+
+  it('marks store as UNINSTALLED and revokes sessions in finalize', async () => {
+    const remove = vi.fn(async () => undefined)
+    const uninstallRepo = new InMemoryUninstallRepository()
+    uninstallRepo.seedStore(tenant, 'ACTIVE')
+    const compliance = new ShopifyComplianceService(new InMemoryCustomerPrivacyRepository(), { remove }, () => 1_000)
+    compliance.setUninstallRepository(uninstallRepo)
+
+    const uninstallEvent = event('app/uninstalled', JSON.stringify({ shop_domain: 'demo.myshopify.com', shop_id: 1 }))
+    await compliance.handle(uninstallEvent)
+    await compliance.finalize(uninstallEvent)
+
+    expect(remove).toHaveBeenCalledWith('demo.myshopify.com')
+    expect(uninstallRepo.getStoreStatus(tenant)).toBe('UNINSTALLED')
+    expect(uninstallRepo.getStoreUninstalledAt(tenant)).toBe(1_000)
+  })
+
+  it('is idempotent: duplicate uninstall requests succeed without error', async () => {
+    const remove = vi.fn(async () => undefined)
+    const uninstallRepo = new InMemoryUninstallRepository()
+    uninstallRepo.seedStore(tenant, 'ACTIVE')
+    const compliance = new ShopifyComplianceService(new InMemoryCustomerPrivacyRepository(), { remove }, () => 1_000)
+    compliance.setUninstallRepository(uninstallRepo)
+
+    const uninstallEvent = event('app/uninstalled', JSON.stringify({ shop_domain: 'demo.myshopify.com', shop_id: 1 }), 'uninstall-1')
+    await compliance.handle(uninstallEvent)
+    await compliance.finalize(uninstallEvent)
+
+    // First uninstall succeeded
+    expect(uninstallRepo.getStoreStatus(tenant)).toBe('UNINSTALLED')
+
+    // Reset mocks for second call
+    remove.mockClear()
+
+    // Second (duplicate) uninstall should also succeed (idempotent)
+    const duplicateEvent = event('app/uninstalled', JSON.stringify({ shop_domain: 'demo.myshopify.com', shop_id: 1 }), 'uninstall-2')
+    await compliance.handle(duplicateEvent)
+    await compliance.finalize(duplicateEvent)
+
+    // Token removal still called (for idempotency, token revocation is idempotent)
+    expect(remove).toHaveBeenCalledWith('demo.myshopify.com')
+    // Status remains UNINSTALLED (not an error)
+    expect(uninstallRepo.getStoreStatus(tenant)).toBe('UNINSTALLED')
+  })
+
+  it('rejects app/uninstalled with missing shop_domain', async () => {
+    const compliance = new ShopifyComplianceService(new InMemoryCustomerPrivacyRepository(), { remove: vi.fn(async () => undefined) }, () => 1_000)
+    const invalidEvent = event('app/uninstalled', JSON.stringify({ shop_id: 1 }))
+    await expect(compliance.handle(invalidEvent)).rejects.toThrow('missing shop_domain')
+  })
+
+  it('HMAC-verifies app/uninstalled webhook at HTTP boundary', async () => {
+    const remove = vi.fn(async () => undefined)
+    const uninstallRepo = new InMemoryUninstallRepository()
+    uninstallRepo.seedStore(tenant, 'ACTIVE')
+    const compliance = new ShopifyComplianceService(new InMemoryCustomerPrivacyRepository(), { remove }, () => 1_000)
+    compliance.setUninstallRepository(uninstallRepo)
+    const ledger = new InMemoryWebhookProcessingLedger()
+    const processor = new WebhookProcessor(new WebhookVerifier(secret, ledger), ledger)
+    const directory = new InMemoryStoreDirectory()
+    const connection = await directory.upsertByShopDomain('demo.myshopify.com')
+    const installer = new ShopifyInstallService({ apiKey: 'key', apiSecret: secret, scopes: [], redirectUri: 'https://app.example/callback' }, new OAuthStateStore(), new TokenVault(AesGcmCipher.fromHex(key), new InMemoryTokenRecordStore()), directory)
+    const app = createApi({ logger: new Logger(), readinessChecks: [], shopify: { installer, exchange: async () => 'token', webhook: { processor, storeIdForShop: async () => connection.storeId, handle: (item) => compliance.handle(item), finalize: (item) => compliance.finalize(item) } } })
+
+    await withServer(app, async (base) => {
+      const body = JSON.stringify({ shop_domain: 'demo.myshopify.com', shop_id: 1 })
+      const validHeaders = { 'content-type': 'application/json', 'x-shopify-shop-domain': 'demo.myshopify.com', 'x-shopify-webhook-id': 'uninstall-1', 'x-shopify-topic': 'app/uninstalled', 'x-shopify-hmac-sha256': createHmac('sha256', secret).update(body).digest('base64') }
+
+      // Invalid HMAC returns 401
+      const invalidHmacResponse = await fetch(`${base}/shopify/webhooks`, { method: 'POST', headers: { ...validHeaders, 'x-shopify-hmac-sha256': 'invalid-signature' }, body })
+      expect(invalidHmacResponse.status).toBe(401)
+      expect(remove).not.toHaveBeenCalled()
+
+      // Valid HMAC returns 200 and revokes token
+      const validResponse = await fetch(`${base}/shopify/webhooks`, { method: 'POST', headers: validHeaders, body })
+      expect(validResponse.status).toBe(200)
+      expect(remove).toHaveBeenCalledWith('demo.myshopify.com')
+    })
+  })
+
+  it('PostgresUninstallRepository uses tenant-bound SQL', async () => {
+    const calls: Array<{ sql: string; parameters: readonly unknown[] }> = []
+    const executor: SqlExecutor = { query: async (sql, parameters = []) => { calls.push({ sql, parameters }); return { rows: [], rowCount: 1 } } }
+    const repo = new PostgresUninstallRepository(executor)
+    await repo.markStoreUninstalled(tenant, 'demo.myshopify.com', 1_000)
+    expect(calls[0]!.sql).toContain('UPDATE stores')
+    expect(calls[0]!.sql).toContain("status = 'UNINSTALLED'")
+    expect(calls[0]!.sql).toContain('uninstalled_at')
+    expect(calls[0]!.parameters[0]).toBe(tenant)
+  })
+
+  it('PostgresUninstallRepository revokes sessions with tenant-bound SQL', async () => {
+    const calls: Array<{ sql: string; parameters: readonly unknown[] }> = []
+    const executor: SqlExecutor = { query: async (sql, parameters = []) => { calls.push({ sql, parameters }); return { rows: [], rowCount: 5 } } }
+    const repo = new PostgresUninstallRepository(executor)
+    const revoked = await repo.revokeStoreSessions(tenant, 1_000)
+    expect(revoked).toBe(5)
+    expect(calls[0]!.sql).toContain('UPDATE auth_sessions')
+    expect(calls[0]!.sql).toContain('revoked_at')
+    expect(calls[0]!.parameters[0]).toBe(tenant)
   })
 })

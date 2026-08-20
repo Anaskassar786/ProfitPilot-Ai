@@ -4,7 +4,7 @@ import type { StoreDirectory } from '@profitpilot/db'
 import { PostgresOAuthStateStore, PostgresTokenRecordStore, PostgresWebhookProcessingStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import type { ShopifyRouteDependencies } from './shopify-routes.js'
-import { PostgresCustomerPrivacyRepository, ShopifyComplianceService } from './shopify-compliance.js'
+import { PostgresCustomerPrivacyRepository, PostgresUninstallRepository, ShopifyComplianceService } from './shopify-compliance.js'
 
 export type F1Bootstrap = Readonly<{
   shopify: ShopifyRouteDependencies
@@ -41,7 +41,11 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   const tokenExchange = new ShopifyTokenExchangeService(sessionToken, vault)
   const webhookStore = new PostgresWebhookProcessingStore(database)
   const webhookProcessor = new WebhookProcessor(new WebhookVerifier(env.SHOPIFY_WEBHOOK_SECRET?.trim() || sessionToken.apiSecret, webhookStore), webhookStore)
-  const compliance = new ShopifyComplianceService(new PostgresCustomerPrivacyRepository(database), vault)
+  const privacyRepo = new PostgresCustomerPrivacyRepository(database)
+  const uninstallRepo = new PostgresUninstallRepository(database)
+  const compliance = new ShopifyComplianceService(privacyRepo, vault)
+  // Wire the uninstall repository for app/uninstalled webhook handling
+  compliance.setUninstallRepository(uninstallRepo)
   const webhook = {
     processor: webhookProcessor,
     storeIdForShop: async (shop: string) => (await storeDirectory.getByShopDomain(shop))?.storeId ?? null,
