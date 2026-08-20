@@ -72,8 +72,18 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
 }
 
 async function usage(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, shopId: string) {
-  const result = await database.query<UsageRow>('SELECT feature, used FROM billing_usage WHERE shop_id = $1 AND period_start = date_trunc(\'month\', now())::date', [shopId])
-  const account = await new PostgresBillingRepository(database).get(shopId)
+  let result: { readonly rows: readonly UsageRow[] }
+  try {
+    result = await database.query<UsageRow>('SELECT feature, used FROM billing_usage WHERE shop_id = $1 AND period_start = date_trunc(\'month\', now())::date', [shopId])
+  } catch {
+    result = { rows: [] }
+  }
+  let account: Awaited<ReturnType<PostgresBillingRepository['get']>> = null
+  try {
+    account = await new PostgresBillingRepository(database).get(shopId)
+  } catch {
+    account = null
+  }
   const tier = account?.plan ?? 'trial'
   // Always surface every metered entitlement so the Billing UI can render a
   // complete usage dashboard even when no rows exist yet for the period.

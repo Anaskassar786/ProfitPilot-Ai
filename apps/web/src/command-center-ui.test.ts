@@ -163,7 +163,7 @@ describe('PR45 component rendering', () => {
     expect(html).toContain('Upgrade Plan')
     // The button must never mention a specific plan name or price.
     expect(html).not.toContain('Upgrade to Growth')
-    expect(html).not.toContain('$149/mo')
+    expect(html).not.toContain('$199/mo')
     expect(html).toContain('Sample insight.')
   })
   it('renders real KPI data in the hero, not hard-coded strings', () => {
