@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { jarvisVoiceController, resumeJarvisListening, retryCloudSpeech, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { resetApiClientStateForTests } from './api.js'
 
 class FakeRecognition {
   public lang = ''
@@ -139,6 +140,88 @@ describe('Shared Jarvis voice controller', () => {
     expect(jarvisVoiceController.error).toBeNull()
     expect(windowLike.open).toHaveBeenCalledOnce()
     expect(popup.document.write).toHaveBeenCalledOnce()
+    jarvisVoiceController.stop()
+  })
+
+  it('uses the in-page microphone (no popup) when a framed page can own getUserMedia', async () => {
+    const top = {}
+    const windowLike = {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [] },
+      isSecureContext: true,
+      location: { origin: 'https://app.test' },
+      open: vi.fn(() => null),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setInterval: vi.fn(() => 7),
+      clearInterval: vi.fn(),
+      // A preview iframe that allows the mic: getUserMedia resolves.
+      navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } },
+    }
+    Object.defineProperties(windowLike, { self: { value: windowLike }, top: { value: top } })
+    vi.stubGlobal('window', windowLike)
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } })
+    vi.stubGlobal('navigator', windowLike.navigator)
+    jarvisVoiceController.stop()
+    const started = await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    expect(started).toBe(true)
+    // The permission prompt is owned by the page, so no popup bridge is opened.
+    expect(windowLike.open).not.toHaveBeenCalled()
+    expect(jarvisVoiceController.framed).toBe(true)
+    jarvisVoiceController.stop()
+  })
+
+  it('plays the natural cloud voice when a storeId is provided and cloud speech is available', async () => {
+    resetApiClientStateForTests()
+    retryCloudSpeech()
+    const played: string[] = []
+    class FakeAudio {
+      public onended: (() => void) | null = null
+      public onerror: (() => void) | null = null
+      public ended = false
+      public paused = false
+      public src = ''
+      public currentSrc = ''
+      public play = vi.fn(async () => { played.push('played'); return undefined })
+      public pause = vi.fn()
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (String(input).includes('/security/csrf')) return new Response(JSON.stringify({ ok: true, data: { csrfToken: 'tok' } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response(Buffer.from([1, 2, 3, 4]), { status: 200, headers: { 'content-type': 'audio/mpeg' } })
+    }))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:audio'), revokeObjectURL: vi.fn() })
+    vi.stubGlobal('Audio', FakeAudio)
+    await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Hello Sir.', language: 'en', storeId: 'store-1' })
+    await vi.waitFor(() => expect(played).toContain('played'))
+    expect(jarvisVoiceController.status).toBe('speaking')
+    jarvisVoiceController.stop()
+  })
+
+  it('falls back to the browser voice when cloud speech is unavailable (503)', async () => {
+    resetApiClientStateForTests()
+    retryCloudSpeech()
+    const nativeSpeak = vi.fn()
+    class FakeAudio { public play = vi.fn(async () => undefined) }
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (String(input).includes('/security/csrf')) return new Response(JSON.stringify({ ok: true, data: { csrfToken: 'tok' } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response('unavailable', { status: 503 })
+    }))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:audio'), revokeObjectURL: vi.fn() })
+    vi.stubGlobal('Audio', FakeAudio)
+    const navigatorLike = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ readyState: 'live', stop: vi.fn() }] }) } }
+    vi.stubGlobal('window', {
+      SpeechRecognition: FakeRecognition,
+      speechSynthesis: { cancel: vi.fn(), speak: nativeSpeak, getVoices: () => [], addEventListener: vi.fn() },
+      isSecureContext: true,
+      navigator: navigatorLike,
+    })
+    vi.stubGlobal('navigator', navigatorLike)
+    vi.stubGlobal('SpeechSynthesisUtterance', class { public lang = ''; public onend: (() => void) | null = null })
+    await jarvisVoiceController.start({ language: 'en', onTranscript: vi.fn(), onError: vi.fn() })
+    jarvisVoiceController.speak({ text: 'Hello Sir.', language: 'en', storeId: 'store-1' })
+    // After a 503 the cloud voice is disabled and the native queue takes over.
+    await vi.waitFor(() => expect(nativeSpeak).toHaveBeenCalled())
     jarvisVoiceController.stop()
   })
 })

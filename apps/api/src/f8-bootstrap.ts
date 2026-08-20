@@ -5,7 +5,7 @@ import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
 import type { QueryResultRow } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
-import { AiCommandService, OpenRouterClient, CopilotService, JarvisService } from '@profitpilot/ai'
+import { AiCommandService, OpenRouterClient, CopilotService, JarvisService, createJarvisTtsProvider } from '@profitpilot/ai'
 import type { JarvisActionAuditEntry, JarvisActionTool } from '@profitpilot/ai'
 import { PostgresCopilotRepository, PostgresJarvisRepository, PostgresReportRepository } from './f8-repositories.js'
 import { F8ContextProvider } from './f8-context.js'
@@ -49,6 +49,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   })
   if (logger) void validateOpenRouterModels(provider, logger)
   const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
+  const jarvisTts = createJarvisTtsProvider(env)
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
   const reports = createReports(f7, env)
@@ -191,7 +192,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   // text and returned zero tool calls, adding latency and an unmetered failure
   // point without changing a single answer.
   const aiCommand = new AiCommandService(commandConfig)
-  return { ...f7, f8: { jarvis: { service: jarvis }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand, pageMetrics } }
+  return { ...f7, f8: { jarvis: { service: jarvis, ...(jarvisTts ? { tts: jarvisTts } : {}) }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand, pageMetrics } }
 }
 
 async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {

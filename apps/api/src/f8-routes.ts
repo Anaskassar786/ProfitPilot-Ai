@@ -4,11 +4,11 @@ import type { Request } from 'express'
 import { AppError, requestId, storeId, success } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { CopilotService, JarvisService } from '@profitpilot/ai'
-import type { JarvisAddressing, JarvisEngagementMode, JarvisLanguage, JarvisPage, JarvisPlan } from '@profitpilot/ai'
+import type { JarvisAddressing, JarvisEngagementMode, JarvisLanguage, JarvisPage, JarvisPlan, JarvisTtsProvider } from '@profitpilot/ai'
 import { writeCsv } from '@profitpilot/reporting'
 import type { ClosedPeriod, ReportFrequency, ReportService, ReportSchedule } from '@profitpilot/reporting'
 
-export type JarvisRouteDependencies = Readonly<{ service: JarvisService }>
+export type JarvisRouteDependencies = Readonly<{ service: JarvisService; tts?: JarvisTtsProvider }>
 export type CopilotRouteDependencies = Readonly<{ service: CopilotService }>
 export type ForecastRouteDependencies = Readonly<{ forecast: (storeId: string) => Promise<unknown> }>
 export type ReportRouteDependencies = Readonly<{ service: ReportService }>
@@ -23,6 +23,31 @@ export function createF8Router(dependencies: Readonly<{ jarvis?: JarvisRouteDepe
 }
 
 function registerJarvis(router: Router, dependencies: JarvisRouteDependencies): void {
+  router.post('/jarvis/tts', (request, response, next) => {
+    void (async () => {
+      const body = requireRecord(request.body)
+      if (typeof body.text !== 'string' || !body.text.trim()) throw new AppError('VALIDATION_ERROR', 'Text is required for speech', 400)
+      const tts = dependencies.tts
+      if (!tts || !tts.available) throw new AppError('DEPENDENCY_ERROR', 'Cloud speech is not configured. The browser voice is used instead.', 503)
+      const voice = body.voice === 'masculine' ? 'masculine' : 'feminine'
+      const language = body.language === 'hi' ? 'hi' : 'en'
+      // queryStore enforces the tenant before we spend a synthesis call.
+      queryStore(request)
+      let result
+      try {
+        result = await tts.synthesize(body.text, voice, language)
+      } catch (error: unknown) {
+        // Synthesis failure must never break a spoken reply — surface a 503 so
+        // the client falls back to the browser voice instead of hanging.
+        const message = error instanceof Error ? error.message : 'Cloud speech failed.'
+        throw new AppError('DEPENDENCY_ERROR', message, 503)
+      }
+      response.status(200)
+      response.setHeader('content-type', result.contentType)
+      response.setHeader('cache-control', 'private, max-age=3600')
+      response.send(result.audio)
+    })().catch((error: unknown) => next(error))
+  })
   router.get('/jarvis/preferences', asyncRoute(async (request) => dependencies.service.preferences(queryStore(request))))
   router.get('/jarvis/briefing', asyncRoute(async (request) => dependencies.service.briefing(queryStore(request), pageValue(request.query.page), planValue(request.query.plan))))
   router.put('/jarvis/preferences', asyncRoute(async (request) => {

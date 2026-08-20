@@ -153,4 +153,38 @@ describe('F8 API routes', () => {
       expect(body).not.toContain('event: error')
     } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
   })
+
+  it('returns 503 from the Jarvis TTS endpoint when cloud speech is not configured', async () => await withServer(async (base) => {
+    const response = await fetch(`${base}/jarvis/tts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', text: 'Hello Sir.', voice: 'feminine', language: 'en' }) })
+    expect(response.status).toBe(503)
+  }))
+
+  it('streams synthesized audio from the Jarvis TTS endpoint when cloud speech is configured', async () => {
+    const { JarvisService, OpenAiTtsProvider, OpenRouterClient } = await import('@profitpilot/ai')
+    const calls: string[] = []
+    const tts = new OpenAiTtsProvider({
+      apiKey: 'sk-test',
+      fetcher: async (_input: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as { voice: string; input: string }
+        calls.push(`${body.voice}:${body.input}`)
+        return new Response(Buffer.from([1, 2, 3, 4]), { status: 200, headers: { 'content-type': 'audio/mpeg' } })
+      },
+    })
+    const jarvis = new JarvisService(new OpenRouterClient({ keys: [] }), evidence, new InMemoryJarvisRepository(), null, () => 1_000)
+    const app = createApi({ logger: new Logger(), readinessChecks: [], jarvis: { service: jarvis, tts } })
+    const server = createServer(app); await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error('No address')
+    const base = `http://127.0.0.1:${address.port}`
+    try {
+      const ok = await fetch(`${base}/jarvis/tts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', text: 'Hello Sir.', voice: 'masculine', language: 'en' }) })
+      expect(ok.status).toBe(200)
+      expect(ok.headers.get('content-type')).toContain('audio')
+      const buffer = Buffer.from(await ok.arrayBuffer())
+      expect(Array.from(buffer)).toEqual([1, 2, 3, 4])
+      // Masculine voice mapping is honored.
+      expect(calls[0]).toBe('echo:Hello Sir.')
+      // Missing text is a 400.
+      const bad = await fetch(`${base}/jarvis/tts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: 'store-1', text: '   ' }) })
+      expect(bad.status).toBe(400)
+    } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
+  })
 })

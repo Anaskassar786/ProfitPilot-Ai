@@ -169,6 +169,32 @@ export function unlockSpeechSynthesis(scope: Window | undefined): boolean {
   }
 }
 
+/**
+ * Browser TTS voices load asynchronously — `getVoices()` returns `[]` until the
+ * `voiceschanged` event fires. Speaking before that uses the OS default voice,
+ * which is the robotic voice merchants hear. This resolves once voices are
+ * available (or quickly gives up so speech is never blocked). It is safe in
+ * environments without speechSynthesis or the event.
+ */
+export async function loadSpeechVoices(scope: Window | undefined, timeoutMs = 400): Promise<readonly SpeechSynthesisVoice[]> {
+  if (!scope?.speechSynthesis || typeof scope.speechSynthesis.getVoices !== 'function') return []
+  const immediate = scope.speechSynthesis.getVoices()
+  if (immediate.length > 0) return immediate
+  return new Promise<readonly SpeechSynthesisVoice[]>((resolve) => {
+    let settled = false
+    const finish = (voices: readonly SpeechSynthesisVoice[]): void => { if (!settled) { settled = true; resolve(voices) } }
+    const timer = setTimeout(() => finish(scope.speechSynthesis?.getVoices() ?? []), timeoutMs)
+    const handler = (): void => {
+      const voices = scope.speechSynthesis?.getVoices() ?? []
+      if (voices.length > 0) { clearTimeout(timer); finish(voices) }
+    }
+    try {
+      scope.speechSynthesis.addEventListener?.('voiceschanged', handler, { once: true })
+    } catch { /* some engines throw on addEventListener; the timeout still resolves */ }
+    void timer
+  })
+}
+
 export function pickSpeechVoice(scope: Window | undefined, language: 'en' | 'hi', preferredGender: VoiceGender = 'feminine'): SpeechSynthesisVoice | null {
   if (!scope?.speechSynthesis || typeof scope.speechSynthesis.getVoices !== 'function') return null
   const voices = scope.speechSynthesis.getVoices()

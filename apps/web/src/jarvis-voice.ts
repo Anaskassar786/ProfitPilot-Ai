@@ -3,6 +3,7 @@ import type { VoiceStatus as NativeVoiceStatus } from './voice.js'
 import {
   applySpeechProfile,
   createSpeechRecognition,
+  loadSpeechVoices,
   pickSpeechVoice,
   releaseMicrophoneAccess,
   requestMicrophoneAccess,
@@ -14,6 +15,7 @@ import {
   unlockSpeechSynthesis,
 } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
+import { synthesizeJarvisSpeech } from './api.js'
 import { framedMicrophoneNeedsBridge, reserveVoiceBridge, startVoiceBridge } from './jarvis-voice-bridge.js'
 import type { VoiceBridgeSession } from './jarvis-voice-bridge.js'
 
@@ -26,7 +28,7 @@ export type FloatingVoiceStatus = NativeVoiceStatus | 'paused'
 export type VoiceBlock = 'insecure' | 'embedded-policy' | 'policy-denied' | 'media-devices-unavailable' | null
 
 type TranscriptHandler = (transcript: string) => void | Promise<void>
-type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean; voiceGender?: 'feminine' | 'masculine' }>
+type SpeakOptions = Readonly<{ text: string; language: 'en' | 'hi'; muted?: boolean; voiceGender?: 'feminine' | 'masculine'; storeId?: string }>
 
 type VoiceController = Readonly<{
   active: boolean
@@ -59,6 +61,13 @@ let resumeTimer: ReturnType<typeof setInterval> | null = null
 let speakEndTimer: ReturnType<typeof setTimeout> | null = null
 let pendingLanguage: 'en' | 'hi' = 'en'
 let startGeneration = 0
+// Set to true once the cloud speech endpoint reports it is unavailable, so we
+// stop paying a network round-trip on every reply and go straight to the
+// browser voice. Reset by retryCloudSpeech() on the next user gesture.
+let cloudTtsDisabled = false
+let cloudAudio: HTMLAudioElement | null = null
+
+export function retryCloudSpeech(): void { cloudTtsDisabled = false }
 
 let state = {
   active: false,
@@ -163,6 +172,76 @@ function finishSpeaking(generation: number, onEnd?: () => void): void {
   onEnd?.()
 }
 
+/** Releases a finished cloud audio element and its object URL. */
+function teardownCloudAudio(): void {
+  if (!cloudAudio) return
+  const src = cloudAudio.currentSrc || cloudAudio.src
+  try { cloudAudio.pause() } catch { /* ignore */ }
+  try { cloudAudio.src = '' } catch { /* ignore */ }
+  try { if (src.startsWith('blob:')) URL.revokeObjectURL(src) } catch { /* ignore */ }
+  cloudAudio = null
+}
+
+/** Plays natural cloud speech; falls back to the browser voice on any failure. */
+function playCloudAudio(url: string, generation: number, fallback: () => void, onEnd?: () => void): void {
+  if (generation !== speakGeneration || typeof window === 'undefined') {
+    try { URL.revokeObjectURL(url) } catch { /* ignore */ }
+    return
+  }
+  const audio = new Audio(url)
+  audio.preload = 'auto'
+  cloudAudio = audio
+  const safeEnd = (): void => { if (generation !== speakGeneration) return; teardownCloudAudio(); finishSpeaking(generation, onEnd) }
+  audio.onended = safeEnd
+  audio.onerror = () => { teardownCloudAudio(); fallback() }
+  const playPromise = audio.play()
+  if (playPromise && typeof playPromise.then === 'function') {
+    playPromise.then(() => undefined).catch(() => { teardownCloudAudio(); fallback() })
+  }
+  // Guard against browsers that never fire `ended` for short clips.
+  clearSpeakKeepAlive()
+  speakEndTimer = setTimeout(() => {
+    if (generation !== speakGeneration) return
+    if (cloudAudio && cloudAudio.ended) return
+    if (cloudAudio && !cloudAudio.paused) return
+    teardownCloudAudio(); finishSpeaking(generation, onEnd)
+  }, Math.max(8_000, (url.length || 0) * 200))
+}
+
+/** Native browser voice, warmed up so the best available voice is selected. */
+function startNativeQueue(scope: Window, clean: string, language: 'en' | 'hi', gender: 'feminine' | 'masculine', generation: number, onEnd?: () => void): void {
+  void loadSpeechVoices(scope).finally(() => {
+    if (generation !== speakGeneration) return
+    const sentences = speechSentences(clean)
+    speakSentenceQueue(scope, sentences, language, gender, generation, 0, onEnd)
+    clearSpeakKeepAlive()
+    resumeTimer = setInterval(() => {
+      if (generation !== speakGeneration || typeof window === 'undefined') return
+      if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+        try { window.speechSynthesis.resume() } catch { /* ignore */ }
+      }
+    }, 4_000)
+    const estimatedMs = Math.min(60_000, Math.max(4_000, clean.length * 80))
+    speakEndTimer = setTimeout(() => {
+      if (generation !== speakGeneration) return
+      if (typeof window !== 'undefined' && window.speechSynthesis.speaking) return
+      finishSpeaking(generation, onEnd)
+    }, estimatedMs)
+  })
+}
+
+/** Fetches the natural cloud voice, disabling it for the session when absent. */
+async function fetchCloudSpeech(storeId: string, clean: string, gender: 'feminine' | 'masculine', language: 'en' | 'hi', generation: number): Promise<string | null> {
+  try {
+    const url = await synthesizeJarvisSpeech(storeId, clean, gender, language)
+    if (!url) cloudTtsDisabled = true
+    return generation === speakGeneration ? url : null
+  } catch {
+    cloudTtsDisabled = true
+    return null
+  }
+}
+
 function speakSentenceQueue(scope: Window, sentences: readonly string[], language: 'en' | 'hi', gender: 'feminine' | 'masculine', generation: number, index: number, onEnd?: () => void): void {
   if (generation !== speakGeneration) return
   const sentence = sentences[index]
@@ -208,10 +287,25 @@ export const jarvisVoiceController: VoiceController = {
     startGeneration += 1
     const generation = startGeneration
     if (typeof window !== 'undefined') unlockSpeechSynthesis(window)
+    retryCloudSpeech()
 
-    // Iframes (preview / Shopify Admin) usually cannot own the microphone.
-    // Open a same-origin popup while we still have the click gesture.
     const needsBridge = typeof window !== 'undefined' && framedMicrophoneNeedsBridge(window, typeof document === 'undefined' ? undefined : document)
+
+    // Try to own the microphone in THIS page first. getUserMedia reliably
+    // surfaces the browser permission prompt in the main tab (and in modern
+    // preview iframes that allow the mic), which is what merchants expect.
+    const access = await requestMicrophoneAccess(typeof window === 'undefined' ? undefined : window, typeof navigator === 'undefined' ? undefined : navigator)
+    if (generation !== startGeneration) return false
+    if (access.ok) {
+      teardownBridge()
+      setState({ active: true, error: null, framed: access.framed })
+      startRecognition(language)
+      return true
+    }
+
+    // The page could not own the mic and we are framed — open a same-origin
+    // popup while we still have the click gesture so the browser prompt can
+    // appear in a top-level browsing context.
     if (needsBridge) {
       teardownRecognition()
       teardownBridge()
@@ -240,16 +334,8 @@ export const jarvisVoiceController: VoiceController = {
       }
     }
 
-    const access = await requestMicrophoneAccess(typeof window === 'undefined' ? undefined : window, typeof navigator === 'undefined' ? undefined : navigator)
-    if (generation !== startGeneration) return false
-    if (access.ok) {
-      teardownBridge()
-      setState({ active: true, error: null, framed: access.framed })
-      startRecognition(language)
-      return true
-    }
-
-    // Only fall back to in-page recognition when the page itself can own the mic.
+    // Fall back to in-page recognition when the page supports it even though
+    // getUserMedia was skipped/unavailable (some engines split the two).
     if (access.code !== 'denied' && typeof window !== 'undefined' && speechRecognitionAvailable(window)) {
       teardownBridge()
       setState({ active: true, error: null, framed: access.framed })
@@ -270,6 +356,7 @@ export const jarvisVoiceController: VoiceController = {
     teardownRecognition()
     teardownBridge()
     clearSpeakKeepAlive()
+    teardownCloudAudio()
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
     releaseMicrophoneAccess()
     currentUtterance = null
@@ -300,36 +387,27 @@ export const jarvisVoiceController: VoiceController = {
     pauseBridge()
     setState({ status: 'speaking', lastSpoken: clean })
     unlockSpeechSynthesis(window)
+    teardownCloudAudio()
     window.speechSynthesis.cancel()
-    // Chrome drops the next utterance if speak() runs in the same turn as cancel().
-    setTimeout(() => {
-      if (generation !== speakGeneration) return
-      if (typeof window === 'undefined' || !window.speechSynthesis) {
-        finishSpeaking(generation, onEnd)
-        return
-      }
-      const gender = options.voiceGender ?? 'feminine'
-      const sentences = speechSentences(clean)
-      speakSentenceQueue(window, sentences, language, gender, generation, 0, onEnd)
-      // Chrome silently pauses long utterances. Keep the queue alive.
-      clearSpeakKeepAlive()
-      resumeTimer = setInterval(() => {
-        if (generation !== speakGeneration || typeof window === 'undefined') return
-        if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
-          try { window.speechSynthesis.resume() } catch { /* ignore */ }
-        }
-      }, 4_000)
-      const estimatedMs = Math.min(60_000, Math.max(4_000, clean.length * 80))
-      speakEndTimer = setTimeout(() => {
-        if (generation !== speakGeneration) return
-        if (typeof window !== 'undefined' && window.speechSynthesis.speaking) return
-        finishSpeaking(generation, onEnd)
-      }, estimatedMs)
-    }, 80)
+    const gender = options.voiceGender ?? 'feminine'
+    const storeId = options.storeId
+    // Natural cloud voice first (like ChatGPT); fall straight back to the
+    // warmed-up browser voice when it is unavailable or not configured.
+    const nativeFallback = (): void => startNativeQueue(window, clean, language, gender, generation, onEnd)
+    if (storeId && !cloudTtsDisabled) {
+      void fetchCloudSpeech(storeId, clean, gender, language, generation).then((url) => {
+        if (generation !== speakGeneration) { if (url) { try { URL.revokeObjectURL(url) } catch { /* ignore */ } } return }
+        if (url) playCloudAudio(url, generation, nativeFallback, onEnd)
+        else nativeFallback()
+      })
+      return
+    }
+    nativeFallback()
   },
   stopSpeaking() {
     speakGeneration += 1
     clearSpeakKeepAlive()
+    teardownCloudAudio()
     currentUtterance = null
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
     if (state.active && state.status === 'speaking') setState({ status: 'idle' })
@@ -339,6 +417,7 @@ export const jarvisVoiceController: VoiceController = {
     if (muted) {
       speakGeneration += 1
       clearSpeakKeepAlive()
+      teardownCloudAudio()
       stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
       if (state.status === 'speaking') setState({ status: 'idle' })
     }
@@ -349,6 +428,7 @@ export const jarvisVoiceController: VoiceController = {
       teardownRecognition()
       pauseBridge()
       clearSpeakKeepAlive()
+      teardownCloudAudio()
       stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
       setState({ status: 'paused' })
     } else if (state.active) {
@@ -396,6 +476,7 @@ export function useJarvisVoiceTeardown(): void {
     teardownRecognition()
     teardownBridge()
     clearSpeakKeepAlive()
+    teardownCloudAudio()
     releaseMicrophoneAccess()
     onTranscriptRef = null
     onErrorRef = null
