@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canExecuteJarvisActions, inferAutomationTemplate, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
+import { canExecuteJarvisActions, inferAutomationTemplate, jarvisStartupGreeting, parseJarvisVoiceIntent, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 
 describe('Jarvis spoken intents', () => {
   it('treats Growth and Start as suggestion-only', () => {
@@ -26,7 +26,6 @@ describe('Jarvis spoken intents', () => {
     expect(parseJarvisVoiceIntent('low stock batao')).toEqual({ type: 'ask', text: 'low stock batao' })
   })
 
-
   it('detects when the merchant wants a page walkthrough', () => {
     expect(wantsPageWalkthrough('is page pe kya important hai')).toBe(true)
     expect(wantsPageWalkthrough('tell me about this page')).toBe(true)
@@ -35,5 +34,13 @@ describe('Jarvis spoken intents', () => {
 
   it('strips action protocol before speech', () => {
     expect(spokenReplyText('Opening products.\n@jarvis:action {"actionId":"navigate_page","parameters":{"page":"products"}}')).toBe('Opening products.')
+  })
+
+  it('opens with a friendly assistant greeting and then waits to help', () => {
+    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain("I'm Jarvis, your store assistant")
+    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain('How can I help you today')
+    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain('Good morning')
+    expect(jarvisStartupGreeting("Ma'am", 'hi', new Date('2026-08-20T19:00:00'))).toContain('kya madad karun')
+    expect(jarvisStartupGreeting("Ma'am", 'hi', new Date('2026-08-20T19:00:00'))).toContain('Good evening')
   })
 })

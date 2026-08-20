@@ -11,7 +11,10 @@ export default defineConfig({
     // frame-ancestors is dev-only (production CSP ships from the API in
     // web-app.ts). The *.e2b.app entry lets the Arena preview iframe embed
     // the dev server; Shopify domains keep parity with production.
-    headers: { 'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.e2b.app; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws:; object-src 'none'" },
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.e2b.app; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws:; object-src 'none'",
+      'Permissions-Policy': 'microphone=(self "https://admin.shopify.com"), geolocation=(), payment=()',
+    },
     proxy: {
       '/api': 'http://127.0.0.1:3000',
       // Every /ai-growth-command/* path (Store Coach, PatternAI, GrowthIQ) is
@@ -85,6 +88,9 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     allowedHosts: true,
-    headers: { 'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'" },
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; base-uri 'self'; frame-ancestors https://admin.shopify.com https://*.myshopify.com; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'",
+      'Permissions-Policy': 'microphone=(self "https://admin.shopify.com"), geolocation=(), payment=()',
+    },
   },
 })

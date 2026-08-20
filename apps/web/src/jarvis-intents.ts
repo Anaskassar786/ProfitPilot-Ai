@@ -110,6 +110,17 @@ export function spokenReplyText(text: string): string {
   return text
     .replace(/@jarvis:action\s*\{[\s\S]*$/g, '')
     .replace(/[*_`#]+/g, '')
+    .replace(/[—–]/g, ', ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/** First-open spoken greeting. Jarvis then waits for the merchant to ask. */
+export function jarvisStartupGreeting(addressing: string, language: 'en' | 'hi', now = new Date()): string {
+  const hour = now.getHours()
+  const time = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  if (language === 'hi') {
+    return `Hello ${addressing}. ${time}. Main Jarvis hoon, aapka store assistant. Bataiye, main aapki kya madad karun?`
+  }
+  return `Hello ${addressing}. ${time}. I'm Jarvis, your store assistant. How can I help you today?`
 }

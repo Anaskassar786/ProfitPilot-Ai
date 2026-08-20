@@ -1,6 +1,17 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { VoiceStatus as NativeVoiceStatus } from './voice.js'
-import { createSpeechRecognition, pickSpeechVoice, spokenReplyText, stopNativeSpeech, unlockSpeechSynthesis } from './voice.js'
+import {
+  applySpeechProfile,
+  createSpeechRecognition,
+  pickSpeechVoice,
+  releaseMicrophoneAccess,
+  requestMicrophoneAccess,
+  speechRecognitionFailure,
+  speechSentences,
+  spokenReplyText,
+  stopNativeSpeech,
+  unlockSpeechSynthesis,
+} from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 /**
@@ -22,7 +33,7 @@ type VoiceController = Readonly<{
   muted: boolean
   framed: boolean
   lastSpoken: string | null
-  start: (options: Readonly<{ language: 'en' | 'hi'; onTranscript: TranscriptHandler; onError: (message: string) => void }>) => void
+  start: (options: Readonly<{ language: 'en' | 'hi'; onTranscript: TranscriptHandler; onError: (message: string) => void }>) => Promise<boolean>
   stop: () => void
   setProcessing: () => void
   speak: (options: SpeakOptions, onEnd?: () => void) => void
@@ -43,6 +54,7 @@ let speakGeneration = 0
 let resumeTimer: ReturnType<typeof setInterval> | null = null
 let speakEndTimer: ReturnType<typeof setTimeout> | null = null
 let pendingLanguage: 'en' | 'hi' = 'en'
+let startGeneration = 0
 
 let state = {
   active: false,
@@ -108,9 +120,9 @@ function startRecognition(language: 'en' | 'hi'): void {
       updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
       return
     }
-    const message = event.error ? `Voice error: ${event.error}` : 'Voice recognition failed.'
-    setState({ status: 'error', error: message })
-    onErrorRef?.(message)
+    const failure = speechRecognitionFailure(event.error)
+    setState({ status: 'error', error: failure.message })
+    onErrorRef?.(failure.message)
   }
   next.onend = () => {
     updateState((current) => ({ status: current.status === 'listening' ? 'idle' : current.status }))
@@ -132,6 +144,32 @@ function finishSpeaking(generation: number, onEnd?: () => void): void {
   onEnd?.()
 }
 
+function speakSentenceQueue(scope: Window, sentences: readonly string[], language: 'en' | 'hi', gender: 'feminine' | 'masculine', generation: number, index: number, onEnd?: () => void): void {
+  if (generation !== speakGeneration) return
+  const sentence = sentences[index]
+  if (!sentence) {
+    finishSpeaking(generation, onEnd)
+    return
+  }
+  const utterance = new SpeechSynthesisUtterance(sentence)
+  applySpeechProfile(utterance, language, gender, pickSpeechVoice(scope, language, gender))
+  utterance.onend = () => {
+    if (generation !== speakGeneration) return
+    if (index + 1 >= sentences.length) {
+      finishSpeaking(generation, onEnd)
+      return
+    }
+    window.setTimeout(() => speakSentenceQueue(scope, sentences, language, gender, generation, index + 1, onEnd), 160)
+  }
+  utterance.onerror = () => finishSpeaking(generation, onEnd)
+  currentUtterance = utterance
+  try {
+    scope.speechSynthesis.speak(utterance)
+  } catch {
+    finishSpeaking(generation, onEnd)
+  }
+}
+
 export const jarvisVoiceController: VoiceController = {
   get active() { return state.active },
   get status() { return state.status },
@@ -144,26 +182,41 @@ export const jarvisVoiceController: VoiceController = {
     if (typeof window === 'undefined') return
     unlockSpeechSynthesis(window)
   },
-  start({ language, onTranscript, onError }) {
+  async start({ language, onTranscript, onError }) {
     onTranscriptRef = onTranscript
     onErrorRef = onError
     pendingLanguage = language
+    startGeneration += 1
+    const generation = startGeneration
     if (typeof window !== 'undefined') unlockSpeechSynthesis(window)
-    setState({ active: true, error: null })
+    const access = await requestMicrophoneAccess(typeof window === 'undefined' ? undefined : window, typeof navigator === 'undefined' ? undefined : navigator)
+    if (generation !== startGeneration) return false
+    if (!access.ok) {
+      setState({ active: false, status: 'error', error: access.message, framed: access.framed })
+      onError?.(access.message ?? 'Microphone permission was denied.')
+      return false
+    }
+    setState({ active: true, error: null, framed: access.framed })
     startRecognition(language)
+    return true
   },
   stop() {
+    startGeneration += 1
     speakGeneration += 1
     teardownRecognition()
     clearSpeakKeepAlive()
     stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
+    releaseMicrophoneAccess()
     currentUtterance = null
     onTranscriptRef = null
     onErrorRef = null
     setState({ active: false, status: 'idle', error: null })
   },
   setProcessing() {
-    if (state.active) setState({ status: 'processing' })
+    if (state.active) {
+      teardownRecognition()
+      setState({ status: 'processing' })
+    }
   },
   speak(options, onEnd) {
     const { text, language, muted } = options
@@ -177,6 +230,7 @@ export const jarvisVoiceController: VoiceController = {
     speakGeneration += 1
     const generation = speakGeneration
     pendingLanguage = language
+    teardownRecognition()
     setState({ status: 'speaking', lastSpoken: clean })
     unlockSpeechSynthesis(window)
     window.speechSynthesis.cancel()
@@ -187,26 +241,9 @@ export const jarvisVoiceController: VoiceController = {
         finishSpeaking(generation, onEnd)
         return
       }
-      const utterance = new SpeechSynthesisUtterance(clean)
-      const voice = pickSpeechVoice(window, language, options.voiceGender ?? 'feminine')
-      if (voice) {
-        utterance.voice = voice
-        utterance.lang = voice.lang || (language === 'hi' ? 'hi-IN' : 'en-IN')
-      } else {
-        utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
-      }
-      utterance.rate = language === 'hi' ? 1.0 : 1.02
-      utterance.pitch = (options.voiceGender ?? 'feminine') === 'feminine' ? 1.12 : 1.02
-      utterance.volume = 1
-      utterance.onend = () => finishSpeaking(generation, onEnd)
-      utterance.onerror = () => finishSpeaking(generation, onEnd)
-      currentUtterance = utterance
-      try {
-        window.speechSynthesis.speak(utterance)
-      } catch {
-        finishSpeaking(generation, onEnd)
-        return
-      }
+      const gender = options.voiceGender ?? 'feminine'
+      const sentences = speechSentences(clean)
+      speakSentenceQueue(window, sentences, language, gender, generation, 0, onEnd)
       // Chrome silently pauses long utterances. Keep the queue alive.
       clearSpeakKeepAlive()
       resumeTimer = setInterval(() => {
@@ -215,7 +252,7 @@ export const jarvisVoiceController: VoiceController = {
           try { window.speechSynthesis.resume() } catch { /* ignore */ }
         }
       }, 4_000)
-      const estimatedMs = Math.min(60_000, Math.max(4_000, clean.length * 70))
+      const estimatedMs = Math.min(60_000, Math.max(4_000, clean.length * 80))
       speakEndTimer = setTimeout(() => {
         if (generation !== speakGeneration) return
         if (typeof window !== 'undefined' && window.speechSynthesis.speaking) return
@@ -236,7 +273,7 @@ export const jarvisVoiceController: VoiceController = {
       speakGeneration += 1
       clearSpeakKeepAlive()
       stopNativeSpeech(typeof window === 'undefined' ? undefined : window)
-      if (state.status === 'speaking') setState({ status: state.active ? 'idle' : 'idle' })
+      if (state.status === 'speaking') setState({ status: 'idle' })
     }
   },
   setPaused(paused) {
@@ -281,9 +318,11 @@ export function resumeJarvisListening(language: 'en' | 'hi'): void {
 
 export function useJarvisVoiceTeardown(): void {
   useEffect(() => () => {
+    startGeneration += 1
     speakGeneration += 1
     teardownRecognition()
     clearSpeakKeepAlive()
+    releaseMicrophoneAccess()
     onTranscriptRef = null
     onErrorRef = null
   }, [])
