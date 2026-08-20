@@ -16,6 +16,7 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain('https://app.example/shopify/callback')
     expect(toml).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
     expect(toml).toContain('compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]')
+    expect(toml).toContain('topics = ["app/uninstalled"]')
     expect(toml).toContain('uri = "/shopify/webhooks"')
     expect(toml).not.toContain('client_secret')
   })
