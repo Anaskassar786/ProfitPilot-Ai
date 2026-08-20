@@ -82,7 +82,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
+import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
 import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
@@ -856,6 +856,9 @@ const BILLING_FEATURE_MATRIX: readonly Readonly<{
   commander: string | boolean
 }>[] = [
   { id: 'stores', label: 'Shopify stores', trial: '1', start: '1', growth: '3', commander: 'Unlimited' },
+  { id: 'orders_sync', label: 'Orders synced / month', trial: '250', start: '1,000', growth: '5,000', commander: 'Unlimited' },
+  { id: 'products_sync', label: 'Products synced', trial: '250', start: '1,500', growth: '5,000', commander: 'Unlimited' },
+  { id: 'customers_sync', label: 'Customers synced', trial: '250', start: '2,500', growth: '10,000', commander: 'Unlimited' },
   { id: 'ai_commands', label: 'AI Commands / day', trial: '10', start: '100', growth: '300', commander: 'Unlimited' },
   { id: 'automations', label: 'Automation workflows', trial: '2', start: '5', growth: '20', commander: 'Unlimited' },
   { id: 'recs', label: 'AI recommendations / mo', trial: '10', start: '150', growth: '300', commander: 'Unlimited' },
@@ -876,6 +879,7 @@ const BILLING_AGENT_MATRIX: readonly Readonly<{ id: string; label: string; blurb
 const BILLING_FAQ: readonly Readonly<{ q: string; a: string }>[] = [
   { q: 'How does the 14-day free trial work?', a: 'Every new store starts on a 14-day Free Trial with Revenue and Inventory agents unlocked. No credit card is required. When the trial ends, basic analytics stay available until you choose Start, Growth, or Commander.' },
   { q: 'What does “1 store” / “3 stores” mean?', a: 'Store limit is how many of your Shopify stores you can connect under one subscription. Each merchant gets their own install. Start includes 1 store, Growth up to 3, and Commander is unlimited.' },
+  { q: 'What does "Unlimited" mean on Commander?', a: `Commander is marketed as unlimited on stores, sync volume, AI commands, automations, and reports so the biggest merchants do not have to count quotas. Behind the scenes we apply a Fair Usage Policy per store so we can warn (and, in extreme cases, throttle) abusive workloads before they impact other merchants: more than ${FAIR_USE_ORDERS_30D.toLocaleString('en-US')} orders in any rolling 30 days, more than ${FAIR_USE_PRODUCTS_ACTIVE.toLocaleString('en-US')} active products, or more than ${FAIR_USE_CUSTOMERS.toLocaleString('en-US')} customers. Normal high-volume stores never hit these — the soft cap exists only to flag truly unusual usage, not to bill you extra. You will see a "High volume — fair use applies" note on the affected meter if you approach the limit.` },
   { q: 'Can I cancel or change plan anytime?', a: 'Yes. You can upgrade, downgrade, or cancel at any time. Changes take effect at the end of the current billing period. Suspended stores keep read-only access to billing and support.' },
   { q: 'How do gift/promo codes work?', a: 'A promo code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Redemption replaces the free trial for that store.' },
   { q: 'Are payments secure?', a: 'Yes. Paid subscriptions are billed securely through Shopify. ProfitPilot never stores your card details — Shopify handles checkout, invoices, and PCI compliance.' },
@@ -887,7 +891,7 @@ const USAGE_FEATURE_LABELS: Readonly<Record<string, string>> = {
   products_sync: 'Products synced',
   customers_sync: 'Customers synced',
   ai_recommendations_month: 'AI recommendations / month',
-  active_agents: 'Active AI agents',
+  active_agents: 'AI agents available',
   jarvis_messages_month: 'Jarvis messages / month',
   automation_workflows: 'Automation workflows',
   email_sends_month: 'Email sends / month',
@@ -897,6 +901,17 @@ const USAGE_FEATURE_LABELS: Readonly<Record<string, string>> = {
   forecasting: 'Forecasting',
   attribution: 'Attribution',
   ai_command_daily: 'AI Command / day',
+}
+
+/** Per-meter fair-use threshold (Commander only). Returns `true` if the
+ *  current count is past the soft cap and we should surface the
+ *  "High volume — fair use applies" hint. Kept in lock-step with the
+ *  FAIR_USE_* constants in `@profitpilot/types`; if you add a new key here,
+ *  add a constant there. */
+const FAIR_USE_THRESHOLDS: Readonly<Record<string, { softCap: number; window: 'instant' | 'rolling-30d' | 'month' }>> = {
+  orders_sync_month: { softCap: FAIR_USE_ORDERS_30D, window: 'rolling-30d' },
+  products_sync: { softCap: FAIR_USE_PRODUCTS_ACTIVE, window: 'instant' },
+  customers_sync: { softCap: FAIR_USE_CUSTOMERS, window: 'instant' },
 }
 
 function humanizeBillingStatus(account: import('./model.js').BillingAccount | null): Readonly<{ label: string; tone: 'green' | 'amber' | 'purple' | 'neutral'; planName: string }> {
@@ -920,6 +935,83 @@ function usageTone(percent: number): 'green' | 'yellow' | 'red' {
   if (percent >= 80) return 'red'
   if (percent >= 60) return 'yellow'
   return 'green'
+}
+
+/**
+ * Renders a single entitlement meter. Pulled out of the BillingPage so the
+ * three cases (limited cap, unlimited, capacity-style "X of Y") each have
+ * one honest rendering and never fall back to `0 / 0` or `Infinity`.
+ *
+ * - `limit === null` → unlimited. Show `used · Unlimited` and a neutral
+ *   thin bar (never a red bar, even at 1000+).
+ * - `feature === 'active_agents'` → capacity chip ("3 of 3 agents available"),
+ *   no progress bar, "Included" badge when `used === limit`.
+ * - Otherwise limited cap with green/amber/red bar.
+ */
+export function UsageMeterRow({ meter, plan }: { meter: import('./model.js').UsageMeter; plan: 'trial' | 'start' | 'growth' | 'commander' | null }) {
+  const label = USAGE_FEATURE_LABELS[meter.feature] ?? meter.feature.replaceAll('_', ' ')
+  const isCapacity = meter.feature === 'active_agents'
+  const isUnlimited = meter.limit === null
+  const safeUsed = Number.isFinite(meter.used) ? Math.max(0, meter.used) : 0
+  // Fair-use flag (Commander only — never alarms on trial/start/growth).
+  const fairUse = isUnlimited && plan === 'commander' ? FAIR_USE_THRESHOLDS[meter.feature] : undefined
+  const fairUseTriggered = fairUse !== undefined && safeUsed > fairUse.softCap
+
+  if (isCapacity) {
+    const limit = meter.limit ?? safeUsed
+    const included = limit > 0 && safeUsed >= limit
+    return (
+      <div className="billing-usage-meter tone-green">
+        <div className="billing-usage-meter-top">
+          <span>{label}</span>
+          <strong>{limit > 0 ? `${safeUsed} of ${limit} included` : `${safeUsed} included`}</strong>
+        </div>
+        {included && <span className="billing-usage-chip">Included</span>}
+        {!included && limit > 0 && <span className="billing-usage-chip subtle">Included with {labelForPlan(plan)}</span>}
+      </div>
+    )
+  }
+
+  // Progress bar width — never NaN/Infinity. Unlimited gets a thin neutral
+  // pulse proportional to usage (capped at 12%) so it never feels empty.
+  const percent = !isUnlimited && meter.limit && meter.limit > 0 ? Math.min(100, Math.max(0, (safeUsed / meter.limit) * 100)) : 0
+  const tone = isUnlimited ? 'green' : usageTone(percent)
+  const limitText = isUnlimited ? `${safeUsed} · Unlimited` : `${safeUsed} / ${meter.limit}`
+  const barWidth = isUnlimited ? Math.min(12, safeUsed > 0 ? Math.min(12, Math.log10(Math.max(1, safeUsed)) * 4) : 0) : percent
+  return (
+    <div className={`billing-usage-meter tone-${tone}`}>
+      <div className="billing-usage-meter-top">
+        <span>{label}</span>
+        <strong>{limitText}</strong>
+      </div>
+      <div className="billing-usage-bar" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={isUnlimited ? undefined : 100} aria-valuetext={limitText}>
+        <span style={{ width: `${Number.isFinite(barWidth) ? barWidth : 0}%` }} />
+      </div>
+      {fairUseTriggered && (
+        <small className="billing-usage-fair-use">
+          <Info size={11} aria-hidden /> High volume — fair use applies
+        </small>
+      )}
+      {!isUnlimited && percent >= 100 && (
+        <button type="button" className="billing-upgrade-link" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Upgrade for higher limits</button>
+      )}
+    </div>
+  )
+}
+
+/** Plan name used in the "Included with Start" chip on the agents meter. */
+function labelForPlan(plan: 'trial' | 'start' | 'growth' | 'commander' | null): string {
+  if (plan === 'commander') return 'Commander'
+  if (plan === 'growth') return 'Growth'
+  if (plan === 'start') return 'Start'
+  return 'your plan'
+}
+
+/** Filter a list of usage meters down to the ones the Billing UI should
+ *  actually render — drops dead/unproductized features (SMS, campaigns,
+ *  Jarvis) so we never show a fake `0 / 0` row. */
+export function visibleMeters(meters: readonly import('./model.js').UsageMeter[]): readonly import('./model.js').UsageMeter[] {
+  return meters.filter((meter) => !HIDDEN_METER_KEYS.has(meter.feature))
 }
 
 function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
@@ -965,7 +1057,12 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const trialProgress = trialDaysLeft !== null
     ? Math.min(100, Math.max(0, ((trialDaysTotal - trialDaysLeft) / trialDaysTotal) * 100))
     : 0
-  const activeTier = account?.subscription?.plan?.toLowerCase() ?? (account?.trial?.state === 'ACTIVE' ? 'trial' : null)
+  const activeTier: 'trial' | 'start' | 'growth' | 'commander' | null = (() => {
+    const subPlan = account?.subscription?.plan?.toLowerCase()
+    if (subPlan === 'start' || subPlan === 'growth' || subPlan === 'commander') return subPlan
+    if (account?.trial?.state === 'ACTIVE') return 'trial'
+    return null
+  })()
   const isGift = account?.subscription?.state === 'GIFT_ACCESS_UNLIMITED' || Boolean(account?.gift)
 
   const startCharge = async (plan: 'START' | 'GROWTH' | 'COMMANDER') => {
@@ -982,7 +1079,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
       await reload()
       const tier = plan.toLowerCase() as Exclude<PlanTier, 'trial'>
       setUsage((current) => {
-        const meters = current.length > 0 ? current : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))
+        const meters = current.length > 0 ? current : Object.keys(USAGE_FEATURE_LABELS).filter((feature) => !HIDDEN_METER_KEYS.has(feature)).map((feature) => ({ feature, used: 0, limit: null as number | null }))
         return meters.map((meter) => {
           const key = meter.feature as EntitlementKey
           const nextLimit = key in PLAN_ENTITLEMENT_LIMITS[tier] ? PLAN_ENTITLEMENT_LIMITS[tier][key] : meter.limit
@@ -1020,9 +1117,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   }
 
   const displayPlans = plans.length > 0 ? plans : ([
-    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 79, annualPrice: 790, annualMonthsFree: 2, headline: 'AI clarity for your Shopify store', features: ['1 Shopify store connected', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', 'Customer insights, churn and win-back signals', 'Cart recovery and welcome flows via Customer Agent', '5 automation workflows', '150 AI recommendations / month', 'Closed-period reports and basic exports', 'Email support'], limits: {} },
-    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 199, annualPrice: 1990, annualMonthsFree: 2, recommended: true, headline: 'Scale decisions across products, pricing & automations', features: ['Up to 3 Shopify stores', '4 AI agents — includes Pricing Agent', '300 AI Commands / day', '20 automation workflows', 'Advanced analytics plus forecasting and ROI attribution', '300 AI recommendations / month', 'Margin-safe pricing opportunities (Pricing Agent)', 'Priority support with a 12-hour target'], limits: {} },
-    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 399, annualPrice: 3990, annualMonthsFree: 2, headline: 'Full AI employee — insights plus actions', features: ['Unlimited Shopify stores', 'All 6 AI agents (Product + Executive unlocked)', 'Unlimited AI Commands', 'Auto-execution: AI can take store actions for you', 'Unlimited automation workflows', 'Product Agent cross-sell + Executive weekly digest', 'Unlimited AI recommendations', 'Advanced forecasting, attribution, and exports', 'VIP priority support with a 4-hour target'], limits: {} },
+    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 79, annualPrice: 790, annualMonthsFree: 2, headline: 'AI clarity for your Shopify store', features: ['1 Shopify store connected', '3 AI agents: Revenue, Inventory, Customer', '100 AI Commands / day', '1,000 orders synced / month', '1,500 products synced', '2,500 customers synced', 'Customer insights, churn and win-back signals', 'Cart recovery and welcome flows via Customer Agent', '5 automation workflows', '150 AI recommendations / month', 'Closed-period reports and basic exports', 'Email support'], limits: {} },
+    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 199, annualPrice: 1990, annualMonthsFree: 2, recommended: true, headline: 'Scale decisions across products, pricing & automations', features: ['Up to 3 Shopify stores', '4 AI agents — includes Pricing Agent', '300 AI Commands / day', '5,000 orders synced / month', '5,000 products synced', '10,000 customers synced', '20 automation workflows', 'Advanced analytics plus forecasting and ROI attribution', '300 AI recommendations / month', 'Margin-safe pricing opportunities (Pricing Agent)', 'Priority support with a 12-hour target'], limits: {} },
+    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 399, annualPrice: 3990, annualMonthsFree: 2, headline: 'Full AI employee — insights plus actions', features: ['Unlimited Shopify stores', 'All 6 AI agents (Product + Executive unlocked)', 'Unlimited AI Commands', 'Auto-execution: AI can take store actions for you', 'Unlimited automation workflows', 'Unlimited orders, products, and customers synced*', 'Product Agent cross-sell + Executive weekly digest', 'Unlimited AI recommendations', 'Advanced forecasting, attribution, and exports', 'VIP priority support with a 4-hour target', '*Fair use applies — see FAQ'], limits: {} },
   ])
 
   return (
@@ -1194,25 +1291,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 </div>
               </div>
               <div className="billing-usage-grid">
-                {(usage.length ? usage : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))).filter((meter) => meter.feature !== 'sms_sends_month' && meter.feature !== 'active_campaigns' && meter.feature !== 'jarvis_messages_month').map((meter) => {
-                  const percent = meter.limit && meter.limit > 0 ? Math.min(100, (meter.used / meter.limit) * 100) : 0
-                  const tone = usageTone(percent)
-                  const label = USAGE_FEATURE_LABELS[meter.feature] ?? meter.feature.replaceAll('_', ' ')
-                  return (
-                    <div key={meter.feature} className={`billing-usage-meter tone-${tone}`}>
-                      <div className="billing-usage-meter-top">
-                        <span>{label}</span>
-                        <strong>{meter.limit === null ? `${meter.used} · Unlimited` : `${meter.used} / ${meter.limit}`}</strong>
-                      </div>
-                      <div className="billing-usage-bar" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-                        <span style={{ width: `${meter.limit === null ? Math.min(12, meter.used > 0 ? 12 : 0) : percent}%` }} />
-                      </div>
-                      {percent >= 100 && meter.limit !== null && (
-                        <button type="button" className="billing-upgrade-link" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Upgrade for higher limits</button>
-                      )}
-                    </div>
-                  )
-                })}
+                {visibleMeters(usage.length ? usage : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))).map((meter) => (
+                  <UsageMeterRow key={meter.feature} meter={meter} plan={activeTier} />
+                ))}
               </div>
             </section>
 

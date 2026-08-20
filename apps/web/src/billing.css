@@ -599,6 +599,36 @@
   background: linear-gradient(90deg, #ef4444, #f87171);
 }
 
+/* Capacity chip used for the AI-agents meter (e.g. "3 of 3 agents available"). */
+.billing-usage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent-green, #10b981);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.billing-usage-chip.subtle {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-muted, #94a3b8);
+}
+
+/* Fair-use nudge — only shown on Commander when a soft cap is exceeded. */
+.billing-usage-fair-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
+
 .billing-roi-period select {
   height: 34px;
   padding: 0 10px;
