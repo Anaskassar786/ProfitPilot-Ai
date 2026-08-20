@@ -48,6 +48,8 @@ describe('Jarvis spoken intents', () => {
 
   it('detects startup greetings and barge-in vs echo', () => {
     expect(isStartupGreeting('Hello Sir. Good morning. I\'m Jarvis')).toBe(true)
+    expect(isStartupGreeting('Good morning Sir, I\'m Jarvis, your store assistant, how can I help you today?')).toBe(true)
+    expect(isStartupGreeting('Namaste Sir, Good evening, main Jarvis hoon')).toBe(true)
     expect(isStartupGreeting('Revenue is up today')).toBe(false)
     expect(isLikelyBargeIn('stop')).toBe(false)
     expect(isLikelyBargeIn('tell me the bad news')).toBe(true)
@@ -56,10 +58,17 @@ describe('Jarvis spoken intents', () => {
   })
 
   it('opens with a friendly assistant greeting and then waits to help', () => {
-    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain("I'm Jarvis, your store assistant")
-    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain('How can I help you today')
-    expect(jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))).toContain('Good morning')
-    expect(jarvisStartupGreeting("Ma'am", 'hi', new Date('2026-08-20T19:00:00'))).toContain('kya madad karun')
-    expect(jarvisStartupGreeting("Ma'am", 'hi', new Date('2026-08-20T19:00:00'))).toContain('Good evening')
+    const en = jarvisStartupGreeting('Sir', 'en', new Date('2026-08-20T08:00:00'))
+    expect(en).toContain("I'm Jarvis, your store assistant")
+    expect(en).toContain('how can I help you today')
+    expect(en).toContain('Good morning')
+    expect(en.split('.').length).toBe(1)
+    expect(en).not.toContain('.')
+    const hi = jarvisStartupGreeting("Ma'am", 'hi', new Date('2026-08-20T19:00:00'))
+    expect(hi).toContain('kya madad karun')
+    expect(hi).toContain('Good evening')
+    expect(hi).toContain('Namaste')
+    expect(hi.split('.').length).toBe(1)
+    expect(hi).not.toContain('.')
   })
 })

@@ -8,7 +8,7 @@ import { microphonePreflight, speechRecognitionAvailable } from './voice.js'
 import { framedMicrophoneNeedsBridge } from './jarvis-voice-bridge.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import { FloatingVoiceWidget } from './FloatingVoiceWidget.js'
-import { jarvisVoiceController, resumeJarvisListening, useJarvisVoiceSnapshot } from './jarvis-voice.js'
+import { getJarvisVoiceProfile, jarvisVoiceController, resumeJarvisListening, setJarvisVoiceProfile, useJarvisVoiceSnapshot } from './jarvis-voice.js'
 import { canExecuteJarvisActions, canNavigateWithJarvis, jarvisStartupGreeting, pageSpokenName, parseJarvisVoiceIntent, resolveJarvisSpokenLanguage, spokenReplyText, wantsPageWalkthrough } from './jarvis-intents.js'
 import type { WorkspaceContext } from './model.js'
 import type { WorkspaceSettings } from './settings-model.js'
@@ -82,23 +82,26 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   }, [open, context.storeId, startAttempt])
 
   const ambientLanguage = (): 'en' | 'hi' => {
-    if (workspaceSettings?.jarvisLanguage === 'hi' || preference?.language === 'hi') return 'hi'
-    return 'en'
+    const profile = getJarvisVoiceProfile()
+    return workspaceSettings?.jarvisLanguage ?? profile.language
   }
 
-  const speakReply = (text: string, language: 'en' | 'hi', interrupt = true) => {
+  const speakReply = (text: string, language: 'en' | 'hi' = ambientLanguage(), interrupt = true) => {
     const spoken = spokenReplyText(text)
     if (spoken) setCaption(spoken)
+    const profile = getJarvisVoiceProfile()
+    const spokenLanguage = workspaceSettings?.jarvisLanguage ?? profile.language ?? language
+    const gender = workspaceSettings?.jarvisVoiceGender ?? profile.gender
     const options: { text: string; language: 'en' | 'hi'; muted: boolean; voiceGender: 'feminine' | 'masculine'; storeId?: string; interrupt: boolean } = {
       text: spoken,
-      language,
+      language: spokenLanguage,
       muted: voice.muted,
-      voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine',
+      voiceGender: gender,
       interrupt,
     }
     if (context.storeId) options.storeId = context.storeId
     jarvisVoiceController.speak(options, () => {
-      resumeJarvisListening(language)
+      resumeJarvisListening(spokenLanguage)
     })
   }
 
@@ -110,7 +113,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
       const briefing = await fetchJarvisBriefing(context.storeId, pageToExplain, current.plan)
       setSession(briefing.session)
       pendingPageOffer.current = null
-      speakReply(briefing.text, briefing.language)
+      speakReply(briefing.text, ambientLanguage())
     } catch {
       pendingPageOffer.current = null
       speakReply(fallbackBriefing(pageToExplain, preference?.addressing ?? 'Sir', ambientLanguage()), ambientLanguage())
@@ -144,7 +147,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
         setPendingStoreAction(null)
         if (canNavigateWithJarvis(current.plan) && pendingStoreAction.actionId === 'navigate_page' && typeof pendingStoreAction.parameters.page === 'string') onNavigate?.(pendingStoreAction.parameters.page)
         if (canNavigateWithJarvis(current.plan) && pendingStoreAction.actionId === 'create_automation') onNavigate?.('automation')
-        speakReply(response.text, response.language)
+        speakReply(response.text, ambientLanguage())
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'The action could not be completed.'
         onToast(message, 'error')
@@ -212,7 +215,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
       if (pageName) onNavigate?.(pageName)
     }
     if (response.showEvidence) onEvidence(response.evidence)
-    speakReply(spoken, response.language)
+    speakReply(spoken, ambientLanguage())
   }
 
   const beginVoice = () => {
@@ -288,9 +291,14 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   }, [open])
 
   useEffect(() => {
+    if (!workspaceSettings) return
+    setJarvisVoiceProfile({ language: workspaceSettings.jarvisLanguage, gender: workspaceSettings.jarvisVoiceGender })
+  }, [workspaceSettings?.jarvisLanguage, workspaceSettings?.jarvisVoiceGender])
+
+  useEffect(() => {
     if (!open || paused) return
     jarvisVoiceController.setLanguage(ambientLanguage())
-  }, [open, paused, workspaceSettings?.jarvisLanguage, preference?.language])
+  }, [open, paused, workspaceSettings?.jarvisLanguage])
 
   const toggleMic = () => {
     if (paused) {

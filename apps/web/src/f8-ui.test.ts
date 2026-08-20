@@ -43,6 +43,11 @@ describe('Jarvis voice-strip UI', () => {
     expect(source).toContain('fetchJarvisBriefing')
     expect(source).toContain('resolveJarvisSpokenLanguage')
     expect(source).toContain('canNavigateWithJarvis')
+    expect(source).toContain('getJarvisVoiceProfile')
+    expect(source).toContain('setJarvisVoiceProfile')
+    expect(source).toContain('ambientLanguage()')
+    expect(source).not.toContain('speakReply(spoken, response.language)')
+    expect(source).not.toContain("voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine'")
   })
 
   it('renders the floating strip when open so chat is not required', () => {

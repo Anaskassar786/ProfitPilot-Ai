@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -20,6 +21,13 @@ describe('Jarvis workspace page', () => {
     expect(html).toContain('Four voices')
     expect(html).not.toContain('<textarea')
     expect(html).not.toContain('Ask Jarvis')
+  })
+
+  it('applies the 4-voice picker immediately via setJarvisVoiceProfile without waiting for Save', () => {
+    const source = readFileSync(new URL('./jarvis-page.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('setJarvisVoiceProfile({ language: option.language, gender: option.gender })')
+    expect(source).toContain('writeWorkspaceSettings')
+    expect(source).not.toMatch(/setVoiceLanguage\(next\.language\)/)
   })
 
   it('renders a compact nav mark', () => {
