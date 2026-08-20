@@ -50,28 +50,28 @@ async function getOverview(base: string): Promise<{ plan: string; unlockedCount:
 }
 
 describe('PR45 plan-aware agent overview', () => {
-  it('trial sees exactly 2 unlocked and 5 locked agents', async () => await withServer(async ({ base }) => {
+  it('trial sees exactly 2 unlocked and 4 locked agents', async () => await withServer(async ({ base }) => {
     const overview = await getOverview(base)
     expect(overview.plan).toBe('trial')
     expect(overview.agents.filter((agent) => !agent.locked).map((agent) => agent.id)).toEqual(['REVENUE_AGENT', 'INVENTORY_AGENT'])
-    expect(overview.agents.filter((agent) => agent.locked)).toHaveLength(5)
+    expect(overview.agents.filter((agent) => agent.locked)).toHaveLength(4)
     expect(overview.unlockedCount).toBe(2)
-    expect(overview.totalCount).toBe(7)
+    expect(overview.totalCount).toBe(6)
   }))
-  it('start sees exactly 3 unlocked and 4 locked agents', async () => await withServer(async ({ base }) => {
+  it('start sees exactly 3 unlocked and 3 locked agents', async () => await withServer(async ({ base }) => {
     const overview = await getOverview(base)
     expect(overview.agents.filter((agent) => !agent.locked)).toHaveLength(3)
-    expect(overview.agents.filter((agent) => agent.locked)).toHaveLength(4)
+    expect(overview.agents.filter((agent) => agent.locked)).toHaveLength(3)
   }, 'start'))
-  it('growth sees exactly 5 unlocked and 2 locked agents', async () => await withServer(async ({ base }) => {
+  it('growth sees exactly 4 unlocked and 2 locked agents', async () => await withServer(async ({ base }) => {
     const overview = await getOverview(base)
-    expect(overview.agents.filter((agent) => !agent.locked)).toHaveLength(5)
+    expect(overview.agents.filter((agent) => !agent.locked)).toHaveLength(4)
     expect(overview.agents.filter((agent) => agent.locked).map((agent) => agent.id).sort()).toEqual(['EXECUTIVE_AGENT', 'PRODUCT_AGENT'])
   }, 'growth'))
-  it('commander sees all 7 unlocked', async () => await withServer(async ({ base }) => {
+  it('commander sees all 6 unlocked', async () => await withServer(async ({ base }) => {
     const overview = await getOverview(base)
     expect(overview.agents.every((agent) => !agent.locked)).toBe(true)
-    expect(overview.unlockedCount).toBe(7)
+    expect(overview.unlockedCount).toBe(6)
   }, 'commander'))
   it('locked agents carry the exact plan required to unlock them', async () => await withServer(async ({ base }) => {
     const overview = await getOverview(base)
@@ -83,7 +83,7 @@ describe('PR45 plan-aware agent overview', () => {
   it('upgrading the plan immediately unlocks agents; downgrading immediately locks them', async () => await withServer(async ({ base, setPlan }) => {
     expect((await getOverview(base)).agents.filter((agent) => !agent.locked)).toHaveLength(2)
     setPlan('commander')
-    expect((await getOverview(base)).agents.filter((agent) => !agent.locked)).toHaveLength(7)
+    expect((await getOverview(base)).agents.filter((agent) => !agent.locked)).toHaveLength(6)
     setPlan('start')
     expect((await getOverview(base)).agents.filter((agent) => !agent.locked)).toHaveLength(3)
   }))
@@ -92,7 +92,7 @@ describe('PR45 plan-aware agent overview', () => {
     expect(response.status).toBe(200)
     const data = (await response.json()).data
     expect(Array.isArray(data)).toBe(true)
-    expect(data).toHaveLength(7)
+    expect(data).toHaveLength(6)
   }))
 })
 

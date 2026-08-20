@@ -68,6 +68,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sun,
+  Gift,
   Tag,
   Target,
   Trash2,
@@ -825,37 +826,404 @@ function ExportsPage({ context, onToast, onNavigateBilling }: { context: Workspa
   </PageLayout>
 }
 
-function BillingPage({ context, onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
+const BILLING_AGENT_MATRIX: readonly Readonly<{ id: string; label: string; trial: boolean; start: boolean; growth: boolean; commander: boolean }>[] = [
+  { id: 'REVENUE_AGENT', label: 'Revenue Agent', trial: true, start: true, growth: true, commander: true },
+  { id: 'INVENTORY_AGENT', label: 'Inventory Agent', trial: true, start: true, growth: true, commander: true },
+  { id: 'CUSTOMER_AGENT', label: 'Customer Agent', trial: false, start: true, growth: true, commander: true },
+  { id: 'PRICING_AGENT', label: 'Pricing Agent', trial: false, start: false, growth: true, commander: true },
+  { id: 'PRODUCT_AGENT', label: 'Product Agent', trial: false, start: false, growth: false, commander: true },
+  { id: 'EXECUTIVE_AGENT', label: 'Executive Agent', trial: false, start: false, growth: false, commander: true },
+]
+
+const BILLING_FAQ: readonly Readonly<{ q: string; a: string }>[] = [
+  { q: 'How does the 14-day free trial work?', a: 'Every new store starts on a 14-day Free Trial with Revenue and Inventory agents unlocked. No credit card is required. When the trial ends, basic analytics stay available until you choose a paid plan.' },
+  { q: 'Can I cancel or change my plan anytime?', a: 'Yes. You can upgrade, downgrade, or cancel at any time. Changes take effect at the end of the current billing period. Suspended stores keep read-only access to billing and support.' },
+  { q: 'How do gift codes work?', a: 'A gift code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Redemption cancels the free trial and writes a gift subscription to your account.' },
+  { q: 'Are the payments secure?', a: 'Yes. All paid subscriptions are processed securely through Shopify Billing. ProfitPilot never stores your card details — Shopify handles checkout, invoices, and PCI compliance.' },
+  { q: 'What happens when I upgrade during a trial?', a: 'Choosing a paid plan ends the trial immediately and unlocks that plan’s full agent roster and entitlements. In this testing phase, upgrades are applied locally without a Shopify checkout redirect.' },
+]
+
+const USAGE_FEATURE_LABELS: Readonly<Record<string, string>> = {
+  orders_sync_month: 'Orders synced / month',
+  products_sync: 'Products synced',
+  customers_sync: 'Customers synced',
+  ai_recommendations_month: 'AI recommendations / month',
+  active_agents: 'Active AI agents',
+  jarvis_messages_month: 'Jarvis messages / month',
+  automation_workflows: 'Automation workflows',
+  active_campaigns: 'Active campaigns',
+  email_sends_month: 'Email sends / month',
+  sms_sends_month: 'SMS sends / month',
+  team_members: 'Team members',
+  reports: 'Reports',
+  exports: 'Data exports',
+  forecasting: 'Forecasting',
+  attribution: 'Attribution',
+  ai_command_daily: 'AI Command / day',
+}
+
+function humanizeBillingStatus(account: import('./model.js').BillingAccount | null): Readonly<{ label: string; tone: 'green' | 'amber' | 'purple' | 'neutral'; planName: string }> {
+  const sub = account?.subscription
+  if (sub) {
+    const planName = sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)
+    if (sub.state === 'GIFT_ACCESS_UNLIMITED') return { label: 'Gift Access', tone: 'purple', planName: 'Commander' }
+    if (sub.state.startsWith('ACTIVE')) return { label: 'Active', tone: 'green', planName }
+    if (sub.state === 'TRIAL_LIMITED') return { label: 'Free Trial', tone: 'amber', planName: 'Trial' }
+    if (sub.state === 'SUSPENDED' || sub.state === 'PAST_DUE') return { label: 'Attention needed', tone: 'amber', planName }
+    if (sub.state === 'CANCELLED') return { label: 'Cancelled', tone: 'neutral', planName }
+    return { label: sub.state.replaceAll('_', ' '), tone: 'neutral', planName }
+  }
+  if (account?.trial?.state === 'ACTIVE') return { label: 'Free Trial', tone: 'amber', planName: 'Trial' }
+  if (account?.trial?.state === 'EXPIRED') return { label: 'Trial ended', tone: 'neutral', planName: 'Trial' }
+  if (account?.gift) return { label: 'Gift Access', tone: 'purple', planName: 'Commander' }
+  return { label: 'No plan', tone: 'neutral', planName: 'None' }
+}
+
+function usageTone(percent: number): 'green' | 'yellow' | 'red' {
+  if (percent >= 80) return 'red'
+  if (percent >= 60) return 'yellow'
+  return 'green'
+}
+
+function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [plans, setPlans] = useState<readonly import('./model.js').BillingPlan[]>([])
   const [account, setAccount] = useState<import('./model.js').BillingAccount | null>(null)
   const [usage, setUsage] = useState<readonly import('./model.js').UsageMeter[]>([])
   const [roi, setRoi] = useState<import('./model.js').RoiMetrics | null>(null)
   const [giftCode, setGiftCode] = useState('')
-  useEffect(() => {
-    void fetchBillingPlans().then(setPlans).catch(() => setPlans([]))
+  const [giftLoading, setGiftLoading] = useState(false)
+  const [upgradeLoading, setUpgradeLoading] = useState<string | null>(null)
+  const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
+  const [roiPeriod, setRoiPeriod] = useState<'this_month' | 'last_month' | 'all_time'>('this_month')
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [loading, setLoading] = useState(false)
+
+  const reload = async () => {
     if (!context.storeId) return
-    void Promise.allSettled([fetchBilling(context.storeId), fetchBillingUsage(context.storeId), fetchBillingRoi(context.storeId)]).then(([billing, meter, returnOnAi]) => {
+    setLoading(true)
+    try {
+      const [billing, meter, returnOnAi] = await Promise.allSettled([fetchBilling(context.storeId), fetchBillingUsage(context.storeId), fetchBillingRoi(context.storeId)])
       if (billing.status === 'fulfilled') setAccount(billing.value)
       if (meter.status === 'fulfilled') setUsage(meter.value)
       if (returnOnAi.status === 'fulfilled') setRoi(returnOnAi.value)
-    })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetchBillingPlans().then(setPlans).catch(() => setPlans([]))
+    void reload()
   }, [context.storeId])
+
+  const status = humanizeBillingStatus(account)
+  const trialDaysTotal = account?.trialDays ?? 14
+  const trialDaysLeft = account?.trial?.expiresAt
+    ? Math.max(0, Math.ceil((account.trial.expiresAt - Date.now()) / 86_400_000))
+    : null
+  const trialProgress = trialDaysLeft !== null
+    ? Math.min(100, Math.max(0, ((trialDaysTotal - trialDaysLeft) / trialDaysTotal) * 100))
+    : 0
+  const activeTier = account?.subscription?.plan?.toLowerCase() ?? (account?.trial?.state === 'ACTIVE' ? 'trial' : null)
+  const isGift = account?.subscription?.state === 'GIFT_ACCESS_UNLIMITED' || Boolean(account?.gift)
+
   const startCharge = async (plan: 'START' | 'GROWTH' | 'COMMANDER') => {
     if (!context.storeId) { onToast('Connect Shopify before choosing a plan.', 'info'); return }
-    try { const charge = await createBillingCharge(context.storeId, plan, 'MONTHLY', window.location.origin + '/billing'); if (charge.confirmationUrl) window.location.assign(charge.confirmationUrl); else onToast('Charge created without a confirmation URL.', 'warning') } catch (error: unknown) { onToast(errorMessage(error), 'error') }
+    if (activeTier === plan.toLowerCase() && !isGift) return
+    setUpgradeLoading(plan)
+    try {
+      const charge = await createBillingCharge(context.storeId, plan, billingInterval, `${window.location.origin}/billing`)
+      if (charge.confirmationUrl) {
+        window.location.assign(charge.confirmationUrl)
+        return
+      }
+      onToast(charge.message ?? `[DEV] Upgraded to ${plan} locally. Shopify Billing Integration Pending.`, 'success')
+      await reload()
+    } catch (error: unknown) {
+      onToast(errorMessage(error), 'error')
+    } finally {
+      setUpgradeLoading(null)
+    }
   }
-  const redeem = async () => { if (!context.storeId || !giftCode.trim()) return; try { await redeemGiftCode(context.storeId, giftCode); onToast('Gift access redeemed for this store.', 'success'); setGiftCode('') } catch (error: unknown) { onToast(errorMessage(error), 'error') } }
-  return <PageLayout eyebrow="Plans and usage" title="Billing" description="Plan, quota, and ROI values are loaded from the real billing API. Suspended stores keep read-only access." actions={<button className="button secondary" onClick={() => context.storeId ? void fetchBilling(context.storeId).then(setAccount).catch((error: unknown) => onToast(errorMessage(error), 'error')) : onToast('Connect Shopify from Settings.', 'info')}>{context.storeId ? 'Refresh billing' : 'Connect Shopify'} <RefreshCw size={14} /></button>}>
-    {!context.storeId ? <EmptyState icon={WalletCards} title="Connect Shopify to view billing" description="Billing never assumes a plan. Complete the signed install flow to load a real subscription." action="Connect from Settings" onAction={() => onToast('Open the Shopify install flow from the workspace context.', 'info')} /> : <>
-      <div className="billing-current"><div className="billing-plan"><span className="plan-icon"><WalletCards size={19} /></span><div><div className="section-kicker">CURRENT PLAN</div><h2>{account?.subscription ? `${account.subscription.plan} · ${account.subscription.state}` : account?.trial?.state === 'ACTIVE' ? `You're on the Free Trial (${Math.max(0, Math.ceil((account.trial.expiresAt - Date.now()) / 86_400_000))} days remaining)` : 'No active plan — choose a plan below to get started'}</h2><p>{account?.subscription?.currentPeriodEnd ? `Current period ends ${new Date(account.subscription.currentPeriodEnd).toLocaleDateString()}.` : account?.trial?.expiresAt ? `Trial ends ${new Date(account.trial.expiresAt).toLocaleDateString()}. Basic analytics stay available until you choose a plan.` : 'Start a plan or redeem a gift code when you are ready.'}</p></div><span className={`status-badge ${account?.subscription ? 'green' : account?.trial ? 'amber' : 'neutral'}`}>{account?.subscription?.state ?? account?.trial?.state ?? 'Trial'}</span></div></div>
-      <div className="billing-grid"><section className="card usage-panel"><CardHeading kicker="Usage meters" dot="blue" title="Current period" />{account?.trial && !account.subscription ? <p className="usage-trial-note">Free trial includes limited analytics. Usage meters fill in after a paid plan starts.</p> : null}{usage.length ? usage.map((meter) => <Quota key={meter.feature} label={meter.feature} value={`${meter.used}${meter.limit === null ? '' : ` / ${meter.limit}`}`} percent={meter.limit ? Math.min(100, meter.used / meter.limit * 100) : 0} />) : <EmptySmall icon={Gauge} text="No usage recorded yet for this period." />}</section><section className="card roi-panel"><CardHeading kicker="Return on AI" dot="gold" title="Verified attribution" /><p className="roi-help">Revenue that can be tied to an approved ProfitPilot action. $0 means no attributed outcomes yet — not a billing error.</p>{roi ? <div className="roi-live"><strong>{formatMoney(roi.attributedRevenue)}</strong><span>AI-attributed revenue</span><div className="roi-breakdown"><MetricLine label="AI operational cost" value={formatMoney(roi.aiCostDollars)} /><MetricLine label="Net return" value={formatMoney(roi.netReturn)} /><MetricLine label="Multiple" value={roi.multiple === null ? '—' : `${roi.multiple.toFixed(1)}×`} /></div></div> : <EmptySmall icon={Sparkles} text="No attributed outcomes yet." />}</section></div>
-      <section className="card gift-panel"><div><div className="section-kicker"><Tag size={13} /> GIFT ACCESS</div><h3>Have a gift code?</h3><p>One store can redeem one code. Redemption replaces the limited trial.</p></div><div className="gift-input"><input value={giftCode} onChange={(event) => setGiftCode(event.target.value.toUpperCase())} placeholder="Enter gift code" /><button className="button secondary" onClick={() => void redeem()} disabled={!giftCode.trim()}>Redeem</button></div></section>
-      <div className="plan-comparison"><div className="section-kicker"><span className="kicker-dot purple" /> AVAILABLE PLANS</div><h2>Choose the level of autonomy you need.</h2><div className="plan-cards">{plans.map((plan) => <div className={`plan-card ${plan.recommended ? 'recommended' : ''} ${account?.subscription?.plan === plan.tier ? 'current' : ''}`} key={plan.code}>{plan.recommended && <span className="plan-recommended">Recommended</span>}<h3>{plan.code}</h3><div className="plan-price"><strong>${plan.monthlyPrice}</strong><span>/month</span></div><p>{plan.headline ?? `$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`}</p><ul className="plan-features">{(plan.features ?? [`$${plan.annualPrice}/year · ${plan.annualMonthsFree} months free`]).
-              /* 🛑 Jarvis feature references filtered from plan comparison UI — restore when Jarvis returns */
-              filter((feature: string) => !feature.toLowerCase().includes('jarvis')).
-              map((feature: string) => <li key={feature}>{feature}</li>)}</ul><button className="button primary" onClick={() => void startCharge(plan.code)}>{account?.subscription?.plan === plan.tier ? 'Current plan' : 'Choose plan'} <ArrowUpRight size={14} /></button></div>)}</div></div>
-    </>}
-  </PageLayout>
+
+  const redeem = async () => {
+    if (!context.storeId || !giftCode.trim()) return
+    setGiftLoading(true)
+    try {
+      await redeemGiftCode(context.storeId, giftCode)
+      onToast('Gift access redeemed — Commander unlocked for a limited time.', 'success')
+      setGiftCode('')
+      await reload()
+    } catch (error: unknown) {
+      onToast(errorMessage(error), 'error')
+    } finally {
+      setGiftLoading(false)
+    }
+  }
+
+  const displayPlans = plans.length > 0 ? plans : ([
+    { code: 'START' as const, tier: 'start' as const, monthlyPrice: 49, annualPrice: 490, annualMonthsFree: 2, headline: 'Basic analytics for one store', features: ['3 AI agents: Revenue, Inventory, Customer', '100 AI Command / day', 'Email support'], limits: {} },
+    { code: 'GROWTH' as const, tier: 'growth' as const, monthlyPrice: 149, annualPrice: 1490, annualMonthsFree: 2, recommended: true, headline: 'AI agents and advanced analytics', features: ['4 AI agents: adds Pricing', '300 AI Command / day', 'Forecasting and attribution'], limits: {} },
+    { code: 'COMMANDER' as const, tier: 'commander' as const, monthlyPrice: 349, annualPrice: 3490, annualMonthsFree: 2, headline: 'Full AI employee, unlimited stores', features: ['All 6 AI agents', 'Unlimited AI Command', 'Priority support'], limits: {} },
+  ])
+
+  return (
+    <PageLayout
+      eyebrow="Plans and usage"
+      title="Billing"
+      description="Manage your plan, monitor usage, and track AI-attributed return — all grounded in real subscription data."
+      actions={
+        <button className="button secondary" disabled={loading} onClick={() => context.storeId ? void reload() : onToast('Connect Shopify from Settings.', 'info')}>
+          <RefreshCw size={14} className={loading ? 'spin' : ''} /> {context.storeId ? (loading ? 'Refreshing…' : 'Refresh billing') : 'Connect Shopify'}
+        </button>
+      }
+    >
+      {!context.storeId ? (
+        <EmptyState icon={WalletCards} title="Connect Shopify to view billing" description="Billing never assumes a plan. Complete the signed install flow to load a real subscription." action="Connect from Settings" onAction={() => onToast('Open the Shopify install flow from the workspace context.', 'info')} />
+      ) : (
+        <div className="billing-v2">
+          {/* ── 3.1 Hero ─────────────────────────────────────────────── */}
+          <section className="billing-hero card">
+            <div className="billing-hero-main">
+              <div className="billing-hero-icon"><WalletCards size={22} /></div>
+              <div className="billing-hero-copy">
+                <div className="section-kicker">CURRENT PLAN</div>
+                <div className="billing-hero-title-row">
+                  <h2>{status.planName}</h2>
+                  <span className={`billing-status-badge ${status.tone}`}>{status.label}</span>
+                </div>
+                <p>
+                  {account?.subscription?.currentPeriodEnd
+                    ? `Current period ends ${new Date(account.subscription.currentPeriodEnd).toLocaleDateString()}.`
+                    : account?.trial?.expiresAt
+                      ? `Trial ends ${new Date(account.trial.expiresAt).toLocaleDateString()}. Basic analytics stay available until you choose a plan.`
+                      : account?.gift
+                        ? `Gift access expires ${new Date(account.gift.expiresAt).toLocaleDateString()}.`
+                        : 'Start a plan or redeem a gift code when you are ready.'}
+                </p>
+                {account?.trial?.state === 'ACTIVE' && trialDaysLeft !== null && (
+                  <div className="billing-trial-progress">
+                    <div className="billing-trial-progress-meta">
+                      <span>Free trial progress</span>
+                      <strong>{trialDaysLeft} of {trialDaysTotal} days remaining</strong>
+                    </div>
+                    <div className="billing-trial-track" role="progressbar" aria-valuenow={trialDaysLeft} aria-valuemin={0} aria-valuemax={trialDaysTotal}>
+                      <span style={{ width: `${100 - trialProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="billing-interval-toggle" role="group" aria-label="Billing interval">
+              <button type="button" className={billingInterval === 'MONTHLY' ? 'active' : ''} onClick={() => setBillingInterval('MONTHLY')}>Monthly</button>
+              <button type="button" className={billingInterval === 'ANNUAL' ? 'active' : ''} onClick={() => setBillingInterval('ANNUAL')}>
+                Annual <span className="billing-save-badge">2 Months Free</span>
+              </button>
+            </div>
+          </section>
+
+          {/* ── 3.2 Plan cards ───────────────────────────────────────── */}
+          <section className="billing-plans-section">
+            <div className="billing-section-head">
+              <div className="section-kicker"><span className="kicker-dot purple" /> AVAILABLE PLANS</div>
+              <h2>Choose the level of autonomy you need.</h2>
+              <p>Upgrade anytime. Phase 1 applies the plan locally for testing — Shopify Billing checkout comes next.</p>
+            </div>
+            <div className="billing-plan-grid">
+              {displayPlans.map((plan) => {
+                const isCurrent = activeTier === plan.tier && !isGift
+                const price = billingInterval === 'ANNUAL' ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice
+                const features = (plan.features ?? []).filter((feature) => !feature.toLowerCase().includes('jarvis'))
+                return (
+                  <article key={plan.code} className={`billing-plan-card ${plan.recommended ? 'recommended' : ''} ${isCurrent ? 'current' : ''}`}>
+                    {plan.recommended && <span className="billing-plan-ribbon">Recommended</span>}
+                    {isCurrent && <span className="billing-plan-current-tag">Current plan</span>}
+                    <header className={`billing-plan-card-head tone-${plan.tier}`}>
+                      <h3>{plan.code.charAt(0) + plan.code.slice(1).toLowerCase()}</h3>
+                      <p>{plan.headline}</p>
+                    </header>
+                    <div className="billing-plan-price">
+                      <strong>${price}</strong>
+                      <span>/mo{billingInterval === 'ANNUAL' ? ' billed annually' : ''}</span>
+                    </div>
+                    {billingInterval === 'ANNUAL' && (
+                      <div className="billing-plan-annual-note">${plan.annualPrice}/year · {plan.annualMonthsFree} months free</div>
+                    )}
+                    <ul className="billing-plan-features">
+                      {features.map((feature) => (
+                        <li key={feature}><Check size={14} strokeWidth={2.5} />{feature}</li>
+                      ))}
+                    </ul>
+                    <button
+                      className={`button ${isCurrent ? 'secondary' : 'primary'} billing-plan-cta`}
+                      disabled={isCurrent || upgradeLoading === plan.code}
+                      onClick={() => void startCharge(plan.code)}
+                    >
+                      {isCurrent ? 'Current plan' : upgradeLoading === plan.code ? 'Updating…' : 'Choose plan'}
+                      {!isCurrent && <ArrowUpRight size={14} />}
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* ── 3.3 AI Agents Matrix ─────────────────────────────────── */}
+          <section className="card billing-matrix">
+            <div className="billing-section-head inline">
+              <div>
+                <div className="section-kicker"><span className="kicker-dot blue" /> AI AGENTS</div>
+                <h3>What each plan unlocks</h3>
+                <p>Trial 2 · Start 3 · Growth 4 · Commander 6. Campaign Agent has been retired — recovery and welcome live under Customer Agent.</p>
+              </div>
+            </div>
+            <div className="billing-matrix-table-wrap">
+              <table className="billing-matrix-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Agent</th>
+                    <th scope="col">Trial</th>
+                    <th scope="col">Start</th>
+                    <th scope="col">Growth</th>
+                    <th scope="col">Commander</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {BILLING_AGENT_MATRIX.map((agent) => (
+                    <tr key={agent.id}>
+                      <th scope="row">{agent.label}</th>
+                      <td><BillingCheck ok={agent.trial} /></td>
+                      <td><BillingCheck ok={agent.start} /></td>
+                      <td><BillingCheck ok={agent.growth} /></td>
+                      <td><BillingCheck ok={agent.commander} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* ── 3.4 + 3.5 Usage + ROI ────────────────────────────────── */}
+          <div className="billing-split">
+            <section className="card billing-usage">
+              <div className="billing-section-head inline">
+                <div>
+                  <div className="section-kicker"><span className="kicker-dot blue" /> USAGE</div>
+                  <h3>Entitlement meters</h3>
+                  <p>Every metered feature for your current period — even at zero.</p>
+                </div>
+              </div>
+              <div className="billing-usage-grid">
+                {(usage.length ? usage : Object.keys(USAGE_FEATURE_LABELS).map((feature) => ({ feature, used: 0, limit: null as number | null }))).map((meter) => {
+                  const percent = meter.limit && meter.limit > 0 ? Math.min(100, (meter.used / meter.limit) * 100) : 0
+                  const tone = usageTone(percent)
+                  const label = USAGE_FEATURE_LABELS[meter.feature] ?? meter.feature.replaceAll('_', ' ')
+                  return (
+                    <div key={meter.feature} className={`billing-usage-meter tone-${tone}`}>
+                      <div className="billing-usage-meter-top">
+                        <span>{label}</span>
+                        <strong>{meter.limit === null ? `${meter.used} · ∞` : `${meter.used} / ${meter.limit}`}</strong>
+                      </div>
+                      <div className="billing-usage-bar" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+                        <span style={{ width: `${meter.limit === null ? Math.min(12, meter.used > 0 ? 12 : 0) : percent}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="card billing-roi">
+              <div className="billing-section-head inline">
+                <div>
+                  <div className="section-kicker"><span className="kicker-dot gold" /> RETURN ON AI</div>
+                  <h3>Verified attribution</h3>
+                </div>
+                <label className="billing-roi-period">
+                  <span className="sr-only">Period</span>
+                  <select value={roiPeriod} onChange={(event) => setRoiPeriod(event.target.value as typeof roiPeriod)}>
+                    <option value="this_month">This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="all_time">All Time</option>
+                  </select>
+                </label>
+              </div>
+              <p className="billing-roi-help">
+                Revenue tied to an approved ProfitPilot action. $0 means no attributed outcomes yet — not a billing error.
+                <button type="button" className="billing-tooltip-trigger" title="Attribution credits revenue only when a merchant-approved recommendation can be linked to a later order or recovery. Unapproved insights never inflate ROI.">
+                  <Info size={13} /> How attribution works
+                </button>
+              </p>
+              {roi ? (
+                <div className="billing-roi-live">
+                  <strong>{formatMoney(roi.attributedRevenue)}</strong>
+                  <span>AI-attributed revenue · {roiPeriod === 'this_month' ? 'This month' : roiPeriod === 'last_month' ? 'Last month' : 'All time'}</span>
+                  <div className="billing-roi-breakdown">
+                    <MetricLine label="AI operational cost" value={formatMoney(roi.aiCostDollars)} />
+                    <MetricLine label="Net return" value={formatMoney(roi.netReturn)} />
+                    <MetricLine label="Multiple" value={roi.multiple === null ? '—' : `${roi.multiple.toFixed(1)}×`} />
+                  </div>
+                </div>
+              ) : (
+                <EmptySmall icon={Sparkles} text="No attributed outcomes yet." />
+              )}
+            </section>
+          </div>
+
+          {/* ── 3.6 Gift Access ──────────────────────────────────────── */}
+          <section className="card billing-gift">
+            <div className="billing-gift-icon"><Gift size={22} /></div>
+            <div className="billing-gift-copy">
+              <div className="section-kicker">GIFT ACCESS</div>
+              <h3>Have a gift code?</h3>
+              <p>Redeem once per store for temporary Commander access. Replaces the free trial.</p>
+            </div>
+            <div className="billing-gift-form">
+              <input
+                value={giftCode}
+                onChange={(event) => setGiftCode(event.target.value.toUpperCase())}
+                placeholder="e.g. KASSAR786"
+                aria-label="Gift code"
+                disabled={giftLoading}
+              />
+              <button className="button primary" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
+                {giftLoading ? <RefreshCw size={14} className="spin" /> : <Gift size={14} />}
+                {giftLoading ? 'Redeeming…' : 'Redeem'}
+              </button>
+            </div>
+          </section>
+
+          {/* ── 3.7 FAQ ──────────────────────────────────────────────── */}
+          <section className="card billing-faq">
+            <div className="billing-section-head">
+              <div className="section-kicker"><span className="kicker-dot purple" /> FAQ</div>
+              <h3>Common questions</h3>
+            </div>
+            <div className="billing-faq-list">
+              {BILLING_FAQ.map((item, index) => {
+                const open = openFaq === index
+                return (
+                  <div key={item.q} className={`billing-faq-item ${open ? 'open' : ''}`}>
+                    <button type="button" className="billing-faq-q" aria-expanded={open} onClick={() => setOpenFaq(open ? null : index)}>
+                      <span>{item.q}</span>
+                      <ChevronDown size={16} />
+                    </button>
+                    {open && <div className="billing-faq-a"><p>{item.a}</p></div>}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        </div>
+      )}
+    </PageLayout>
+  )
+}
+
+function BillingCheck({ ok }: { ok: boolean }) {
+  return ok
+    ? <span className="billing-check ok" aria-label="Included"><Check size={15} strokeWidth={2.75} /></span>
+    : <span className="billing-check no" aria-label="Not included"><X size={14} strokeWidth={2.5} /></span>
 }
 
 function PageLayout({ eyebrow, title, description, actions, children }: { eyebrow: ReactNode; title: string; description: string; actions?: ReactNode; children: ReactNode }) { return <div className="page-content"><div className="page-header"><div><div className="page-eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>{children}</div> }

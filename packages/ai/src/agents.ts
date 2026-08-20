@@ -6,9 +6,8 @@ export type AgentPrompt = Readonly<{ id: AgentId; label: string; version: string
 export const AGENT_PROMPTS: Readonly<Record<AgentId, AgentPrompt>> = {
   REVENUE_AGENT: { id: 'REVENUE_AGENT', label: 'Revenue Agent', version: '1.1.0', system: 'Explain revenue and sales signals using only the supplied evidence. Never calculate or invent numbers.' },
   INVENTORY_AGENT: { id: 'INVENTORY_AGENT', label: 'Inventory Agent', version: '1.1.0', system: 'Explain inventory signals using only the supplied evidence. Never invent stock, velocity, or dates.' },
-  CUSTOMER_AGENT: { id: 'CUSTOMER_AGENT', label: 'Customer Agent', version: '1.1.0', system: 'Explain customer segments without names, emails, phones, or direct identifiers. Use only supplied evidence.' },
+  CUSTOMER_AGENT: { id: 'CUSTOMER_AGENT', label: 'Customer Agent', version: '1.1.0', system: 'Explain customer segments, recovery, and welcome signals without names, emails, phones, or direct identifiers. Use only supplied evidence. Do not send messages or invent performance claims.' },
   PRICING_AGENT: { id: 'PRICING_AGENT', label: 'Pricing Agent', version: '1.1.0', system: 'Explain margin-aware pricing opportunities without introducing a number not present in evidence.' },
-  CAMPAIGN_AGENT: { id: 'CAMPAIGN_AGENT', label: 'Campaign Agent', version: '1.1.0', system: 'Write concise, compliant campaign language. Do not send messages or invent performance claims.' },
   PRODUCT_AGENT: { id: 'PRODUCT_AGENT', label: 'Product Agent', version: '1.1.0', system: 'Explain catalog and cross-sell signals from evidence only. Do not alter product data.' },
   EXECUTIVE_AGENT: { id: 'EXECUTIVE_AGENT', label: 'Executive Agent', version: '1.1.0', system: 'Summarize the supplied store evidence for a merchant. Keep every number grounded.' },
 }
@@ -17,9 +16,8 @@ export const AGENT_PROMPTS: Readonly<Record<AgentId, AgentPrompt>> = {
 export const AGENT_DESCRIPTIONS: Readonly<Record<AgentId, Readonly<{ tagline: string; sampleInsight: string }>>> = {
   REVENUE_AGENT: { tagline: 'Watches revenue momentum across closed periods and explains what changed.', sampleInsight: 'Revenue is up versus the previous 30 days — here is what is driving the streak.' },
   INVENTORY_AGENT: { tagline: 'Tracks stock cover and dead inventory so cash never sits idle on a shelf.', sampleInsight: 'Two products will sell out within a week at current velocity — reorder now.' },
-  CUSTOMER_AGENT: { tagline: 'Finds churn risks and reorder windows in your customer base — never using PII.', sampleInsight: 'A high-value customer has gone quiet for 80 days. A win-back nudge is due.' },
+  CUSTOMER_AGENT: { tagline: 'Finds churn risks, reorder windows, abandoned checkouts, and welcome moments — never using PII.', sampleInsight: 'A high-value customer has gone quiet for 80 days. A win-back nudge is due.' },
   PRICING_AGENT: { tagline: 'Spots margin-safe price test opportunities from real cost and demand data.', sampleInsight: 'A best-seller clears your margin floor — a measured 5% test is available.' },
-  CAMPAIGN_AGENT: { tagline: 'Drafts compliant recovery and welcome campaigns from live checkout signals.', sampleInsight: 'Three abandoned checkouts are still inside the 48-hour recovery window.' },
   PRODUCT_AGENT: { tagline: 'Learns which products travel together and proposes cross-sell pairings.', sampleInsight: 'Customers who buy your top product add a companion item 12% of the time.' },
   EXECUTIVE_AGENT: { tagline: 'Delivers a weekly plain-language digest of your deterministic store health.', sampleInsight: 'Store health is 74/100 this week — inventory cover is the weak component.' },
 }

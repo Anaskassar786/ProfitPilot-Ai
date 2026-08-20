@@ -11,7 +11,6 @@ export const AGENT_LABELS: Readonly<Record<AgentId, string>> = {
   INVENTORY_AGENT: 'Inventory Agent',
   CUSTOMER_AGENT: 'Customer Agent',
   PRICING_AGENT: 'Pricing Agent',
-  CAMPAIGN_AGENT: 'Campaign Agent',
   PRODUCT_AGENT: 'Product Agent',
   EXECUTIVE_AGENT: 'Executive Agent',
 }

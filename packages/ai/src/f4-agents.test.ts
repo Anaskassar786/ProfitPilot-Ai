@@ -3,7 +3,7 @@ import { AGENT_PROMPTS, agentStatuses, promptFor } from './agents.js'
 import type { RuleSignal, StoreSnapshot } from './domain.js'
 
 describe('versioned AI agents', () => {
-  it('contains all seven versioned prompts', () => expect(Object.keys(AGENT_PROMPTS)).toHaveLength(7))
+  it('contains all six versioned prompts (Campaign Agent removed)', () => expect(Object.keys(AGENT_PROMPTS)).toHaveLength(6))
   it('marks language-only behavior in statuses', () => expect(agentStatuses(false)[0]?.languageOnly).toBe(true))
   it('marks configured agents ready', () => expect(agentStatuses(true)[0]?.execution).toBe('READY'))
   it('marks disabled agents paused', () => expect(agentStatuses(true, ['REVENUE_AGENT'])[1]?.execution).toBe('PAUSED'))

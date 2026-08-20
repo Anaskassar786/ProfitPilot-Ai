@@ -2,9 +2,8 @@ import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresStoreDirectory } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 import { Logger } from '@profitpilot/logger'
-import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, ShopifyBillingClient, TrialAndGiftLedger } from '@profitpilot/billing'
+import { AdminStepUpSessions, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
 import type { TrialRecord } from '@profitpilot/billing'
-import { withTenantContext } from '@profitpilot/db'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
 import { createF4Bootstrap } from './f4-bootstrap.js'
@@ -23,7 +22,10 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   const repository = new PostgresBillingRepository(f4.database)
   const directory = new PostgresStoreDirectory(f4.database)
   const vault = new TokenVault(AesGcmCipher.fromHex(requiredEnv(env, 'ENCRYPTION_KEY')), new PostgresTokenRecordStore(f4.database))
-  const trials = new TrialAndGiftLedger(giftCodesFromEnv(env))
+  const giftStore = new PostgresTrialGiftStore(f4.database, giftCodesFromEnv(env))
+  // Best-effort seed so KASSAR786 / AFRIDI786 (or env overrides) exist even if
+  // the migration seed was wiped. Failures are non-fatal at boot.
+  void giftStore.seedDefaultCodes(giftCodesFromEnv(env)).catch(() => undefined)
   const funnel = new FunnelLedger()
   const stepUp = new AdminStepUpSessions(15)
   const logger = new Logger()
@@ -36,6 +38,9 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
     if (!token) throw new AppError('DEPENDENCY_ERROR', 'Shopify access token is missing. Hard refresh the embedded app to reconnect this store, then retry.', 503, { storeId: shopId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' })
     return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', testMode: billingTestMode(env), logger })
   }
+
+  const ensureTrial = async (shopId: string): Promise<TrialRecord> => giftStore.ensureTrial(shopId)
+
   return {
     ...f4,
     // PR45: the AI Command Center is plan-aware — the billing repository is
@@ -43,14 +48,26 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
     ai: { ...f4.ai, plan: async (tenant) => (await repository.get(tenant))?.plan ?? 'trial' },
     billing: {
       repository,
-      trials,
+      trials: giftStore,
       funnel,
+      // Phase 1: mock local plan upgrades by default so the Billing UI can be
+      // tested end-to-end without Shopify Billing. Flip via BILLING_MOCK_CHARGES=false.
+      mockCharges: env.BILLING_MOCK_CHARGES?.trim().toLowerCase() !== 'false',
       createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
       verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, { plan, interval }),
       usage: async (shopId) => usage(f4.database, shopId),
       roi: async (shopId) => roi(f4.database, f4.ai, shopId),
+      ensureTrial,
     },
-    admin: { adminKey: requiredEnv(env, 'ADMIN_KEY'), stepUp, funnel, gifts: trials },
+    admin: {
+      adminKey: requiredEnv(env, 'ADMIN_KEY'),
+      stepUp,
+      funnel,
+      gifts: {
+        setGiftKillSwitch: (active: boolean) => giftStore.setGiftKillSwitch(active),
+        isGiftKillSwitchActive: () => giftStore.isGiftKillSwitchActive(),
+      },
+    },
   }
 }
 
@@ -58,7 +75,32 @@ async function usage(database: { query<Row extends QueryResultRow>(text: string,
   const result = await database.query<UsageRow>('SELECT feature, used FROM billing_usage WHERE shop_id = $1 AND period_start = date_trunc(\'month\', now())::date', [shopId])
   const account = await new PostgresBillingRepository(database).get(shopId)
   const tier = account?.plan ?? 'trial'
-  return result.rows.map((row) => ({ feature: row.feature, used: Number(row.used), limit: featureLimit(tier, row.feature) }))
+  // Always surface every metered entitlement so the Billing UI can render a
+  // complete usage dashboard even when no rows exist yet for the period.
+  const features = [
+    'orders_sync_month',
+    'products_sync',
+    'customers_sync',
+    'ai_recommendations_month',
+    'active_agents',
+    'jarvis_messages_month',
+    'automation_workflows',
+    'active_campaigns',
+    'email_sends_month',
+    'sms_sends_month',
+    'team_members',
+    'reports',
+    'exports',
+    'forecasting',
+    'attribution',
+    'ai_command_daily',
+  ] as const
+  const usedByFeature = new Map(result.rows.map((row) => [row.feature, Number(row.used)]))
+  return features.map((feature) => ({
+    feature,
+    used: usedByFeature.get(feature) ?? 0,
+    limit: featureLimit(tier, feature),
+  }))
 }
 
 async function roi(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, ai: F4Bootstrap['ai'], shopId: string) {
@@ -67,33 +109,8 @@ async function roi(database: { query<Row extends QueryResultRow>(text: string, v
   return calculateRoi(revenue, (await Promise.resolve(ai.costs.summary(storeId(shopId)))).microDollars)
 }
 
-type TrialRow = QueryResultRow & { shop_id: string; started_at: Date; expires_at: Date; consumed: boolean; state: TrialRecord['state'] }
-
-async function ensureTrial(database: F4Bootstrap['database'], ledger: TrialAndGiftLedger, shopId: string): Promise<TrialRecord> {
-  const existing = ledger.trial(shopId)
-  if (existing) return existing
-  try {
-    const loaded = await withTenantContext(database, shopId, async (client) => {
-      const result = await client.query<TrialRow>('SELECT shop_id, started_at, expires_at, consumed, state FROM trials WHERE shop_id = $1 LIMIT 1', [shopId])
-      return result.rows[0] ?? null
-    })
-    if (loaded) {
-      const trial: TrialRecord = { shopId: loaded.shop_id, startedAt: loaded.started_at.valueOf(), expiresAt: loaded.expires_at.valueOf(), consumed: loaded.consumed, state: loaded.state }
-      ledger.hydrate(trial)
-      return ledger.trial(shopId) ?? trial
-    }
-  } catch { /* fall through and start a fresh limited trial */ }
-  const created = ledger.startTrial(shopId)
-  try {
-    await withTenantContext(database, shopId, async (client) => {
-      await client.query('INSERT INTO trials (shop_id, started_at, expires_at, consumed, state) VALUES ($1, to_timestamp($2 / 1000.0), to_timestamp($3 / 1000.0), $4, $5) ON CONFLICT (shop_id) DO NOTHING', [created.shopId, created.startedAt, created.expiresAt, created.consumed, created.state])
-    })
-  } catch { /* in-memory trial still applies for this process */ }
-  return created
-}
-
 function featureLimit(plan: 'trial' | 'start' | 'growth' | 'commander', feature: string): number | null {
-  const allowed = ['orders_sync_month', 'products_sync', 'customers_sync', 'ai_recommendations_month', 'active_agents', 'jarvis_messages_month', 'automation_workflows', 'active_campaigns', 'email_sends_month', 'sms_sends_month', 'team_members', 'reports', 'exports', 'forecasting', 'attribution'] as const
+  const allowed = ['orders_sync_month', 'products_sync', 'customers_sync', 'ai_recommendations_month', 'active_agents', 'jarvis_messages_month', 'automation_workflows', 'active_campaigns', 'email_sends_month', 'sms_sends_month', 'team_members', 'reports', 'exports', 'forecasting', 'attribution', 'ai_command_daily'] as const
   return allowed.includes(feature as (typeof allowed)[number]) ? limitForPlan(plan, feature as (typeof allowed)[number]) : null
 }
 
@@ -119,3 +136,6 @@ function giftCodesFromEnv(env: Readonly<Record<string, string | undefined>>) {
 
 function numberEnv(env: Readonly<Record<string, string | undefined>>, key: string, fallback: number): number { const value = env[key]; const parsed = value?.trim() ? Number(value) : fallback; return Number.isFinite(parsed) ? parsed : fallback }
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: string): string { const value = env[key]?.trim(); if (!value) throw new Error(`Missing required environment variable ${key}`); return value }
+
+// Re-export for tests that previously imported the private ensureTrial helper shape.
+export type { TrialRecord }

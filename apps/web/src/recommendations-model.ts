@@ -5,7 +5,7 @@
  * count of its own — it renders what the API returned.
  */
 
-export type AgentId = 'REVENUE_AGENT' | 'INVENTORY_AGENT' | 'CUSTOMER_AGENT' | 'PRICING_AGENT' | 'CAMPAIGN_AGENT' | 'PRODUCT_AGENT' | 'EXECUTIVE_AGENT'
+export type AgentId = 'REVENUE_AGENT' | 'INVENTORY_AGENT' | 'CUSTOMER_AGENT' | 'PRICING_AGENT' | 'PRODUCT_AGENT' | 'EXECUTIVE_AGENT'
 export type RuleId = 'STOCKOUT_RISK' | 'DEAD_STOCK' | 'CHURN_RISK' | 'PRICING_UPLIFT' | 'REPEAT_PURCHASE' | 'CART_ABANDONMENT' | 'CROSS_SELL' | 'NEW_CUSTOMER_WELCOME'
 export type RecommendationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED'
 export type ActionType = 'CREATE_RECOMMENDATION' | 'TAG_CUSTOMER' | 'SEND_EMAIL' | 'CREATE_DISCOUNT' | 'INTERNAL_ALERT'
@@ -129,7 +129,6 @@ export const AGENT_LABELS: Readonly<Record<AgentId, string>> = {
   INVENTORY_AGENT: 'Inventory Agent',
   CUSTOMER_AGENT: 'Customer Agent',
   PRICING_AGENT: 'Pricing Agent',
-  CAMPAIGN_AGENT: 'Campaign Agent',
   PRODUCT_AGENT: 'Product Agent',
   EXECUTIVE_AGENT: 'Executive Agent',
 }
@@ -191,9 +190,8 @@ export const TEAM_FIND_BULLETS: readonly string[] = [
 export const AGENT_DESCRIPTIONS: Readonly<Record<AgentId, string>> = {
   REVENUE_AGENT: 'Watches your sales and flags swings worth acting on.',
   INVENTORY_AGENT: 'Keeps bestsellers in stock and frees cash locked in idle inventory.',
-  CUSTOMER_AGENT: 'Looks after your best customers and times the next hello.',
+  CUSTOMER_AGENT: 'Looks after your best customers, recovers abandoned carts, and welcomes new buyers.',
   PRICING_AGENT: 'Finds products that can handle a careful price lift.',
-  CAMPAIGN_AGENT: 'Recovers abandoned carts and welcomes brand-new buyers.',
   PRODUCT_AGENT: 'Spots products your customers already love buying together.',
   EXECUTIVE_AGENT: 'Gives you a plain-language read on overall store health.',
 }
@@ -223,9 +221,9 @@ export const RULE_AGENT: Readonly<Record<RuleId, AgentId>> = {
   CHURN_RISK: 'CUSTOMER_AGENT',
   PRICING_UPLIFT: 'PRICING_AGENT',
   REPEAT_PURCHASE: 'CUSTOMER_AGENT',
-  CART_ABANDONMENT: 'CAMPAIGN_AGENT',
+  CART_ABANDONMENT: 'CUSTOMER_AGENT',
   CROSS_SELL: 'PRODUCT_AGENT',
-  NEW_CUSTOMER_WELCOME: 'CAMPAIGN_AGENT',
+  NEW_CUSTOMER_WELCOME: 'CUSTOMER_AGENT',
 }
 
 export type RuleDetail = Readonly<{
@@ -402,9 +400,9 @@ export function formatDurationMs(ms: number): string {
 // The unlock order mirrors PLAN_ENTITLEMENT_LIMITS.active_agents (2/3/6/7).
 // ---------------------------------------------------------------------------
 
-export const AGENT_UNLOCK_ORDER: readonly AgentId[] = ['REVENUE_AGENT', 'INVENTORY_AGENT', 'CUSTOMER_AGENT', 'PRICING_AGENT', 'CAMPAIGN_AGENT', 'PRODUCT_AGENT', 'EXECUTIVE_AGENT']
+export const AGENT_UNLOCK_ORDER: readonly AgentId[] = ['REVENUE_AGENT', 'INVENTORY_AGENT', 'CUSTOMER_AGENT', 'PRICING_AGENT', 'PRODUCT_AGENT', 'EXECUTIVE_AGENT']
 
-const ACTIVE_AGENTS_BY_PLAN: Readonly<Record<PlanTier, number>> = { trial: 2, start: 3, growth: 6, commander: 7 }
+const ACTIVE_AGENTS_BY_PLAN: Readonly<Record<PlanTier, number>> = { trial: 2, start: 3, growth: 4, commander: 6 }
 
 export function unlockedAgents(plan: PlanTier | null): readonly AgentId[] {
   if (!plan) return AGENT_UNLOCK_ORDER

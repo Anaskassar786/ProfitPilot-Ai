@@ -36,7 +36,6 @@ import {
   Radio,
   RefreshCw,
   Rocket,
-  Send,
   Settings2,
   ShoppingCart,
   ShieldCheck,
@@ -92,7 +91,6 @@ export const AGENT_ICONS: Readonly<Record<string, LucideIcon>> = {
   INVENTORY_AGENT: Box,
   CUSTOMER_AGENT: Users,
   PRICING_AGENT: Tag,
-  CAMPAIGN_AGENT: Send,
   PRODUCT_AGENT: Package,
   EXECUTIVE_AGENT: Briefcase,
 }
