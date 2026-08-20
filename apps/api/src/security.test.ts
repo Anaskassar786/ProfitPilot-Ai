@@ -106,7 +106,7 @@ describe('F7 API security suite', () => {
       const sqlInjection = await fetch(`${base}/analytics?storeId=${encodeURIComponent("1 OR 1=1")}`)
       expect(sqlInjection.status).toBe(400)
       const failure = await fetch(`${base}/analytics?storeId=store-1`)
-      expect(failure.headers.get('permissions-policy')).toContain('microphone=(self "https://admin.shopify.com")')
+      expect(failure.headers.get('permissions-policy')).toContain('microphone=(self *)')
       const payload = await failure.json() as { error: { message: string; details: Readonly<Record<string, unknown>> } }
       expect(failure.status).toBe(500)
       expect(payload.error.message).toBe('Internal server error')

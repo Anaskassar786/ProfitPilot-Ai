@@ -54,7 +54,7 @@ describe('API-hosted web app', () => {
     expect(root.headers.get('content-type')).toContain('text/html')
     expect(root.headers.get('cache-control')).toBe('no-cache')
     expect(root.headers.get('content-security-policy')).toContain('frame-ancestors https://admin.shopify.com https://*.myshopify.com')
-    expect(root.headers.get('permissions-policy')).toContain('microphone=(self "https://admin.shopify.com")')
+    expect(root.headers.get('permissions-policy')).toContain('microphone=(self *)')
     expect(root.headers.get('x-frame-options')).toBeNull()
     expect(await root.text()).toContain('ProfitPilot web shell')
 
