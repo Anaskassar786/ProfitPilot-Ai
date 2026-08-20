@@ -8,10 +8,11 @@
  * key is present, while still working with zero configuration.
  *
  * The provider is OpenAI-compatible, so any endpoint that mirrors
- * `POST {base}/audio/speech` works (OpenAI, Groq, local gateways, …). Voices,
- * model, and audio container are fully overridable from configuration so each
- * provider's quirks (e.g. Groq's Orpheus model + voice names) are handled by
- * env vars alone, with no code change.
+ * `POST {base}/audio/speech` works (OpenAI, OpenRouter + Fish Audio/Grok/etc.,
+ * Groq, local gateways). Model, voices, audio container, and speed are fully
+ * overridable from configuration so each provider's quirks are handled by env
+ * vars alone, with no code change. Unknown fields (like `speed`) are omitted by
+ * default because some providers strictly validate the request body.
  */
 
 export type JarvisTtsVoice = 'feminine' | 'masculine'
@@ -31,10 +32,12 @@ export type OpenAiTtsConfig = Readonly<{
   apiKey: string
   baseUrl?: string
   model?: string
-  /** feminine / masculine → vendor voice id. */
+  /** feminine / masculine → vendor voice id (e.g. a Fish Audio reference_id). */
   voices?: Readonly<{ feminine?: string; masculine?: string }>
   /** Audio container requested from the provider (mp3, wav, opus, flac…). */
   responseFormat?: string
+  /** Optional playback speed (0.5–2.0). Omitted by default for compatibility. */
+  speed?: number
   /** Per-request timeout in ms. */
   timeoutMs?: number
   fetcher?: TtsFetcher
@@ -54,7 +57,7 @@ interface CacheEntry { readonly audio: Buffer; readonly contentType: string; rea
 
 export class OpenAiTtsProvider implements JarvisTtsProvider {
   private readonly cache = new Map<CacheKey, CacheEntry>()
-  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: Readonly<Record<JarvisTtsVoice, string>>; responseFormat: string; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
+  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: Readonly<Record<JarvisTtsVoice, string>>; responseFormat: string; speed: number | null; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
 
   public constructor(config: OpenAiTtsConfig) {
     const baseUrl = (config.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '')
@@ -62,12 +65,14 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
       feminine: config.voices?.feminine?.trim() || DEFAULT_VOICES.feminine,
       masculine: config.voices?.masculine?.trim() || DEFAULT_VOICES.masculine,
     }
+    const rawSpeed = typeof config.speed === 'number' && Number.isFinite(config.speed) ? config.speed : null
     this.config = {
       apiKey: config.apiKey,
       baseUrl,
       model: config.model?.trim() || DEFAULT_MODEL,
       voices,
       responseFormat: config.responseFormat?.trim() || DEFAULT_RESPONSE_FORMAT,
+      speed: rawSpeed !== null && rawSpeed > 0 ? rawSpeed : null,
       timeoutMs: config.timeoutMs ?? 15_000,
       fetcher: config.fetcher ?? fetch,
       cacheLimit: Math.max(0, config.cacheLimit ?? CACHE_LIMIT),
@@ -85,6 +90,12 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
     const cached = this.cache.get(key)
     if (cached) return { audio: cached.audio, contentType: cached.contentType }
 
+    // Build the OpenAI-compatible payload. Only `speed` is optional; some
+    // providers (Fish Audio, Grok) reject unknown fields, so it is sent only
+    // when explicitly configured.
+    const payload: Record<string, unknown> = { model: this.config.model, voice: this.config.voices[voice], input: cleaned, response_format: this.config.responseFormat }
+    if (this.config.speed !== null) payload.speed = this.config.speed
+
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs)
     try {
@@ -92,7 +103,7 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
         method: 'POST',
         signal: controller.signal,
         headers: { authorization: `Bearer ${this.config.apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: this.config.model, voice: this.config.voices[voice], input: cleaned, response_format: this.config.responseFormat, speed: 1 }),
+        body: JSON.stringify(payload),
       })
       if (!response.ok) {
         throw new JarvisTtsUnavailableError(`Speech service responded ${response.status}.`)
@@ -133,7 +144,7 @@ export class JarvisTtsUnavailableError extends Error {
 export function createJarvisTtsProvider(env: Readonly<Record<string, string | undefined>>, fetcher?: TtsFetcher): JarvisTtsProvider | null {
   const apiKey = env.JARVIS_TTS_API_KEY?.trim() || env.OPENAI_TTS_API_KEY?.trim()
   if (!apiKey) return null
-  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string }; responseFormat?: string; fetcher?: TtsFetcher } = { apiKey }
+  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string }; responseFormat?: string; speed?: number; fetcher?: TtsFetcher } = { apiKey }
   const baseUrl = env.JARVIS_TTS_BASE_URL?.trim() || env.OPENAI_TTS_BASE_URL?.trim()
   const model = env.JARVIS_TTS_MODEL?.trim() || env.OPENAI_TTS_MODEL?.trim()
   const responseFormat = env.JARVIS_TTS_RESPONSE_FORMAT?.trim()
@@ -146,6 +157,8 @@ export function createJarvisTtsProvider(env: Readonly<Record<string, string | un
   if (feminine) voices.feminine = feminine
   if (masculine) voices.masculine = masculine
   if (feminine || masculine) config.voices = voices
+  const speed = env.JARVIS_TTS_SPEED?.trim()
+  if (speed) { const parsed = Number(speed); if (Number.isFinite(parsed) && parsed > 0) config.speed = parsed }
   if (fetcher) config.fetcher = fetcher
   return new OpenAiTtsProvider(config)
 }

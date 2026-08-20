@@ -91,6 +91,26 @@ describe('Jarvis cloud TTS provider', () => {
     expect(captured).toBe('wav')
   })
 
+  it('omits speed by default and includes it only when configured', async () => {
+    let defaultBody = ''
+    const defaultFetcher = vi.fn(async (_input: string, init: RequestInit) => {
+      defaultBody = String(init.body)
+      return fakeResponse(Buffer.from([1]))
+    })
+    const noSpeed = new OpenAiTtsProvider({ apiKey: 'sk-test', fetcher: defaultFetcher })
+    await noSpeed.synthesize('hello', 'feminine', 'en')
+    expect(defaultBody).not.toContain('speed')
+
+    let withSpeedBody = ''
+    const speedFetcher = vi.fn(async (_input: string, init: RequestInit) => {
+      withSpeedBody = String(init.body)
+      return fakeResponse(Buffer.from([1]))
+    })
+    const withSpeed = new OpenAiTtsProvider({ apiKey: 'sk-test', speed: 1.1, fetcher: speedFetcher })
+    await withSpeed.synthesize('hello', 'feminine', 'en')
+    expect(withSpeedBody).toContain('"speed":1.1')
+  })
+
   it('createJarvisTtsProvider returns null without a key and a provider with one', () => {
     expect(createJarvisTtsProvider({}, vi.fn())).toBeNull()
     const provider = createJarvisTtsProvider({ JARVIS_TTS_API_KEY: 'sk-test' }, vi.fn())
