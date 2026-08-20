@@ -451,14 +451,24 @@ export function fetchBilling(storeId: string, fetcher: Fetcher = fetch): Promise
 export function fetchBillingUsage(storeId: string, fetcher: Fetcher = fetch): Promise<readonly UsageMeter[]> { return requestJson<readonly UsageMeter[]>(`/billing/usage?shopId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function fetchBillingRoi(storeId: string, fetcher: Fetcher = fetch): Promise<RoiMetrics> { return requestJson<RoiMetrics>(`/billing/roi?shopId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function redeemGiftCode(storeId: string, code: string, fetcher: Fetcher = fetch): Promise<Readonly<{ code: string; expiresAt: number }>> { return requestJson(`/billing/gift?shopId=${encodeURIComponent(storeId)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) }, fetcher) }
-/** Phase 1: always request a local mock upgrade (no Shopify Billing redirect). */
+/** Creates a Shopify GraphQL app subscription (or a local mock when the API is in mock mode). */
 export function createBillingCharge(storeId: string, plan: BillingPlan['code'], interval: 'MONTHLY' | 'ANNUAL', returnUrl: string, fetcher: Fetcher = fetch): Promise<Readonly<{ confirmationUrl: string | null; mock?: boolean; message?: string }>> {
   return requestJson(`/billing/charge?shopId=${encodeURIComponent(storeId)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ plan, interval, returnUrl, mock: true }),
+    body: JSON.stringify({ plan, interval, returnUrl }),
   }, fetcher)
 }
+
+export function verifyBillingCharge(storeId: string, chargeId: string, extras: Readonly<{ plan?: BillingPlan['code']; interval?: 'MONTHLY' | 'ANNUAL' }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ charge?: Readonly<Record<string, unknown>>; subscription?: BillingAccount['subscription'] } & RecurringChargeLike>> {
+  return requestJson(`/billing/charge/verify?shopId=${encodeURIComponent(storeId)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chargeId, ...extras }),
+  }, fetcher)
+}
+
+type RecurringChargeLike = Readonly<{ id?: string; status?: string }>
 
 export function fetchJarvisPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>(`/jarvis/preferences?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function saveJarvisPreferences(preferences: Readonly<Partial<JarvisPreference> & { storeId: string }>, fetcher: Fetcher = fetch): Promise<JarvisPreference> { return requestJson<JarvisPreference>('/jarvis/preferences', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(preferences) }, fetcher) }

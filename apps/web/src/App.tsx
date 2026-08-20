@@ -84,7 +84,7 @@ import {
 } from 'lucide-react'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyBillingCharge, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -314,6 +314,29 @@ export default function App() {
     setToast({ message, kind })
     window.setTimeout(() => setToast(null), 3600)
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const chargeId = params.get('charge_id')?.trim() || params.get('chargeId')?.trim()
+    if (!chargeId || !context.storeId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        await initializeCsrf()
+        await verifyBillingCharge(context.storeId!, chargeId)
+        if (cancelled) return
+        showToast('Plan activated successfully!', 'success')
+        params.delete('charge_id')
+        params.delete('chargeId')
+        const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
+        window.history.replaceState(null, '', next)
+        window.dispatchEvent(new Event('profitpilot:billing-updated'))
+      } catch (error: unknown) {
+        if (!cancelled) showToast(errorMessage(error), 'error')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [context.storeId])
 
   const loadData = async () => {
     if (!context.storeId) {
@@ -1047,6 +1070,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   useEffect(() => {
     void fetchBillingPlans().then(setPlans).catch(() => setPlans([]))
     void reload()
+    const onBillingUpdated = () => { void reload() }
+    window.addEventListener('profitpilot:billing-updated', onBillingUpdated)
+    return () => window.removeEventListener('profitpilot:billing-updated', onBillingUpdated)
   }, [context.storeId])
 
   const status = humanizeBillingStatus(account)

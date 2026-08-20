@@ -27,6 +27,30 @@ export type BillingClientConfig = Readonly<{ shop: string; accessToken: string; 
 /** Shop plans that cannot be billed for real money. */
 export const NON_BILLABLE_SHOPIFY_PLANS: readonly string[] = ['affiliate', 'partner_test', 'plus_partner_sandbox', 'staff', 'staff_business', 'dev_preview', 'development', 'trial', 'frozen', 'cancelled', 'paused']
 
+export const APP_SUBSCRIPTION_CREATE_MUTATION = `mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
+  appSubscriptionCreate(name: $name, lineItems: $lineItems, returnUrl: $returnUrl, test: $test, trialDays: $trialDays) {
+    userErrors { field message }
+    confirmationUrl
+    appSubscription { id status name createdAt currentPeriodEnd trialDays test lineItems { plan { pricingDetails { ... on AppRecurringPricing { price { amount } interval } } } } }
+  }
+}`
+
+export const APP_SUBSCRIPTION_CANCEL_MUTATION = `mutation AppSubscriptionCancel($id: ID!) {
+  appSubscriptionCancel(id: $id) {
+    userErrors { field message }
+    appSubscription { id status name createdAt currentPeriodEnd trialDays test }
+  }
+}`
+
+export const APP_SUBSCRIPTION_QUERY = `query AppSubscription($id: ID!) {
+  node(id: $id) {
+    ... on AppSubscription {
+      id status name createdAt currentPeriodEnd trialDays test
+      lineItems { plan { pricingDetails { ... on AppRecurringPricing { price { amount } interval } } } }
+    }
+  }
+}`
+
 export class ShopifyBillingError extends Error {
   public readonly status: number
   /** Field-level validation errors Shopify returned with a 422, if any. */
@@ -59,22 +83,28 @@ export class ShopifyBillingClient {
     if (!returnUrl.startsWith('http')) throw new TypeError('Billing return URL must be absolute')
     const definition = planFor(plan)
     const price = priceFor(plan, interval)
-    // Shopify validates each field server side and answers 422 with the exact
-    // reasons. Guard the two it rejects most often before spending a call.
     if (price <= 0) throw new ShopifyBillingError(422, `Shopify Billing rejected the ${definition.code} plan: price must be greater than zero`, { price: ['must be greater than zero'] })
     const test = await this.testCharge()
-    const charge: Record<string, unknown> = {
-      name: `${definition.code} ${interval}`,
-      price: price.toFixed(2),
-      return_url: returnUrl,
+    const name = `${definition.code} ${interval}`
+    const variables: Record<string, unknown> = {
+      name,
+      returnUrl,
       test,
+      lineItems: [{
+        plan: {
+          appRecurringPricingDetails: {
+            price: { amount: price, currencyCode: 'USD' },
+            interval: interval === 'ANNUAL' ? 'ANNUAL' : 'EVERY_30_DAYS',
+          },
+        },
+      }],
     }
-    // trial_days must be a non-negative integer; omit it rather than send 0.
-    if (Number.isFinite(trialDays) && trialDays > 0) charge.trial_days = Math.floor(trialDays)
+    if (Number.isFinite(trialDays) && trialDays > 0) variables.trialDays = Math.floor(trialDays)
 
     this.config.logger?.info('Shopify Billing API charge request', {
       shop: this.config.shop,
-      endpoint: '/recurring_application_charges.json',
+      endpoint: '/graphql.json',
+      mutation: 'appSubscriptionCreate',
       plan,
       interval,
       price: price.toFixed(2),
@@ -83,24 +113,43 @@ export class ShopifyBillingClient {
       tokenMasked: maskToken(this.config.accessToken),
     })
 
-    const response = await this.request('/recurring_application_charges.json', { method: 'POST', body: JSON.stringify({ recurring_application_charge: charge }) })
-    return chargeFromPayload(response, test)
+    const payload = await this.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, variables)
+    return chargeFromGraphqlCreate(payload, name, price.toFixed(2), test)
   }
 
   public async getCharge(id: string): Promise<RecurringCharge> {
-    // Reads must not trigger a shop lookup; `test` is only a display fallback.
-    return chargeFromPayload(await this.request(`/recurring_application_charges/${encodeURIComponent(id)}.json`), this.resolvedTestMode ?? false)
+    const gid = toAppSubscriptionGid(id)
+    try {
+      const payload = await this.graphql(APP_SUBSCRIPTION_QUERY, { id: gid })
+      return chargeFromGraphqlNode(payload, this.resolvedTestMode ?? false)
+    } catch (error: unknown) {
+      if (error instanceof ShopifyBillingError && (error.status === 404 || error.message.includes('missing'))) {
+        return chargeFromPayload(await this.request(`/recurring_application_charges/${encodeURIComponent(numericChargeId(id))}.json`), this.resolvedTestMode ?? false)
+      }
+      try {
+        return chargeFromPayload(await this.request(`/recurring_application_charges/${encodeURIComponent(numericChargeId(id))}.json`), this.resolvedTestMode ?? false)
+      } catch {
+        throw error
+      }
+    }
   }
 
-  public async verifyCharge(id: string, expected: Readonly<{ plan: PlanCode; interval: BillingInterval }>): Promise<RecurringCharge> {
+  public async verifyCharge(id: string, expected?: Readonly<{ plan: PlanCode; interval: BillingInterval }>): Promise<RecurringCharge> {
     const charge = await this.getCharge(id)
-    const definition = planFor(expected.plan)
-    if (charge.name !== `${definition.code} ${expected.interval}` || Number(charge.price) !== priceFor(expected.plan, expected.interval) || (charge.status !== 'active' && charge.status !== 'accepted')) throw new ShopifyBillingError(409, 'Shopify charge verification failed')
+    if (charge.status !== 'active' && charge.status !== 'accepted') throw new ShopifyBillingError(409, 'Shopify charge verification failed')
+    if (expected) {
+      const definition = planFor(expected.plan)
+      const expectedName = `${definition.code} ${expected.interval}`
+      const expectedPrice = priceFor(expected.plan, expected.interval)
+      if (charge.name && charge.name !== expectedName) throw new ShopifyBillingError(409, 'Shopify charge verification failed')
+      if (charge.price && Number(charge.price) !== expectedPrice && Number(charge.price) !== 0) throw new ShopifyBillingError(409, 'Shopify charge verification failed')
+    }
     return charge
   }
 
   public async cancelCharge(id: string): Promise<RecurringCharge> {
-    return chargeFromPayload(await this.request(`/recurring_application_charges/${encodeURIComponent(id)}.json`, { method: 'DELETE' }), this.resolvedTestMode ?? false)
+    const payload = await this.graphql(APP_SUBSCRIPTION_CANCEL_MUTATION, { id: toAppSubscriptionGid(id) })
+    return chargeFromGraphqlCancel(payload, this.resolvedTestMode ?? false)
   }
 
   /**
@@ -120,6 +169,10 @@ export class ShopifyBillingClient {
     if (!isRecord(payload) || !isRecord(payload.shop)) return true
     const planName = typeof payload.shop.plan_name === 'string' ? payload.shop.plan_name.toLowerCase() : ''
     return planName === '' || NON_BILLABLE_SHOPIFY_PLANS.includes(planName)
+  }
+
+  private async graphql(query: string, variables: Readonly<Record<string, unknown>>): Promise<unknown> {
+    return this.request('/graphql.json', { method: 'POST', body: JSON.stringify({ query, variables }) })
   }
 
   private async request(path: string, init: Readonly<RequestInit> = {}): Promise<unknown> {
@@ -170,8 +223,23 @@ export class ShopifyBillingClient {
       durationMs,
     })
 
-    return response.status === 204 ? {} : await response.json()
+    const json = response.status === 204 ? {} : await response.json()
+    if (path === '/graphql.json') assertGraphqlOk(json, path)
+    return json
   }
+}
+
+export function toAppSubscriptionGid(id: string): string {
+  const trimmed = id.trim()
+  if (trimmed.startsWith('gid://')) return trimmed
+  return `gid://shopify/AppSubscription/${trimmed}`
+}
+
+export function numericChargeId(id: string): string {
+  const trimmed = id.trim()
+  const match = trimmed.match(/AppSubscription\/(\d+)/)
+  if (match) return match[1]!
+  return trimmed
 }
 
 function maskToken(token: string): string {
@@ -181,11 +249,6 @@ function maskToken(token: string): string {
   return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`
 }
 
-/**
- * Turns a failed Shopify Billing response into an error that carries the real
- * reason. Shopify answers 422 with `{"errors":{"price":["must be greater than
- * zero"]}}`; logging only the status made the failure unactionable.
- */
 async function billingErrorFrom(response: Response, path: string): Promise<ShopifyBillingError> {
   const raw = await response.text().catch(() => '')
   const condensed = raw.replace(/\s+/g, ' ').slice(0, 500)
@@ -215,12 +278,92 @@ function parseValidationErrors(raw: string): Readonly<Record<string, readonly st
   return result
 }
 
+function assertGraphqlOk(payload: unknown, path: string): void {
+  if (!isRecord(payload)) throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+    const messages = payload.errors.map((item) => isRecord(item) && typeof item.message === 'string' ? item.message : 'GraphQL error')
+    throw new ShopifyBillingError(422, `Shopify Billing API failed with 422 on ${path} — ${messages.join('; ')}`, { graphql: messages }, JSON.stringify(payload).slice(0, 500))
+  }
+}
+
+function userErrorsFrom(value: unknown): Readonly<Record<string, readonly string[]>> {
+  if (!Array.isArray(value)) return {}
+  const result: Record<string, string[]> = {}
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.message !== 'string') continue
+    const field = Array.isArray(item.field) ? item.field.map(String).join('.') : typeof item.field === 'string' ? item.field : 'base'
+    result[field] = [...(result[field] ?? []), item.message]
+  }
+  return result
+}
+
+function chargeFromGraphqlCreate(payload: unknown, fallbackName: string, fallbackPrice: string, test: boolean): RecurringCharge {
+  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : payload
+  if (!isRecord(data) || !isRecord(data.appSubscriptionCreate)) throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  const created = data.appSubscriptionCreate
+  const errors = userErrorsFrom(created.userErrors)
+  if (Object.keys(errors).length > 0) {
+    const summary = Object.entries(errors).map(([field, messages]) => `${field}: ${messages.join(', ')}`).join('; ')
+    throw new ShopifyBillingError(422, `Shopify Billing API failed with 422 on /graphql.json — ${summary}`, errors, JSON.stringify(payload).slice(0, 500))
+  }
+  if (!isRecord(created.appSubscription) || typeof created.appSubscription.id !== 'string') throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  return mapAppSubscription(created.appSubscription, typeof created.confirmationUrl === 'string' ? created.confirmationUrl : null, fallbackName, fallbackPrice, test)
+}
+
+function chargeFromGraphqlNode(payload: unknown, test: boolean): RecurringCharge {
+  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : payload
+  if (!isRecord(data) || !isRecord(data.node) || typeof data.node.id !== 'string') throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  return mapAppSubscription(data.node, null, '', '', test)
+}
+
+function chargeFromGraphqlCancel(payload: unknown, test: boolean): RecurringCharge {
+  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : payload
+  if (!isRecord(data) || !isRecord(data.appSubscriptionCancel)) throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  const cancelled = data.appSubscriptionCancel
+  const errors = userErrorsFrom(cancelled.userErrors)
+  if (Object.keys(errors).length > 0) {
+    const summary = Object.entries(errors).map(([field, messages]) => `${field}: ${messages.join(', ')}`).join('; ')
+    throw new ShopifyBillingError(422, `Shopify Billing API failed with 422 on /graphql.json — ${summary}`, errors, JSON.stringify(payload).slice(0, 500))
+  }
+  if (!isRecord(cancelled.appSubscription) || typeof cancelled.appSubscription.id !== 'string') throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
+  return mapAppSubscription(cancelled.appSubscription, null, '', '', test)
+}
+
+function mapAppSubscription(subscription: Readonly<Record<string, unknown>>, confirmationUrl: string | null, fallbackName: string, fallbackPrice: string, test: boolean): RecurringCharge {
+  const price = recurringPrice(subscription) || fallbackPrice
+  return {
+    id: String(subscription.id),
+    name: stringValue(subscription.name) || fallbackName,
+    price,
+    status: statusValue(subscription.status),
+    confirmationUrl,
+    billingOn: typeof subscription.currentPeriodEnd === 'string' ? subscription.currentPeriodEnd : null,
+    trialDays: numberValue(subscription.trialDays),
+    test: typeof subscription.test === 'boolean' ? subscription.test : test,
+    createdAt: stringValue(subscription.createdAt),
+  }
+}
+
+function recurringPrice(subscription: Readonly<Record<string, unknown>>): string {
+  const items = Array.isArray(subscription.lineItems) ? subscription.lineItems : []
+  for (const item of items) {
+    if (!isRecord(item) || !isRecord(item.plan) || !isRecord(item.plan.pricingDetails)) continue
+    const amount = isRecord(item.plan.pricingDetails.price) ? item.plan.pricingDetails.price.amount : null
+    if (typeof amount === 'number') return amount.toFixed(2)
+    if (typeof amount === 'string') return Number(amount).toFixed(2)
+  }
+  return ''
+}
+
 function chargeFromPayload(payload: unknown, test: boolean): RecurringCharge {
   if (!isRecord(payload) || !isRecord(payload.recurring_application_charge) || typeof payload.recurring_application_charge.id !== 'number' && typeof payload.recurring_application_charge.id !== 'string') throw new ShopifyBillingError(502, 'Shopify Billing response missing charge')
   const charge = payload.recurring_application_charge
   return { id: String(charge.id), name: stringValue(charge.name), price: stringValue(charge.price), status: statusValue(charge.status), confirmationUrl: typeof charge.confirmation_url === 'string' ? charge.confirmation_url : null, billingOn: typeof charge.billing_on === 'string' ? charge.billing_on : null, trialDays: numberValue(charge.trial_days), test: typeof charge.test === 'boolean' ? charge.test : test, createdAt: stringValue(charge.created_at) }
 }
-function statusValue(value: unknown): ChargeStatus { return value === 'pending' || value === 'accepted' || value === 'active' || value === 'declined' || value === 'cancelled' || value === 'expired' ? value : 'pending' }
+function statusValue(value: unknown): ChargeStatus {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : ''
+  return normalized === 'pending' || normalized === 'accepted' || normalized === 'active' || normalized === 'declined' || normalized === 'cancelled' || normalized === 'expired' ? normalized : 'pending'
+}
 function stringValue(value: unknown): string { return typeof value === 'string' ? value : '' }
 function numberValue(value: unknown): number { return typeof value === 'number' ? value : 0 }
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
