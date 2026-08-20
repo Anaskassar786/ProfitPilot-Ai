@@ -111,6 +111,32 @@ describe('Jarvis cloud TTS provider', () => {
     expect(withSpeedBody).toContain('"speed":1.1')
   })
 
+  it('picks a language-specific voice for Hindi vs English, falling back to the gender default', async () => {
+    const calls: string[] = []
+    const fetcher = vi.fn(async (_input: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { voice: string }
+      calls.push(body.voice)
+      return fakeResponse(Buffer.from([1]))
+    })
+    const provider = new OpenAiTtsProvider({
+      apiKey: 'sk-test',
+      voices: {
+        // gender fallbacks
+        feminine: 'en-female-default',
+        masculine: 'en-male-default',
+        // language-specific overrides
+        en: { feminine: 'sarah-en', masculine: 'adrian-en' },
+        hi: { feminine: 'hindi-female', masculine: 'hindi-male' },
+      },
+      fetcher,
+    })
+    await provider.synthesize('hi text', 'feminine', 'hi')
+    await provider.synthesize('en text', 'masculine', 'en')
+    // Hindi female -> hindi voice; English male -> english voice.
+    expect(calls[0]).toBe('hindi-female')
+    expect(calls[1]).toBe('adrian-en')
+  })
+
   it('createJarvisTtsProvider returns null without a key and a provider with one', () => {
     expect(createJarvisTtsProvider({}, vi.fn())).toBeNull()
     const provider = createJarvisTtsProvider({ JARVIS_TTS_API_KEY: 'sk-test' }, vi.fn())

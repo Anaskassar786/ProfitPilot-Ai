@@ -28,12 +28,17 @@ export interface JarvisTtsProvider {
 
 export type TtsFetcher = (input: string, init: RequestInit) => Promise<Response>
 
+export type JarvisTtsVoiceSet = Readonly<{ feminine?: string; masculine?: string }>
+
 export type OpenAiTtsConfig = Readonly<{
   apiKey: string
   baseUrl?: string
   model?: string
-  /** feminine / masculine → vendor voice id (e.g. a Fish Audio reference_id). */
-  voices?: Readonly<{ feminine?: string; masculine?: string }>
+  /** Voice ids. `feminine`/`masculine` are language-agnostic fallbacks; `en`/
+   * `hi` are optional per-language overrides (e.g. a Hindi voice for Hindi
+   * replies and an English voice for English replies). For Fish Audio these are
+   * voice model reference_ids; for OpenAI/Grok they are named voices. */
+  voices?: Readonly<{ feminine?: string; masculine?: string; en?: JarvisTtsVoiceSet; hi?: JarvisTtsVoiceSet }>
   /** Audio container requested from the provider (mp3, wav, opus, flac…). */
   responseFormat?: string
   /** Optional playback speed (0.5–2.0). Omitted by default for compatibility. */
@@ -55,22 +60,28 @@ const CACHE_LIMIT = 64
 type CacheKey = string
 interface CacheEntry { readonly audio: Buffer; readonly contentType: string; readonly at: number }
 
+type ResolvedVoices = Readonly<{ def: Readonly<Record<JarvisTtsVoice, string>>; en: Readonly<Record<JarvisTtsVoice, string | null>>; hi: Readonly<Record<JarvisTtsVoice, string | null>> }>
+
 export class OpenAiTtsProvider implements JarvisTtsProvider {
   private readonly cache = new Map<CacheKey, CacheEntry>()
-  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: Readonly<Record<JarvisTtsVoice, string>>; responseFormat: string; speed: number | null; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
+  private readonly config: Readonly<{ apiKey: string; baseUrl: string; model: string; voices: ResolvedVoices; responseFormat: string; speed: number | null; timeoutMs: number; fetcher: TtsFetcher; cacheLimit: number }>
 
   public constructor(config: OpenAiTtsConfig) {
     const baseUrl = (config.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '')
-    const voices: Readonly<Record<JarvisTtsVoice, string>> = {
+    const def: Readonly<Record<JarvisTtsVoice, string>> = {
       feminine: config.voices?.feminine?.trim() || DEFAULT_VOICES.feminine,
       masculine: config.voices?.masculine?.trim() || DEFAULT_VOICES.masculine,
     }
+    const langSet = (set: JarvisTtsVoiceSet | undefined): Readonly<Record<JarvisTtsVoice, string | null>> => ({
+      feminine: set?.feminine?.trim() || null,
+      masculine: set?.masculine?.trim() || null,
+    })
     const rawSpeed = typeof config.speed === 'number' && Number.isFinite(config.speed) ? config.speed : null
     this.config = {
       apiKey: config.apiKey,
       baseUrl,
       model: config.model?.trim() || DEFAULT_MODEL,
-      voices,
+      voices: { def, en: langSet(config.voices?.en), hi: langSet(config.voices?.hi) },
       responseFormat: config.responseFormat?.trim() || DEFAULT_RESPONSE_FORMAT,
       speed: rawSpeed !== null && rawSpeed > 0 ? rawSpeed : null,
       timeoutMs: config.timeoutMs ?? 15_000,
@@ -79,21 +90,29 @@ export class OpenAiTtsProvider implements JarvisTtsProvider {
     }
   }
 
+  /** Language-specific voice wins; the gender default is the fallback. */
+  private resolveVoice(voice: JarvisTtsVoice, language: JarvisTtsLanguage): string {
+    const langSet = language === 'hi' ? this.config.voices.hi : this.config.voices.en
+    const langVoice = voice === 'feminine' ? langSet?.feminine : langSet?.masculine
+    return langVoice || (voice === 'feminine' ? this.config.voices.def.feminine : this.config.voices.def.masculine)
+  }
+
   public get available(): boolean { return this.config.apiKey.trim().length > 0 }
 
-  public async synthesize(text: string, voice: JarvisTtsVoice, _language: JarvisTtsLanguage): Promise<JarvisTtsResult> {
+  public async synthesize(text: string, voice: JarvisTtsVoice, language: JarvisTtsLanguage): Promise<JarvisTtsResult> {
     if (!this.available) throw new JarvisTtsUnavailableError('Jarvis cloud speech is not configured.')
     const cleaned = text.replace(/@jarvis:action\s*\{[\s\S]*$/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT)
     if (!cleaned) throw new JarvisTtsUnavailableError('Nothing to synthesize.')
 
-    const key = `${cleaned}\u0000${voice}`
+    const resolvedVoice = this.resolveVoice(voice, language)
+    const key = `${cleaned}\u0000${language}\u0000${resolvedVoice}`
     const cached = this.cache.get(key)
     if (cached) return { audio: cached.audio, contentType: cached.contentType }
 
     // Build the OpenAI-compatible payload. Only `speed` is optional; some
     // providers (Fish Audio, Grok) reject unknown fields, so it is sent only
     // when explicitly configured.
-    const payload: Record<string, unknown> = { model: this.config.model, voice: this.config.voices[voice], input: cleaned, response_format: this.config.responseFormat }
+    const payload: Record<string, unknown> = { model: this.config.model, voice: resolvedVoice, input: cleaned, response_format: this.config.responseFormat }
     if (this.config.speed !== null) payload.speed = this.config.speed
 
     const controller = new AbortController()
@@ -144,19 +163,27 @@ export class JarvisTtsUnavailableError extends Error {
 export function createJarvisTtsProvider(env: Readonly<Record<string, string | undefined>>, fetcher?: TtsFetcher): JarvisTtsProvider | null {
   const apiKey = env.JARVIS_TTS_API_KEY?.trim() || env.OPENAI_TTS_API_KEY?.trim()
   if (!apiKey) return null
-  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string }; responseFormat?: string; speed?: number; fetcher?: TtsFetcher } = { apiKey }
+  const config: { apiKey: string; baseUrl?: string; model?: string; voices?: { feminine?: string; masculine?: string; en?: { feminine?: string; masculine?: string }; hi?: { feminine?: string; masculine?: string } }; responseFormat?: string; speed?: number; fetcher?: TtsFetcher } = { apiKey }
   const baseUrl = env.JARVIS_TTS_BASE_URL?.trim() || env.OPENAI_TTS_BASE_URL?.trim()
   const model = env.JARVIS_TTS_MODEL?.trim() || env.OPENAI_TTS_MODEL?.trim()
   const responseFormat = env.JARVIS_TTS_RESPONSE_FORMAT?.trim()
   if (baseUrl) config.baseUrl = baseUrl
   if (model) config.model = model
   if (responseFormat) config.responseFormat = responseFormat
-  const voices: { feminine?: string; masculine?: string } = {}
+  // Language-agnostic gender fallbacks + per-language overrides (e.g. a Hindi
+  // voice for Hindi replies, an English voice for English replies).
+  const voices: { feminine?: string; masculine?: string; en?: { feminine?: string; masculine?: string }; hi?: { feminine?: string; masculine?: string } } = {}
   const feminine = env.JARVIS_TTS_VOICE_FEMININE?.trim()
   const masculine = env.JARVIS_TTS_VOICE_MASCULINE?.trim()
   if (feminine) voices.feminine = feminine
   if (masculine) voices.masculine = masculine
-  if (feminine || masculine) config.voices = voices
+  const enFeminine = env.JARVIS_TTS_VOICE_EN_FEMININE?.trim()
+  const enMasculine = env.JARVIS_TTS_VOICE_EN_MASCULINE?.trim()
+  if (enFeminine || enMasculine) voices.en = { ...(enFeminine ? { feminine: enFeminine } : {}), ...(enMasculine ? { masculine: enMasculine } : {}) }
+  const hiFeminine = env.JARVIS_TTS_VOICE_HI_FEMININE?.trim()
+  const hiMasculine = env.JARVIS_TTS_VOICE_HI_MASCULINE?.trim()
+  if (hiFeminine || hiMasculine) voices.hi = { ...(hiFeminine ? { feminine: hiFeminine } : {}), ...(hiMasculine ? { masculine: hiMasculine } : {}) }
+  if (feminine || masculine || voices.en || voices.hi) config.voices = voices
   const speed = env.JARVIS_TTS_SPEED?.trim()
   if (speed) { const parsed = Number(speed); if (Number.isFinite(parsed) && parsed > 0) config.speed = parsed }
   if (fetcher) config.fetcher = fetcher
