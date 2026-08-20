@@ -8,7 +8,10 @@ import type { Role } from '@profitpilot/types'
 import { getAuthContext } from './security.js'
 
 /** Minimal gift admin surface — kill switch only. Backed by Postgres or in-memory. */
-export type GiftAdminSurface = Readonly<{ setGiftKillSwitch: (active: boolean) => void }>
+export type GiftAdminSurface = Readonly<{
+  setGiftKillSwitch: (active: boolean) => void
+  isGiftKillSwitchActive: () => boolean
+}>
 
 export type AdminRouteDependencies = Readonly<{ adminKey: string; stepUp: AdminStepUpSessions; funnel: FunnelLedger; gifts: GiftAdminSurface; accessReview?: AccessReviewService }>
 
