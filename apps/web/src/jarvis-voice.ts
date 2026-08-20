@@ -195,8 +195,8 @@ export const jarvisVoiceController: VoiceController = {
       } else {
         utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN'
       }
-      utterance.rate = language === 'hi' ? 0.94 : 0.98
-      utterance.pitch = (options.voiceGender ?? 'feminine') === 'feminine' ? 1.08 : 0.96
+      utterance.rate = language === 'hi' ? 1.0 : 1.02
+      utterance.pitch = (options.voiceGender ?? 'feminine') === 'feminine' ? 1.12 : 1.02
       utterance.volume = 1
       utterance.onend = () => finishSpeaking(generation, onEnd)
       utterance.onerror = () => finishSpeaking(generation, onEnd)

@@ -48,10 +48,14 @@ describe('F8 browser-native voice contracts', () => {
     const top = {} as Window
     const framed = { isSecureContext: true } as unknown as Window
     Object.defineProperties(framed, { self: { value: framed }, top: { value: top } })
-    expect(microphonePreflight(framed, {} as Document, media)).toMatchObject({ allowed: false, framed: true, code: 'embedded-policy' })
+    // Framed views allow mic access when media devices are available (browser may still prompt for permission).
+    expect(microphonePreflight(framed, {} as Document, media)).toMatchObject({ allowed: true, framed: true, code: 'ready' })
     const allowedDocument = { permissionsPolicy: { allowsFeature: () => true } } as unknown as Document
     expect(microphonePreflight(framed, allowedDocument, media)).toMatchObject({ allowed: true, framed: true })
     expect(microphonePreflight({ ...standalone, isSecureContext: false } as Window, {} as Document, media).code).toBe('insecure')
+    // Non-framed pages with explicit policy denial are still blocked.
+    const deniedDocument = { permissionsPolicy: { allowsFeature: () => false } } as unknown as Document
+    expect(microphonePreflight(standalone, deniedDocument, media)).toMatchObject({ allowed: false, framed: false, code: 'policy-denied' })
   })
 
   it('creates a safe standalone URL without signed Shopify parameters', () => {
