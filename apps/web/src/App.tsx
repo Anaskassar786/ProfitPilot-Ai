@@ -84,7 +84,7 @@ import {
 } from 'lucide-react'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -314,6 +314,17 @@ export default function App() {
     setToast({ message, kind })
     window.setTimeout(() => setToast(null), 3600)
   }
+
+  useEffect(() => {
+    // Embedded App Bridge session tokens (P0 App Store fix): when the Shopify
+    // admin cannot mint a fresh token, tell the merchant once instead of
+    // letting every API call fail silently. The handler fires at most once
+    // per registration; page error states still carry per-request detail.
+    setEmbeddedAuthFailureHandler(() => {
+      showToast('Your Shopify session expired — reload the app to reconnect.', 'error')
+    })
+    return () => setEmbeddedAuthFailureHandler(null)
+  }, [])
 
   const loadData = async () => {
     if (!context.storeId) {

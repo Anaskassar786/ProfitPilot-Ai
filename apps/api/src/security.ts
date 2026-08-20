@@ -2,24 +2,50 @@ import { randomUUID } from 'node:crypto'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
+import type { StoreId } from '@profitpilot/types'
 import { isMissingRelationError } from './ai-keys.js'
-import { isShopifyApiError } from '@profitpilot/shopify'
+import { isShopifyApiError, verifyShopifySessionToken } from '@profitpilot/shopify'
+import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
-import type { SessionRecord, SessionRepository } from '@profitpilot/db'
+import type { SessionRecord, SessionRepository, StoreDirectory } from '@profitpilot/db'
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, createCsrfToken, parseCookies, setCsrfCookie, verifyCsrfToken } from './cookies.js'
 
 export type EndpointRateRule = Readonly<{ limit: number; windowMs: number }>
 export type RateLimitDecision = Readonly<{ allowed: boolean; limit: number; remaining: number; retryAfterMs: number }>
 
-export type AuthContext = Readonly<{ claims: JwtClaims; session: SessionRecord }>
+/**
+ * Who a request is authenticated as.
+ *
+ * - `jwt` — the first-party access token issued by `JwtService` (local dev and
+ *   non-embedded clients). Backed by a persisted session row.
+ * - `shopify-session-token` — the Shopify App Bridge session token embedded
+ *   merchants send as `Authorization: Bearer …`. Verified with the app's API
+ *   secret; the `dest` claim maps to the store row. There is no app session
+ *   row, so `session` is null.
+ */
+export type AuthContext = Readonly<{
+  method: 'jwt' | 'shopify-session-token'
+  claims: Readonly<{ storeId: StoreId; sub: string }>
+  session: SessionRecord | null
+  shop: string | null
+}>
+
 export type SecurityAuth = Readonly<{ jwt: JwtService; sessions: SessionRepository }>
+
+/**
+ * Shopify session-token verification for embedded API calls. Present whenever
+ * the Shopify bootstrap is configured (SHOPIFY_API_KEY/SECRET set).
+ */
+export type SecurityShopifySessionToken = Readonly<{ config: SessionTokenConfig; directory: StoreDirectory }>
+
 export type SecurityOptions = Readonly<{
   environment: string
   allowedOrigins: readonly string[]
   requireAuthentication: boolean
   csrfSecret: string
   auth?: SecurityAuth
+  shopifySessionToken?: SecurityShopifySessionToken
   rateLimiter?: EndpointRateLimiter
 }>
 
@@ -76,7 +102,7 @@ export class EndpointRateLimiter {
   }
 }
 
-export function securityOptionsFromEnv(env: Readonly<Record<string, string | undefined>>, auth?: SecurityAuth): SecurityOptions {
+export function securityOptionsFromEnv(env: Readonly<Record<string, string | undefined>>, auth?: SecurityAuth, shopifySessionToken?: SecurityShopifySessionToken): SecurityOptions {
   const environment = env.NODE_ENV?.trim() || 'development'
   const allowedOrigins = unique([
     ...splitCsv(env.CORS_ALLOWED_ORIGINS),
@@ -85,15 +111,15 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     ...(environment === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
   ])
   const requireAuthentication = env.SECURITY_REQUIRE_AUTH === 'true' || (environment === 'production' && env.SECURITY_REQUIRE_AUTH !== 'false')
-  if (requireAuthentication && !auth) throw new Error('Production security requires JWT and session configuration')
-  const base: Omit<SecurityOptions, 'auth'> = {
+  if (requireAuthentication && !auth && !shopifySessionToken) throw new Error('Production security requires JWT and session configuration or a Shopify session-token verifier')
+  const base: Omit<SecurityOptions, 'auth' | 'shopifySessionToken'> = {
     environment,
     allowedOrigins,
     requireAuthentication,
     csrfSecret: env.CSRF_SECRET?.trim() || env.JWT_SECRET?.trim() || 'development-csrf-secret-change-me',
     rateLimiter: new EndpointRateLimiter({ limit: numberEnv(env, 'RATE_LIMIT_DEFAULT', 120), windowMs: numberEnv(env, 'RATE_LIMIT_WINDOW_MS', 60_000) }),
   }
-  return auth ? { ...base, auth } : base
+  return { ...base, ...(auth ? { auth } : {}), ...(shopifySessionToken ? { shopifySessionToken } : {}) }
 }
 
 export function defaultSecurityOptions(): SecurityOptions {
@@ -245,24 +271,74 @@ export function assertSafeTenantValue(value: string): void {
   }
 }
 
-export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' | 'requireAuthentication'>): RequestHandler {
+export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' | 'requireAuthentication' | 'shopifySessionToken'>): RequestHandler {
   return (request, _response, next): void => {
     // /public-api/* carries its own Bearer credential (Insights Hub API
     // keys, PR #50); JWT session auth must not consume those requests.
     if (request.path.startsWith('/public-api/')) { next(); return }
     const token = bearerToken(request)
     const hasTenant = requestTenantValue(request) !== null
-    if (!token) {
+    const unauthenticated = (): void => {
       if (options.requireAuthentication && hasTenant) next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
       else next()
+    }
+    if (!token) {
+      unauthenticated()
       return
     }
-    if (!options.auth) {
-      next(new AppError('UNAUTHORIZED', 'Authentication is unavailable', 401))
-      return
-    }
-    void authenticate(token, options.auth, request).then(() => next()).catch(next)
+    // An unverifiable bearer is treated exactly like a missing one: 401 when
+    // authentication is required, otherwise the request proceeds
+    // unauthenticated (cookie/query fallback for non-embedded dev). This keeps
+    // an expired or stale token from hard-failing requests that the cookie
+    // path could still serve.
+    void authenticateBearer(options, token, request)
+      .then((context) => {
+        if (context) (request as RequestWithAuth).profitPilotAuth = context
+        next()
+      })
+      .catch(() => unauthenticated())
   }
+}
+
+/**
+ * Accepts two kinds of Bearer credentials, tried in order:
+ *
+ *   1. A Shopify session token (App Bridge `idToken()`), verified with the
+ *      app's API secret. This is the PRIMARY path for the embedded app: the
+ *      token travels in an `Authorization` header, so it works even when
+ *      third-party cookies are blocked.
+ *   2. A first-party access JWT (existing session flow) — the fallback for
+ *      local dev and non-embedded clients.
+ *
+ * Resolves the AuthContext, or returns null when neither verifier accepts the
+ * token (never throws for credential-shaped failures).
+ */
+async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopifySessionToken'>, token: string, request: Request): Promise<AuthContext | null> {
+  const shopify = options.shopifySessionToken
+  if (shopify) {
+    const shopClaims = verifyShopifySessionToken(token, shopify.config)
+    if (shopClaims) {
+      return resolveShopifySessionContext(shopify.directory, shopClaims)
+    }
+  }
+  if (!options.auth) return null
+  try {
+    await authenticate(token, options.auth, request)
+    return getAuthContext(request)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Maps a verified Shopify session token to the tenant's store record. The
+ * store row is normally registered by the embedded-entry middleware on the
+ * first app load; the idempotent upsert keeps API calls self-sufficient if
+ * that row is missing (e.g. the very first frame's parallel requests).
+ */
+async function resolveShopifySessionContext(directory: StoreDirectory, shopClaims: ShopifySessionTokenClaims): Promise<AuthContext> {
+  const connection = (await directory.getByShopDomain(shopClaims.shop)) ?? (await directory.upsertByShopDomain(shopClaims.shop))
+  return { method: 'shopify-session-token', claims: { storeId: connection.storeId, sub: shopClaims.sub || shopClaims.shop }, session: null, shop: shopClaims.shop }
 }
 
 export function tenantContextMiddleware(requireAuthentication: boolean): RequestHandler {
@@ -350,7 +426,7 @@ async function authenticate(token: string, auth: SecurityAuth, request: Request)
   if (!session || session.revokedAt !== null || session.expiresAt <= Date.now() || session.storeId !== claims.storeId || session.userId !== claims.sub) {
     throw new AppError('UNAUTHORIZED', 'Session is no longer valid', 401)
   }
-  ;(request as RequestWithAuth).profitPilotAuth = { claims, session }
+  ;(request as RequestWithAuth).profitPilotAuth = { method: 'jwt', claims, session, shop: null }
 }
 
 function bearerToken(request: Request): string | null {

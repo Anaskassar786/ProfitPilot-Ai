@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError, fetchAnalytics, fetchCatalog, fetchCsrfToken, fetchOrder, fetchOrderInsights, fetchOrders, fetchSyncStatus, initializeCsrf, requestJson, requestSync, requestSyncAll, resetApiClientStateForTests, resetSyncCircuit, startJarvisSession } from './api.js'
 import type { Fetcher } from './api.js'
 
@@ -84,8 +84,10 @@ describe('F3 relative API client', () => {
     }
     const initialization = initializeCsrf(capturing)
     const session = startJarvisSession('store-1', 'dashboard', 'trial', capturing)
-    await Promise.resolve()
-    expect(calls).toEqual(['GET /security/csrf'])
+    // requestJson awaits the (no-op, non-embedded) session-token attach before
+    // dispatching, so wait for the CSRF call instead of assuming a microtask
+    // ordering; the dedupe contract (exactly one call before release) holds.
+    await vi.waitFor(() => expect(calls).toEqual(['GET /security/csrf']))
     releaseCsrf()
     await Promise.all([initialization, session])
     expect(calls).toEqual(['GET /security/csrf', 'POST /jarvis/sessions'])

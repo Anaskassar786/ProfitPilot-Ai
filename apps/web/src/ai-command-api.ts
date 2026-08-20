@@ -1,4 +1,4 @@
-import { ApiClientError, csrfHeaders, failureFromPayload, initializeCsrf, requestJson } from './api.js'
+import { ApiClientError, attachEmbeddedSessionToken, csrfHeaders, failureFromPayload, initializeCsrf, requestJson } from './api.js'
 import type { Fetcher } from './api.js'
 import type { AiCommandConversation, AiCommandPreferences, AiCommandQuickCommand, AiCommandQuickInsights, AiCommandSavedCommand, AiCommandSuggestion, AiCommandUsage, ChatResult } from './ai-command-model.js'
 import { isRecord, parseSseBlocks, parseSseFrame } from './ai-command-model.js'
@@ -27,7 +27,9 @@ export async function sendAiCommandMessage(storeId: string, text: string, conver
 }
 export async function streamAiCommandMessage(storeId: string, text: string, conversationId: string | undefined, onEvent: (event: string, payload: unknown) => void, fetcher: Fetcher = fetch, signal?: AbortSignal): Promise<ChatResult> {
   await initializeCsrf(fetcher)
-  const response = await fetcher('/ai-command/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) })
+  const headers = new Headers({ 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() })
+  await attachEmbeddedSessionToken(headers)
+  const response = await fetcher('/ai-command/chat', { method: 'POST', headers, body: JSON.stringify({ storeId, text, stream: true, ...(conversationId ? { conversationId } : {}) }), ...(signal ? { signal } : {}) })
   if (!response.ok || !response.body) {
     let payload: unknown = null
     try { payload = await response.json() } catch { payload = null }

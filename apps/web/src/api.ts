@@ -10,6 +10,7 @@ import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult
 import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
+import { getShopifySessionToken } from './shopify-app-bridge.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -40,6 +41,7 @@ async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetche
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = new Headers(init.headers)
   if (UNSAFE_METHODS.has(method) && csrfToken) headers.set('x-csrf-token', csrfToken)
+  await attachEmbeddedSessionToken(headers)
   let response: Response
   try {
     response = await fetcher(path, { ...init, headers })
@@ -109,6 +111,56 @@ export function csrfHeaders(): Record<string, string> {
 export function resetApiClientStateForTests(): void {
   csrfToken = null
   csrfInitialization = null
+  embeddedAuthFailureNotified = false
+  embeddedAuthFailureHandler = null
+}
+
+/* ── Embedded App Bridge session tokens (P0 App Store fix) ──────────────── */
+
+export type EmbeddedAuthFailureHandler = (message: string) => void
+
+let embeddedAuthFailureHandler: EmbeddedAuthFailureHandler | null = null
+let embeddedAuthFailureNotified = false
+
+/**
+ * Registers the user-visible handler for embedded session-token failures
+ * (e.g. an expired Shopify session). Fired at most once per registration so a
+ * broken token cannot spam toasts on every API call; the API responses still
+ * carry their own per-page error states.
+ */
+export function setEmbeddedAuthFailureHandler(handler: EmbeddedAuthFailureHandler | null): void {
+  embeddedAuthFailureHandler = handler
+  embeddedAuthFailureNotified = false
+}
+
+/**
+ * Attaches `Authorization: Bearer <session token>` when the app runs embedded
+ * in the Shopify admin. A no-op for standalone/local dev (no `host` param) and
+ * for Node test environments. On failure it notifies the registered handler
+ * once and continues WITHOUT the header so the cookie fallback can still
+ * serve the request — the API answers 401 cleanly if that fails too.
+ */
+export async function attachEmbeddedSessionToken(headers: Headers): Promise<void> {
+  if (headers.has('authorization')) return
+  // `getShopifySessionToken` is a no-op outside a browser (Node tests) and
+  // when the page is not embedded; the extra try/catch guarantees a broken
+  // bridge can degrade a request to cookie fallback but never fail it.
+  try {
+    const result = await getShopifySessionToken()
+    if (result.status === 'ok') {
+      headers.set('authorization', `Bearer ${result.token}`)
+      return
+    }
+    if (result.status === 'unavailable' && !embeddedAuthFailureNotified) {
+      embeddedAuthFailureNotified = true
+      embeddedAuthFailureHandler?.(result.message)
+    }
+  } catch (error: unknown) {
+    if (!embeddedAuthFailureNotified) {
+      embeddedAuthFailureNotified = true
+      embeddedAuthFailureHandler?.(error instanceof Error ? error.message : 'Shopify session token request failed')
+    }
+  }
 }
 
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {
@@ -317,6 +369,7 @@ export async function runAllAgents(storeId: string, onEvent: (event: RunAllEvent
   const headers = new Headers({ 'content-type': 'application/json' })
   if (!csrfToken) await initializeCsrf(fetcher)
   if (csrfToken) headers.set('x-csrf-token', csrfToken)
+  await attachEmbeddedSessionToken(headers)
   const response = await fetcher(`/ai/run-all?storeId=${encodeURIComponent(storeId)}`, { method: 'POST', headers, body: '{}' })
   if (!response.ok || !response.body) {
     let payload: unknown = null
@@ -479,7 +532,9 @@ export function sendJarvisMessage(storeId: string, sessionId: string, text: stri
  * caller should then fall back to sendJarvisMessage.
  */
 export async function streamJarvisMessage(storeId: string, sessionId: string, text: string, page: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<JarvisResponse> {
-  const response = await fetcher(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, page, stream: true }) })
+  const headers = new Headers({ 'content-type': 'application/json', accept: 'text/event-stream', ...csrfHeaders() })
+  await attachEmbeddedSessionToken(headers)
+  const response = await fetcher(`/jarvis/sessions/${encodeURIComponent(sessionId)}/message`, { method: 'POST', headers, body: JSON.stringify({ storeId, text, page, stream: true }) })
   if (!response.ok || !response.body) {
     let payload: unknown = null
     try { payload = await response.json() } catch { payload = null }
@@ -530,9 +585,11 @@ export async function synthesizeJarvisSpeech(storeId: string, text: string, voic
   if (!csrfToken) {
     try { await initializeCsrf(fetcher) } catch { /* caller falls back to the browser voice */ }
   }
+  const headers = new Headers({ 'content-type': 'application/json', ...csrfHeaders() })
+  await attachEmbeddedSessionToken(headers)
   let response: Response
   try {
-    response = await fetcher('/jarvis/tts', { method: 'POST', headers: { 'content-type': 'application/json', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, voice, language }) })
+    response = await fetcher('/jarvis/tts', { method: 'POST', headers, body: JSON.stringify({ storeId, text, voice, language }) })
   } catch {
     return null
   }
@@ -708,11 +765,13 @@ export function fetchCoachProgressComparisons(storeId: string, fetcher: Fetcher 
 
 /** Streams the coach reply over SSE and resolves with the final message. */
 export async function streamCoachChat(storeId: string, message: string, onDelta: (fullText: string) => void, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachMessage> {
+  const headers = new Headers({ 'content-type': 'application/json', ...csrfHeaders() })
+  await attachEmbeddedSessionToken(headers)
   let response: Response
   try {
     response = await fetcher(coachPath('/store-coach/chat', storeId), {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...csrfHeaders() },
+      headers,
       body: JSON.stringify({ message }),
     })
   } catch (error: unknown) {
