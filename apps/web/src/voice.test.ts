@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSpeechRecognition, isFramed, microphonePreflight, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
+import { createSpeechRecognition, isFramed, loadSpeechVoices, microphonePreflight, releaseMicrophoneAccess, requestMicrophoneAccess, speakNative, speechProfile, speechRecognitionAvailable, speechRecognitionFailure, speechSentences, standaloneAppUrl, stopNativeSpeech, transcriptFromEvent } from './voice.js'
 import type { NativeSpeechRecognition } from './voice.js'
 
 class FakeRecognition implements NativeSpeechRecognition {
@@ -82,5 +82,20 @@ describe('F8 browser-native voice contracts', () => {
     expect(cancel).toHaveBeenCalledTimes(2)
     expect(transcriptFromEvent({ results: [{ 0: { transcript: 'Mujhe' }, length: 1 }, { 0: { transcript: 'dikhao' }, length: 1 }] })).toBe('Mujhe dikhao')
     expect(speakNative(undefined, 'hello', 'en')).toBe(false)
+  })
+
+  it('waits for voices to load before resolving, falling back gracefully', async () => {
+    // Voices already present → resolves immediately with the available voices.
+    const voices = [{ name: 'Google US English', lang: 'en-US', default: true } as SpeechSynthesisVoice]
+    const ready = { speechSynthesis: { getVoices: () => voices } } as unknown as Window
+    await expect(loadSpeechVoices(ready)).resolves.toEqual(voices)
+
+    // No voices and no event → resolves empty quickly rather than hanging.
+    const empty = { speechSynthesis: { getVoices: () => [], addEventListener: vi.fn() } } as unknown as Window
+    const result = await loadSpeechVoices(empty, 30)
+    expect(result).toEqual([])
+
+    // No speechSynthesis at all → empty, no throw.
+    await expect(loadSpeechVoices(undefined)).resolves.toEqual([])
   })
 })

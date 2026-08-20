@@ -40,6 +40,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   const pendingTranscript = useRef<string | null>(null)
   const lastBriefedPage = useRef<string | null>(null)
   const pendingPageOffer = useRef<string | null>(null)
+  const offeredPages = useRef<ReadonlySet<string>>(new Set())
   sessionRef.current = session
   pageRef.current = page
 
@@ -73,7 +74,9 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   const speakReply = (text: string, language: 'en' | 'hi') => {
     const spoken = spokenReplyText(text)
     if (spoken) setCaption(spoken)
-    jarvisVoiceController.speak({ text: spoken, language, muted: voice.muted, voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine' }, () => {
+    const options: { text: string; language: 'en' | 'hi'; muted: boolean; voiceGender: 'feminine' | 'masculine'; storeId?: string } = { text: spoken, language, muted: voice.muted, voiceGender: workspaceSettings?.jarvisVoiceGender ?? 'feminine' }
+    if (context.storeId) options.storeId = context.storeId
+    jarvisVoiceController.speak(options, () => {
       resumeJarvisListening(language)
     })
   }
@@ -216,6 +219,14 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     beginVoice()
   }
 
+  const offerPageGuidance = (pageToOffer: string) => {
+    const addressing = preference?.addressing ?? 'Sir'
+    const language = ambientLanguage()
+    pendingPageOffer.current = pageToOffer
+    offeredPages.current = new Set([...offeredPages.current, pageToOffer])
+    speakReply(pageOfferPrompt(pageToOffer, addressing, language), language)
+  }
+
   useEffect(() => {
     if (!open || lifecycle.status !== 'ready' || !session || !context.storeId) return
     if (pendingTranscript.current) {
@@ -226,20 +237,30 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     const previousPage = lastBriefedPage.current
     if (previousPage === page) return
     lastBriefedPage.current = page
+    const guidanceEnabled = preference?.navigationSuggestions !== false && !preference?.onlyAnswerWhenAsked
     if (previousPage === null) {
+      // First open: time-based greeting only, then optionally offer the page.
       const addressing = preference?.addressing ?? 'Sir'
       const language = ambientLanguage()
       speakReply(jarvisStartupGreeting(addressing, language), language)
+      if (guidanceEnabled) {
+        window.setTimeout(() => { if (pageRef.current === page && !pendingPageOffer.current) offerPageGuidance(page) }, 500)
+      }
       return
     }
-    // Page changes: Jarvis stays quiet. It only speaks when the user asks.
-    // No automatic briefing, no page offer prompt.
+    // Page changes: Jarvis never dumps a briefing unprompted. When page
+    // guidance is on it asks ONCE "shall I tell you what's important here?"
+    // and waits for the merchant to say yes — never re-offering the same page.
+    if (guidanceEnabled && !offeredPages.current.has(page) && !pendingPageOffer.current) {
+      offerPageGuidance(page)
+    }
   }, [open, lifecycle.status, session?.id, page, context.storeId, paused, preference?.navigationSuggestions, preference?.onlyAnswerWhenAsked, preference?.engagementMode])
 
   useEffect(() => {
     if (!open) {
       lastBriefedPage.current = null
       pendingPageOffer.current = null
+      offeredPages.current = new Set()
     }
   }, [open])
 
@@ -279,6 +300,7 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
     pendingPageOffer.current = null
     setCaption('Store assistant')
     lastBriefedPage.current = null
+    offeredPages.current = new Set()
     onClose()
   }
 
@@ -326,9 +348,10 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   )
 }
 
-function pageOfferPrompt(_page: string, addressing: string, language: 'en' | 'hi'): string {
-  if (language === 'hi') return `${addressing}, aap kuch poochna chahte hain is page ke baare mein? Bas boliye.`
-  return `${addressing}, would you like me to explain this page? Just say yes.`
+function pageOfferPrompt(page: string, addressing: string, language: 'en' | 'hi'): string {
+  const pageName = pageSpokenName(page)
+  if (language === 'hi') return `${addressing}, main aapko bataun ki is ${pageName} par kya sabse important hai? Bas haan boliye.`
+  return `${addressing}, shall I tell you what's important on ${pageName}? Just say yes.`
 }
 
 function fallbackBriefing(page: string, addressing: string, language: 'en' | 'hi'): string {

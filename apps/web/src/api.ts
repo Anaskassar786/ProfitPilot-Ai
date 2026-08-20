@@ -512,6 +512,34 @@ export function confirmJarvisAction(storeId: string, sessionId: string, actionId
 export function invokeJarvisStoreAction(storeId: string, sessionId: string, actionId: string, parameters: Readonly<Record<string, string | number | boolean | null>>, confirmed: boolean, fetcher: Fetcher = fetch): Promise<JarvisResponse> { return requestJson<JarvisResponse>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/store-action`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, actionId, parameters, confirmed }) }, fetcher) }
 export function setJarvisState(storeId: string, sessionId: string, state: 'pause' | 'resume' | 'end', fetcher: Fetcher = fetch): Promise<JarvisSession> { return requestJson<JarvisSession>(`/jarvis/sessions/${encodeURIComponent(sessionId)}/${state}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher) }
 
+/**
+ * Requests natural cloud speech for a Jarvis reply. Returns a playback-ready
+ * object URL (revoked by the caller), or null when the cloud voice is not
+ * configured / temporarily unavailable so the caller falls back to the
+ * browser voice. Uses a direct fetch (binary audio, not the JSON envelope).
+ */
+export async function synthesizeJarvisSpeech(storeId: string, text: string, voice: 'feminine' | 'masculine', language: 'en' | 'hi', fetcher: Fetcher = fetch): Promise<string | null> {
+  if (!storeId || !text.trim()) return null
+  if (!csrfToken) {
+    try { await initializeCsrf(fetcher) } catch { /* caller falls back to the browser voice */ }
+  }
+  let response: Response
+  try {
+    response = await fetcher('/jarvis/tts', { method: 'POST', headers: { 'content-type': 'application/json', ...csrfHeaders() }, body: JSON.stringify({ storeId, text, voice, language }) })
+  } catch {
+    return null
+  }
+  if (!response.ok) return null
+  try {
+    const blob = await response.blob()
+    if (blob.size === 0) return null
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}
+
+
 export function fetchCopilotThreads(storeId: string, fetcher: Fetcher = fetch): Promise<readonly CopilotThread[]> { return requestJson<readonly CopilotThread[]>(`/copilot/threads?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
 export function createCopilotThread(storeId: string, title: string, fetcher: Fetcher = fetch): Promise<CopilotThread> { return requestJson<CopilotThread>('/copilot/threads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, title }) }, fetcher) }
 export function fetchCopilotMessages(storeId: string, threadId: string, fetcher: Fetcher = fetch): Promise<readonly CopilotAnswer[]> { return requestJson<readonly CopilotAnswer[]>(`/copilot/threads/${encodeURIComponent(threadId)}/messages?storeId=${encodeURIComponent(storeId)}`, {}, fetcher) }
