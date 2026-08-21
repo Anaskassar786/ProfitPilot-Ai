@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 /**
  * Automation WorkflowEditor — exhaustive interaction sweep.
  *

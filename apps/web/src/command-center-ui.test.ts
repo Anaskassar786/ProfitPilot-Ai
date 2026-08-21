@@ -1,7 +1,14 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { ActivityFeed, AgentCard, AgentMenu, CommandCenterEmpty, CommandCenterHero, CommandCenterSkeleton, GrowthModuleCard, GrowthModuleDrawer, LockedAgentCard, RunAllBanner, Sparkline, Tooltip } from './command-center.js'
+
+/** Polaris components require i18n from AppProvider — main.tsx wraps every page. */
+function render(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
 import {
   GROWTH_MODULES,
   IDLE_RUN_STATE,
@@ -147,7 +154,7 @@ describe('PR45 component rendering', () => {
   it('renders an unlocked agent card with actions, stats, and menu', () => {
     const agent = overviewFor('commander')[0]
     if (!agent) throw new Error('missing agent')
-    const html = renderToStaticMarkup(createElement(AgentCard, { agent, activity: [recommendation], onOpen: () => undefined, onTogglePause: () => undefined }))
+    const html = render(createElement(AgentCard, { agent, activity: [recommendation], onOpen: () => undefined, onTogglePause: () => undefined }))
     expect(html).toContain('Revenue Agent')
     expect(html).not.toContain('Run now')
     expect(html).toContain('View details')
@@ -158,7 +165,7 @@ describe('PR45 component rendering', () => {
   it('renders a locked card with plan badge, sample insight, and a generic upgrade CTA', () => {
     const locked = overviewFor('trial').find((agent) => agent.id === 'PRICING_AGENT')
     if (!locked) throw new Error('missing locked agent')
-    const html = renderToStaticMarkup(createElement(LockedAgentCard, { agent: locked, onUpgrade: () => undefined, onLearnMore: () => undefined }))
+    const html = render(createElement(LockedAgentCard, { agent: locked, onUpgrade: () => undefined, onLearnMore: () => undefined }))
     expect(html).toContain('Requires Growth')
     expect(html).toContain('Upgrade Plan')
     // The button must never mention a specific plan name or price.
@@ -167,7 +174,7 @@ describe('PR45 component rendering', () => {
     expect(html).toContain('Sample insight.')
   })
   it('renders real KPI data in the hero, not hard-coded strings', () => {
-    const html = renderToStaticMarkup(createElement(CommandCenterHero, {
+    const html = render(createElement(CommandCenterHero, {
       health: { score: 74, method: 'deterministic-v1', components: [{ key: 'revenue_momentum', score: 80, weight: .35, reason: '' }] },
       summary: { counts: { PENDING: 0, APPROVED: 2, REJECTED: 0, EXECUTED: 1, FAILED: 0, EXPIRED: 0 }, total: 3, pendingImpact: [], approvedThisMonth: { count: 2, impact: [] }, byAgent: [], byRule: [], approvalRate: { allTime: 100, last30d: 100 }, averageDecisionMs: null, recentDecisions: [], generatedTrend: [{ day: '2026-08-18', generated: 2, approved: 1 }, { day: '2026-08-17', generated: 1, approved: 1 }], plan: 'growth', usage: { feature: 'ai_recommendations_month', used: 3, limit: 300, remaining: 297 } },
       overview: { plan: 'growth', unlockedCount: 4, totalCount: 6, agents: [...overviewFor('growth')] },
@@ -182,26 +189,26 @@ describe('PR45 component rendering', () => {
   })
   it('renders the activity feed rows and the empty state', () => {
     const agents = [...overviewFor('commander')]
-    const withRows = renderToStaticMarkup(createElement(ActivityFeed, { recent: [recommendation], agents, onOpenAgent: () => undefined }))
+    const withRows = render(createElement(ActivityFeed, { recent: [recommendation], agents, onOpenAgent: () => undefined }))
     expect(withRows).toContain('Revenue is accelerating')
     expect(withRows).toContain('PENDING')
-    const empty = renderToStaticMarkup(createElement(ActivityFeed, { recent: [], agents, onOpenAgent: () => undefined }))
+    const empty = render(createElement(ActivityFeed, { recent: [], agents, onOpenAgent: () => undefined }))
     expect(empty).toContain('No agent activity yet')
   })
   it('renders run-all progress and completion states', () => {
-    const running = renderToStaticMarkup(createElement(RunAllBanner, { state: { ...IDLE_RUN_STATE, running: true, completed: 3, total: 10, lastAgent: 'REVENUE_AGENT', runnable: ['REVENUE_AGENT'], skipped: [{ agent: 'EXECUTIVE_AGENT', reason: 'LOCKED' }] }, onDismiss: () => undefined }))
+    const running = render(createElement(RunAllBanner, { state: { ...IDLE_RUN_STATE, running: true, completed: 3, total: 10, lastAgent: 'REVENUE_AGENT', runnable: ['REVENUE_AGENT'], skipped: [{ agent: 'EXECUTIVE_AGENT', reason: 'LOCKED' }] }, onDismiss: () => undefined }))
     expect(running).toContain('Analyzing 3/10 signals')
     expect(running).toContain('Skipped: Executive Agent (locked)')
-    const done = renderToStaticMarkup(createElement(RunAllBanner, { state: { ...IDLE_RUN_STATE, result: { recommendations: 4, deduplicated: 1, cacheHits: 2 } }, onDismiss: () => undefined }))
+    const done = render(createElement(RunAllBanner, { state: { ...IDLE_RUN_STATE, result: { recommendations: 4, deduplicated: 1, cacheHits: 2 } }, onDismiss: () => undefined }))
     expect(done).toContain('Run complete: 4 insights')
     expect(done).toContain('2 cache hits')
   })
   it('renders skeleton and empty states instead of blank screens', () => {
-    expect(renderToStaticMarkup(createElement(CommandCenterSkeleton))).toContain('cc-skeleton')
-    expect(renderToStaticMarkup(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))).toContain('Connect Shopify')
+    expect(render(createElement(CommandCenterSkeleton))).toContain('cc-skeleton')
+    expect(render(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))).toContain('Connect Shopify')
   })
   it('renders an accessible 3-dot menu trigger', () => {
-    const html = renderToStaticMarkup(createElement(AgentMenu, { items: [{ label: 'Pause agent', icon: (() => null) as never, onSelect: () => undefined }], label: 'Agent actions' }))
+    const html = render(createElement(AgentMenu, { items: [{ label: 'Pause agent', icon: (() => null) as never, onSelect: () => undefined }], label: 'Agent actions' }))
     expect(html).toContain('aria-label="Agent actions"')
     expect(html).toContain('aria-expanded="false"')
   })
@@ -288,7 +295,7 @@ describe('PR49 shipped AI Growth Command modules', () => {
   it('renders a shipped module card as Available (never Coming soon)', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'STORE_COACH')
     if (!module) throw new Error('missing module')
-    const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'trial', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
+    const html = render(createElement(GrowthModuleCard, { module, plan: 'trial', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('Store Coach')
     expect(html).toContain('Available')
     expect(html).toContain('Open Store Coach')
@@ -298,7 +305,7 @@ describe('PR49 shipped AI Growth Command modules', () => {
   it('renders the GrowthIQ card with the rebranded label and gated CTA', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'AI_EXECUTIVE')
     if (!module) throw new Error('missing module')
-    const html = renderToStaticMarkup(createElement(GrowthModuleCard, { module, plan: 'start', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
+    const html = render(createElement(GrowthModuleCard, { module, plan: 'start', onOpen: () => undefined, onDetails: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('GrowthIQ')
     expect(html).not.toContain('AI Executive')
     // Start plan: gated by the growth tier — badge names the required tier,
@@ -310,7 +317,7 @@ describe('PR49 shipped AI Growth Command modules', () => {
   it('renders the module info drawer with a plan matrix and an Open CTA', () => {
     const module = GROWTH_MODULES.find((entry) => entry.id === 'STORE_COACH')
     if (!module) throw new Error('missing module')
-    const html = renderToStaticMarkup(createElement(GrowthModuleDrawer, { module, plan: 'trial', onClose: () => undefined, onOpen: () => undefined, onUpgrade: () => undefined }))
+    const html = render(createElement(GrowthModuleDrawer, { module, plan: 'trial', onClose: () => undefined, onOpen: () => undefined, onUpgrade: () => undefined }))
     expect(html).toContain('Store Coach')
     expect(html).toContain('Plan availability')
     expect(html).toContain('You are here')
@@ -321,19 +328,19 @@ describe('PR49 shipped AI Growth Command modules', () => {
 
 describe('PR49 tooltips and empty states', () => {
   it('renders an accessible tooltip with the help text', () => {
-    const html = renderToStaticMarkup(createElement(Tooltip, { text: 'Daily budget cap protects your AI costs' }, 'AI Spend Today'))
+    const html = render(createElement(Tooltip, { text: 'Daily budget cap protects your AI costs' }, 'AI Spend Today'))
     expect(html).toContain('AI Spend Today')
     expect(html).toContain('data-tip="Daily budget cap protects your AI costs"')
     expect(html).toContain('title="Daily budget cap protects your AI costs"')
   })
   it('renders educational samples and the learn link in an empty activity feed', () => {
-    const html = renderToStaticMarkup(createElement(ActivityFeed, { recent: [], agents: [], onOpenAgent: () => undefined }))
+    const html = render(createElement(ActivityFeed, { recent: [], agents: [], onOpenAgent: () => undefined }))
     expect(html).toContain('No agent activity yet')
     expect(html).toContain('Recommendation created')
     expect(html).toContain('Learn how agents work')
   })
   it('renders the getting-started guide in the empty state', () => {
-    const html = renderToStaticMarkup(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))
+    const html = render(createElement(CommandCenterEmpty, { title: 'Connect Shopify', body: 'Body' }))
     expect(html).toContain('Connect Shopify')
     expect(html).toContain('Agents run automatically')
     expect(html).toContain('Review and act')
@@ -372,7 +379,7 @@ describe('AI actions and insights KPI helpers', () => {
     expect(visible).toHaveLength(6)
   })
   it('renders a theme-adaptive sparkline with per-day hover labels', () => {
-    const html = renderToStaticMarkup(createElement(Sparkline, { points: [{ day: '2026-08-17', value: 2 }, { day: '2026-08-18', value: 4 }], ariaLabel: 'Insights generated' }))
+    const html = render(createElement(Sparkline, { points: [{ day: '2026-08-17', value: 2 }, { day: '2026-08-18', value: 4 }], ariaLabel: 'Insights generated' }))
     expect(html).toContain('role="img"')
     expect(html).toContain('aria-label="Insights generated"')
     expect(html).toContain('2026-08-17: 2')

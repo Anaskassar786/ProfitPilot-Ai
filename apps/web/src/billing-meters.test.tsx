@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest'
 import { UsageMeterRow, visibleMeters } from './App.js'
 import { HIDDEN_METER_KEYS } from '@profitpilot/types'
 import type { UsageMeter } from './model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 /**
  * The PR (entitlement-meters) — every metered feature on the Billing page

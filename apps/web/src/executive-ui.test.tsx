@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Landmark } from './icons.js'
@@ -5,10 +6,19 @@ import { ExecutiveAreaChart, ExecutiveBubbleMap, ExecutiveBullet, ExecutiveConfi
 import { ComingSoonPanel, ExecutiveEmptyState, ExecutiveGateOverlay, ExecutiveSkeleton, ExecutiveStatusPill, GrowthCommandTabs, GrowthIqBaselineState, GrowthIqPlanPanel, GrowthIqWelcomeState } from './executive-ui.js'
 import type { ExecutiveGate } from './executive-model.js'
 import { GrowthIqMark, GrowthIqNavIcon, GrowthIqWordmark } from './growthiq-logo.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 describe('PR49 executive charts render for both themes', () => {
   it('renders the radial gauge with the score and label', () => {
-    const html = renderToStaticMarkup(<ExecutiveRadialGauge score={82} label="STRONG" />)
+    const html = renderWithAppProvider(<ExecutiveRadialGauge score={82} label="STRONG" />)
     expect(html).toContain('exec-gauge')
     expect(html).toContain('82')
     expect(html).toContain('STRONG')
@@ -16,24 +26,24 @@ describe('PR49 executive charts render for both themes', () => {
 
   it('renders area, sparkline, stacked, waterfall, and horizontal bars', () => {
     const series = [{ day: '2026-08-01', value: 100 }, { day: '2026-08-02', value: 150 }, { day: '2026-08-03', value: 130 }]
-    expect(renderToStaticMarkup(<ExecutiveAreaChart points={series} label="Revenue" />)).toContain('exec-area-chart')
-    expect(renderToStaticMarkup(<ExecutiveSparkline points={[1, 2, 3]} />)).toContain('exec-sparkline')
-    expect(renderToStaticMarkup(<ExecutiveStackedBars groups={[{ label: 'A', segments: [{ key: 'x', label: 'X', value: 5, tone: 'positive' }] }]} />)).toContain('exec-stack-segment')
-    expect(renderToStaticMarkup(<ExecutiveWaterfall steps={[{ label: 'Base', value: 100, kind: 'start' }, { label: 'Up', value: 20, kind: 'up' }, { label: 'Down', value: 10, kind: 'down' }]} />)).toContain('exec-waterfall')
-    expect(renderToStaticMarkup(<ExecutiveHorizontalBars rows={[{ label: 'A', value: 10, display: '10' }]} />)).toContain('exec-hbars')
+    expect(renderWithAppProvider(<ExecutiveAreaChart points={series} label="Revenue" />)).toContain('exec-area-chart')
+    expect(renderWithAppProvider(<ExecutiveSparkline points={[1, 2, 3]} />)).toContain('exec-sparkline')
+    expect(renderWithAppProvider(<ExecutiveStackedBars groups={[{ label: 'A', segments: [{ key: 'x', label: 'X', value: 5, tone: 'positive' }] }]} />)).toContain('exec-stack-segment')
+    expect(renderWithAppProvider(<ExecutiveWaterfall steps={[{ label: 'Base', value: 100, kind: 'start' }, { label: 'Up', value: 20, kind: 'up' }, { label: 'Down', value: 10, kind: 'down' }]} />)).toContain('exec-waterfall')
+    expect(renderWithAppProvider(<ExecutiveHorizontalBars rows={[{ label: 'A', value: 10, display: '10' }]} />)).toContain('exec-hbars')
   })
 
   it('renders bubble map, bullet, percentile, heatmap, and confidence components', () => {
-    expect(renderToStaticMarkup(<ExecutiveBubbleMap points={[{ id: 'r1', label: 'Risk', x: 0.5, y: 0.5, size: 10, tone: 'danger', detail: '50%' }]} xLabel="Probability" yLabel="Impact" />)).toContain('exec-bubble')
-    expect(renderToStaticMarkup(<ExecutiveBullet actual={80} target={95} display="80" targetDisplay="95" />)).toContain('exec-bullet')
-    expect(renderToStaticMarkup(<ExecutivePercentileBar percentile={62} topLabel="Top 10%" medianLabel="Median" />)).toContain('62th percentile')
-    expect(renderToStaticMarkup(<ExecutiveHeatmap cells={[{ x: 0, y: 0, value: 1, label: '1' }]} xLabels={['A']} yLabels={['B']} />)).toContain('exec-heatmap')
-    expect(renderToStaticMarkup(<ExecutiveConfidenceBar value={0.7} />)).toContain('70% confidence')
+    expect(renderWithAppProvider(<ExecutiveBubbleMap points={[{ id: 'r1', label: 'Risk', x: 0.5, y: 0.5, size: 10, tone: 'danger', detail: '50%' }]} xLabel="Probability" yLabel="Impact" />)).toContain('exec-bubble')
+    expect(renderWithAppProvider(<ExecutiveBullet actual={80} target={95} display="80" targetDisplay="95" />)).toContain('exec-bullet')
+    expect(renderWithAppProvider(<ExecutivePercentileBar percentile={62} topLabel="Top 10%" medianLabel="Median" />)).toContain('62th percentile')
+    expect(renderWithAppProvider(<ExecutiveHeatmap cells={[{ x: 0, y: 0, value: 1, label: '1' }]} xLabels={['A']} yLabels={['B']} />)).toContain('exec-heatmap')
+    expect(renderWithAppProvider(<ExecutiveConfidenceBar value={0.7} />)).toContain('70% confidence')
   })
 
   it('renders theme tokens as CSS custom properties, not hard-coded colors', () => {
     // Charts must reference var(--exec-*) tokens so both themes adapt.
-    const html = renderToStaticMarkup(<ExecutiveRadialGauge score={50} label="HEALTHY" />)
+    const html = renderWithAppProvider(<ExecutiveRadialGauge score={50} label="HEALTHY" />)
     expect(html).toContain('exec-gauge-track')
     expect(html).toContain('exec-gauge-fill')
   })
@@ -43,7 +53,7 @@ describe('PR49 plan gating UI', () => {
   const gate = (allowed: boolean): ExecutiveGate => ({ allowed, requiredPlan: 'commander', used: 0, limit: allowed ? null : 0 })
 
   it('renders locked sections with an overlay when the gate blocks', () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithAppProvider(
       <ExecutiveGateOverlay gate={gate(false)} feature="pdf" plan="trial" onUpgrade={() => undefined}>
         <div>Secret content</div>
       </ExecutiveGateOverlay>,
@@ -56,7 +66,7 @@ describe('PR49 plan gating UI', () => {
   })
 
   it('renders children directly when the gate allows', () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithAppProvider(
       <ExecutiveGateOverlay gate={gate(true)} feature="reports" plan="commander" onUpgrade={() => undefined}>
         <div>Real content</div>
       </ExecutiveGateOverlay>,
@@ -66,10 +76,10 @@ describe('PR49 plan gating UI', () => {
   })
 
   it('always labels upgrade CTAs "Upgrade Plan" — never a plan name', () => {
-    const empty = renderToStaticMarkup(<ExecutiveEmptyState icon={Landmark} title="Locked" description="Needs a plan" locked onUpgrade={() => undefined} />)
+    const empty = renderWithAppProvider(<ExecutiveEmptyState icon={Landmark} title="Locked" description="Needs a plan" locked onUpgrade={() => undefined} />)
     expect(empty).toContain('Upgrade Plan')
     expect(empty).not.toContain('Upgrade to')
-    const tabs = renderToStaticMarkup(<GrowthCommandTabs active="executive" onNavigate={() => undefined} />)
+    const tabs = renderWithAppProvider(<GrowthCommandTabs active="executive" onNavigate={() => undefined} />)
     expect(tabs).toContain('GrowthIQ')
     expect(tabs).toContain('Store Coach')
     expect(tabs).toContain('Insights Hub')
@@ -78,15 +88,15 @@ describe('PR49 plan gating UI', () => {
   })
 
   it('renders skeletons and coming-soon panels for loading/empty states', () => {
-    expect(renderToStaticMarkup(<ExecutiveSkeleton rows={3} label="Loading" />)).toContain('exec-skeleton')
-    expect(renderToStaticMarkup(<ComingSoonPanel title="Insights Hub" description="Next release" />)).toContain('Insights Hub')
-    expect(renderToStaticMarkup(<ExecutiveStatusPill status="AT_RISK" />)).toContain('AT RISK')
+    expect(renderWithAppProvider(<ExecutiveSkeleton rows={3} label="Loading" />)).toContain('exec-skeleton')
+    expect(renderWithAppProvider(<ComingSoonPanel title="Insights Hub" description="Next release" />)).toContain('Insights Hub')
+    expect(renderWithAppProvider(<ExecutiveStatusPill status="AT_RISK" />)).toContain('AT RISK')
   })
 })
 
 describe('GrowthIQ brand mark', () => {
   it('renders the growth-arrow + neural-node logo as an accessible SVG', () => {
-    const html = renderToStaticMarkup(<GrowthIqMark size={24} />)
+    const html = renderWithAppProvider(<GrowthIqMark size={24} />)
     expect(html).toContain('role="img"')
     expect(html).toContain('aria-label="GrowthIQ"')
     // The signature is the purple gradient, not the old navy/gold.
@@ -95,16 +105,16 @@ describe('GrowthIQ brand mark', () => {
     expect(html).not.toContain('rgb(201, 162, 39)')
   })
   it('provides a nav icon adapter and a wordmark lockup', () => {
-    const nav = renderToStaticMarkup(<GrowthIqNavIcon size={17} strokeWidth={2.25} />)
+    const nav = renderWithAppProvider(<GrowthIqNavIcon size={17} strokeWidth={2.25} />)
     expect(nav).toContain('width="17"')
-    const wordmark = renderToStaticMarkup(<GrowthIqWordmark size={30} />)
+    const wordmark = renderWithAppProvider(<GrowthIqWordmark size={30} />)
     expect(wordmark).toContain('GrowthIQ')
   })
 })
 
 describe('GrowthIQ plan-based feature display', () => {
   it('renders compact and collapsed by default so billing never dominates the page', () => {
-    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} />)
+    const html = renderWithAppProvider(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} />)
     expect(html).toContain('Your plan: Trial')
     expect(html).toContain('3 features active · 12 more available')
     expect(html).toContain('Show details')
@@ -115,7 +125,7 @@ describe('GrowthIQ plan-based feature display', () => {
     expect(html).not.toContain('Hide details')
   })
   it('expands to the categorized feature matrix when requested', () => {
-    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} defaultExpanded />)
+    const html = renderWithAppProvider(<GrowthIqPlanPanel plan="trial" onUpgrade={() => undefined} defaultExpanded />)
     expect(html).toContain('aria-expanded="true"')
     expect(html).toContain('Currently available (3)')
     expect(html).toContain('Sample benchmarks (3 metrics)')
@@ -132,7 +142,7 @@ describe('GrowthIQ plan-based feature display', () => {
     expect(html).not.toContain('Upgrade to')
   })
   it('shows every capability unlocked for a commander plan, with no upgrade CTA', () => {
-    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="commander" onUpgrade={() => undefined} defaultExpanded />)
+    const html = renderWithAppProvider(<GrowthIqPlanPanel plan="commander" onUpgrade={() => undefined} defaultExpanded />)
     expect(html).toContain('Your plan: Commander')
     expect(html).toContain('15 features active · all GrowthIQ features unlocked')
     expect(html).toContain('Currently available (15)')
@@ -143,7 +153,7 @@ describe('GrowthIQ plan-based feature display', () => {
     expect(html).not.toContain('Upgrade to')
   })
   it('mid-tier plans keep remaining capabilities grouped under the tiers above', () => {
-    const html = renderToStaticMarkup(<GrowthIqPlanPanel plan="growth" onUpgrade={() => undefined} defaultExpanded />)
+    const html = renderWithAppProvider(<GrowthIqPlanPanel plan="growth" onUpgrade={() => undefined} defaultExpanded />)
     expect(html).toContain('Your plan: Growth')
     expect(html).toContain('12 features active · 3 more available')
     expect(html).toContain('Currently available (12)')
@@ -158,7 +168,7 @@ describe('GrowthIQ plan-based feature display', () => {
 
 describe('GrowthIQ educational first-run states', () => {
   it('welcomes new merchants and lists real capabilities without fake data', () => {
-    const html = renderToStaticMarkup(<GrowthIqWelcomeState />)
+    const html = renderWithAppProvider(<GrowthIqWelcomeState />)
     expect(html).toContain('Welcome to GrowthIQ')
     expect(html).toContain('Board-ready monthly reports')
     expect(html).toContain('Industry benchmarking')
@@ -166,7 +176,7 @@ describe('GrowthIQ educational first-run states', () => {
     expect(html).toContain('Decision tracking')
   })
   it('reports the honest sync baseline when history is thin', () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithAppProvider(
       <GrowthIqBaselineState
         readiness={{ hasStoreInfo: true, ordersSynced: 15, daysSynced: 20, minOrders: 30, minDays: 60 }}
         onLogDecision={() => undefined}

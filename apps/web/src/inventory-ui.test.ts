@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { BasicInsightsCard, DaysOfCoverCell, InventoryEmptyState, InventoryHealthCard, InventoryStatsGrid, InventoryTable, InventoryToolbar, StockDistributionChart, StockLevelBadge, inventorySortOptions } from './inventory.js'
 import { EMPTY_INVENTORY_PAGE, distributionSegments, daysOfCoverLabel, formatMoney, formatUnits, locationBreakdown, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
 import type { InventoryPageResult, InventoryRowItem } from './inventory-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 function item(overrides: Partial<InventoryRowItem> = {}): InventoryRowItem {
   return {
@@ -54,7 +63,7 @@ function page(overrides: Partial<InventoryPageResult> = {}): InventoryPageResult
 
 describe('Inventory KPI and health rendering', () => {
   it('renders real synced numbers rather than the old em-dash placeholders', () => {
-    const html = renderToStaticMarkup(createElement(InventoryStatsGrid, { data: page(), loading: false }))
+    const html = renderWithAppProvider(createElement(InventoryStatsGrid, { data: page(), loading: false }))
     expect(html).toContain('Total Products')
     expect(html).toContain('Units in Stock')
     expect(html).toContain('Low Stock Alerts')
@@ -64,7 +73,7 @@ describe('Inventory KPI and health rendering', () => {
   })
 
   it('renders a real inventory health score instead of the store-wide 100/100 gauge', () => {
-    const html = renderToStaticMarkup(createElement(InventoryHealthCard, { data: page(), loading: false }))
+    const html = renderWithAppProvider(createElement(InventoryHealthCard, { data: page(), loading: false }))
     expect(html).toContain('Inventory Health')
     expect(html).toContain('62')
     expect(html).toContain('C · Needs attention')
@@ -73,15 +82,15 @@ describe('Inventory KPI and health rendering', () => {
   })
 
   it('shows an honest no-data gauge when nothing is synced', () => {
-    const html = renderToStaticMarkup(createElement(InventoryHealthCard, { data: EMPTY_INVENTORY_PAGE, loading: false }))
+    const html = renderWithAppProvider(createElement(InventoryHealthCard, { data: EMPTY_INVENTORY_PAGE, loading: false }))
     expect(html).toContain('No inventory data')
     expect(html).toContain('health-gauge compact no-data')
     expect(html).not.toMatch(/>\s*100\s*</)
   })
 
   it('renders the stock distribution legend from real counts and nothing when empty', () => {
-    expect(renderToStaticMarkup(createElement(StockDistributionChart, { data: page(), loading: false }))).toContain('Stock Distribution')
-    expect(renderToStaticMarkup(createElement(StockDistributionChart, { data: EMPTY_INVENTORY_PAGE, loading: false }))).toContain('No stock levels to chart yet.')
+    expect(renderWithAppProvider(createElement(StockDistributionChart, { data: page(), loading: false }))).toContain('Stock Distribution')
+    expect(renderWithAppProvider(createElement(StockDistributionChart, { data: EMPTY_INVENTORY_PAGE, loading: false }))).toContain('No stock levels to chart yet.')
   })
 })
 
@@ -113,7 +122,7 @@ describe('Inventory toolbar', () => {
   })
 
   it('keeps search and sort on the primary row so Name/Sort no longer wrap under the filters', () => {
-    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
     expect(html).toContain('inventory-toolbar-primary')
     expect(html).toContain('inventory-sort-control')
     expect(html).toContain('Sort by')
@@ -128,7 +137,7 @@ describe('Inventory toolbar', () => {
   })
 
   it('places category, vendor, and location filters on their own row', () => {
-    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
     expect(html).toContain('inventory-toolbar-filters')
     expect(html).toContain('All categories')
     expect(html).toContain('All vendors')
@@ -140,21 +149,21 @@ describe('Inventory toolbar', () => {
 
   it('offers readable sort fields and a direction toggle', () => {
     expect(inventorySortOptions(false).map((option) => option.label)).toEqual(['Product name', 'Stock level', 'Stock value', 'Category', 'Last updated'])
-    const html = renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))
+    const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
     expect(html).toContain('aria-label="Sort descending"')
     expect(html).toContain('Currently ascending')
   })
 
   it('shows a clear-filters action only when a filter or search is active', () => {
-    expect(renderToStaticMarkup(createElement(InventoryToolbar, toolbarProps))).not.toContain('Clear filters')
-    const html = renderToStaticMarkup(createElement(InventoryToolbar, { ...toolbarProps, query: 'shirt' }))
+    expect(renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))).not.toContain('Clear filters')
+    const html = renderWithAppProvider(createElement(InventoryToolbar, { ...toolbarProps, query: 'shirt' }))
     expect(html).toContain('Clear filters')
   })
 })
 
 describe('Inventory table rendering', () => {
   it('shows product name, SKU, stock, value, location name, and a status badge', () => {
-    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item()], multiLocation: true, onSelect: vi.fn() }))
+    const html = renderWithAppProvider(createElement(InventoryTable, { items: [item()], multiLocation: true, onSelect: vi.fn() }))
     expect(html).toContain('Blue Cotton Shirt')
     expect(html).toContain('SKU SHIRT-S')
     expect(html).toContain('24')
@@ -165,7 +174,7 @@ describe('Inventory table rendering', () => {
   })
 
   it('never renders a fabricated zero for an untracked variant', () => {
-    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item({ tracked: false, quantity: null, status: 'untracked', value: null, locations: [] })], multiLocation: false, onSelect: vi.fn() }))
+    const html = renderWithAppProvider(createElement(InventoryTable, { items: [item({ tracked: false, quantity: null, status: 'untracked', value: null, locations: [] })], multiLocation: false, onSelect: vi.fn() }))
     expect(html).toContain('Not tracked')
     expect(html).toContain('Not Tracked')
     expect(html).not.toContain('Out of Stock')
@@ -177,13 +186,13 @@ describe('Inventory table rendering', () => {
     ['out', 'Out of Stock'],
     ['untracked', 'Not Tracked'],
   ] as const)('renders the %s badge as %s', (status, label) => {
-    expect(renderToStaticMarkup(createElement(StockLevelBadge, { status }))).toContain(label)
+    expect(renderWithAppProvider(createElement(StockLevelBadge, { status }))).toContain(label)
   })
 })
 
 describe('Inventory insights and gating', () => {
   it('states an honest awaiting-sales-history message instead of a fake top seller', () => {
-    const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page(), onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(BasicInsightsCard, { data: page(), onUpgrade: vi.fn() }))
     expect(html).toContain('Top Selling Item')
     expect(html).toContain('Awaiting more sales history')
     expect(html).toContain('Health Grade')
@@ -191,13 +200,13 @@ describe('Inventory insights and gating', () => {
   })
 
   it('keeps the free Days of Cover slot locked for a Trial plan with an upgrade CTA', () => {
-    const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page({ lockedFeatures: [{ locked: true, feature: 'days_of_cover', name: 'Days of Cover', required_plan: 'growth' }] }), onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(BasicInsightsCard, { data: page({ lockedFeatures: [{ locked: true, feature: 'days_of_cover', name: 'Days of Cover', required_plan: 'growth' }] }), onUpgrade: vi.fn() }))
     expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('plan-locked-blur')
   })
 
   it('points an unlocked plan at the real Days of Cover column instead of a duplicate number', () => {
-    const html = renderToStaticMarkup(createElement(BasicInsightsCard, { data: page({ plan: 'growth', lockedFeatures: [] }), onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(BasicInsightsCard, { data: page({ plan: 'growth', lockedFeatures: [] }), onUpgrade: vi.fn() }))
     expect(html).toContain('Days of Cover')
     expect(html).toContain('Shown per item in the Days of Cover column below.')
     expect(html).not.toContain('plan-locked-blur')
@@ -206,26 +215,26 @@ describe('Inventory insights and gating', () => {
 
 describe('Days of Cover column', () => {
   it('is hidden entirely for plans that cannot compute it', () => {
-    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item()], multiLocation: false, onSelect: vi.fn() }))
+    const html = renderWithAppProvider(createElement(InventoryTable, { items: [item()], multiLocation: false, onSelect: vi.fn() }))
     expect(html).not.toContain('Days of Cover')
   })
 
   it('renders the real cover and velocity for a Growth plan', () => {
-    const html = renderToStaticMarkup(createElement(InventoryTable, { items: [item({ daysOfCover: { status: 'available', days: 12.5, velocity: 1.92 } })], multiLocation: false, showDaysOfCover: true, onSelect: vi.fn() }))
+    const html = renderWithAppProvider(createElement(InventoryTable, { items: [item({ daysOfCover: { status: 'available', days: 12.5, velocity: 1.92 } })], multiLocation: false, showDaysOfCover: true, onSelect: vi.fn() }))
     expect(html).toContain('Days of Cover')
     expect(html).toContain('12.5 days')
     expect(html).toContain('1.92 units/day')
   })
 
   it('says insufficient data rather than showing a fabricated cover', () => {
-    const html = renderToStaticMarkup(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'sales_history', message: 'Awaiting 28 more days of sales history.' } }))
+    const html = renderWithAppProvider(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'sales_history', message: 'Awaiting 28 more days of sales history.' } }))
     expect(html).toContain('Insufficient data')
     expect(html).toContain('Awaiting sales history')
     expect(html).not.toMatch(/\d+ days<\/strong>/)
   })
 
   it('explains that Shopify reports sales per product for multi-variant rows', () => {
-    const html = renderToStaticMarkup(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'variant_sales_unavailable', message: 'Sales are per product.' } }))
+    const html = renderWithAppProvider(createElement(DaysOfCoverCell, { cover: { status: 'insufficient_data', reason: 'variant_sales_unavailable', message: 'Sales are per product.' } }))
     expect(html).toContain('Sales are per product')
   })
 
@@ -243,7 +252,7 @@ describe('Days of Cover column', () => {
 
 describe('Inventory empty states', () => {
   it('prompts a sync without inventing any stock rows', () => {
-    const html = renderToStaticMarkup(createElement(InventoryEmptyState, { title: 'Sync your inventory to see stock levels', description: 'Nothing on this page is estimated.', action: 'Sync inventory', onAction: vi.fn() }))
+    const html = renderWithAppProvider(createElement(InventoryEmptyState, { title: 'Sync your inventory to see stock levels', description: 'Nothing on this page is estimated.', action: 'Sync inventory', onAction: vi.fn() }))
     expect(html).toContain('Sync your inventory to see stock levels')
     expect(html).toContain('Sync inventory')
     expect(html).not.toContain('SHIRT')

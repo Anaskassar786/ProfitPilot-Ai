@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'

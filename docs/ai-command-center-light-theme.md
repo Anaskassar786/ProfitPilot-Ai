@@ -68,6 +68,16 @@ Shadow md     0 4px 10px rgba(15,23,42,.08), 0 2px 4px rgba(15,23,42,.05)
 Shadow purple 0 10px 24px rgba(124,58,237,.16), 0 2px 6px rgba(15,23,42,.06)
 ```
 
+Same palette as rgb() for tooling that consumes CSS colours directly:
+
+```
+Canvas rgb(248, 250, 252)  Surface rgb(255, 255, 255)  Raised rgb(241, 245, 249)
+Border rgb(226, 232, 240)
+Text   rgb(15, 23, 42)     Secondary rgb(71, 85, 105)  Muted rgb(100, 116, 139)
+Purple rgb(124, 58, 237)   Hover rgb(109, 40, 217)
+Success text rgb(22, 101, 52)   Warning text rgb(146, 64, 14)
+```
+
 All of it is exposed as `--cc-l-*` custom properties on `.app-shell.light-mode`;
 the `cc-` prefix guarantees no other module reads or is affected by them.
 

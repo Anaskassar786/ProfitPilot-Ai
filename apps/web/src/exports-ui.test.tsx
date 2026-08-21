@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.js'
 import { ExportsWorkspace } from './exports.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
 
 /**
  * Data Exports — full page mount.
@@ -150,11 +154,11 @@ async function mountWorkspace(toasts: string[] = [], navigations: string[] = [])
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(ExportsWorkspace, {
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(ExportsWorkspace, {
       context: { storeId: 'exports-test', shop: 'exports-test.myshopify.com' },
       onToast: (message: string) => { toasts.push(message) },
       onNavigateBilling: () => { navigations.push('billing') },
-    })))
+    }))))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
 }
@@ -164,7 +168,7 @@ async function mountApp(): Promise<void> {
   container.id = 'root'
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root!.render(createElement(StrictMode, null, createElement(App))) })
+  await act(async () => { root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(App)))) })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
 }
 

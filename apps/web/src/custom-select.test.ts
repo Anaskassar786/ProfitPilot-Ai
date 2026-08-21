@@ -3,6 +3,15 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { CustomSelect, customSelectKeyAction } from './CustomSelect.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 const OPTIONS = [
   { value: 'name', label: 'Sort: Name' },
@@ -14,7 +23,7 @@ type SortValue = 'name' | 'stock' | 'value'
 
 function render(props: Partial<Parameters<typeof CustomSelect<SortValue>>[0]> = {}): string {
   const base: Parameters<typeof CustomSelect<SortValue>>[0] = { value: 'name', options: OPTIONS, onChange: vi.fn(), ariaLabel: 'Sort inventory' }
-  return renderToStaticMarkup(createElement(CustomSelect<SortValue>, { ...base, ...props }))
+  return renderWithAppProvider(createElement(CustomSelect<SortValue>, { ...base, ...props }))
 }
 
 describe('shared dark listbox markup', () => {

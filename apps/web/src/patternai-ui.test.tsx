@@ -32,6 +32,15 @@ import {
 } from './patternai-charts.js'
 import type { InsightDiscovery, InsightPrediction } from './patternai-model.js'
 import { Compass } from './icons.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 const noop = vi.fn()
 
@@ -44,7 +53,7 @@ function prediction(overrides: Partial<InsightPrediction> = {}): InsightPredicti
 }
 
 describe('DiscoveryCard humanization (no enum leakage)', () => {
-  const htmlFor = (value: InsightDiscovery) => renderToStaticMarkup(createElement(DiscoveryCard, { discovery: value, storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
+  const htmlFor = (value: InsightDiscovery) => renderWithAppProvider(createElement(DiscoveryCard, { discovery: value, storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
   it('renders humanized type and category labels, never raw enums', () => {
     const html = htmlFor(discovery())
     expect(html).toContain('Opportunity')
@@ -71,7 +80,7 @@ describe('DiscoveryCard humanization (no enum leakage)', () => {
 
 describe('plan messaging', () => {
   it('LockedPanel uses only the generic Upgrade Plan CTA — never a plan name', () => {
-    const html = renderToStaticMarkup(createElement(InsightsLockedPanel, { feature: 'personas', plan: 'trial', overview: null, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(InsightsLockedPanel, { feature: 'personas', plan: 'trial', overview: null, onNavigateBilling: noop }))
     expect(html).toContain('Upgrade Plan')
     expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
     expect(html).not.toContain('$49')
@@ -79,27 +88,27 @@ describe('plan messaging', () => {
     expect(html).not.toContain('$349')
   })
   it('LockedPanel renders nothing when the feature is unlocked', () => {
-    const html = renderToStaticMarkup(createElement(InsightsLockedPanel, { feature: 'trends', plan: 'trial', overview: null, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(InsightsLockedPanel, { feature: 'trends', plan: 'trial', overview: null, onNavigateBilling: noop }))
     expect(html).toBe('')
   })
   it('UpgradeCta button says exactly Upgrade Plan', () => {
-    const html = renderToStaticMarkup(createElement(InsightsUpgradeCta, { onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(InsightsUpgradeCta, { onNavigateBilling: noop }))
     expect(html).toContain('Upgrade Plan')
   })
 })
 
 describe('educational empty states and samples', () => {
   it('renders the curious-scientist empty state', () => {
-    const html = renderToStaticMarkup(createElement(InsightsEmptyState, { icon: Compass, title: 'Personas require at least 50 customers', body: 'You have 12 synced so far.' }))
+    const html = renderWithAppProvider(createElement(InsightsEmptyState, { icon: Compass, title: 'Personas require at least 50 customers', body: 'You have 12 synced so far.' }))
     expect(html).toContain('Personas require at least 50 customers')
   })
   it('SampleBadge carries the trial labeling', () => {
-    expect(renderToStaticMarkup(createElement(SampleBadge))).toContain('SAMPLE')
+    expect(renderWithAppProvider(createElement(SampleBadge))).toContain('SAMPLE')
   })
 })
 
 describe('PredictionCard honesty', () => {
-  const htmlFor = (value: InsightPrediction) => renderToStaticMarkup(createElement(PredictionCard, { prediction: value, storeId: 's', onChanged: noop, onToast: noop }))
+  const htmlFor = (value: InsightPrediction) => renderWithAppProvider(createElement(PredictionCard, { prediction: value, storeId: 's', onChanged: noop, onToast: noop }))
   it('shows the figure with its honest interval and method', () => {
     const html = htmlFor(prediction())
     expect(html).toContain('$3,210')
@@ -116,16 +125,16 @@ describe('PredictionCard honesty', () => {
 
 describe('supporting atoms', () => {
   it('UsageMeterBar renders real fractions', () => {
-    const html = renderToStaticMarkup(createElement(UsageMeterBar, { label: 'Discoveries this month', used: 3, limit: 5 }))
+    const html = renderWithAppProvider(createElement(UsageMeterBar, { label: 'Discoveries this month', used: 3, limit: 5 }))
     expect(html).toContain('3 / 5')
   })
   it('RatingStars renders five stars and reflects values', () => {
-    const html = renderToStaticMarkup(createElement(RatingStars, { value: 3, onRate: noop }))
+    const html = renderWithAppProvider(createElement(RatingStars, { value: 3, onRate: noop }))
     expect((html.match(/type="button"/g) ?? []).length).toBeGreaterThanOrEqual(5)
     expect(html).toContain('lit')
   })
   it('MarkdownLite renders structure without scripts', () => {
-    const html = renderToStaticMarkup(createElement(MarkdownLite, { markdown: '## Study\n\n- one\n- two\n\n**Bold** claim <script>alert(1)</script>' }))
+    const html = renderWithAppProvider(createElement(MarkdownLite, { markdown: '## Study\n\n- one\n- two\n\n**Bold** claim <script>alert(1)</script>' }))
     expect(html).toContain('<h3>')
     expect(html).toContain('<li>')
     expect(html).toContain('<strong>Bold</strong>')
@@ -135,51 +144,51 @@ describe('supporting atoms', () => {
 
 describe('chart kit — SVG only, no line charts, no donuts', () => {
   it('BubbleChart plots circles on a subtle grid with axis labels', () => {
-    const html = renderToStaticMarkup(createElement(InsightsBubbleChart, { points: [{ id: 'p1', label: 'Weekly rhythm', x: 0.8, y: 0.6, r: 14 }], xLabel: 'Confidence →', yLabel: 'Recurrence →' }))
+    const html = renderWithAppProvider(createElement(InsightsBubbleChart, { points: [{ id: 'p1', label: 'Weekly rhythm', x: 0.8, y: 0.6, r: 14 }], xLabel: 'Confidence →', yLabel: 'Recurrence →' }))
     expect(html).toContain('<circle')
     expect(html).toContain('Confidence →')
     expect(html).toContain('pa-chart-grid')
     expect(html).not.toContain('<polyline')
   })
   it('RadarChart draws trait polygon + labels', () => {
-    const html = renderToStaticMarkup(createElement(InsightsRadarChart, { traits: [{ trait: 'Loyalty', score: 0.8 }, { trait: 'Spend', score: 0.5 }, { trait: 'Recency', score: 0.3 }] }))
+    const html = renderWithAppProvider(createElement(InsightsRadarChart, { traits: [{ trait: 'Loyalty', score: 0.8 }, { trait: 'Spend', score: 0.5 }, { trait: 'Recency', score: 0.3 }] }))
     expect(html).toContain('<polygon')
     expect(html).toContain('Loyalty')
   })
   it('Heatmap renders intensity cells with tooltips', () => {
-    const html = renderToStaticMarkup(createElement(InsightsHeatmap, { cells: [{ x: 1, y: 0, value: 9, label: 'Mon: 9 orders' }], xLabels: ['Sun', 'Mon'], yLabels: ['Revenue'] }))
+    const html = renderWithAppProvider(createElement(InsightsHeatmap, { cells: [{ x: 1, y: 0, value: 9, label: 'Mon: 9 orders' }], xLabels: ['Sun', 'Mon'], yLabels: ['Revenue'] }))
     expect(html).toContain('<rect')
     expect(html).toContain('Mon: 9 orders')
   })
   it('AreaBand renders a gradient confidence band instead of a line', () => {
-    const html = renderToStaticMarkup(createElement(InsightsAreaBand, { series: prediction().series }))
+    const html = renderWithAppProvider(createElement(InsightsAreaBand, { series: prediction().series }))
     expect(html).toContain('linearGradient')
     expect(html).toContain('<polygon')
     expect(html).not.toContain('<polyline')
   })
   it('Scatter/WordCloud/Timeline/Network/TreeMap render their own primitives', () => {
-    expect(renderToStaticMarkup(createElement(InsightsScatter, { points: [{ id: 'a', label: 'trend', x: 0.4, y: 0.7 }], xLabel: 'M', yLabel: 'C' }))).toContain('<circle')
-    expect(renderToStaticMarkup(createElement(InsightsWordCloud, { words: [{ tag: 'weekend', weight: 3 }] }))).toContain('weekend')
-    expect(renderToStaticMarkup(createElement(InsightsTimelineStrip, { events: [{ id: 'e1', at: '2026-08-17T00:00:00.000Z', label: 'Discovery', tone: 'discovery' }] }))).toContain('<circle')
-    expect(renderToStaticMarkup(createElement(InsightsNetworkGraph, { nodes: [{ id: 'a', label: 'Alpha', kind: 'NOTE' }, { id: 'b', label: 'Beta', kind: 'DISCOVERY' }], edges: [{ from: 'a', to: 'b' }] }))).toContain('pa-network-edge')
-    expect(renderToStaticMarkup(createElement(InsightsTreeMap, { blocks: [{ id: 'x', label: 'Repeat', value: 60 }, { id: 'y', label: 'One-time', value: 40 }] }))).toContain('<rect')
-    expect(renderToStaticMarkup(createElement(InsightsComparisonBars, { rows: [{ metric: 'revenue', a: 100, b: 50, winner: 'A' }] }))).toContain('pa-compare-bar')
+    expect(renderWithAppProvider(createElement(InsightsScatter, { points: [{ id: 'a', label: 'trend', x: 0.4, y: 0.7 }], xLabel: 'M', yLabel: 'C' }))).toContain('<circle')
+    expect(renderWithAppProvider(createElement(InsightsWordCloud, { words: [{ tag: 'weekend', weight: 3 }] }))).toContain('weekend')
+    expect(renderWithAppProvider(createElement(InsightsTimelineStrip, { events: [{ id: 'e1', at: '2026-08-17T00:00:00.000Z', label: 'Discovery', tone: 'discovery' }] }))).toContain('<circle')
+    expect(renderWithAppProvider(createElement(InsightsNetworkGraph, { nodes: [{ id: 'a', label: 'Alpha', kind: 'NOTE' }, { id: 'b', label: 'Beta', kind: 'DISCOVERY' }], edges: [{ from: 'a', to: 'b' }] }))).toContain('pa-network-edge')
+    expect(renderWithAppProvider(createElement(InsightsTreeMap, { blocks: [{ id: 'x', label: 'Repeat', value: 60 }, { id: 'y', label: 'One-time', value: 40 }] }))).toContain('<rect')
+    expect(renderWithAppProvider(createElement(InsightsComparisonBars, { rows: [{ metric: 'revenue', a: 100, b: 50, winner: 'A' }] }))).toContain('pa-compare-bar')
   })
 })
 
 describe('PatternAI brand mark', () => {
   it('draws a five-node neural constellation, not a flask or an eye', () => {
-    const html = renderToStaticMarkup(createElement(PatternAiMark, { size: 32 }))
+    const html = renderWithAppProvider(createElement(PatternAiMark, { size: 32 }))
     expect((html.match(/<circle/g) ?? []).length).toBe(10) // five nodes + five halos
     expect((html.match(/<line /g) ?? []).length).toBe(7)
     expect(html).toContain('linearGradient')
     expect(html).toContain('PatternAI')
   })
   it('renders a badge plate variant for headers and favicons', () => {
-    expect(renderToStaticMarkup(createElement(PatternAiMark, { size: 24, variant: 'badge' }))).toContain('<rect')
+    expect(renderWithAppProvider(createElement(PatternAiMark, { size: 24, variant: 'badge' }))).toContain('<rect')
   })
   it('wordmark spells PatternAI', () => {
-    const html = renderToStaticMarkup(createElement(PatternAiWordmark, {}))
+    const html = renderWithAppProvider(createElement(PatternAiWordmark, {}))
     expect(html).toContain('Pattern')
     expect(html).toContain('AI')
   })
@@ -187,7 +196,7 @@ describe('PatternAI brand mark', () => {
 
 describe('failure and welcome states', () => {
   it('the error panel is scoped and retryable — no laboratory metaphors', () => {
-    const html = renderToStaticMarkup(createElement(InsightsErrorPanel, { message: 'Internal server error', onRetry: noop }))
+    const html = renderWithAppProvider(createElement(InsightsErrorPanel, { message: 'Internal server error', onRetry: noop }))
     expect(html).toContain('This section could not load')
     expect(html).toContain('Try again')
     expect(html.toLowerCase()).not.toContain('laboratory')
@@ -201,7 +210,7 @@ describe('failure and welcome states', () => {
       trendsRequirement: { met: false, have: 12, need: 30 },
       predictRequirement: { met: false, have: 12, need: 30 },
     }
-    const html = renderToStaticMarkup(createElement(PatternAiWelcome, { readiness, plan: 'trial', canRun: false, onRunDiscovery: noop, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(PatternAiWelcome, { readiness, plan: 'trial', canRun: false, onRunDiscovery: noop, onNavigateBilling: noop }))
     expect(html).toContain('Welcome to PatternAI')
     expect(html).toContain('Customers for persona modelling')
     expect(html).toContain('15 / 50')
@@ -212,7 +221,7 @@ describe('failure and welcome states', () => {
 
 describe('plan panel', () => {
   it('separates available capabilities from locked ones with a generic CTA', () => {
-    const html = renderToStaticMarkup(createElement(PlanPanel, { plan: 'trial', overview: null, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(PlanPanel, { plan: 'trial', overview: null, onNavigateBilling: noop }))
     expect(html).toContain('Available now')
     expect(html).toContain('Unlocks with a paid plan')
     expect(html).toContain('Upgrade Plan')
@@ -221,7 +230,7 @@ describe('plan panel', () => {
 })
 
 describe('workspace smoke test', () => {
-  const shell = () => renderToStaticMarkup(createElement(PatternAiWorkspace, { context: { storeId: null, shop: null }, onToast: noop, onNavigateBilling: noop }))
+  const shell = () => renderWithAppProvider(createElement(PatternAiWorkspace, { context: { storeId: null, shop: null }, onToast: noop, onNavigateBilling: noop }))
   it('renders the PatternAI hero, grouped navigation, and the no-store state', () => {
     const html = shell()
     expect(html).toContain('Discover the patterns that drive your business')
@@ -245,7 +254,7 @@ describe('workspace smoke test', () => {
     expect(html).toMatch(/pa-nav-item[^"]*locked/)
   })
   it('renders the cross-section explorer', () => {
-    const html = renderToStaticMarkup(createElement(ExploreFurther, { go: noop, storeId: null, overview: null, plan: 'trial' as const }))
+    const html = renderWithAppProvider(createElement(ExploreFurther, { go: noop, storeId: null, overview: null, plan: 'trial' as const }))
     expect(html).toContain('Keep exploring')
     expect(html).toContain('Trend watcher')
   })

@@ -105,4 +105,41 @@ describe('F8 deterministic PDF vault', () => {
     expect(emailed.run.emailStatus).toBe('SENT')
     expect(sends).toBe(1)
   })
+
+  it('recovers stale GENERATING runs to FAILED so the UI never spins forever', async () => {
+    const repository = new InMemoryReportRepository()
+    const now = () => Date.parse('2024-06-01T12:00:00.000Z')
+    const service = new ReportService(repository, new InMemoryReportObjectStore(), dataProvider, null, now)
+    const generated = await service.generate({ storeId: 'store-stale', frequency: 'MONTHLY', period, email: false })
+    expect(generated.run.status).toBe('COMPLETED')
+    // Simulate a crashed generation: write a GENERATING run with an old
+    // createdAt directly into the repository.
+    const staleRun = {
+      ...generated.run,
+      id: 'stale-1',
+      idempotencyKey: 'MONTHLY:2024-03-01:2024-03-31',
+      period: { start: '2024-03-01T00:00:00.000Z', end: '2024-03-31T23:59:59.000Z' },
+      filename: 'stale.pdf',
+      objectKey: 'reports/store-stale/stale.pdf',
+      status: 'GENERATING' as const,
+      createdAt: Date.parse('2024-06-01T09:00:00.000Z'),
+      completedAt: null,
+    }
+    await repository.createRunIfAbsent(staleRun)
+    // Fresh GENERATING runs (< staleness window) are left untouched.
+    const freshRun = { ...staleRun, id: 'fresh-1', idempotencyKey: 'MONTHLY:2024-02-01:2024-02-28', period: { start: '2024-02-01T00:00:00.000Z', end: '2024-02-28T23:59:59.000Z' }, createdAt: now() }
+    await repository.createRunIfAbsent(freshRun)
+
+    const listed = await service.list('store-stale')
+    const stale = listed.find((run) => run.id === 'stale-1')
+    expect(stale?.status).toBe('FAILED')
+    const fresh = listed.find((run) => run.id === 'fresh-1')
+    expect(fresh?.status).toBe('GENERATING')
+    // The recovery is persisted: a fresh list shows the same terminal state.
+    expect((await repository.listRuns('store-stale')).find((run) => run.id === 'stale-1')?.status).toBe('FAILED')
+    // Re-generating the same period after a crash re-drives to COMPLETED.
+    const retried = await service.generate({ storeId: 'store-stale', frequency: 'MONTHLY', period: staleRun.period, email: false })
+    expect(retried.run.status).toBe('COMPLETED')
+    expect(retried.run.id).not.toBe('stale-1')
+  })
 })

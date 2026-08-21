@@ -160,7 +160,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'command-center', label: 'AI Command Center', icon: Bot },
       { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
       { id: 'automation', label: 'Automation', icon: Workflow },
-      { id: 'ai-command', label: 'AI Command', icon: AiCommandIcon },
+      { id: 'ai-command', label: 'AI Commander', icon: AiCommandIcon },
       /* 🛑 Jarvis nav item temporarily removed — restore when Jarvis returns */
       // { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon },
     ],
@@ -216,9 +216,9 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   'ai-executive': { title: 'GrowthIQ', description: 'Intelligent growth for ambitious merchants — strategy, benchmarks, scenarios, and board reports from your real store data.', icon: GrowthIqNavIcon },
   automation: { title: 'Automation', description: 'Automate the busywork — recover carts, welcome customers, and stay on top of stock.', icon: Workflow },
   patternai: { title: 'PatternAI', description: 'Discover the patterns that drive your business — discoveries, lessons, personas, and Why? answers computed from your real synced data.', icon: PatternAiIcon },
-  campaigns: { title: 'AI Command', description: 'Campaigns has been replaced by AI Command.', icon: AiCommandIcon },
-  copilot: { title: 'AI Command', description: 'One command controls everything.', icon: AiCommandIcon },
-  'ai-command': { title: 'AI Command', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
+  campaigns: { title: 'AI Commander', description: 'Campaigns has been replaced by AI Commander.', icon: AiCommandIcon },
+  copilot: { title: 'AI Commander', description: 'One command controls everything.', icon: AiCommandIcon },
+  'ai-command': { title: 'AI Commander', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
   /* 🛑 Jarvis page — data preserved for type safety but not rendered in UI (removed from navGroups & PageRouter) */
   jarvis: { title: 'Jarvis', description: 'Your spoken store assistant — page-aware briefings, no chat box.', icon: JarvisNavIcon },
   reports: { title: 'Business Reports', description: 'Generate professional reports from your real store data.', icon: FileBarChart },
@@ -238,20 +238,31 @@ type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; statu
 
 type WorkspaceData = Readonly<{ analytics: AnalyticsSnapshot | null; catalog: readonly CatalogProduct[]; agents: readonly AgentStatus[]; recommendations: readonly Recommendation[]; inventory: InventoryPageResult | null; loadState: LoadState; error: string | null }>
 
+/**
+ * Merchant-approved header navigation sequence (18 tabs, exact order).
+ * Both AI Command Center (`/command`) and AI Commander (`/ai-command`) are
+ * separate live pages. Tabs are SPA buttons wired to client-side `navigate`
+ * (history.pushState) — never `<a href>` anchors, so switching tabs never
+ * hard-reloads the embedded iframe.
+ */
 const HEADER_NAV: ReadonlyArray<Readonly<{ label: string; page: SectionId }>> = [
   { label: 'Dashboard', page: 'dashboard' },
-  { label: 'AI Command Center', page: 'command-center' },
-  { label: 'Recommendations', page: 'recommendations' },
-  { label: 'Automation', page: 'automation' },
   { label: 'Products', page: 'products' },
   { label: 'Orders', page: 'orders' },
   { label: 'Customers', page: 'customers' },
   { label: 'Inventory', page: 'inventory' },
-  { label: 'Store Coach', page: 'store-coach' },
+  { label: 'Analytics', page: 'analytics' },
+  { label: 'AI Command Center', page: 'command-center' },
+  { label: 'AI Commander', page: 'ai-command' },
+  { label: 'Recommendations', page: 'recommendations' },
   { label: 'GrowthIQ', page: 'ai-executive' },
+  { label: 'Automation', page: 'automation' },
+  { label: 'Store Coach', page: 'store-coach' },
   { label: 'PatternAI', page: 'patternai' },
   { label: 'Reports', page: 'reports' },
+  { label: 'Exports', page: 'exports' },
   { label: 'Billing', page: 'billing' },
+  { label: 'Help & Support', page: 'support' },
   { label: 'Settings', page: 'settings' },
 ]
 
@@ -643,9 +654,12 @@ export default function App() {
 
   const navigate = (page: SectionId) => {
     const next = page === 'campaigns' || page === 'copilot' ? 'ai-command' : page
-    if (page === 'campaigns') showToast('Campaigns has been replaced by AI Command', 'info')
+    if (page === 'campaigns') showToast('Campaigns has been replaced by AI Commander', 'info')
     if (next === 'automation' && !window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/automation${window.location.search}`)
     else if (next !== 'automation' && window.location.pathname.startsWith('/automation')) window.history.pushState({}, '', `/${window.location.search}`)
+    // AI Command Center owns the `/command` path (deep links land on the page).
+    if (next === 'command-center' && window.location.pathname !== '/command') window.history.pushState({}, '', `/command${window.location.search}`)
+    else if (next !== 'command-center' && window.location.pathname === '/command') window.history.pushState({}, '', `/${window.location.search}`)
     // Each AI Growth Command module is its own sidebar page with its own
     // pathname (same pattern PatternAI already used).
     const growthTarget = growthCommandPath(next)
@@ -672,12 +686,13 @@ export default function App() {
     const onHashNavigation = () => {
       const section = hashSection(window.location.hash)
       const onCommand = isAiCommandHash(window.location.hash) || isCampaignsHash(window.location.hash) || window.location.hash.startsWith('#/copilot')
-      if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Command', 'info')
+      if (isCampaignsHash(window.location.hash)) showToast('Campaigns has been replaced by AI Commander', 'info')
       const onPatternAi = window.location.pathname.startsWith('/ai-growth-command/patternai') || window.location.pathname.startsWith('/ai-growth-command/insights')
       const onExecutive = isGrowthIqLocation(window.location.pathname, window.location.hash)
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' /* 🛑 || current === 'jarvis' */ || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' ? 'dashboard' : current))
+      const onCommandCenter = window.location.pathname === '/command' || window.location.pathname.startsWith('/command/')
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onCommandCenter ? 'command-center' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' /* 🛑 || current === 'jarvis' */ || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' || current === 'command-center' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -1100,28 +1115,6 @@ function RecommendationCard({ recommendation, onEvidence, onDecide }: { recommen
   return <article className="recommendation-card"><div className="recommendation-card-main"><div className="recommendation-card-top"><span className="agent-pill"><span />{recommendation.agent}</span><span className={`confidence-pill ${recommendation.confidenceLevel.toLowerCase()}`}><span />{recommendation.confidenceLevel}</span><span className="recommendation-time">{recommendation.status}</span></div><h3>{recommendation.title}</h3><p>{recommendation.reason}</p><div className="evidence-snippets"><span><Database size={13} /> Rule {recommendation.ruleId} · v1.0.0</span><span><ShieldCheck size={13} /> {recommendation.explanationStatus}</span>{recommendation.explanation && <span><MessageSquare size={13} /> {recommendation.explanation}</span>}</div></div><div className="recommendation-card-side"><span className="impact-label">{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><Button className="text-button" onClick={onEvidence}><Eye size={14} /> Evidence</Button>{recommendation.status === 'PENDING' ? <div className="recommendation-actions"><Button className="button reject" onClick={() => void onDecide(recommendation.id, 'reject', recommendation.version)}>Reject</Button><Button className="button approve" onClick={() => void onDecide(recommendation.id, 'approve', recommendation.version)}><Check size={14} /> Approve</Button></div> : <span className="resolved-label"><CheckCircle2 size={14} />{recommendation.status}</span>}</div></article>
 }
 
-function CampaignsComingSoon({ onNavigate, onNavigateAutomation }: { onNavigate: () => void; onNavigateAutomation: () => void }) {
-  const previewFeatures = ['AI-drafted subject lines', 'Advanced segmentation', 'A/B testing', 'Revenue attribution', 'Full analytics'] as const
-  return (
-    <PageLayout eyebrow="Marketing center" title="Campaigns" description="A professional email marketing experience is on its way.">
-      <div className="campaigns-coming-soon">
-        <span className="campaigns-coming-soon-icon"><Mail size={26} /><Clock3 size={13} className="campaigns-coming-soon-clock" /></span>
-        <div className="section-kicker"><span className="kicker-dot purple" />MARKETING CENTER</div>
-        <h2>Campaigns are Coming Soon</h2>
-        <p>We’re building a professional email marketing experience with full legal compliance. Currently, you can use automated workflows in the Automation module for transactional emails.</p>
-        <div className="campaigns-coming-soon-features">
-          {previewFeatures.map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}
-        </div>
-        <div className="campaigns-coming-soon-actions">
-          <Button className="button primary" onClick={onNavigate}><GraduationCap size={15} /> Try AI Growth Command Instead</Button>
-          <Button className="button secondary" onClick={onNavigateAutomation}><Workflow size={15} /> Open Automation for transactional emails</Button>
-        </div>
-        <p className="campaigns-coming-soon-note">Your existing campaign templates are safe — nothing has been deleted, and they will be available again when Campaigns launches.</p>
-      </div>
-    </PageLayout>
-  )
-}
-
 function CopilotPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { const [query, setQuery] = useState(''); return <PageLayout eyebrow="Advanced query" title="Copilot" description="A closed-intent grammar will answer from evidence packs once F8 is implemented." actions={<Button className="button secondary"><Clock3 size={15} /> Thread history</Button>}><div className="copilot-layout"><section className="copilot-main"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">10 SUPPORTED INTENTS · F8</div><h2>Ask a grounded question.</h2><p>There are no generated answers in this phase.</p></div></div><div className="copilot-empty"><Database size={24} /><strong>Copilot is not answering yet</strong><span>F8 will connect closed grammar intents to real evidence tables.</span><Button className="button secondary" onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><LockKeyhole size={14} /> View gate</Button></div><div className="copilot-composer"><div className="composer-label"><span><Command size={13} /> Try a future intent</span><span>Numbers will come from F2 tables</span></div><div className="composer-input"><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Why did sales change this week?" rows={2} /><Button className="send-button" disabled={!query.trim()} onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><ArrowUpRight size={16} /></Button></div><div className="suggested-prompts"><Button onClick={() => setQuery('Which products are at stockout risk?')}>Stockout risk</Button><Button onClick={() => setQuery('What changed in revenue?')}>Revenue change</Button></div></div></section><aside className="card copilot-sidebar"><CardHeading kicker="Thread history" dot="blue" title="No questions yet" /><EmptySmall icon={MessageSquare} text="F8 threads are not created yet." /></aside></div></PageLayout> }
 
 function ReportsPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { return <PageLayout eyebrow="Reporting shell" title="Reports" description="Report vault and scheduling will only render closed-period PDFs from F8." actions={<Button className="button primary" onClick={() => onPhaseGate('F8', 'PDF report generation')}><Plus size={15} /> Generate report</Button>}><div className="report-banner"><span className="report-banner-icon"><FileBarChart size={22} /></span><div><div className="section-kicker">DETERMINISTIC PDF VAULT</div><h2>Reporting is not enabled yet.</h2><p>F8 will add closed periods, R2 storage, and idempotent delivery.</p></div><span className="phase-tag">AI</span></div><EmptyState icon={FileText} title="No reports generated" description="There are no placeholder PDFs in this vault. Generate reports after the F8 reporting package is implemented." action="View F8 boundary" onAction={() => onPhaseGate('F8', 'PDF report generation')} /></PageLayout> }
@@ -1355,7 +1348,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
     if (account?.trial?.state === 'ACTIVE') return 'trial'
     return null
   })()
-  const isGift = account?.subscription?.state === 'GIFT_ACCESS_UNLIMITED' || Boolean(account?.gift)
+  const now = Date.now()
+  // A gift is only "active" while its redemption window is open — once it
+  // expires the store reverts to Trial (or locked) and Commander perks vanish.
+  const giftRecord = account?.gift ?? null
+  const giftActive = (account?.subscription?.state === 'GIFT_ACCESS_UNLIMITED' && (account.subscription.currentPeriodEnd === null || account.subscription.currentPeriodEnd > now))
+    || (giftRecord !== null && (giftRecord.expiresAt ?? 0) > now)
+  const giftExpired = giftRecord !== null && (giftRecord.expiresAt ?? 0) <= now
+  const trialExpired = account?.trial?.state === 'EXPIRED' && !giftActive
+  const isGift = giftActive
 
   const startCharge = async (plan: 'START' | 'GROWTH' | 'COMMANDER') => {
     if (!context.storeId) { onToast('Connect Shopify before choosing a plan.', 'info'); return }
@@ -1432,6 +1433,16 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
           <Button type="button" onClick={dismissDevNote} aria-label="Dismiss developer note"><X size={13} /></Button>
         </div>
       )}
+      {giftExpired && (
+        <Banner tone="warning" title="Gift access ended — upgrade to keep Commander features">
+          <p>Your promo-code access to Commander has ended. Basic trial features remain available until you choose Start, Growth, or Commander.</p>
+        </Banner>
+      )}
+      {trialExpired && (
+        <Banner tone="critical" title="Trial expired — upgrade to continue">
+          <p>Your 14-day free trial has ended. Paid features are locked until you choose a plan; viewing your dashboard and syncing data still work.</p>
+        </Banner>
+      )}
       {!context.storeId ? (
         <EmptyState icon={WalletCards} title="Connect Shopify to view billing" description="Billing never assumes a plan. Complete the signed install flow to load a real subscription." action="Connect from Settings" onAction={() => onToast('Open the Shopify install flow from the workspace context.', 'info')} />
       ) : (
@@ -1447,13 +1458,17 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                   <span className={`billing-status-badge ${status.tone}`}>{status.label}</span>
                 </div>
                 <p>
-                  {account?.subscription?.currentPeriodEnd
-                    ? `Current period ends ${new Date(account.subscription.currentPeriodEnd).toLocaleDateString()}.`
-                    : account?.trial?.expiresAt
-                      ? `Trial ends ${new Date(account.trial.expiresAt).toLocaleDateString()}. Basic analytics stay available until you choose a plan.`
-                      : account?.gift
-                        ? `Gift access expires ${new Date(account.gift.expiresAt).toLocaleDateString()}.`
-                        : 'Start a plan or redeem a gift code when you are ready.'}
+                  {giftExpired
+                    ? 'Gift access ended — Commander features are locked until you upgrade.'
+                    : trialExpired
+                      ? 'Trial ended — paid features are locked until you choose a plan.'
+                      : account?.subscription?.currentPeriodEnd
+                        ? `Current period ends ${new Date(account.subscription.currentPeriodEnd).toLocaleDateString()}.`
+                        : account?.trial?.expiresAt
+                          ? `Trial ends ${new Date(account.trial.expiresAt).toLocaleDateString()}. Basic analytics stay available until you choose a plan.`
+                          : account?.gift
+                            ? `Gift access expires ${new Date(account.gift.expiresAt).toLocaleDateString()}.`
+                            : 'Start a plan or redeem a gift code when you are ready.'}
                 </p>
                 {account?.trial?.state === 'ACTIVE' && trialDaysLeft !== null && (
                   <div className="billing-trial-progress">

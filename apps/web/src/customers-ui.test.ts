@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { CustomerActivityStatus, CustomerEmailAction, CustomersEmptyState, CustomerPremiumIntelligence, InitialsAvatar, TargetedEmailComposer } from './customers.js'
 import { customerAvatarColor, customerEmailLabel, customerMoney, initialsForCustomer, primaryBehaviorLabel } from './customers-model.js'
 import type { CustomerCoverage, CustomerDetail, CustomerInsightsResult, CustomerSummary } from './customers-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 const customer: CustomerSummary = { id: 'real-1', displayName: 'Asha Khan', hasRealName: true, email: 'asha@example.com', emailVisibility: 'available', marketingState: 'subscribed', canEmail: true, emailDisabledReason: null, phone: null, createdAt: '2026-08-01T00:00:00Z', lifetimeOrders: 2, totalSpent: 200, currency: 'INR', lastOrderAt: '2026-08-10T00:00:00Z', activity: 'active', segments: ['vip'], primarySegment: 'vip', purchasePattern: null }
 
@@ -12,8 +21,8 @@ describe('Customers protected-data display helpers', () => {
   it('derives initials only from a real name and uses a neutral icon otherwise', () => {
     expect(initialsForCustomer(customer)).toBe('AK')
     expect(initialsForCustomer({ ...customer, displayName: 'Guest customer', hasRealName: false })).toBeNull()
-    const named = renderToStaticMarkup(createElement(InitialsAvatar, { customer }))
-    const guest = renderToStaticMarkup(createElement(InitialsAvatar, { customer: { ...customer, displayName: 'Guest customer', hasRealName: false } }))
+    const named = renderWithAppProvider(createElement(InitialsAvatar, { customer }))
+    const guest = renderWithAppProvider(createElement(InitialsAvatar, { customer: { ...customer, displayName: 'Guest customer', hasRealName: false } }))
     expect(named).toContain('AK')
     expect(guest).toContain('Customer name unavailable')
     expect(guest).not.toContain('>G<')
@@ -41,22 +50,22 @@ describe('Customers protected-data display helpers', () => {
 
 describe('Customers UI safety regressions', () => {
   it('shows Unknown activity with the exact coverage explanation', () => {
-    const html = renderToStaticMarkup(createElement(CustomerActivityStatus, { activity: 'unknown' }))
+    const html = renderWithAppProvider(createElement(CustomerActivityStatus, { activity: 'unknown' }))
     expect(html).toContain('Unknown')
     expect(html).toContain('complete 90-day Shopify order window cannot be proven')
     expect(html).not.toContain('Inactive')
   })
 
   it('disables opted-out email with the server-derived reason and locks lower plans', () => {
-    const disabled = renderToStaticMarkup(createElement(CustomerEmailAction, { customer: { ...customer, canEmail: false, marketingState: 'not_subscribed', emailDisabledReason: 'Customer opted out' }, premium: true, onEmail: vi.fn(), onUpgrade: vi.fn() }))
+    const disabled = renderWithAppProvider(createElement(CustomerEmailAction, { customer: { ...customer, canEmail: false, marketingState: 'not_subscribed', emailDisabledReason: 'Customer opted out' }, premium: true, onEmail: vi.fn(), onUpgrade: vi.fn() }))
     expect(disabled).toContain('Customer opted out')
     expect(disabled).toContain('disabled')
-    const locked = renderToStaticMarkup(createElement(CustomerEmailAction, { customer, premium: false, onEmail: vi.fn(), onUpgrade: vi.fn() }))
+    const locked = renderWithAppProvider(createElement(CustomerEmailAction, { customer, premium: false, onEmail: vi.fn(), onUpgrade: vi.fn() }))
     expect(locked).toContain('Upgrade to unlock')
   })
 
   it('renders empty state without demo customer identities or fake money', () => {
-    const html = renderToStaticMarkup(createElement(CustomersEmptyState, { title: 'No customer records synced', description: 'No demo customers are created.', action: 'Sync Customers', onAction: vi.fn() }))
+    const html = renderWithAppProvider(createElement(CustomersEmptyState, { title: 'No customer records synced', description: 'No demo customers are created.', action: 'Sync Customers', onAction: vi.fn() }))
     expect(html).toContain('No customer records synced')
     expect(html).toContain('No demo customers are created.')
     expect(html).not.toContain('john@example.com')
@@ -89,7 +98,7 @@ describe('Customers UI safety regressions', () => {
   })
 
   it('renders a safety-first email composer with explicit review and no arbitrary recipient input', () => {
-    const html = renderToStaticMarkup(createElement(TargetedEmailComposer, { storeId: 'store-1', customer, onClose: vi.fn(), onToast: vi.fn() }))
+    const html = renderWithAppProvider(createElement(TargetedEmailComposer, { storeId: 'store-1', customer, onClose: vi.fn(), onToast: vi.fn() }))
     expect(html).toContain('NO ONE-CLICK SEND')
     expect(html).toContain('REAL SHOPIFY RECIPIENT')
     expect(html).toContain('Send reviewed email')
@@ -117,7 +126,7 @@ describe('Customer detail drawer premium sections', () => {
   const insights: CustomerInsightsResult = { plan: 'growth', planLabel: 'Growth', customerCount: 5, available: [{ feature: 'retention_suggestion', name: 'AI retention suggestion', data: { status: 'generated', text: 'Re-engage VIPs with a curated restock note.' } }], locked: [], usage: { feature: 'customers_ai_insights_day', used: 1, limit: 20, remaining: 19, limitReached: false }, coverage: detailCoverage, cached: false }
 
   it('locks every premium feature individually for a Trial plan instead of leaving blank sections', () => {
-    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'trial', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'trial', insights, insightsLoading: false, onUpgrade: vi.fn() }))
     expect(html).toContain('Purchase intelligence')
     expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Predicted next order')
@@ -134,7 +143,7 @@ describe('Customer detail drawer premium sections', () => {
   })
 
   it('unlocks Growth features while keeping Commander predictions locked', () => {
-    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'growth', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'growth', insights, insightsLoading: false, onUpgrade: vi.fn() }))
     expect(html).toContain('Average cadence')
     expect(html).toContain('27 days')
     expect(html).toContain('Re-engage VIPs')
@@ -144,7 +153,7 @@ describe('Customer detail drawer premium sections', () => {
   })
 
   it('unlocks every prediction for Commander with the heuristic LTV disclaimer', () => {
-    const html = renderToStaticMarkup(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'commander', insights, insightsLoading: false, onUpgrade: vi.fn() }))
+    const html = renderWithAppProvider(createElement(CustomerPremiumIntelligence, { customer: detailCustomer, plan: 'commander', insights, insightsLoading: false, onUpgrade: vi.fn() }))
     expect(html).toContain('Average cadence')
     expect(html).toContain('Predicted date')
     expect(html).toContain('12-month forecast')

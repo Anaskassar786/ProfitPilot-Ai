@@ -1,4 +1,5 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
+import { cached, loadCached, remember } from './data-cache.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { LucideIcon } from './icons.js'
@@ -206,36 +207,40 @@ export const COACH_CARD_LABELS = [
   'Health score',
 ] as const
 
+type CoachBundle = Readonly<{ data: CoachData; loadState: CoachLoadState; error: string | null; failedCards: readonly string[] }>
+
+function emptyCoachBundle(): CoachBundle {
+  return { data: EMPTY_COACH_DATA, loadState: 'ready', error: null, failedCards: [] }
+}
+
 export function useCoachData(storeId: string | null): readonly [CoachData, CoachLoadState, string | null, () => void, readonly string[]] {
   const [data, setData] = useState<CoachData>(EMPTY_COACH_DATA)
   const [loadState, setLoadState] = useState<CoachLoadState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [failedCards, setFailedCards] = useState<readonly string[]>([])
-  const load = useCallback(async () => {
-    if (!storeId) { setData(EMPTY_COACH_DATA); setLoadState('ready'); setError(null); setFailedCards([]); return }
-    setLoadState('loading')
+  const fetchBundle = useCallback(async (currentStoreId: string): Promise<CoachBundle> => {
     const [huddle, priorities, goals, summary, heatmap, achievements, badges, streak, review, preferences, usage, health] = await Promise.allSettled([
-      fetchCoachHuddle(storeId),
-      fetchCoachPriorities(storeId),
-      fetchCoachGoals(storeId, 'ACTIVE'),
+      fetchCoachHuddle(currentStoreId),
+      fetchCoachPriorities(currentStoreId),
+      fetchCoachGoals(currentStoreId, 'ACTIVE'),
       // Ask for the widest dashboard window; the API clamps it down to the
       // store's real plan entitlement and echoes the window it served.
-      fetchCoachProgressSummary(storeId, 90),
-      fetchCoachActivityHeatmap(storeId),
-      fetchCoachAchievements(storeId),
-      fetchCoachAvailableAchievements(storeId),
-      fetchCoachStreak(storeId),
+      fetchCoachProgressSummary(currentStoreId, 90),
+      fetchCoachActivityHeatmap(currentStoreId),
+      fetchCoachAchievements(currentStoreId),
+      fetchCoachAvailableAchievements(currentStoreId),
+      fetchCoachStreak(currentStoreId),
       // A 404 here is an expected absence (no weekly review generated yet),
       // not a failure — the home view already renders the card conditionally.
       // Counting it as a failure would flag every fresh store as 'partial'
       // and false-trigger the partial-load banner.
-      fetchCoachReview(storeId).catch((error: unknown) => {
+      fetchCoachReview(currentStoreId).catch((error: unknown) => {
         if (error instanceof ApiClientError && error.status === 404) return null
         throw error
       }),
-      fetchCoachPreferences(storeId),
-      fetchCoachUsage(storeId),
-      fetchCoachHealthScore(storeId),
+      fetchCoachPreferences(currentStoreId),
+      fetchCoachUsage(currentStoreId),
+      fetchCoachHealthScore(currentStoreId),
     ])
     const catalog = badges.status === 'fulfilled' && Array.isArray(badges.value.catalog) ? badges.value.catalog : []
     const badgeCategoryStats: readonly CoachBadgeCategoryStat[] = badges.status === 'fulfilled' && Array.isArray(badges.value.categories)
@@ -256,19 +261,41 @@ export function useCoachData(storeId: string | null): readonly [CoachData, Coach
       usage: usage.status === 'fulfilled' ? usage.value : null,
       health: health.status === 'fulfilled' ? { score: health.value.score, label: health.value.label, tone: health.value.tone } : null,
     }
-    setData(next)
     const settled = [huddle, priorities, goals, summary, heatmap, achievements, badges, streak, review, preferences, usage, health] as const
     const failed = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    if (failed.length === 0) { setLoadState('ready'); setError(null); setFailedCards([]) }
-    else {
-      const first = failed[0]!.reason
-      const message = first instanceof ApiClientError && first.status === 402 ? 'Store Coach is locked on your current plan. Upgrade Plan to keep coaching.' : first instanceof Error ? first.message : 'Some Store Coach data could not be loaded.'
-      setLoadState(failed.length >= 10 ? 'error' : 'partial')
-      setError(message)
-      setFailedCards(COACH_CARD_LABELS.filter((_, index) => settled[index]!.status === 'rejected'))
-    }
-  }, [storeId])
-  useEffect(() => { void load() }, [load])
+    if (failed.length === 0) return { data: next, loadState: 'ready' as const, error: null, failedCards: [] }
+    const first = failed[0]!.reason
+    const message = first instanceof ApiClientError && first.status === 402 ? 'Store Coach is locked on your current plan. Upgrade Plan to keep coaching.' : first instanceof Error ? first.message : 'Some Store Coach data could not be loaded.'
+    return { data: next, loadState: (failed.length >= 10 ? 'error' : 'partial') as CoachLoadState, error: message, failedCards: COACH_CARD_LABELS.filter((_, index) => settled[index]!.status === 'rejected') }
+  }, [])
+  const applyBundle = useCallback((bundle: CoachBundle) => {
+    setData(bundle.data)
+    setLoadState(bundle.loadState)
+    setError(bundle.error)
+    setFailedCards(bundle.failedCards)
+  }, [])
+  const load = useCallback(async () => {
+    if (!storeId) { applyBundle(emptyCoachBundle()); return }
+    setLoadState('loading')
+    const bundle = await fetchBundle(storeId)
+    remember(`store-coach:${storeId}`, bundle)
+    applyBundle(bundle)
+  }, [storeId, fetchBundle, applyBundle])
+  // SPA tab-switch fast path (GA 2026-08-21): Store Coach fires 12 parallel
+  // fetches on mount. Seed from the cached bundle so returning to the tab
+  // renders instantly, then silently refresh in the background.
+  useEffect(() => {
+    if (!storeId) { applyBundle(emptyCoachBundle()); return }
+    const cacheKey = `store-coach:${storeId}`
+    const seed = cached<CoachBundle>(cacheKey)
+    if (seed) applyBundle(seed)
+    else setLoadState('loading')
+    let cancelled = false
+    void loadCached(cacheKey, () => fetchBundle(storeId)).then((bundle) => {
+      if (!cancelled) applyBundle(bundle)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [storeId, fetchBundle, applyBundle])
   return [data, loadState, error, load, failedCards]
 }
 
@@ -2002,7 +2029,9 @@ function CoachSettingRow({ label, description, children }: { label: string; desc
 }
 
 export function Toggle({ value, onChange, disabled }: { value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
-  return <Button className={`toggle ${value ? 'on' : ''}`} role="switch" aria-checked={value} disabled={disabled} onClick={() => onChange(!value)}><span /></Button>
+  // RichButton (UnstyledButton) forwards role/aria-checked/className intact —
+  // the plain Button shim drops them.
+  return <RichButton className={`toggle ${value ? 'on' : ''}`} role="switch" aria-checked={value} disabled={disabled} onClick={() => onChange(!value)}><span /></RichButton>
 }
 
 function minutesToTimeInput(minutes: number): string {

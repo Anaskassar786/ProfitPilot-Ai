@@ -3,7 +3,7 @@ import { PLAN_ENTITLEMENT_LIMITS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE,
 import { assertAccess, UpgradeRequiredError, accessGate, limitForPlan } from './entitlements.js'
 import { AdminStepUpSessions, FunnelLedger, FUNNEL_MILESTONES, calculateRoi, lockPrice, priceForRenewal } from './growth.js'
 import { agentsForPlanCount, PLAN_DEFINITIONS, entitlementsFor, planFor, priceFor } from './plans.js'
-import { TrialAndGiftLedger, subscriptionForTrial } from './trials.js'
+import { TrialAndGiftLedger, expiredGiftRevert, subscriptionForTrial } from './trials.js'
 import type { Subscription } from './billing.js'
 
 const active: Subscription = { storeId: 's', plan: 'growth', state: 'ACTIVE_MONTHLY', currentPeriodEnd: null, version: 0 }
@@ -102,11 +102,39 @@ describe('trial and gift redemption', () => {
   it('tracks one limited trial for a shop id', () => { const ledger = new TrialAndGiftLedger(); const first = ledger.startTrial('s', 100); expect(ledger.startTrial('s', 200)).toEqual(first); expect(subscriptionForTrial('s', first, 200).state).toBe('TRIAL_LIMITED') })
   it('expires trials after fourteen days', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); expect(ledger.trial('s', 100 + 14 * 86_400_000)?.state).toBe('EXPIRED') })
   it('finds trials for an hourly nudge window', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100, 1); expect(ledger.expiringTrials(100, 86_400_000)).toHaveLength(1) })
-  it('redeems a gift and cancels the trial', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'KASSAR786', 200); expect(redemption.code).toBe('KASSAR786'); expect(ledger.trial('s')?.state).toBe('CANCELLED') })
+  it('redeems a gift for Commander for the full duration', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'KASSAR786', 200); expect(redemption.code).toBe('KASSAR786'); expect(redemption.expiresAt).toBe(200 + 3 * 86_400_000) })
+  it('leaves the trial intact so the store reverts after the gift window (6.2.4)', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); ledger.redeemGift('s', 'KASSAR786', 200); expect(ledger.trial('s', 1_000)?.state).toBe('ACTIVE'); expect(ledger.trial('s', 1_000)?.consumed).toBe(false) })
+  it('cancels the trial only on an explicit upgrade', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const cancelled = ledger.cancelTrial('s'); expect(cancelled?.state).toBe('CANCELLED'); expect(cancelled?.consumed).toBe(true) })
   it('prevents a store from redeeming twice', () => { const ledger = new TrialAndGiftLedger(); ledger.redeemGift('s', 'KASSAR786'); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('already redeemed') })
   it('auto-deactivates an exhausted code', () => { const ledger = new TrialAndGiftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786'); expect(ledger.gift('KASSAR786')?.active).toBe(false) })
   it('supports an admin kill switch', () => { const ledger = new TrialAndGiftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'KASSAR786')).toThrow('disabled') })
   it('rejects invalid codes', () => expect(() => new TrialAndGiftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))
+})
+
+describe('gift expiry revert (expiredGiftRevert)', () => {
+  const now = Date.parse('2026-08-21T00:00:00.000Z')
+  const giftRecord = { storeId: 's' as const, plan: 'commander' as const, state: 'GIFT_ACCESS_UNLIMITED' as const, currentPeriodEnd: now - 1_000, version: 3, interval: null, chargeId: null }
+  it('returns null when there is no gift subscription', () => {
+    expect(expiredGiftRevert(null, null, now)).toBeNull()
+    expect(expiredGiftRevert({ ...giftRecord, state: 'ACTIVE_MONTHLY' as const, plan: 'start' as const }, null, now)).toBeNull()
+  })
+  it('returns null while the gift window is still open', () => {
+    expect(expiredGiftRevert({ ...giftRecord, currentPeriodEnd: now + 86_400_000 }, null, now)).toBeNull()
+  })
+  it('reverts to Trial (TRIAL_LIMITED) when the trial is still valid', () => {
+    const trial = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: false, state: 'ACTIVE' as const }
+    const reverted = expiredGiftRevert(giftRecord, trial, now)
+    expect(reverted?.state).toBe('TRIAL_LIMITED')
+    expect(reverted?.plan).toBe('trial')
+    expect(reverted?.currentPeriodEnd).toBe(trial.expiresAt)
+    expect(reverted?.version).toBe(4)
+  })
+  it('reverts to locked (PENDING_CONFIRMATION) when the trial is also expired', () => {
+    const trial = { shopId: 's', startedAt: now - 30 * 86_400_000, expiresAt: now - 2 * 86_400_000, consumed: false, state: 'EXPIRED' as const }
+    const reverted = expiredGiftRevert(giftRecord, trial, now)
+    expect(reverted?.state).toBe('PENDING_CONFIRMATION')
+    expect(reverted?.plan).toBe('trial')
+  })
 })
 
 describe('funnel, grandfathering, ROI, admin', () => {

@@ -2,7 +2,7 @@ import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresStoreDirectory, withTenantContext } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 import { Logger } from '@profitpilot/logger'
-import { AdminStepUpSessions, agentsForPlanCount, calculateRoi, DEFAULT_GIFT_CODES, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
+import { AdminStepUpSessions, agentsForPlanCount, calculateRoi, DEFAULT_GIFT_CODES, expiredGiftRevert, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
 import type { TrialRecord } from '@profitpilot/billing'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
@@ -57,7 +57,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
       mockCharges: env.BILLING_MOCK_CHARGES?.trim().toLowerCase() !== 'false',
       createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
       verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, plan && interval ? { plan, interval } : undefined),
-      usage: async (shopId) => usage(f4.database, shopId),
+      usage: async (shopId) => usage(f4.database, shopId, giftStore),
       roi: async (shopId) => roi(f4.database, f4.ai, shopId),
       ensureTrial,
     },
@@ -73,7 +73,11 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   }
 }
 
-async function usage(database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> }, shopId: string) {
+async function usage(
+  database: { query<Row extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<{ readonly rows: readonly Row[]; readonly rowCount: number }> },
+  shopId: string,
+  giftStore?: PostgresTrialGiftStore,
+) {
   // Resolve the tier first — every meter needs a limit and Commander fairness
   // flags are tier-relative.
   let account: Awaited<ReturnType<PostgresBillingRepository['get']>> = null
@@ -81,6 +85,19 @@ async function usage(database: { query<Row extends QueryResultRow>(text: string,
     account = await new PostgresBillingRepository(database).get(shopId)
   } catch {
     account = null
+  }
+  // Gift-expiry enforcement: a GIFT_ACCESS_UNLIMITED record whose window has
+  // passed must not keep Commander limits — revert to Trial (if still valid)
+  // or locked, exactly like GET /billing does.
+  if (account && giftStore) {
+    try {
+      const trial = await giftStore.trial(shopId)
+      const reverted = expiredGiftRevert(account, trial)
+      if (reverted) {
+        await new PostgresBillingRepository(database).put(reverted).catch(() => undefined)
+        account = reverted
+      }
+    } catch { /* tier resolution falls back to the stored plan */ }
   }
   const tier: 'trial' | 'start' | 'growth' | 'commander' = account?.plan ?? 'trial'
 

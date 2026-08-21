@@ -37,7 +37,16 @@ function channel(value: number): number {
   return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
 }
 
-export function luminance(hex: string): number {
+export function luminance(color: string): number {
+  // Accept hex (#rrggbb) and rgb(r, g, b) — the contrast table mixes both.
+  const trimmed = color.trim()
+  const hex = trimmed.startsWith('#')
+    ? trimmed
+    : (() => {
+        const match = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(trimmed)
+        if (!match) return '#000000'
+        return `#${[match[1], match[2], match[3]].map((part) => Number.parseInt(part, 10).toString(16).padStart(2, '0')).join('')}`
+      })()
   const value = hex.replace('#', '')
   const red = Number.parseInt(value.slice(0, 2), 16)
   const green = Number.parseInt(value.slice(2, 4), 16)

@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GrowthIqPage } from './executive.js'
 import { resetApiClientStateForTests } from './api.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
 
 const envelope = (data: unknown): unknown => ({ ok: true, data, requestId: 'growthiq-fn' })
 
@@ -145,12 +149,12 @@ async function mountPage(): Promise<HTMLElement> {
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(GrowthIqPage, {
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(GrowthIqPage, {
       context: { storeId: 'fn-store', shop: 'fn.myshopify.com' },
       onToast: (message: string) => { toasts.push(message) },
       onNavigateBilling: () => { billing.push('billing') },
       onSync: (module: string) => { syncs.push(module) },
-    })))
+    }))))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
   return container
