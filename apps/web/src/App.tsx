@@ -1,5 +1,5 @@
 import { Button, AppNavigationMenu, AppTitleBar, showAppBridgeToast, PolarisEmpty, SimpleModal, LoadingSpinner } from './polaris-ui.js'
-import { Banner, Page } from '@shopify/polaris'
+import { Banner, Layout, Page } from '@shopify/polaris'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { LucideIcon } from './icons.js'
@@ -87,7 +87,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -256,6 +256,9 @@ const HEADER_NAV: ReadonlyArray<Readonly<{ label: string; page: SectionId }>> = 
 ]
 
 function HeaderNavigation({ activePage, onNavigate }: { activePage: SectionId; onNavigate: (page: SectionId) => void }) {
+  // HOTFIX 3: header tabs are SPA-only. They are buttons wired to the
+  // client-side `navigate` (history.pushState + state) — never `<a href>`
+  // anchors, so switching tabs can never hard-reload the embedded iframe.
   return (
     <nav className="header-navigation" aria-label="ProfitPilot pages">
       <div className="header-navigation-scroll">
@@ -267,6 +270,34 @@ function HeaderNavigation({ activePage, onNavigate }: { activePage: SectionId; o
       </div>
     </nav>
   )
+}
+
+/**
+ * HOTFIX 3 — globally cached bootstrap context (`hasStoreContext`).
+ *
+ * The resolved `/session/context` result is cached at module scope so tab
+ * switching and remounts never re-run the boot-time loading sequence
+ * (App Bridge token warm-up + tenant lookup). Keyed by shop so a different
+ * store still bootstraps from scratch. SPA tab switches never hit this path
+ * at all — the cache only short-circuits remounts (StrictMode, HMR, and any
+ * legitimate reload that reaches the shell again).
+ */
+let embeddedBootstrapCache: Readonly<{ shop: string | null; context: WorkspaceContext }> | null = null
+
+function readEmbeddedBootstrapCache(shop: string | null): WorkspaceContext | null {
+  if (!embeddedBootstrapCache) return null
+  const cacheKey = shop ?? embeddedBootstrapCache.shop
+  if (embeddedBootstrapCache.shop === cacheKey) return embeddedBootstrapCache.context
+  return null
+}
+
+function rememberEmbeddedBootstrapCache(shop: string | null, context: WorkspaceContext): void {
+  embeddedBootstrapCache = { shop: shop ?? context.shop ?? null, context }
+}
+
+/** Clears the boot cache between isolated tests (exported for tests only). */
+export function resetEmbeddedBootstrapCacheForTests(): void {
+  embeddedBootstrapCache = null
 }
 
 export default function App() {
@@ -357,12 +388,22 @@ export default function App() {
     return () => { cancelled = true }
   }, [context.storeId])
 
-  // HOTFIX 2: single embedded bootstrap path. (1) Wait for the App Bridge
-  // session token (retried once) so the very first fetch carries
-  // `Authorization: Bearer …`; (2) resolve the tenant from /session/context.
-  // A 401 or a transient failure is NEVER treated as "not installed".
+  // HOTFIX 2 + HOTFIX 3: single embedded bootstrap path. (1) Reuse the
+  // globally cached store context when present so tab switching/remounts
+  // never re-run the loading sequence; (2) wait for the App Bridge session
+  // token (retried once) so the very first fetch carries
+  // `Authorization: Bearer …`; (3) resolve the tenant from /session/context.
+  // A 401 or a transient failure is NEVER treated as "not installed", and a
+  // successful bootstrap clears any banner a transient token race latched.
   useEffect(() => {
     if (urlContext.storeId) {
+      setAuthState('ready')
+      return
+    }
+    const cached = readEmbeddedBootstrapCache(urlContext.shop)
+    if (cached) {
+      setResolvedContext(cached)
+      setSessionError(null)
       setAuthState('ready')
       return
     }
@@ -376,15 +417,18 @@ export default function App() {
         try {
           const result = await fetchSessionContext(query)
           if (cancelled) return
+          // The session is valid — clear any false session-expired latch
+          // (HOTFIX 3 auto-clear).
+          setSessionError(null)
           setResolvedContext(result)
+          rememberEmbeddedBootstrapCache(urlContext.shop, result)
           setAuthState('ready')
           return
         } catch (error: unknown) {
           if (cancelled) return
           if (error instanceof ApiClientError && error.status === 401) {
-            // Session expired: single re-auth banner, NOT an install wall.
-            // A context 401 can be a background token race. Never obscure a
-            // successfully loaded tenant with a global expiry banner.
+            // Session expired AFTER the fetcher's silent fresh-token retry:
+            // single re-auth banner, NOT an install wall.
             if (!urlContext.storeId && !context.storeId) setSessionError('Your Shopify session expired — reload the app to reconnect.')
             setAuthState('ready')
             return
@@ -407,7 +451,9 @@ export default function App() {
       const query = urlContext.shop ? `?shop=${encodeURIComponent(urlContext.shop)}` : ''
       try {
         const result = await fetchSessionContext(query)
+        setSessionError(null)
         setResolvedContext(result)
+        rememberEmbeddedBootstrapCache(urlContext.shop, result)
         setAuthState('ready')
       } catch (error: unknown) {
         if (error instanceof ApiClientError && error.status === 401) {
@@ -428,21 +474,25 @@ export default function App() {
   }
 
   useEffect(() => {
-    // Embedded App Bridge session tokens (P0 App Store fix): when the Shopify
-    // admin cannot mint a fresh token, tell the merchant once instead of
-    // letting every API call fail silently. Register BEFORE CSRF / data
-    // loads so the first failed token request can surface. The API client
-    // still de-dupes to one notification per page lifetime. HOTFIX 2: the
-    // single surface is the Polaris session banner below — never stacked
-    // toasts.
+    // Embedded App Bridge session tokens (P0 App Store fix): the failure
+    // handler only fires from the fetcher's 401-AFTER-fresh-token-retry path,
+    // so a transient token race can never latch it. The single surface is
+    // the Polaris session banner below — never stacked toasts.
     setEmbeddedAuthFailureHandler(() => {
-      // Background API calls silently retry tokens. Only the primary
-      // bootstrap is allowed to surface this banner, and only when no
-      // usable store data has loaded yet.
+      // Only the bootstrap phase is allowed to surface this banner, and only
+      // when no usable store data has loaded yet — page data rendering
+      // successfully means the session is valid.
       const primaryDataLoaded = Boolean(context.storeId && data.analytics)
       if (!primaryDataLoaded) setSessionError('Your Shopify session expired — reload the app to reconnect.')
     })
-    return () => setEmbeddedAuthFailureHandler(null)
+    // HOTFIX 3: any successful authenticated API call proves the session is
+    // valid and auto-clears a false session-expired banner. The red banner
+    // can never stay visible while real page data is rendering.
+    setEmbeddedAuthRecoveryHandler(() => setSessionError(null))
+    return () => {
+      setEmbeddedAuthFailureHandler(null)
+      setEmbeddedAuthRecoveryHandler(null)
+    }
   }, [context.storeId, data.analytics])
 
   useEffect(() => {
@@ -489,7 +539,11 @@ export default function App() {
     const recommendations = recommendationsResult.status === 'fulfilled' ? recommendationsResult.value : []
     const inventory = inventoryResult.status === 'fulfilled' ? inventoryResult.value : null
     const errors = [analyticsResult, catalogResult].filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    setData({ analytics, catalog, agents, recommendations, inventory, loadState: errors.length === 2 ? 'offline' : errors.length > 0 ? 'partial' : 'ready', error: errors[0] ? `Some synced data could not be loaded: ${errorMessage(errors[0].reason)}` : null })
+    const nextLoadState = errors.length === 2 ? 'offline' : errors.length > 0 ? 'partial' : 'ready'
+    // HOTFIX 3: real page data rendering successfully is proof the session is
+    // valid — never leave a false session-expired banner above live content.
+    if (nextLoadState === 'ready' || nextLoadState === 'partial') setSessionError(null)
+    setData({ analytics, catalog, agents, recommendations, inventory, loadState: nextLoadState, error: errors[0] ? `Some synced data could not be loaded: ${errorMessage(errors[0].reason)}` : null })
   }
 
   useEffect(() => { void loadData() }, [context.storeId])
@@ -711,23 +765,44 @@ export default function App() {
     setPassiveRecommendation(null)
   }
 
+  // HOTFIX 3: the banner region renders inside a Polaris Layout.Section (the
+  // app shell is already wrapped in a Polaris Frame) so any banner pushes the
+  // page content down gracefully instead of overlapping it.
+  const showGlobalBanners =
+    data.loadState === 'offline' ||
+    data.loadState === 'partial' ||
+    sessionError !== null ||
+    showConnect ||
+    (authState === 'ready' && !context.storeId && Boolean(context.shop) && !sessionError) ||
+    (authState === 'unavailable' && !context.storeId)
+
   return (
     <div className={`app-shell ${lightMode ? 'light-mode' : ''} ${workspacePrefs.reducedMotion ? 'reduce-motion' : ''} ${workspacePrefs.bubbleEnabled ? '' : 'hide-jarvis'} jarvis-pos-${workspacePrefs.bubblePosition}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <AppNavigationMenu />
+      {/* HOTFIX 3: admin-side nav clicks route client-side through the SPA
+          router — the iframe never hard-reloads on a tab switch. */}
+      <AppNavigationMenu onNavigate={(section) => navigate(section as SectionId)} />
       <AppTitleBar title={pageMeta[activePage].title} />
       <HeaderNavigation activePage={activePage} onNavigate={navigate} />
       <main id="main-content" tabIndex={-1} className="page-scroll">
-          {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
-          {/* HOTFIX 2: one session-expired banner, one install banner (only
-              when the bootstrap settled with no store and no known shop), and
-              an honest "restoring context" notice for installed merchants
-              whose tenant lookup is pending or failed — never a connect wall
-              while auth is still loading. */}
-          {sessionError && <SessionExpiredBanner message={sessionError} onDismiss={() => setSessionError(null)} />}
-          {showConnect && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
-          {authState === 'ready' && !context.storeId && context.shop && !sessionError && <ContextPendingBanner shop={context.shop} />}
-          {authState === 'unavailable' && !context.storeId && <ContextLoadErrorBanner onRetry={retryContext} />}
+          {showGlobalBanners && (
+            <Layout>
+              <Layout.Section>
+                {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
+                {/* HOTFIX 2 + 3: one session-expired banner, one install banner
+                    (only when the bootstrap settled with no store and no
+                    known shop), and an honest "restoring context" notice for
+                    installed merchants whose tenant lookup is pending or
+                    failed — never a connect wall while auth is still loading.
+                    The session banner auto-clears on the next successful API
+                    call (or via onDismiss), so it can never stay stuck. */}
+                {sessionError && <SessionExpiredBanner message={sessionError} onDismiss={() => setSessionError(null)} />}
+                {showConnect && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
+                {authState === 'ready' && !context.storeId && context.shop && !sessionError && <ContextPendingBanner shop={context.shop} />}
+                {authState === 'unavailable' && !context.storeId && <ContextLoadErrorBanner onRetry={retryContext} />}
+              </Layout.Section>
+            </Layout>
+          )}
           {(authState === 'ready' || urlContext.storeId) ? <PageRouter
             active={activePage}
             context={context}
@@ -761,7 +836,7 @@ export default function App() {
       {showConnect && onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
-      {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} />}
+      {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} onNavigate={() => navigate('store-coach')} />}
     </div>
   )
 }

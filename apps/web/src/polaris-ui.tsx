@@ -227,16 +227,26 @@ export const NAV_DESTINATIONS: readonly Readonly<{ label: string; destination: s
   { label: 'Settings', destination: '/settings', section: 'settings' },
 ]
 
-export function AppNavigationMenu() {
+export function AppNavigationMenu({ onNavigate }: Readonly<{ onNavigate?: (section: string) => void }> = {}) {
   // App Bridge v4 reads `<ui-nav-menu>` and paints the links in the Shopify
   // admin sidebar. The element must stay in the DOM but never paint inside
   // the iframe — unknown custom elements otherwise render as raw inline
   // `<a>` text ("DashboardAI Command CenterRecommendations…").
+  //
+  // HOTFIX 3: plain anchors here hard-navigate the embedded iframe (full
+  // reload + full bootstrap re-run on every admin-side tab click). Every
+  // anchor now intercepts the click and routes CLIENT-SIDE via `onNavigate`
+  // (SPA `history.pushState`), which App Bridge treats as in-app navigation:
+  // the admin URL stays in sync without ever reloading the app.
+  const intercept = (event: MouseEvent<HTMLAnchorElement>, section: string): void => {
+    event.preventDefault()
+    onNavigate?.(section)
+  }
   return (
     <ui-nav-menu data-pp-app-bridge-nav="true" aria-hidden="true">
-      <a href="/" rel="home">Dashboard</a>
+      <a href="/" rel="home" data-section="dashboard" onClick={(event) => intercept(event, 'dashboard')}>Dashboard</a>
       {NAV_DESTINATIONS.filter((item) => item.destination !== '/').map((item) => (
-        <a key={item.destination} href={item.destination}>{item.label}</a>
+        <a key={item.destination} href={item.destination} data-section={item.section} onClick={(event) => intercept(event, item.section)}>{item.label}</a>
       ))}
     </ui-nav-menu>
   )
