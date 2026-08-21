@@ -130,7 +130,9 @@ let embeddedAuthFailureNotified = false
  */
 export function setEmbeddedAuthFailureHandler(handler: EmbeddedAuthFailureHandler | null): void {
   embeddedAuthFailureHandler = handler
-  embeddedAuthFailureNotified = false
+  // Do not reset `embeddedAuthFailureNotified` here. React StrictMode remounts
+  // re-register the handler; resetting would re-fire the session-expired toast.
+  if (handler === null) return
 }
 
 /**

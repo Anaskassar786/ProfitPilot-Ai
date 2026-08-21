@@ -32,17 +32,22 @@ import './command-center-light.css'
 import './settings.css'
 import './light-theme-professional-fix.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
-import { AppFrame } from './polaris-ui.js'
+import { AppBridgeProvider, AppFrame } from './polaris-ui.js'
+import { embeddedHost } from './shopify-app-bridge.js'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('ProfitPilot root element is missing')
 
+const host = embeddedHost(window.location.search)
+
 createRoot(root).render(
   <StrictMode>
     <AppProvider i18n={enTranslations as never}>
-      <AppFrame>
-        <App />
-      </AppFrame>
+      <AppBridgeProvider forceRedirect host={host}>
+        <AppFrame>
+          <App />
+        </AppFrame>
+      </AppBridgeProvider>
     </AppProvider>
   </StrictMode>,
 )

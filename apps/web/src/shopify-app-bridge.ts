@@ -49,14 +49,51 @@ export function isEmbeddedShopifyApp(search: string = currentSearch()): boolean 
 }
 
 /** Public app key only — never the API secret (Vite only exposes VITE_ vars). */
-function publicShopifyApiKey(): string | null {
+export function publicShopifyApiKey(): string | null {
   try {
     const meta = import.meta as ImportMeta & { env?: Record<string, string | undefined> }
     const key = meta.env?.VITE_SHOPIFY_API_KEY?.trim()
-    return key || null
+    if (key && key !== '%VITE_SHOPIFY_API_KEY%') return key
   } catch {
-    return null
+    /* import.meta.env is unavailable in some test shims */
   }
+  try {
+    const content = document.querySelector('meta[name="shopify-api-key"]')?.getAttribute('content')?.trim()
+    if (content && content !== '%VITE_SHOPIFY_API_KEY%') return content
+  } catch {
+    /* jsdom / SSR */
+  }
+  return null
+}
+
+/**
+ * App Bridge v3 `forceRedirect` equivalent for v4 CDN apps: if Shopify loaded
+ * the app outside the admin iframe (host+api key present, `window.top ===
+ * window.self`), bounce into admin so `idToken()` can mint a session token.
+ */
+export function ensureEmbeddedAppBridgeRedirect(search: string = currentSearch(), apiKey: string | null = publicShopifyApiKey()): boolean {
+  if (typeof window === 'undefined') return false
+  const host = embeddedHost(search)
+  if (!host || !apiKey) return false
+  let nested = false
+  try {
+    nested = window.top !== window.self
+  } catch {
+    nested = true
+  }
+  if (nested) return false
+  let decoded = ''
+  try {
+    decoded = atob(host)
+  } catch {
+    return false
+  }
+  if (!decoded || decoded.includes('\0') || /\s/.test(decoded)) return false
+  const origin = decoded.startsWith('https://') ? decoded : `https://${decoded}`
+  const path = window.location.pathname || '/'
+  const query = window.location.search || ''
+  window.location.replace(`${origin}/apps/${encodeURIComponent(apiKey)}${path}${query}`)
+  return true
 }
 
 /**
@@ -69,9 +106,6 @@ export async function getShopifySessionToken(search: string = currentSearch(), a
   if (typeof window === 'undefined') return { status: 'not-embedded' }
   const host = embeddedHost(search)
   if (!host) return { status: 'not-embedded' }
-  if (!apiKey) {
-    return { status: 'unavailable', message: 'VITE_SHOPIFY_API_KEY is not configured for this build' }
-  }
   try {
     const source = appBridgeOverride ?? (await appBridgeSource(apiKey, host))
     const token = await source.idToken()
@@ -82,32 +116,51 @@ export async function getShopifySessionToken(search: string = currentSearch(), a
   }
 }
 
-async function appBridgeSource(apiKey: string, host: string): Promise<AppBridgeTokenSource> {
+async function appBridgeSource(apiKey: string | null, host: string): Promise<AppBridgeTokenSource> {
   if (appBridgeInstance) return appBridgeInstance
-  const shopifyGlobal = await waitForShopifyGlobal()
+  const existing = readShopifyGlobal()
+  // App Bridge v4: the CDN script exposes `window.shopify.idToken()` and does
+  // not need createApp / the public API key once it has booted from the meta tag.
+  if (existing && typeof existing.idToken === 'function') {
+    appBridgeInstance = existing as unknown as AppBridgeTokenSource
+    return appBridgeInstance
+  }
+  if (!existing && !apiKey) {
+    throw new Error('VITE_SHOPIFY_API_KEY is not configured for this build')
+  }
+  const shopifyGlobal = existing ?? (await waitForShopifyGlobal())
   if (!shopifyGlobal) throw new Error('Shopify App Bridge did not load (the CDN script may be blocked)')
+  if (typeof shopifyGlobal.idToken === 'function') {
+    appBridgeInstance = shopifyGlobal as unknown as AppBridgeTokenSource
+    return appBridgeInstance
+  }
   const createApp = typeof shopifyGlobal.default === 'function'
     ? shopifyGlobal.default
     : typeof shopifyGlobal.createApp === 'function'
       ? shopifyGlobal.createApp
       : null
   if (createApp) {
-    appBridgeInstance = (createApp as (config: Readonly<{ apiKey: string; host: string }>) => unknown)({ apiKey, host }) as AppBridgeTokenSource
+    if (!apiKey) throw new Error('VITE_SHOPIFY_API_KEY is not configured for this build')
+    appBridgeInstance = (createApp as (config: Readonly<{ apiKey: string; host: string; forceRedirect: boolean }>) => unknown)({ apiKey, host, forceRedirect: true }) as AppBridgeTokenSource
     if (typeof appBridgeInstance.idToken !== 'function') throw new Error('Shopify App Bridge createApp returned no idToken()')
-    return appBridgeInstance
-  }
-  // Legacy CDN builds expose idToken() directly on the window.shopify global.
-  if (typeof shopifyGlobal.idToken === 'function') {
-    appBridgeInstance = shopifyGlobal as unknown as AppBridgeTokenSource
     return appBridgeInstance
   }
   throw new Error('Shopify App Bridge is present but has no idToken() API')
 }
 
+function readShopifyGlobal(): Record<string, unknown> | null {
+  try {
+    const shopify = (window as { shopify?: unknown }).shopify
+    return shopify && typeof shopify === 'object' ? shopify as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
 async function waitForShopifyGlobal(): Promise<Record<string, unknown> | null> {
   const deadline = Date.now() + appBridgeReadyTimeoutMs
   for (;;) {
-    const shopify = (window as { shopify?: unknown }).shopify as Record<string, unknown> | undefined
+    const shopify = readShopifyGlobal()
     if (shopify) return shopify
     if (Date.now() >= deadline) return null
     await new Promise((resolve) => setTimeout(resolve, appBridgeReadyPollMs))

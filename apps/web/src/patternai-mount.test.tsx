@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import App from './App.js'
 
 /**
@@ -101,7 +104,7 @@ async function mountApp(): Promise<void> {
   container.id = 'root'
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root!.render(createElement(StrictMode, null, createElement(App))) })
+  await act(async () => { root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(App)))) })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
 }
 
@@ -152,6 +155,6 @@ describe('PatternAI page mount', () => {
   it('carries no Insights Hub branding anywhere in the shell', async () => {
     await mountApp()
     expect(document.body.textContent ?? '').not.toContain('Insights Hub')
-    expect((document.querySelector('.side-nav')?.textContent ?? '')).toContain('PatternAI')
+    expect((document.querySelector('ui-nav-menu')?.textContent ?? '')).toContain('PatternAI')
   })
 })
