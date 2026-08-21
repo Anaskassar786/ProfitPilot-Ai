@@ -53,7 +53,7 @@ describe('Shopify GraphQL app subscriptions', () => {
       trialDays: 14,
       lineItems: [{ plan: { appRecurringPricingDetails: { price: { amount: 199, currencyCode: 'USD' }, interval: 'EVERY_30_DAYS' } } }],
     })
-    expect(url).toBe('https://demo.myshopify.com/admin/api/2025-10/graphql.json')
+    expect(url).toBe('https://demo.myshopify.com/admin/api/2026-07/graphql.json')
     expect(logger.info).toHaveBeenCalledWith('Shopify Billing API charge request', expect.objectContaining({
       shop: 'demo.myshopify.com',
       endpoint: '/graphql.json',
@@ -145,9 +145,9 @@ describe('Shopify billing 422 diagnostics and payload shape', () => {
   })
   it('uses the configured Admin API version', async () => {
     let requested = ''
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: true, apiVersion: '2025-10', transport: async (url) => { requested = url; return new Response(JSON.stringify(graphqlCreate), { status: 201 }) } })
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: true, apiVersion: '2026-07', transport: async (url) => { requested = url; return new Response(JSON.stringify(graphqlCreate), { status: 201 }) } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
-    expect(requested).toBe('https://demo.myshopify.com/admin/api/2025-10/graphql.json')
+    expect(requested).toBe('https://demo.myshopify.com/admin/api/2026-07/graphql.json')
   })
 })
 

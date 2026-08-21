@@ -36,7 +36,7 @@ describe('F8 Postgres repositories', () => {
     // Regression: `CASE WHEN $5 IS NULL THEN NULL ELSE to_timestamp($5 / 1000.0) END`
     // leaves $5 without an inferable type and Postgres rejects the query with
     // "could not determine data type of parameter $5". The same pattern hit
-    // jarvis_sessions.ended_at ($13).
+    // jarvis_sessions.ended_at ($13) and report_runs.completed_at ($6).
     const { executor, queries } = makeExecutor()
     const repository = new PostgresJarvisRepository(executor)
     await repository.savePreferences({ storeId: 'store-1' as never, addressing: 'Sir', language: 'auto', engagementMode: 'balanced', silenceUntil: null, navigationSuggestions: true, onlyAnswerWhenAsked: false, updatedAt: 200 })
@@ -45,6 +45,22 @@ describe('F8 Postgres repositories', () => {
     const sessionSql = queries.find((query) => query.includes('INSERT INTO jarvis_sessions')) ?? ''
     expect(preferenceSql).toContain('CASE WHEN $5::bigint IS NULL THEN NULL ELSE to_timestamp($5::bigint / 1000.0) END')
     expect(sessionSql).toContain('CASE WHEN $13::bigint IS NULL THEN NULL ELSE to_timestamp($13::bigint / 1000.0) END')
+  })
+
+  it('casts the nullable report_runs.completed_at parameter so report updates cannot 503', async () => {
+    // Regression (Reports page): updateRun passed completed_at as
+    // `CASE WHEN $6 IS NULL THEN NULL ELSE to_timestamp($6 / 1000.0) END`.
+    // While a report is GENERATING, completedAt is null, $6 loses its
+    // inferable type, and Postgres rejects the statement with
+    // "could not determine data type of parameter $6" — surfacing as the red
+    // "Report storage is unavailable" banner with every run stuck on
+    // "Generating…".
+    const { executor, queries } = makeExecutor()
+    const repository = new PostgresReportRepository(executor)
+    await repository.updateRun({ ...reportRecord, completedAt: null })
+    const updateSql = queries.find((query) => query.includes('UPDATE report_runs')) ?? ''
+    expect(updateSql).toContain('CASE WHEN $6::bigint IS NULL THEN NULL ELSE to_timestamp($6::bigint / 1000.0) END')
+    expect(updateSql).not.toContain('CASE WHEN $6 IS NULL')
   })
 
   it('maps Copilot threads, answers, and report schedules/runs', async () => {

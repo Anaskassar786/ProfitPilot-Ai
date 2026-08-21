@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { RichButton } from './polaris-ui.js'
 import { Activity, Bell, CheckCircle2, Target, Workflow } from './icons.js'
 import { useId } from 'react'
 import type { JSX } from 'react'
@@ -128,7 +128,13 @@ export function AutomationKpis({
         <p className="kpi-helper">{actionsTotal > 0 ? impactLine(summary) : 'Measured after successful actions'}</p>
       </article>
 
-      <Button type="button" className={`kpi-card pending-approvals ${pending ? 'attention' : ''}`} onClick={onApprovals}>
+      {/* Composite KPI card (icon + status + value + helper). Must go through
+          RichButton: the plain Button shim flattens children into a single
+          text label and drops `className`, which collapsed this card to a
+          zero-width column and wrapped the text one letter per line
+          ("P E N D I N G …"). RichButton keeps the structured children and the
+          kpi-card/pending-approvals/attention classes on the DOM button. */}
+      <RichButton type="button" className={`kpi-card pending-approvals ${pending ? 'attention' : ''}`} onClick={onApprovals} aria-label={`Pending approvals: ${pending}`}>
         <div className="kpi-header">
           <span className="kpi-icon-wrap">
             <Bell className="kpi-icon" size={14} />
@@ -148,7 +154,7 @@ export function AutomationKpis({
         </div>
         <div className="kpi-value">{pending}</div>
         <p className="kpi-helper">{pending ? 'Review required' : 'No actions waiting'}</p>
-      </Button>
+      </RichButton>
     </section>
   )
 }

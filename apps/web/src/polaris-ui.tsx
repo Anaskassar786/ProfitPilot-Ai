@@ -7,10 +7,12 @@ import { Children, forwardRef, isValidElement, useCallback, useEffect, useMemo, 
 import type { ButtonHTMLAttributes, MouseEvent, ReactElement, ReactNode } from 'react'
 import {
   Banner,
+  Box,
   Button as PolarisButton,
   EmptyState,
   Frame,
   Icon,
+  InlineStack,
   Modal,
   Spinner,
   Text,
@@ -42,7 +44,11 @@ function classList(className: string | undefined): string {
   return ` ${className ?? ''} `
 }
 
-export type UiButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & Readonly<{
+// `variant`/`size` are omitted from the DOM attributes on purpose: React's
+// ButtonHTMLAttributes now declares its own `variant?: 'primary' | 'breadcrumb'
+// | null` (HTMLButtonElement) and a numeric `size`, which would intersect the
+// Polaris unions and collapse them to `'primary'` / `never`.
+export type UiButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'variant' | 'size'> & Readonly<{
   loading?: boolean
   variant?: PolarisButtonProps['variant']
   tone?: PolarisButtonProps['tone']
@@ -306,12 +312,70 @@ export function AppTitleBar({ title, children }: Readonly<{ title: string; child
   return <TitleBar title={title}>{children}</TitleBar>
 }
 
+/** True once App Bridge has registered (upgraded) the `<ui-save-bar>` custom
+ *  element. Before that, app-bridge-react's SaveBar calls `.show()`/`.hide()`
+ *  on a plain HTMLElement and throws `TypeError: saveBar.hide is not a
+ *  function`, which unmounts the entire page — the Settings page crashed to a
+ *  blank screen whenever the CDN script was missing, blocked, or slow. */
+function uiSaveBarDefined(): boolean {
+  try {
+    return typeof window !== 'undefined'
+      && typeof window.customElements !== 'undefined'
+      && window.customElements.get('ui-save-bar') !== undefined
+  } catch {
+    return false
+  }
+}
+
+function useUiSaveBarAvailable(): boolean {
+  const [available, setAvailable] = useState(uiSaveBarDefined)
+  useEffect(() => {
+    if (available) return
+    let attempts = 0
+    const timer = window.setInterval(() => {
+      attempts += 1
+      if (uiSaveBarDefined()) {
+        setAvailable(true)
+        window.clearInterval(timer)
+        return
+      }
+      // Give the deferred CDN script ~10s; after that stay on the safe
+      // Polaris fallback instead of risking a page crash.
+      if (attempts >= 50) window.clearInterval(timer)
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [available])
+  return available
+}
+
 export function AppSaveBar({
   open,
   onSave,
   onDiscard,
   saving,
 }: Readonly<{ open: boolean; onSave: () => void; onDiscard: () => void; saving?: boolean }>) {
+  const nativeSaveBar = useUiSaveBarAvailable()
+  if (!nativeSaveBar) {
+    // No App Bridge (standalone dev, blocked/slow CDN, tests): a Polaris-native
+    // sticky save bar keeps Save/Discard usable instead of crashing the page.
+    if (!open) return null
+    return (
+      <div style={{ position: 'sticky', bottom: 8, zIndex: 40 }}>
+        <Box
+          background="bg-surface"
+          shadow="500"
+          borderWidth="025"
+          borderRadius="300"
+          padding="300"
+        >
+          <InlineStack gap="300" align="end" blockAlign="center">
+            <UiButton onClick={onDiscard}>Discard</UiButton>
+            <UiButton variant="primary" loading={Boolean(saving)} onClick={onSave}>Save</UiButton>
+          </InlineStack>
+        </Box>
+      </div>
+    )
+  }
   return (
     <SaveBar open={open} id="profitpilot-save-bar">
       <UiButton variant="primary" loading={Boolean(saving)} onClick={onSave}>Save</UiButton>

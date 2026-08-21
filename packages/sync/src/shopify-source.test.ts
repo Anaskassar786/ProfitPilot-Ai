@@ -14,7 +14,7 @@ type OperationCall = Readonly<{ operation: string; variables: Readonly<Record<st
 function graphqlSource(operations: Readonly<Record<string, (variables: Readonly<Record<string, unknown>>) => unknown>>): Readonly<{ source: ShopifyGraphQLSyncSource; calls: OperationCall[] }> {
   const calls: OperationCall[] = []
   const client = new ShopifyClient('demo.myshopify.com', 'token', async (url, init) => {
-    expect(url).toBe('https://demo.myshopify.com/admin/api/2025-10/graphql.json')
+    expect(url).toBe('https://demo.myshopify.com/admin/api/2026-07/graphql.json')
     expect(init.method).toBe('POST')
     expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'token' })
     const body = JSON.parse(String(init.body)) as Readonly<{ query: string; variables: Readonly<Record<string, unknown>> }>

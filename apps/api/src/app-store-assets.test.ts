@@ -15,6 +15,8 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain('client_id = "public-client-id"')
     expect(toml).toContain('https://app.example/shopify/callback')
     expect(toml).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
+    expect(config.apiVersion).toBe('2026-07')
+    expect(toml).toContain('api_version = "2026-07"')
     expect(toml).toContain('[webhooks.privacy]')
     expect(toml).toContain('customer_data_request_url = "https://app.example/shopify/webhooks"')
     expect(toml).toContain('customer_deletion_url = "https://app.example/shopify/webhooks"')

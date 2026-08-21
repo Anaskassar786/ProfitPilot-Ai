@@ -1,6 +1,8 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { HowItWorksModal } from './automation-tutorial.js'
 import {
   actionBarHeights,
@@ -21,6 +23,13 @@ import { CreateAutomationModal } from './automation.js'
 import { AutomationKpis } from './AutomationKpis.js'
 import { TemplateGallery } from './TemplateGallery.js'
 import { WorkflowCard } from './WorkflowCard.js'
+
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n); render the same
+ *  way so Polaris components inside these cards render natively. */
+function render(element: ReactElement): string {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
 
 const triggerNode = { id: 'trigger', type: 'trigger' as const, config: { trigger: 'manual' as const }, next: ['action'] }
 const actionNode = { id: 'action', type: 'action' as const, config: { action: 'email' as const }, next: [] }
@@ -153,14 +162,14 @@ describe('Automation visualization helpers', () => {
 
 describe('Automation workflow card', () => {
   it('renders merchant language without leaking the workflow UUID', () => {
-    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
+    const html = render(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
     expect(html).toContain('High-value order alert')
     expect(html).toContain('a new order is received')
     expect(html).not.toContain(workflow.id)
   })
 
   it('shows real usage numbers from the record', () => {
-    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow: { ...workflow, successCount: 12, failureCount: 2 }, onOpen: () => {}, onCommand: () => {} }))
+    const html = render(createElement(WorkflowCard, { workflow: { ...workflow, successCount: 12, failureCount: 2 }, onOpen: () => {}, onCommand: () => {} }))
     expect(html).toContain('12')
     expect(html).toContain('successful run')
     expect(html).toContain('2')
@@ -168,19 +177,19 @@ describe('Automation workflow card', () => {
   })
 
   it('never offers SMS in the workflow surface', () => {
-    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
+    const html = render(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
     expect(html.toLowerCase()).not.toContain('sms')
   })
 
   it('keeps Edit, View Report and Pause actions', () => {
-    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
+    const html = render(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
     expect(html).toContain('Edit')
     expect(html).toContain('View Report')
     expect(html).toContain('Pause')
   })
 
   it('marks status and shows an educational empty hint when the workflow has never run', () => {
-    const html = renderToStaticMarkup(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
+    const html = render(createElement(WorkflowCard, { workflow, onOpen: () => {}, onCommand: () => {} }))
     expect(html).toContain('status-active')
     expect(html).toContain('workflow-status-badge')
     expect(html).toContain('This automation has not run yet')
@@ -190,7 +199,7 @@ describe('Automation workflow card', () => {
 
 describe('Automation template gallery', () => {
   it('renders template cards with real impact copy', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(TemplateGallery, {
         templates: [template, lockedTemplate],
         onInstall: async () => {},
@@ -206,7 +215,7 @@ describe('Automation template gallery', () => {
   })
 
   it('marks locked templates with an Upgrade Plan action (never a plan name)', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(TemplateGallery, {
         templates: [lockedTemplate],
         onInstall: async () => {},
@@ -222,7 +231,7 @@ describe('Automation template gallery', () => {
 
 describe('Create automation modal', () => {
   it('forces a name, category, and starting point', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(CreateAutomationModal, {
         storeId: 'store-1',
         templates: [template],
@@ -243,7 +252,7 @@ describe('Create automation modal', () => {
   })
 
   it('does not suggest plan names in the modal', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(CreateAutomationModal, {
         storeId: 'store-1',
         templates: [template],
@@ -269,7 +278,7 @@ const emptySummary: AutomationSummary = {
 
 describe('Automation KPI visualizations', () => {
   it('renders five unique charts from real empty data with educational helpers', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(AutomationKpis, {
         summary: emptySummary,
         usage: { plan: 'trial', used: 2, limit: 2, remaining: 0, limitReached: true },
@@ -293,7 +302,7 @@ describe('Automation KPI visualizations', () => {
   })
 
   it('surfaces real impact counts and success rate when the backend has them', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(AutomationKpis, {
         summary: {
           ...emptySummary,
@@ -317,7 +326,7 @@ describe('Automation KPI visualizations', () => {
 
 describe('How-it-works tutorial modal', () => {
   it('teaches the four-step recipe without technical jargon', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       createElement(HowItWorksModal, { onClose: () => {}, onStartBuilding: () => {}, onBrowseTemplates: () => {} }),
     )
     expect(html).toContain('How automations work')

@@ -14,7 +14,7 @@ The API/web and worker bind to `0.0.0.0`. Browser requests use relative URLs on 
 1. Create Railway PostgreSQL and Redis/Upstash resources.
 2. Configure the environment variables from `.env.example` in Railway Secret Variables. Never commit `.env` or provider credentials.
 3. Configure `R2_*` **or** `CLOUDFLARE_R2_*` variables. F9 normalizes both names.
-4. Set `NODE_ENV=production`, `SECURITY_REQUIRE_AUTH=true`, and `RUN_MIGRATIONS=true`. Leave `SHOPIFY_BILLING_TEST_MODE` unset (or `auto`) unless you must force a mode — see "Billing charges" below. Set `SHOPIFY_API_VERSION` to a supported Admin API version (default `2025-10`).
+4. Set `NODE_ENV=production`, `SECURITY_REQUIRE_AUTH=true`, and `RUN_MIGRATIONS=true`. Leave `SHOPIFY_BILLING_TEST_MODE` unset (or `auto`) unless you must force a mode — see "Billing charges" below. Set `SHOPIFY_API_VERSION` to a supported Admin API version (default `2026-07`).
 5. Configure `APP_URL` and `SHOPIFY_APP_URL` to the final API/web HTTPS URL, then deploy the API + Web service. Startup validation fails fast on missing production variables; migrations through `0013` run after the F8/F9 bootstrap when `RUN_MIGRATIONS=true`.
 
 ### Shopify OAuth and managed-install token exchange

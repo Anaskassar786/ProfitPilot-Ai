@@ -5,8 +5,8 @@
  * Every control either writes to a real API, persists locally for this store,
  * or is honestly plan-gated. Nothing is decorative.
  */
-import { Button, AppSaveBar } from './polaris-ui.js'
-import { Checkbox, Page } from '@shopify/polaris'
+import { Button, AppSaveBar, RichButton } from './polaris-ui.js'
+import { Page } from '@shopify/polaris'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -156,7 +156,11 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
           {SETTINGS_TABS.map((item) => {
             const Icon = tabIcon(item.id)
             return (
-              <Button
+              /* RichButton (Polaris UnstyledButton): the plain Button shim
+                 drops `className`/`aria-current`, which stripped the
+                 settings-nav-item / active / danger styling and broke tab
+                 navigation. Composite chrome + classes pass through. */
+              <RichButton
                 key={item.id}
                 type="button"
                 className={`settings-nav-item ${tab === item.id ? 'active' : ''} ${item.danger ? 'danger' : ''}`}
@@ -164,7 +168,7 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
                 onClick={() => setTab(item.id)}
               >
                 <Icon size={16} /> {item.label}
-              </Button>
+              </RichButton>
             )
           })}
         </aside>
@@ -358,8 +362,10 @@ function GeneralTab({
       <SettingsPanel icon={Palette} title="Appearance" description="Choose your preferred visual theme and motion.">
         <SettingRow label="Theme" description="Choose your preferred visual theme.">
           <div className="theme-choice" role="group" aria-label="Theme">
-            <Button type="button" className={!lightMode ? 'selected' : ''} onClick={() => lightMode && onTheme()}><Moon size={15} /> Dark</Button>
-            <Button type="button" className={lightMode ? 'selected' : ''} onClick={() => !lightMode && onTheme()}><Sun size={15} /> Light</Button>
+            {/* RichButton: the `selected` state class must reach the DOM for
+                theme styling; the shim drops it. */}
+            <RichButton type="button" className={!lightMode ? 'selected' : ''} onClick={() => lightMode && onTheme()}><Moon size={15} /> Dark</RichButton>
+            <RichButton type="button" className={lightMode ? 'selected' : ''} onClick={() => !lightMode && onTheme()}><Sun size={15} /> Light</RichButton>
           </div>
         </SettingRow>
         <SettingRow label="Reduced motion" description="Reduces animations for accessibility.">
@@ -526,7 +532,9 @@ function AiPreferencesTab({
       <SettingsPanel icon={Bot} title="AI assistant mode" description="Configure how the floating assistant behaves across the workspace.">
         <div className="settings-choice-stack" role="radiogroup" aria-label="AI assistant mode">
           {modes.map((mode) => (
-            <Button
+            /* RichButton: composite card content (marker + title + hint) and
+               the settings-choice/selected classes must reach the DOM. */
+            <RichButton
               key={mode.id}
               type="button"
               className={`settings-choice ${settings.assistantMode === mode.id ? 'selected' : ''}`}
@@ -536,7 +544,7 @@ function AiPreferencesTab({
             >
               <i />
               <span><strong>{mode.label}</strong><small>{mode.hint}</small></span>
-            </Button>
+            </RichButton>
           ))}
         </div>
       </SettingsPanel>
@@ -579,7 +587,8 @@ function AiPreferencesTab({
             const locked = !allowedPersonalities.includes(item)
             const meta = PERSONALITY_META[item]
             return (
-              <Button
+              /* RichButton: composite card content + selected class. */
+              <RichButton
                 key={item}
                 type="button"
                 className={personality === item ? 'selected' : ''}
@@ -591,7 +600,7 @@ function AiPreferencesTab({
               >
                 <strong>{meta.emoji} {meta.label}{locked ? ' · Upgrade Plan' : ''}</strong>
                 <small>{meta.tagline}</small>
-              </Button>
+              </RichButton>
             )
           })}
         </div>
@@ -889,7 +898,10 @@ function ToggleRow({ label, hint, on, onChange }: { label: string; hint: string;
 
 export function SettingsToggle({ label, on, onChange }: { label: string; on: boolean; onChange: (value: boolean) => void }) {
   return (
-    <Button
+    /* RichButton (Polaris UnstyledButton): the plain Button shim drops
+       className/role/aria-checked, which stripped the switch styling and
+       broke every settings toggle. Passes the switch semantics through. */
+    <RichButton
       type="button"
       className={`settings-toggle ${on ? 'on' : ''}`}
       role="switch"
@@ -898,7 +910,7 @@ export function SettingsToggle({ label, on, onChange }: { label: string; on: boo
       onClick={() => onChange(!on)}
     >
       <span />
-    </Button>
+    </RichButton>
   )
 }
 

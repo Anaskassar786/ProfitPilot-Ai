@@ -51,13 +51,17 @@ const WEB_CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   'frame-ancestors https://admin.shopify.com https://*.myshopify.com',
   "form-action 'self'",
-  "img-src 'self' data: https:",
+  "img-src 'self' data: https://cdn.shopify.com",
   // Shopify App Bridge ships as the official CDN script (index.html). It must
   // be allowed or embedded session-token auth silently disappears.
   "script-src 'self' https://cdn.shopify.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https: wss:",
+  // React components use dynamic style attributes for data-driven charts,
+  // gauges, and drag positions. CSP cannot nonce style attributes, so this is
+  // the sole unsafe-inline exception; scripts never receive either unsafe
+  // directive. Stylesheets and fonts otherwise remain same-origin only.
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "connect-src 'self' https://admin.shopify.com https://*.myshopify.com https://cdn.shopify.com",
   "object-src 'none'",
 ].join('; ')
 

@@ -29,7 +29,7 @@ export function createF2Bootstrap(env: Readonly<Record<string, string | undefine
         { storeId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' },
       )
     }
-    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION?.trim() || '2025-10', logger)
+    return new ShopifyClient(connection.shopDomain, token, fetch, env.SHOPIFY_API_VERSION?.trim() || '2026-07', logger)
   })
   const cache = createCache(env)
   // A store circuit now auto-closes after this cooldown, and /sync closes it
