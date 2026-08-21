@@ -11,6 +11,7 @@ import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakd
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
 import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
+import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -37,37 +38,82 @@ export function requestJson<Value>(path: string, init: RequestInit = {}, fetcher
   return requestJsonAttempt<Value>(path, init, fetcher, true)
 }
 
-async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetcher: Fetcher, allowCsrfRetry: boolean): Promise<Value> {
+/**
+ * HOTFIX 3 — bulletproof authenticated fetcher.
+ *
+ * 1. Before EVERY request, `attachEmbeddedSessionToken` awaits a fresh App
+ *    Bridge `idToken()` — never a cached bearer that may have expired.
+ * 2. A 401 is treated as a transient token race, NOT as session expiry:
+ *    silently mint a brand-new `idToken()` and retry the request exactly
+ *    once. Only a 401 that survives the fresh-token retry latches the
+ *    global session-expired notification.
+ * 3. Any 2xx response fires the recovery notification so a banner latched
+ *    by an earlier false alarm clears itself automatically.
+ */
+async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetcher: Fetcher, allowRetry: boolean): Promise<Value> {
   const method = (init.method ?? 'GET').toUpperCase()
   const headers = new Headers(init.headers)
+  // Requests with an explicit caller-set Authorization (e.g. admin step-up
+  // credentials) are outside the App Bridge session-token flow: never retry
+  // them with a minted bearer, and never overwrite the custom credential.
+  const callerAuthorization = headers.has('authorization')
   if (UNSAFE_METHODS.has(method) && csrfToken) headers.set('x-csrf-token', csrfToken)
   await attachEmbeddedSessionToken(headers)
-  let response: Response
-  try {
-    response = await fetcher(path, { ...init, headers })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Network request failed'
-    throw new ApiClientError(message, 0, 'NETWORK_ERROR')
+  let response = await performFetch(path, init, headers, fetcher)
+  let payload = await readJsonPayload(response)
+
+  // Silent 401 retry: fast tab switching can race the App Bridge idToken
+  // mint and send a stale bearer. Mint a FRESH token now and retry once
+  // before surfacing anything to the merchant.
+  if (response.status === 401 && allowRetry && !callerAuthorization) {
+    const fresh = await getShopifySessionToken()
+    if (fresh.status === 'ok') {
+      const retryHeaders = new Headers(init.headers)
+      if (UNSAFE_METHODS.has(method) && csrfToken) retryHeaders.set('x-csrf-token', csrfToken)
+      retryHeaders.set('authorization', `Bearer ${fresh.token}`)
+      response = await performFetch(path, init, retryHeaders, fetcher)
+      payload = await readJsonPayload(response)
+    }
   }
-  let payload: unknown = null
-  try {
-    payload = await response.json()
-  } catch {
-    payload = null
-  }
+
   if (!response.ok) {
-    if (allowCsrfRetry && UNSAFE_METHODS.has(method) && isCsrfFailure(payload, response.status)) {
+    if (allowRetry && UNSAFE_METHODS.has(method) && isCsrfFailure(payload, response.status)) {
       csrfToken = null
       csrfInitialization = null
       await initializeCsrf(fetcher)
       return requestJsonAttempt<Value>(path, init, fetcher, false)
     }
+    // A 401 that survived the fresh-token retry is genuine session expiry —
+    // the ONLY place in the fetch path allowed to latch the banner.
+    if (response.status === 401) notifyEmbeddedAuthFailure()
     throw failureFromPayload(payload, response.status)
   }
+
+  // A successful authenticated response proves the session is valid — clear
+  // any false session-expired latch left by an earlier transient 401.
+  notifyEmbeddedAuthRecovered()
+
   if (!isRecord(payload) || payload.ok !== true || !('data' in payload)) {
     throw new ApiClientError('API returned an invalid envelope', response.status, 'INVALID_ENVELOPE')
   }
   return payload.data as Value
+}
+
+async function performFetch(path: string, init: RequestInit, headers: Headers, fetcher: Fetcher): Promise<Response> {
+  try {
+    return await fetcher(path, { ...init, headers })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Network request failed'
+    throw new ApiClientError(message, 0, 'NETWORK_ERROR')
+  }
+}
+
+async function readJsonPayload(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
 }
 
 export function fetchSessionContext(query = '', fetcher: Fetcher = fetch): Promise<WorkspaceContext> {
@@ -113,20 +159,24 @@ export function resetApiClientStateForTests(): void {
   csrfInitialization = null
   embeddedAuthFailureNotified = false
   embeddedAuthFailureHandler = null
+  embeddedAuthRecoveryHandler = null
 }
 
 /* ── Embedded App Bridge session tokens (P0 App Store fix) ──────────────── */
 
 export type EmbeddedAuthFailureHandler = (message: string) => void
+export type EmbeddedAuthRecoveryHandler = () => void
 
 let embeddedAuthFailureHandler: EmbeddedAuthFailureHandler | null = null
+let embeddedAuthRecoveryHandler: EmbeddedAuthRecoveryHandler | null = null
 let embeddedAuthFailureNotified = false
 
 /**
  * Registers the user-visible handler for embedded session-token failures
- * (e.g. an expired Shopify session). Fired at most once per registration so a
- * broken token cannot spam toasts on every API call; the API responses still
- * carry their own per-page error states.
+ * (e.g. an expired Shopify session). HOTFIX 3: it only fires from the
+ * 401-after-retry path in `requestJsonAttempt` — a transient 401 during fast
+ * tab switching never reaches it. Fired at most once per page lifetime until
+ * a successful request proves the session is valid again.
  */
 export function setEmbeddedAuthFailureHandler(handler: EmbeddedAuthFailureHandler | null): void {
   embeddedAuthFailureHandler = handler
@@ -136,57 +186,75 @@ export function setEmbeddedAuthFailureHandler(handler: EmbeddedAuthFailureHandle
 }
 
 /**
+ * Registers the handler the app shell uses to AUTO-CLEAR a session-expired
+ * banner (HOTFIX 3). It fires whenever an authenticated API call succeeds
+ * while a failure notification is latched — proof that the session is valid
+ * and the red banner was a false alarm.
+ */
+export function setEmbeddedAuthRecoveryHandler(handler: EmbeddedAuthRecoveryHandler | null): void {
+  embeddedAuthRecoveryHandler = handler
+}
+
+/**
+ * Internal: latches the session-expired notification exactly once. Called
+ * exclusively from the 401-after-retry path — never from token mint races.
+ */
+function notifyEmbeddedAuthFailure(): void {
+  if (embeddedAuthFailureNotified) return
+  embeddedAuthFailureNotified = true
+  embeddedAuthFailureHandler?.('Your Shopify session expired — reload the app to reconnect.')
+}
+
+/**
+ * Internal: clears a latched session-expired notification once a 2xx proves
+ * the session is actually valid, so a false alarm can never stay stuck.
+ */
+function notifyEmbeddedAuthRecovered(): void {
+  if (!embeddedAuthRecoveryHandler || !embeddedAuthFailureNotified) return
+  embeddedAuthFailureNotified = false
+  embeddedAuthRecoveryHandler()
+}
+
+/**
  * Boot-time gate for the embedded auth path (called by the app shell BEFORE
  * the first `/session/context` bootstrap fetch). Waits for App Bridge to mint
  * a session token — retrying once — so the bootstrap request already carries
  * `Authorization: Bearer …` instead of racing the bridge boot and falling
- * back to the (often blocked) session cookie. Never throws; when the token is
- * genuinely unavailable it fires the single, de-duplicated session-expired
- * notification and lets the cookie/shop fallbacks decide the outcome.
+ * back to the (often blocked) session cookie.
+ *
+ * HOTFIX 3: the warm-up NEVER latches the session-expired banner by itself.
+ * A token mint race during boot (e.g. fast tab switching while the bridge
+ * boots) is expected and harmless: the fetcher silently retries any 401 with
+ * a fresh token, and a successful request clears any latched banner. Only a
+ * 401 that survives that retry can surface the banner.
  */
 export async function warmUpEmbeddedSessionToken(): Promise<void> {
   try {
-    const result = await getShopifySessionTokenWithRetry()
-    if (result.status === 'ok' || result.status === 'not-embedded') return
-    if (!embeddedAuthFailureNotified) {
-      embeddedAuthFailureNotified = true
-      embeddedAuthFailureHandler?.(result.message)
-    }
-  } catch (error: unknown) {
-    if (!embeddedAuthFailureNotified) {
-      embeddedAuthFailureNotified = true
-      embeddedAuthFailureHandler?.(error instanceof Error ? error.message : 'Shopify session token request failed')
-    }
+    await getShopifySessionTokenWithRetry()
+  } catch {
+    /* request outcomes decide — see HOTFIX 3 */
   }
 }
 
 /**
  * Attaches `Authorization: Bearer <session token>` when the app runs embedded
  * in the Shopify admin. A no-op for standalone/local dev (no `host` param) and
- * for Node test environments. On failure it notifies the registered handler
- * once and continues WITHOUT the header so the cookie fallback can still
- * serve the request — the API answers 401 cleanly if that fails too.
+ * for Node test environments. On failure it continues WITHOUT the header so
+ * the cookie fallback can still serve the request — the API answers 401
+ * cleanly if that fails too, and `requestJsonAttempt` then retries once with
+ * a freshly minted token before anything user-visible happens.
  */
-export async function attachEmbeddedSessionToken(headers: Headers): Promise<void> {
-  if (headers.has('authorization')) return
+export async function attachEmbeddedSessionToken(headers: Headers): Promise<EmbeddedSessionTokenResult> {
+  if (headers.has('authorization')) return { status: 'not-embedded' }
   // `getShopifySessionToken` is a no-op outside a browser (Node tests) and
   // when the page is not embedded; the extra try/catch guarantees a broken
   // bridge can degrade a request to cookie fallback but never fail it.
   try {
     const result = await getShopifySessionToken()
-    if (result.status === 'ok') {
-      headers.set('authorization', `Bearer ${result.token}`)
-      return
-    }
-    if (result.status === 'unavailable' && !embeddedAuthFailureNotified) {
-      embeddedAuthFailureNotified = true
-      embeddedAuthFailureHandler?.(result.message)
-    }
-  } catch (error: unknown) {
-    if (!embeddedAuthFailureNotified) {
-      embeddedAuthFailureNotified = true
-      embeddedAuthFailureHandler?.(error instanceof Error ? error.message : 'Shopify session token request failed')
-    }
+    if (result.status === 'ok') headers.set('authorization', `Bearer ${result.token}`)
+    return result
+  } catch {
+    return { status: 'unavailable', message: 'Shopify session token request failed' }
   }
 }
 
