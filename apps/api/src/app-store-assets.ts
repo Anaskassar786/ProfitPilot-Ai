@@ -9,11 +9,18 @@
  * Why each scope exists:
  * - read_products / read_orders / read_customers: core analytics + sync.
  * - read_inventory / read_locations: inventory health and stockout features.
- * - read_checkouts: abandoned-checkout recovery reporting.
- * - read_price_rules: reading existing discounts before recommending changes.
- * - write_price_rules: REQUIRED to run discountCodeBasicCreate and
+ * - read_discounts: reading discounts via the GraphQL Admin API.
+ * - write_discounts: REQUIRED to run discountCodeBasicCreate and
  *   discountCodeDeactivate from the AI Command Center and Automation Engine.
- *   Without it Shopify answers those mutations with 403 Access Denied.
+ *   These are GraphQL mutations — the legacy `write_price_rules` REST scope
+ *   does not authorize them, so Shopify answers with 403 Access Denied.
+ * - read_price_rules: still required by the REST discounts sync module
+ *   (/admin/api/.../price_rules.json in packages/sync). It reads legacy price
+ *   rules and is unrelated to the GraphQL discount mutations above.
+ *
+ * `read_checkouts` was dropped: Shopify deprecated and shut down the REST
+ * Checkout API (and its `read_checkouts` scope) in 2025, so it no longer
+ * authorizes anything ProfitPilot calls.
  *
  * NOTE: this module is imported directly by scripts/generate-shopify-app-toml.ts
  * through Node's type stripping, so it must stay dependency-free (no imports).
@@ -24,9 +31,9 @@ export const PROFITPILOT_SHOPIFY_SCOPES = [
   'read_customers',
   'read_inventory',
   'read_locations',
-  'read_checkouts',
+  'read_discounts',
+  'write_discounts',
   'read_price_rules',
-  'write_price_rules',
 ] as const
 
 /** Comma-separated form used by SHOPIFY_SCOPES and the `access_scopes` TOML field. */
@@ -37,9 +44,10 @@ export const PROFITPILOT_SHOPIFY_SCOPES_CSV: string = PROFITPILOT_SHOPIFY_SCOPES
  *
  * The required registry is always included: an operator whose SHOPIFY_SCOPES
  * value predates a new capability (for example a deployment still requesting
- * only read_price_rules) would otherwise install the app without the write
- * scope and hit a 403 the first time a discount action runs. Any extra scope
- * supplied through the environment is preserved after the required ones.
+ * only read_price_rules) would otherwise install the app without the
+ * write_discounts scope and hit a 403 the first time a discount action runs.
+ * Any extra scope supplied through the environment is preserved after the
+ * required ones.
  */
 export function parseShopifyScopes(value: string | undefined): readonly string[] {
   const requested = (value ?? '')

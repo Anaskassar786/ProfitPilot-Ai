@@ -80,7 +80,18 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       const rawBody = rawBodyFor(request)
       if (rawBody === null) throw new AppError('VALIDATION_ERROR', 'Webhook body is required', 400)
       const tenant = await dependencies.webhook.storeIdForShop(shop)
-      if (!tenant) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404)
+      if (!tenant) {
+        // Shopify treats a non-2xx answer to its mandatory GDPR webhooks as a
+        // delivery failure and retries indefinitely. An unknown/already-redacted
+        // shop for `shop/redact` is a success (nothing left to delete), so ack
+        // it with 200 after the signature still checks out.
+        if (topic === 'shop/redact') {
+          if (!dependencies.webhook.processor.verify(rawBody, signature)) throw new AppError('UNAUTHORIZED', 'Invalid webhook signature', 401)
+          response.status(200).json({ ok: true, message: 'Shop already redacted or never installed' })
+          return
+        }
+        throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404)
+      }
       const event: WebhookEvent = { storeId: tenant, webhookId, topic, rawBody, signature }
       const result = await dependencies.webhook.processor.process(event, async () => dependencies.webhook?.handle(event) ?? Promise.resolve())
       if ((result.status === 'processed' || result.status === 'deduped') && dependencies.webhook.finalize) await dependencies.webhook.finalize(event)
