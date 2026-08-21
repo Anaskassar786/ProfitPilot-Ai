@@ -27,7 +27,7 @@ describe('session context API route', () => {
     await withServer(appWith(new InMemoryStoreDirectory()), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/session/context`)
       expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: null, shop: null } })
+      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: null, shop: null, installed: false } })
     })
   })
 
@@ -37,7 +37,7 @@ describe('session context API route', () => {
     await withServer(appWith(directory), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/session/context`, { headers: { cookie: `profitpilot_session=${tenant.storeId}` } })
       expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: tenant.storeId, shop: 'demo.myshopify.com' } })
+      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: tenant.storeId, shop: 'demo.myshopify.com', installed: true } })
     })
   })
 
@@ -47,7 +47,7 @@ describe('session context API route', () => {
     await withServer(appWith(directory), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/session/context?shop=${encodeURIComponent('commander-pilot.myshopify.com')}`)
       expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: tenant.storeId, shop: 'commander-pilot.myshopify.com' } })
+      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: tenant.storeId, shop: 'commander-pilot.myshopify.com', installed: true } })
     })
   })
 
@@ -55,7 +55,7 @@ describe('session context API route', () => {
     await withServer(appWith(new InMemoryStoreDirectory()), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/session/context`, { headers: { cookie: 'profitpilot_session=does-not-exist' } })
       expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: null, shop: null } })
+      expect(await response.json()).toMatchObject({ ok: true, data: { storeId: null, shop: null, installed: false } })
     })
   })
 })

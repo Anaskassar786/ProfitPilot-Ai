@@ -10,7 +10,7 @@ import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult
 import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
-import { getShopifySessionToken } from './shopify-app-bridge.js'
+import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
 export type SyncAllModuleResult = Readonly<{ module: string; status: 'succeeded'; result: SyncResult }> | Readonly<{ module: string; status: 'failed'; error: Readonly<{ code: string; message: string }> }>
@@ -133,6 +133,31 @@ export function setEmbeddedAuthFailureHandler(handler: EmbeddedAuthFailureHandle
   // Do not reset `embeddedAuthFailureNotified` here. React StrictMode remounts
   // re-register the handler; resetting would re-fire the session-expired toast.
   if (handler === null) return
+}
+
+/**
+ * Boot-time gate for the embedded auth path (called by the app shell BEFORE
+ * the first `/session/context` bootstrap fetch). Waits for App Bridge to mint
+ * a session token — retrying once — so the bootstrap request already carries
+ * `Authorization: Bearer …` instead of racing the bridge boot and falling
+ * back to the (often blocked) session cookie. Never throws; when the token is
+ * genuinely unavailable it fires the single, de-duplicated session-expired
+ * notification and lets the cookie/shop fallbacks decide the outcome.
+ */
+export async function warmUpEmbeddedSessionToken(): Promise<void> {
+  try {
+    const result = await getShopifySessionTokenWithRetry()
+    if (result.status === 'ok' || result.status === 'not-embedded') return
+    if (!embeddedAuthFailureNotified) {
+      embeddedAuthFailureNotified = true
+      embeddedAuthFailureHandler?.(result.message)
+    }
+  } catch (error: unknown) {
+    if (!embeddedAuthFailureNotified) {
+      embeddedAuthFailureNotified = true
+      embeddedAuthFailureHandler?.(error instanceof Error ? error.message : 'Shopify session token request failed')
+    }
+  }
 }
 
 /**

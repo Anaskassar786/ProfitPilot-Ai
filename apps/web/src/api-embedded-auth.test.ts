@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchAnalytics, requestJson, resetApiClientStateForTests, setEmbeddedAuthFailureHandler } from './api.js'
+import { fetchAnalytics, requestJson, resetApiClientStateForTests, setEmbeddedAuthFailureHandler, warmUpEmbeddedSessionToken } from './api.js'
 import type { Fetcher } from './api.js'
-import { getShopifySessionToken } from './shopify-app-bridge.js'
+import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
 import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 
 /**
@@ -12,9 +12,11 @@ import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
  */
 vi.mock('./shopify-app-bridge.js', () => ({
   getShopifySessionToken: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
+  getShopifySessionTokenWithRetry: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
 }))
 
 const sessionTokenMock = vi.mocked(getShopifySessionToken)
+const sessionTokenWithRetryMock = vi.mocked(getShopifySessionTokenWithRetry)
 
 function capturingFetcher(calls: Array<{ headers: Headers | null }>) {
   const fetcher: Fetcher = async (_input, init) => {
@@ -25,8 +27,11 @@ function capturingFetcher(calls: Array<{ headers: Headers | null }>) {
 }
 
 beforeEach(() => {
+  resetApiClientStateForTests()
   sessionTokenMock.mockReset()
   sessionTokenMock.mockResolvedValue({ status: 'not-embedded' })
+  sessionTokenWithRetryMock.mockReset()
+  sessionTokenWithRetryMock.mockResolvedValue({ status: 'not-embedded' })
   setEmbeddedAuthFailureHandler(null)
 })
 
@@ -73,5 +78,37 @@ describe('embedded App Bridge session tokens in the fetch wrapper', () => {
     const calls: Array<{ headers: Headers | null }> = []
     await requestJson('/analytics', { headers: { authorization: 'Bearer custom-credential' } }, capturingFetcher(calls))
     expect(calls[0]?.headers?.get('authorization')).toBe('Bearer custom-credential')
+  })
+})
+
+describe('warmUpEmbeddedSessionToken (HOTFIX 2 boot warm-up)', () => {
+  it('waits for the (internally retried) token before the bootstrap fetch and stays silent on success', async () => {
+    // The one-attempt retry loop lives inside getShopifySessionTokenWithRetry
+    // (covered in shopify-app-bridge.test.ts); the warm-up must simply await
+    // its final result and only surface a failure when it stays unavailable.
+    sessionTokenWithRetryMock.mockResolvedValue({ status: 'ok', token: 'signed-shopify-session-token' })
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    await warmUpEmbeddedSessionToken()
+    expect(sessionTokenWithRetryMock).toHaveBeenCalledTimes(1)
+    expect(failures).toEqual([])
+  })
+
+  it('surfaces exactly one session-expired notification when the token stays unavailable', async () => {
+    sessionTokenWithRetryMock.mockResolvedValue({ status: 'unavailable', message: 'Shopify session token request failed' })
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    await warmUpEmbeddedSessionToken()
+    await warmUpEmbeddedSessionToken()
+    // Once per page lifetime — never a toast per request.
+    expect(failures).toEqual(['Shopify session token request failed'])
+  })
+
+  it('is a no-op outside the embedded admin', async () => {
+    sessionTokenWithRetryMock.mockResolvedValue({ status: 'not-embedded' })
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    await warmUpEmbeddedSessionToken()
+    expect(failures).toEqual([])
   })
 })

@@ -48,7 +48,7 @@ export type ApiSuccess<Value> = Readonly<{ ok: true; data: Value; meta: ApiMeta 
 export type ApiFailure = Readonly<{ ok: false; error: Readonly<{ code: string; message: string; details?: Readonly<Record<string, JsonValue>> }>; meta?: ApiMeta }>
 export type ApiEnvelope<Value> = ApiSuccess<Value> | ApiFailure
 
-export type WorkspaceContext = Readonly<{ storeId: string | null; shop: string | null }>
+export type WorkspaceContext = Readonly<{ storeId: string | null; shop: string | null; installed?: boolean }>
 
 export function workspaceContext(search: string): WorkspaceContext {
   const params = new URLSearchParams(search)

@@ -8,17 +8,22 @@ import { SESSION_COOKIE_NAME, parseCookies } from './cookies.js'
 
 export type SessionRouteDependencies = Readonly<{ directory: StoreDirectory; sessionToken?: SessionTokenConfig; logger?: import('@profitpilot/logger').Logger }>
 
-export type SessionContext = Readonly<{ storeId: string | null; shop: string | null }>
+export type SessionContext = Readonly<{ storeId: string | null; shop: string | null; installed: boolean }>
 
 /**
- * Returns the active tenant context for the embedded dashboard. The context is
- * resolved in order of specificity:
+ * Returns the active tenant context for the embedded dashboard — the single
+ * bootstrap source of truth the frontend uses to decide between the live
+ * dashboard, a session-expired banner, and (only when no store exists at all)
+ * the install guidance. The context is resolved in order of specificity:
  *   1. a verified Shopify session token from the `Authorization: Bearer`
  *      header (the embedded primary path — works with cookies blocked), then
  *   2. the session cookie set at OAuth time (survives refreshes), then
  *   3. the `shop` query parameter Shopify appends to the app URL.
  * All three resolve through the store directory, so the single source of
  * truth stays the `stores` row rather than any client-supplied value.
+ * `installed` mirrors `storeId !== null`: a false value with a known `shop`
+ * means the tenant row is missing (reload/reauth), while a null `shop` means
+ * the app is genuinely not connected to any store.
  */
 export function createSessionRouter(dependencies: SessionRouteDependencies): Router {
   const router = Router()
@@ -53,7 +58,7 @@ async function resolveContext(directory: StoreDirectory, sessionToken: SessionTo
     const shopClaims = verifyShopifySessionToken(bearer, sessionToken)
     if (shopClaims) {
       const connection = await directory.getByShopDomain(shopClaims.shop)
-      if (connection) return { storeId: connection.storeId, shop: connection.shopDomain }
+      if (connection) return { storeId: connection.storeId, shop: connection.shopDomain, installed: true }
     }
   }
   // 2. Session cookie fallback for non-embedded / local dev.
@@ -61,15 +66,15 @@ async function resolveContext(directory: StoreDirectory, sessionToken: SessionTo
   const cookieStoreId = cookies[SESSION_COOKIE_NAME]?.trim() ?? ''
   if (cookieStoreId) {
     const connection = await directory.get(storeId(cookieStoreId))
-    if (connection) return { storeId: connection.storeId, shop: connection.shopDomain }
+    if (connection) return { storeId: connection.storeId, shop: connection.shopDomain, installed: true }
   }
   // 3. Signed-at-install `shop` query parameter.
   const shop = queryString(request.query.shop)
   if (shop) {
     const connection = await directory.getByShopDomain(shop)
-    if (connection) return { storeId: connection.storeId, shop: connection.shopDomain }
+    if (connection) return { storeId: connection.storeId, shop: connection.shopDomain, installed: true }
   }
-  return { storeId: null, shop: null }
+  return { storeId: null, shop: null, installed: false }
 }
 
 function bearerToken(request: Request): string | null {

@@ -1,5 +1,5 @@
-import { Button, AppNavigationMenu, AppTitleBar, showAppBridgeToast, PolarisEmpty, SimpleModal } from './polaris-ui.js'
-import { Page } from '@shopify/polaris'
+import { Button, AppNavigationMenu, AppTitleBar, showAppBridgeToast, PolarisEmpty, SimpleModal, LoadingSpinner } from './polaris-ui.js'
+import { Banner, Page } from '@shopify/polaris'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { LucideIcon } from './icons.js'
@@ -87,7 +87,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -301,7 +301,20 @@ export default function App() {
   // refresh inside Shopify admin keeps the workspace attached.
   const urlContext = useMemo(() => workspaceContext(window.location.search), [])
   const [resolvedContext, setResolvedContext] = useState<WorkspaceContext>({ storeId: null, shop: null })
+  // HOTFIX 2: boot state for the embedded store context.
+  //   'loading'     — bootstrap (App Bridge session token + /session/context)
+  //                   still in flight; the shell must NEVER paint the connect
+  //                   wall during this window.
+  //   'ready'       — bootstrap settled; the connect wall may only appear when
+  //                   it resolved to no store AND no shop is known.
+  //   'unavailable' — bootstrap failed transiently; offer a retry, never an
+  //                   "install from scratch" flow.
+  const [authState, setAuthState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
+  /** True only when the bootstrap settled and the app is genuinely not
+   * connected: no tenant row AND no shop known from the URL/API. */
+  const showConnect = authState === 'ready' && !context.storeId && !context.shop
   // QA (2026-08-20): real Shopify connection health for the sidebar card,
   // fetched from /sync/status instead of assuming "all systems active".
   const [syncHealth, setSyncHealth] = useState<import('./api.js').SyncStatus | null>(null)
@@ -313,13 +326,66 @@ export default function App() {
     return () => { cancelled = true }
   }, [context.storeId])
 
+  // HOTFIX 2: single embedded bootstrap path. (1) Wait for the App Bridge
+  // session token (retried once) so the very first fetch carries
+  // `Authorization: Bearer …`; (2) resolve the tenant from /session/context.
+  // A 401 or a transient failure is NEVER treated as "not installed".
   useEffect(() => {
-    if (urlContext.storeId) return
-    const query = urlContext.shop ? `?shop=${encodeURIComponent(urlContext.shop)}` : ''
-    void fetchSessionContext(query)
-      .then((result) => setResolvedContext(result))
-      .catch(() => setResolvedContext({ storeId: null, shop: null }))
+    if (urlContext.storeId) {
+      setAuthState('ready')
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      setAuthState('loading')
+      await warmUpEmbeddedSessionToken()
+      if (cancelled) return
+      const query = urlContext.shop ? `?shop=${encodeURIComponent(urlContext.shop)}` : ''
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const result = await fetchSessionContext(query)
+          if (cancelled) return
+          setResolvedContext(result)
+          setAuthState('ready')
+          return
+        } catch (error: unknown) {
+          if (cancelled) return
+          if (error instanceof ApiClientError && error.status === 401) {
+            // Session expired: single re-auth banner, NOT an install wall.
+            setSessionError('Your Shopify session expired — reload the app to reconnect.')
+            setAuthState('ready')
+            return
+          }
+          if (attempt === 1) {
+            setAuthState('unavailable')
+            return
+          }
+        }
+      }
+    })()
+    return () => { cancelled = true }
   }, [urlContext.storeId, urlContext.shop])
+
+  const retryContext = () => {
+    setSessionError(null)
+    void (async () => {
+      setAuthState('loading')
+      await warmUpEmbeddedSessionToken()
+      const query = urlContext.shop ? `?shop=${encodeURIComponent(urlContext.shop)}` : ''
+      try {
+        const result = await fetchSessionContext(query)
+        setResolvedContext(result)
+        setAuthState('ready')
+      } catch (error: unknown) {
+        if (error instanceof ApiClientError && error.status === 401) {
+          setSessionError('Your Shopify session expired — reload the app to reconnect.')
+          setAuthState('ready')
+          return
+        }
+        setAuthState('unavailable')
+      }
+    })()
+  }
 
   const showToast = (message: string, kind: ToastKind = 'success') => {
     // Single toast surface: App Bridge toast when embedded, otherwise the
@@ -333,9 +399,11 @@ export default function App() {
     // admin cannot mint a fresh token, tell the merchant once instead of
     // letting every API call fail silently. Register BEFORE CSRF / data
     // loads so the first failed token request can surface. The API client
-    // still de-dupes to one notification per page lifetime.
+    // still de-dupes to one notification per page lifetime. HOTFIX 2: the
+    // single surface is the Polaris session banner below — never stacked
+    // toasts.
     setEmbeddedAuthFailureHandler(() => {
-      showToast('Your Shopify session expired — reload the app to reconnect.', 'error')
+      setSessionError('Your Shopify session expired — reload the app to reconnect.')
     })
     return () => setEmbeddedAuthFailureHandler(null)
   }, [])
@@ -525,7 +593,14 @@ export default function App() {
     return () => { window.removeEventListener('popstate', onHashNavigation); window.removeEventListener('hashchange', onHashNavigation) }
   }, [])
   const sync = async (module: string) => {
-    if (!context.storeId) { setOnboardingOpen(true); return }
+    if (!context.storeId) {
+      // Installed merchants must never be thrown into the legacy install
+      // modal: if a shop is known (or the bootstrap is still settling), the
+      // right move is to wait/reload — not "connect from scratch".
+      if (authState !== 'ready' || context.shop) { showToast('Your store context is still loading — try again in a moment.', 'info'); return }
+      setOnboardingOpen(true)
+      return
+    }
     try {
       await requestSync(context.storeId, module)
       showToast(`${module} synced from Shopify.`, 'success')
@@ -547,7 +622,11 @@ export default function App() {
     }
   }
   const syncAll = async () => {
-    if (!context.storeId) { setOnboardingOpen(true); return }
+    if (!context.storeId) {
+      if (authState !== 'ready' || context.shop) { showToast('Your store context is still loading — try again in a moment.', 'info'); return }
+      setOnboardingOpen(true)
+      return
+    }
     setSyncAllRunning(true)
     setSyncProgress(syncModules.map((module) => ({ module, status: 'syncing', detail: 'Sync in progress…' })))
     try {
@@ -602,11 +681,20 @@ export default function App() {
       <AppTitleBar title={pageMeta[activePage].title} />
       <main id="main-content" tabIndex={-1} className="page-scroll">
           {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
-          {!context.storeId && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
-          <PageRouter
+          {/* HOTFIX 2: one session-expired banner, one install banner (only
+              when the bootstrap settled with no store and no known shop), and
+              an honest "restoring context" notice for installed merchants
+              whose tenant lookup is pending or failed — never a connect wall
+              while auth is still loading. */}
+          {sessionError && <SessionExpiredBanner message={sessionError} onDismiss={() => setSessionError(null)} />}
+          {showConnect && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
+          {authState === 'ready' && !context.storeId && context.shop && !sessionError && <ContextPendingBanner shop={context.shop} />}
+          {authState === 'unavailable' && !context.storeId && <ContextLoadErrorBanner onRetry={retryContext} />}
+          {(authState === 'ready' || urlContext.storeId) ? <PageRouter
             active={activePage}
             context={context}
             data={data}
+            showConnect={showConnect}
             onNavigate={navigate}
             onSync={sync}
             onSyncAll={syncAll}
@@ -620,7 +708,7 @@ export default function App() {
             onTheme={() => setLightMode((value) => !value)}
             onOpenJarvis={() => setJarvisOpen(true)}
             workspaceSettings={workspacePrefs}
-          />
+          /> : <div className="auth-gate"><LoadingSpinner label="Connecting your Shopify store…" /></div>}
       </main>
       {/* 🛑 JarvisExperience temporarily removed from UI — restore when Jarvis returns */}
       {/* <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} /> */}
@@ -632,7 +720,7 @@ export default function App() {
           recommendation (passive Jarvis review) or Jarvis page evidence — the
           old `?? data.recommendations[0]` fallback showed the wrong record. */}
       {evidenceOpen && <EvidenceDrawer recommendation={selectedRecommendation} jarvisEvidence={jarvisEvidence} onClose={() => { setEvidenceOpen(false); setJarvisEvidence(null); setSelectedRecommendation(null) }} />}
-      {onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
+      {showConnect && onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
       {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} />}
@@ -684,6 +772,7 @@ function PageRouter({
   active,
   context,
   data,
+  showConnect,
   onNavigate,
   onSync,
   onSyncAll,
@@ -701,6 +790,7 @@ function PageRouter({
   active: SectionId
   context: WorkspaceContext
   data: WorkspaceData
+  showConnect: boolean
   onNavigate: (page: SectionId) => void
   onSync: (module: string) => Promise<void>
   onSyncAll: () => Promise<void>
@@ -720,6 +810,7 @@ function PageRouter({
       <DashboardPage
         context={context}
         data={data}
+        showConnect={showConnect}
         onNavigate={onNavigate}
         onSync={onSync}
         onSyncAll={onSyncAll}
@@ -764,6 +855,7 @@ function PageRouter({
 function DashboardPage({
   context,
   data,
+  showConnect,
   onNavigate,
   onSync,
   onSyncAll,
@@ -773,6 +865,7 @@ function DashboardPage({
 }: {
   context: WorkspaceContext
   data: WorkspaceData
+  showConnect: boolean
   onNavigate: (page: SectionId) => void
   onSync: (module: string) => Promise<void>
   onSyncAll: () => Promise<void>
@@ -782,16 +875,23 @@ function DashboardPage({
 }) {
   const displayName = formatStoreDisplayName(context.shop)
   const greeting = greetingForHour(new Date().getHours())
+  // HOTFIX 2: the "Connect your Shopify store" title is reserved for the rare
+  // genuinely-uninstalled state. An installed store whose context is still
+  // loading keeps the normal greeting instead of a misleading connect title.
   const greetingTitle = context.storeId
-    ? displayName
-      ? `${greeting}, ${displayName}`
-      : greeting
-    : 'Connect your Shopify store'
+    ? (displayName ? `${greeting}, ${displayName}` : greeting)
+    : showConnect
+      ? 'Connect your Shopify store'
+      : displayName
+        ? `${greeting}, ${displayName}`
+        : greeting
   const greetingDescription = context.storeId
-    ? displayName
-      ? 'Welcome back — your workspace is ready for real Shopify data.'
-      : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.'
-    : 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
+    ? (displayName
+        ? 'Welcome back — your workspace is ready for real Shopify data.'
+        : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.')
+    : showConnect
+      ? 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
+      : 'Looking for your Shopify store — your workspace will appear here in a moment.'
 
   return (
     <PageLayout
@@ -814,9 +914,9 @@ function DashboardPage({
           <span />
         </span>
         <span>
-          <strong>{context.storeId ? 'Shopify data plane ready' : 'No store context'}</strong> · {latestSyncLabel(data.analytics)}
+          <strong>{context.storeId ? 'Shopify data plane ready' : 'Waiting for store context…'}</strong> · {latestSyncLabel(data.analytics)}
         </span>
-        <Button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></Button>
+        {context.storeId && <Button onClick={() => void onSync('orders')}>Sync orders <ArrowUpRight size={13} /></Button>}
       </div>
       {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} dismissing={!!syncDismissing} />}
       <DashboardLayout
@@ -1514,7 +1614,31 @@ function MetricLine({ label, value }: { label: string; value: string }) { return
 function Quota({ label, value, percent }: { label: string; value: string; percent: number }) { return <div className="quota"><div><span>{label}</span><strong>{value}</strong></div><div className="usage-track"><span style={{ width: `${percent}%` }} /></div></div> }
 function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><Button onClick={onSettings}><Settings size={15} /> Settings</Button><Button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</Button><Button onClick={onClose}><LockKeyhole size={15} /> Security boundary</Button></div> }
 function OfflineBanner({ error, partial = false, onRetry }: { error: string | null; partial?: boolean; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>{partial ? 'Partial data load' : 'API unavailable'}</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><Button onClick={onRetry}><RotateCcw size={14} /> Retry</Button></div> }
-function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><Button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></Button></div> }
+function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>ProfitPilot is not connected to a Shopify store yet.</strong> Install it from the Shopify App Store or connect a store to start syncing real data.</span><Button onClick={onConnect}>Connect a store <ArrowUpRight size={13} /></Button></div> }
+
+/**
+ * HOTFIX 2: the single session-expired surface. Rendered as one Polaris
+ * critical banner (never stacked toasts) when the Shopify admin can no longer
+ * mint a session token or the API answers 401.
+ */
+function SessionExpiredBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <Banner tone="critical" title="Session expired" onDismiss={onDismiss}>
+      <p>{message}</p>
+      <Button onClick={() => window.location.reload()}>Reload the app</Button>
+    </Banner>
+  )
+}
+
+/** Installed merchant (shop known) whose tenant row hasn't resolved yet. */
+function ContextPendingBanner({ shop }: { shop: string }) {
+  return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>Restoring your store context…</strong> {shop} is installed — reloading the app restores it.</span><Button onClick={() => window.location.reload()}>Reload the app <RotateCcw size={13} /></Button></div>
+}
+
+/** Bootstrap fetch failed transiently: retry, never "install from scratch". */
+function ContextLoadErrorBanner({ onRetry }: { onRetry: () => void }) {
+  return <div className="context-banner"><span className="context-banner-icon"><CloudOff size={16} /></span><span><strong>Could not load your store context.</strong> Your data is safe — retry once your connection is back.</span><Button onClick={onRetry}><RotateCcw size={14} /> Retry</Button></div>
+}
 function EvidenceDrawer({ recommendation, jarvisEvidence, onClose }: { recommendation: Recommendation | null; jarvisEvidence: JarvisEvidence | null; onClose: () => void }) {
   const hash = recommendation && typeof recommendation.evidencePack.sha256 === 'string' ? recommendation.evidencePack.sha256 : null
   const evidence = jarvisEvidence
