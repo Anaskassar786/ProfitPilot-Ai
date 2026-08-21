@@ -413,6 +413,18 @@ describe('Store Coach goals', () => {
     const accepted = await apiCall(base, 'POST', `/store-coach/goals/any-id/accept-suggestion?storeId=${STORE}`, { suggestion, startDate: '2026-08-18' })
     expect(accepted.status).toBe(201)
   }))
+
+  it('accepts a suggestion on the exact static client path (regression: /store-coach/goals/suggestion/accept-suggestion)', async () => withServer(buildService(), async (base) => {
+    const accepted = await apiCall(base, 'POST', `/store-coach/goals/suggestion/accept-suggestion?storeId=${STORE}`, { suggestion: { title: 'Ship 60 orders', metric: 'ORDERS', targetValue: 60, currency: 'USD', feasibility: 'MEDIUM', rationale: 'Momentum' }, startDate: '2026-08-18' })
+    expect(accepted.status).toBe(201)
+    expect((accepted.json.data as Record<string, unknown>).title).toBe('Ship 60 orders')
+  }))
+
+  it('rejects an empty suggestion body on the static path with 400 — never 404', async () => withServer(buildService(), async (base) => {
+    const response = await apiCall(base, 'POST', `/store-coach/goals/suggestion/accept-suggestion?storeId=${STORE}`, {})
+    expect(response.status).toBe(400)
+    expect((response.json.error as Record<string, unknown>).code).toBe('VALIDATION_ERROR')
+  }))
 })
 
 describe('Store Coach chat', () => {
