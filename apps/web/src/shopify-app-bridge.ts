@@ -23,6 +23,8 @@ export type EmbeddedSessionTokenResult =
 /** How long to wait for the CDN script to expose `window.shopify`. */
 const APP_BRIDGE_READY_TIMEOUT_MS = 5_000
 const APP_BRIDGE_READY_POLL_MS = 50
+/** Pause between embedded-session retries so a still-booting bridge can settle. */
+const SESSION_TOKEN_RETRY_DELAY_MS = 250
 
 let appBridgeInstance: AppBridgeTokenSource | null = null
 let appBridgeOverride: AppBridgeTokenSource | null = null
@@ -64,6 +66,27 @@ export function publicShopifyApiKey(): string | null {
     /* jsdom / SSR */
   }
   return null
+}
+
+/**
+ * Guarantees the `shopify-api-key` meta tag App Bridge v4 reads at boot. The
+ * static index.html carries it and the API injects it at serve time, but a
+ * static/CDN-hosted build with an empty placeholder would otherwise leave the
+ * CDN bridge without a client id. Idempotent; never overwrites a real key.
+ */
+export function ensureShopifyApiKeyMetaTag(apiKey: string | null = publicShopifyApiKey()): void {
+  if (!apiKey || typeof document === 'undefined') return
+  const existing = document.querySelector('meta[name="shopify-api-key"]')
+  const content = existing?.getAttribute('content')?.trim()
+  if (existing && content && content !== '%VITE_SHOPIFY_API_KEY%') return
+  if (existing) {
+    existing.setAttribute('content', apiKey)
+    return
+  }
+  const meta = document.createElement('meta')
+  meta.name = 'shopify-api-key'
+  meta.content = apiKey
+  document.head.appendChild(meta)
 }
 
 /**
@@ -116,6 +139,25 @@ export async function getShopifySessionToken(search: string = currentSearch(), a
   }
 }
 
+/**
+ * Like `getShopifySessionToken`, but retries a transient `unavailable` result
+ * (the App Bridge CDN may still be booting, or the first token mint can race
+ * the admin frame handshake). Used by the boot-time warm-up so the very first
+ * bootstrap fetch carries a Bearer token instead of falling back to the cookie.
+ */
+export async function getShopifySessionTokenWithRetry(
+  search: string = currentSearch(),
+  apiKey: string | null = publicShopifyApiKey(),
+  retries = 1,
+): Promise<EmbeddedSessionTokenResult> {
+  let result = await getShopifySessionToken(search, apiKey)
+  for (let attempt = 0; attempt < retries && result.status === 'unavailable'; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, SESSION_TOKEN_RETRY_DELAY_MS))
+    result = await getShopifySessionToken(search, apiKey)
+  }
+  return result
+}
+
 async function appBridgeSource(apiKey: string | null, host: string): Promise<AppBridgeTokenSource> {
   if (appBridgeInstance) return appBridgeInstance
   const existing = readShopifyGlobal()
@@ -145,7 +187,31 @@ async function appBridgeSource(apiKey: string | null, host: string): Promise<App
     if (typeof appBridgeInstance.idToken !== 'function') throw new Error('Shopify App Bridge createApp returned no idToken()')
     return appBridgeInstance
   }
+  // Fallback: the official npm package, lazily loaded so the CDN stays the
+  // primary path. This covers a blocked/expired CDN script or a stale cached
+  // build: `createApp` from @shopify/app-bridge still mints session tokens
+  // inside the admin iframe as long as the host param and API key are known.
+  if (apiKey) {
+    const npmCreateApp = await createAppFromNpmPackage()
+    if (npmCreateApp) {
+      const instance = npmCreateApp({ apiKey, host, forceRedirect: true }) as AppBridgeTokenSource
+      if (typeof instance.idToken === 'function') {
+        appBridgeInstance = instance
+        return appBridgeInstance
+      }
+    }
+  }
   throw new Error('Shopify App Bridge is present but has no idToken() API')
+}
+
+async function createAppFromNpmPackage(): Promise<((config: Readonly<{ apiKey: string; host: string; forceRedirect: boolean }>) => unknown) | null> {
+  try {
+    const mod = await import('@shopify/app-bridge')
+    const candidate = (mod as { default?: unknown }).default ?? (mod as { createApp?: unknown }).createApp
+    return typeof candidate === 'function' ? (candidate as (config: Readonly<{ apiKey: string; host: string; forceRedirect: boolean }>) => unknown) : null
+  } catch {
+    return null
+  }
 }
 
 function readShopifyGlobal(): Record<string, unknown> | null {

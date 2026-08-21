@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, ensureEmbeddedAppBridgeRedirect, getShopifySessionToken, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -91,6 +91,54 @@ describe('getShopifySessionToken', () => {
     const result = await getShopifySessionToken('?host=abc123', null)
     expect(result).toEqual({ status: 'ok', token: 'cdn-session-token' })
     expect(idToken).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getShopifySessionTokenWithRetry (HOTFIX 2 boot warm-up)', () => {
+  it('retries once when the first token request is transiently unavailable', async () => {
+    let calls = 0
+    overrideShopifyAppBridgeForTests({
+      idToken: async () => {
+        calls += 1
+        if (calls === 1) throw new Error('bridge still booting')
+        return 'signed-shopify-session-token'
+      },
+    })
+    const result = await getShopifySessionTokenWithRetry('?host=abc123', 'test-api-key')
+    expect(result).toEqual({ status: 'ok', token: 'signed-shopify-session-token' })
+    expect(calls).toBe(2)
+  })
+
+  it('gives up after the retry budget instead of hanging', async () => {
+    let calls = 0
+    overrideShopifyAppBridgeForTests({
+      idToken: async () => {
+        calls += 1
+        throw new Error('token mint refused')
+      },
+    })
+    const result = await getShopifySessionTokenWithRetry('?host=abc123', 'test-api-key')
+    expect(result.status).toBe('unavailable')
+    expect(calls).toBe(2) // initial attempt + 1 retry
+  })
+
+  it('does not retry when the app is not embedded', async () => {
+    overrideShopifyAppBridgeForTests({ idToken: async () => { throw new Error('should not be called') } })
+    const result = await getShopifySessionTokenWithRetry('?shop=shop.myshopify.com', 'test-api-key')
+    expect(result).toEqual({ status: 'not-embedded' })
+  })
+})
+
+describe('ensureShopifyApiKeyMetaTag (HOTFIX 2 App Bridge boot)', () => {
+  it('writes the api key into a missing meta tag and never overwrites a real key', () => {
+    document.querySelector('meta[name="shopify-api-key"]')?.remove()
+    ensureShopifyApiKeyMetaTag('client-id-from-env')
+    const meta = document.querySelector('meta[name="shopify-api-key"]')
+    expect(meta?.getAttribute('content')).toBe('client-id-from-env')
+    // Idempotent: a second call with a different key must not clobber the first.
+    ensureShopifyApiKeyMetaTag('other-client')
+    expect(document.querySelector('meta[name="shopify-api-key"]')?.getAttribute('content')).toBe('client-id-from-env')
+    document.querySelector('meta[name="shopify-api-key"]')?.remove()
   })
 })
 

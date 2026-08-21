@@ -33,10 +33,16 @@ import './settings.css'
 import './light-theme-professional-fix.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
 import { AppBridgeProvider, AppFrame } from './polaris-ui.js'
-import { embeddedHost } from './shopify-app-bridge.js'
+import { embeddedHost, ensureShopifyApiKeyMetaTag } from './shopify-app-bridge.js'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('ProfitPilot root element is missing')
+
+// App Bridge v4 boots from the `shopify-api-key` meta tag. The static
+// index.html and the API serve-time injection normally provide it; this guard
+// covers builds where the placeholder stayed empty so the CDN bridge can still
+// mint session tokens for the embedded app.
+ensureShopifyApiKeyMetaTag()
 
 const host = embeddedHost(window.location.search)
 
