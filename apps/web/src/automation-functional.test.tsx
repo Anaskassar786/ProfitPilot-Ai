@@ -10,7 +10,10 @@
  * rename), the never-run hint, KPI cards, approvals, drafts, empty states,
  * loading states, error states, and route navigation.
  */
+import './jsdom-polaris-setup.js'
 import { readFileSync } from 'node:fs'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { resolve } from 'node:path'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -313,11 +316,14 @@ async function mount(storeId = 's1'): Promise<HTMLElement> {
     root = createRoot(container)
     root.render(
       <StrictMode>
-        <AutomationWorkspace
-          context={context}
-          onToast={(message) => toasts.push(message)}
-          onNavigateBilling={() => upgrades.push('billing')}
-        />
+        {/* main.tsx wraps every page in Polaris AppProvider (i18n). */}
+        <AppProvider i18n={enTranslations as never}>
+          <AutomationWorkspace
+            context={context}
+            onToast={(message) => toasts.push(message)}
+            onNavigateBilling={() => upgrades.push('billing')}
+          />
+        </AppProvider>
       </StrictMode>,
     )
   })
@@ -903,7 +909,7 @@ describe('Automation page — states, resilience, and accessibility', () => {
     const context: WorkspaceContext = { storeId: 's1', shop: 'test.myshopify.com' }
     await act(async () => {
       root = createRoot(container)
-      root.render(<StrictMode><AutomationWorkspace context={context} onToast={(message) => toasts.push(message)} onNavigateBilling={() => upgrades.push('billing')} /></StrictMode>)
+      root.render(<StrictMode><AppProvider i18n={enTranslations as never}><AutomationWorkspace context={context} onToast={(message) => toasts.push(message)} onNavigateBilling={() => upgrades.push('billing')} /></AppProvider></StrictMode>)
     })
     expect(container.querySelector('.automation-skeleton')).toBeTruthy()
   })

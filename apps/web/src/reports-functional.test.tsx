@@ -1,9 +1,17 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { ReportsWorkspace } from './reports.js'
 import { canGenerateReport, reportDisplayName, reportStatusView } from './reports-model.js'
 import type { ReportRun } from './f8-model.js'
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n); render the same
+ *  way so the Polaris Buttons on the page render natively. */
+function renderWorkspace(props: Record<string, unknown>): string {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(ReportsWorkspace, props)))
+}
 
 const completed: ReportRun = {
   id: 'c31f6b31-bbd0-4781-9f61-13a64338282b',
@@ -22,11 +30,11 @@ const completed: ReportRun = {
 
 describe('Reports functional checklist', () => {
   it('loads the page shell without developer jargon or console-facing errors in markup', () => {
-    const html = renderToStaticMarkup(createElement(ReportsWorkspace, {
+    const html = renderWorkspace({
       context: { storeId: 'store-1', shop: 'demo.myshopify.com' },
       onNavigateBilling: vi.fn(),
       onToast: vi.fn(),
-    }))
+    })
     expect(html).toContain('aria-label="Report type"')
     expect(html).toContain('Generate Report')
     expect(html).toContain('Report settings')
@@ -48,20 +56,20 @@ describe('Reports functional checklist', () => {
     expect(trial.allowed).toBe(false)
     expect(trial.used).toBe(1)
     expect(trial.limit).toBe(1)
-    const html = renderToStaticMarkup(createElement(ReportsWorkspace, {
+    const html = renderWorkspace({
       context: { storeId: 'store-1', shop: 'demo.myshopify.com' },
       onNavigateBilling: vi.fn(),
       onToast: vi.fn(),
-    }))
+    })
     expect(html).toContain('Upgrade Plan')
     expect(html).toContain('Included when you Upgrade Plan')
   })
 
   it('never fabricates preview revenue when the store has no rows', () => {
-    const html = renderToStaticMarkup(createElement(ReportsWorkspace, {
+    const html = renderWorkspace({
       context: { storeId: null, shop: null },
       onNavigateBilling: vi.fn(),
-    }))
+    })
     expect(html).not.toMatch(/\$9,?999/)
     expect(html).not.toContain('john@example.com')
     expect(html).toContain('No reports generated yet')
