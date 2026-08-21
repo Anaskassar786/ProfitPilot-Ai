@@ -4,10 +4,10 @@
    A scoped token system (`--dx-*`) drives BOTH themes from one place, so
    dark and light are equally finished and neither leaks into the other.
 
-     · Dark  — #14161D cards on the app canvas, violet #8B5CF6 accent,
+     · Dark  — rgb(20, 22, 29) cards on the app canvas, violet rgb(139, 92, 246) accent,
                soft luminous borders, per-dataset accent tints.
-     · Light — #F8FAFC canvas, #FFFFFF cards with real borders + layered
-               shadows, #0F172A text, #7C3AED download buttons.
+     · Light — rgb(248, 250, 252) canvas, rgb(255, 255, 255) cards with real borders + layered
+               shadows, rgb(15, 23, 42) text, rgb(124, 58, 237) download buttons.
 
    Rules honoured: nothing below 12px, 14px card radius, 20–22px padding,
    40px buttons, gentle hover lift, AA contrast on every accent, and no
@@ -16,25 +16,25 @@
 
 .dx-root {
   /* accents */
-  --dx-violet: #8B5CF6;
-  --dx-violet-strong: #7C3AED;
-  --dx-blue: #3B82F6;
-  --dx-teal: #14B8A6;
-  --dx-amber: #F59E0B;
-  --dx-green: #10B981;
-  --dx-red: #F87171;
+  --dx-violet: rgb(139, 92, 246);
+  --dx-violet-strong: rgb(124, 58, 237);
+  --dx-blue: rgb(59, 130, 246);
+  --dx-teal: rgb(20, 184, 166);
+  --dx-amber: rgb(245, 158, 11);
+  --dx-green: rgb(16, 185, 129);
+  --dx-red: rgb(248, 113, 113);
 
   /* surfaces (dark default) */
-  --dx-card: #14161D;
-  --dx-card-raised: #1B1E27;
+  --dx-card: rgb(20, 22, 29);
+  --dx-card-raised: rgb(27, 30, 39);
   --dx-card-sunken: rgba(9, 11, 16, 0.5);
   --dx-border: rgba(148, 163, 184, 0.14);
   --dx-border-strong: rgba(148, 163, 184, 0.24);
 
   /* text */
-  --dx-text: #F8FAFC;
-  --dx-text-secondary: #A9B2C3;
-  --dx-text-tertiary: #7B8598;
+  --dx-text: rgb(248, 250, 252);
+  --dx-text-secondary: rgb(169, 178, 195);
+  --dx-text-tertiary: rgb(123, 133, 152);
 
   /* effects */
   --dx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -48,23 +48,23 @@
 }
 
 .light-mode .dx-root {
-  --dx-violet: #7C3AED;
-  --dx-violet-strong: #6D28D9;
-  --dx-blue: #2563EB;
-  --dx-teal: #0D9488;
-  --dx-amber: #B45309;
-  --dx-green: #047857;
-  --dx-red: #DC2626;
+  --dx-violet: rgb(124, 58, 237);
+  --dx-violet-strong: rgb(109, 40, 217);
+  --dx-blue: rgb(37, 99, 235);
+  --dx-teal: rgb(13, 148, 136);
+  --dx-amber: rgb(180, 83, 9);
+  --dx-green: rgb(4, 120, 87);
+  --dx-red: rgb(220, 38, 38);
 
-  --dx-card: #FFFFFF;
-  --dx-card-raised: #F8FAFC;
-  --dx-card-sunken: #F1F5F9;
-  --dx-border: #E2E8F0;
-  --dx-border-strong: #CBD5E1;
+  --dx-card: rgb(255, 255, 255);
+  --dx-card-raised: rgb(248, 250, 252);
+  --dx-card-sunken: rgb(241, 245, 249);
+  --dx-border: rgb(226, 232, 240);
+  --dx-border-strong: rgb(203, 213, 225);
 
-  --dx-text: #0F172A;
-  --dx-text-secondary: #475569;
-  --dx-text-tertiary: #64748B;
+  --dx-text: rgb(15, 23, 42);
+  --dx-text-secondary: rgb(71, 85, 105);
+  --dx-text-tertiary: rgb(100, 116, 139);
 
   --dx-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   --dx-shadow-lift: 0 14px 30px rgba(15, 23, 42, 0.12);
@@ -75,10 +75,10 @@
 .dx-root .tone-violet { --dx-tone: var(--dx-violet); --dx-tone-soft: rgba(139, 92, 246, 0.14); }
 .dx-root .tone-teal { --dx-tone: var(--dx-teal); --dx-tone-soft: rgba(20, 184, 166, 0.14); }
 .dx-root .tone-amber { --dx-tone: var(--dx-amber); --dx-tone-soft: rgba(245, 158, 11, 0.14); }
-.light-mode .dx-root .tone-blue { --dx-tone-soft: #DBEAFE; }
-.light-mode .dx-root .tone-violet { --dx-tone-soft: #EDE9FE; }
-.light-mode .dx-root .tone-teal { --dx-tone-soft: #CCFBF1; }
-.light-mode .dx-root .tone-amber { --dx-tone-soft: #FEF3C7; }
+.light-mode .dx-root .tone-blue { --dx-tone-soft: rgb(219, 234, 254); }
+.light-mode .dx-root .tone-violet { --dx-tone-soft: rgb(237, 233, 254); }
+.light-mode .dx-root .tone-teal { --dx-tone-soft: rgb(204, 251, 241); }
+.light-mode .dx-root .tone-amber { --dx-tone-soft: rgb(254, 243, 199); }
 
 /* ── shared atoms ─────────────────────────────────────────────────────── */
 
@@ -178,8 +178,8 @@
 }
 .light-mode .dx-plan {
   background:
-    radial-gradient(circle at 0% 0%, #F5F3FF, transparent 52%),
-    #FFFFFF;
+    radial-gradient(circle at 0% 0%, rgb(245, 243, 255), transparent 52%),
+    rgb(255, 255, 255);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 .dx-plan.is-maxed { border-color: color-mix(in srgb, var(--dx-amber) 45%, var(--dx-border)); }
@@ -196,7 +196,7 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--dx-violet) 14%, transparent);
 }
-.light-mode .dx-plan-icon { background: #EDE9FE; border-color: #DDD6FE; }
+.light-mode .dx-plan-icon { background: rgb(237, 233, 254); border-color: rgb(221, 214, 254); }
 .dx-plan-copy h3 { margin: 4px 0 3px; font-size: 18px; }
 .dx-plan-copy p { font-size: 13px; }
 
@@ -204,7 +204,7 @@
 .dx-plan-meter-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dx-plan-meter-top strong { color: var(--dx-text); font-size: 14px; font-weight: 700; }
 .dx-track { height: 8px; overflow: hidden; border-radius: 999px; background: var(--dx-card-sunken); }
-.light-mode .dx-track { background: #E2E8F0; }
+.light-mode .dx-track { background: rgb(226, 232, 240); }
 .dx-track > span {
   display: block;
   height: 100%;
@@ -214,7 +214,7 @@
   transition: width .3s ease;
 }
 .dx-track > span.unlimited { background: linear-gradient(90deg, var(--dx-green), var(--dx-teal)); }
-.dx-track > span.maxed { background: linear-gradient(90deg, var(--dx-amber), #EA580C); }
+.dx-track > span.maxed { background: linear-gradient(90deg, var(--dx-amber), rgb(234, 88, 12)); }
 .dx-plan-locked { color: var(--dx-text-tertiary); font-size: 12px; }
 
 .dx-plan-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
@@ -245,7 +245,7 @@
   font-size: 12px;
 }
 .dx-note svg { flex: 0 0 auto; color: var(--dx-text-tertiary); }
-.light-mode .dx-note { background: #F8FAFC; }
+.light-mode .dx-note { background: rgb(248, 250, 252); }
 
 /* ── export card ──────────────────────────────────────────────────────── */
 
@@ -293,7 +293,7 @@
 .dx-card-description { min-height: 38px; font-size: 13px; }
 
 .dx-facts { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 12px 13px; border-radius: 11px; background: var(--dx-card-sunken); }
-.light-mode .dx-facts { background: #F8FAFC; border: 1px solid #EEF2F7; }
+.light-mode .dx-facts { background: rgb(248, 250, 252); border: 1px solid rgb(238, 242, 247); }
 .dx-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 /* The label never wraps; a long value (a full timestamp) is what may wrap. */
 .dx-facts dt { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 6px; margin: 0; color: var(--dx-text-tertiary); font-size: 12px; white-space: nowrap; }
@@ -304,7 +304,7 @@
 .dx-includes::first-letter { text-transform: uppercase; }
 
 .dx-locked-body { display: flex; flex-direction: column; gap: 9px; padding: 13px; border: 1px dashed color-mix(in srgb, var(--dx-violet) 38%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--dx-violet) 8%, transparent); }
-.light-mode .dx-locked-body { background: #FAF5FF; border-color: #DDD6FE; }
+.light-mode .dx-locked-body { background: rgb(250, 245, 255); border-color: rgb(221, 214, 254); }
 .dx-locked-badge { display: inline-flex; align-items: center; gap: 6px; color: var(--dx-violet); font-size: 12px; font-weight: 700; }
 .light-mode .dx-locked-badge { color: var(--dx-violet-strong); }
 .dx-locked-title { color: var(--dx-text-tertiary); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
@@ -323,17 +323,17 @@
   width: 100%;
   min-height: 40px;
   padding: 0 16px;
-  color: #FFFFFF;
+  color: rgb(255, 255, 255);
   border: 1px solid transparent;
   border-radius: 10px;
-  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+  background: linear-gradient(135deg, rgb(124, 58, 237) 0%, rgb(109, 40, 217) 100%);
   box-shadow: 0 6px 16px rgba(124, 58, 237, .26);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
-.dx-download:hover:not(:disabled) { transform: translateY(-1px); background: linear-gradient(135deg, #6D28D9 0%, #5B21B6 100%); box-shadow: 0 9px 22px rgba(124, 58, 237, .34); }
+.dx-download:hover:not(:disabled) { transform: translateY(-1px); background: linear-gradient(135deg, rgb(109, 40, 217) 0%, rgb(91, 33, 182) 100%); box-shadow: 0 9px 22px rgba(124, 58, 237, .34); }
 .dx-download:focus-visible { outline: none; box-shadow: var(--dx-focus); }
 .dx-download:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
 
@@ -382,9 +382,9 @@
   border-radius: 14px;
   background: var(--dx-card-sunken);
 }
-.light-mode .dx-history-empty { background: #F8FAFC; }
+.light-mode .dx-history-empty { background: rgb(248, 250, 252); }
 .dx-history-empty-icon { display: grid; place-items: center; width: 44px; height: 44px; color: var(--dx-violet); border-radius: 12px; background: color-mix(in srgb, var(--dx-violet) 13%, transparent); }
-.light-mode .dx-history-empty-icon { background: #EDE9FE; }
+.light-mode .dx-history-empty-icon { background: rgb(237, 233, 254); }
 .dx-history-empty strong { color: var(--dx-text); font-size: 15px; }
 .dx-history-empty p { max-width: 420px; font-size: 13px; }
 
@@ -402,9 +402,9 @@
   background: var(--dx-card);
 }
 .dx-state-icon { display: grid; place-items: center; width: 48px; height: 48px; color: var(--dx-violet); border-radius: 14px; background: color-mix(in srgb, var(--dx-violet) 13%, transparent); }
-.light-mode .dx-state-icon { background: #EDE9FE; }
+.light-mode .dx-state-icon { background: rgb(237, 233, 254); }
 .dx-state.error .dx-state-icon { color: var(--dx-red); background: color-mix(in srgb, var(--dx-red) 14%, transparent); }
-.light-mode .dx-state.error .dx-state-icon { background: #FEE2E2; }
+.light-mode .dx-state.error .dx-state-icon { background: rgb(254, 226, 226); }
 .dx-state strong { color: var(--dx-text); font-size: 16px; }
 .dx-state p { max-width: 470px; font-size: 13px; }
 

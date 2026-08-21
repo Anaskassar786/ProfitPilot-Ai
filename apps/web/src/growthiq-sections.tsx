@@ -11,8 +11,9 @@
  * components render honest education — never fabricated figures. Upgrade
  * CTAs always read "Upgrade Plan".
  */
+import { Button } from './polaris-ui.js'
 import type { ReactNode } from 'react'
-import { ArrowUpRight, Crosshair, DollarSign, FileBarChart, Flag, Gem, Globe, Lightbulb, ListChecks, LockKeyhole, Mountain, Newspaper, Package, Quote, TrendingUp, Users, Zap } from 'lucide-react'
+import { ArrowUpRight, Crosshair, DollarSign, FileBarChart, Flag, Gem, Globe, Lightbulb, ListChecks, LockKeyhole, Mountain, Newspaper, Package, Quote, TrendingUp, Users, Zap } from './icons.js'
 import type { PlanTier } from '@profitpilot/types'
 import { formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import type { GrowthMilestonesResult, ImpactPreview, StrategicPosition, TrajectoryProjection, WeeklyDigest } from './growthiq-strategic.js'
@@ -84,7 +85,7 @@ export function GrowthIqTrajectorySection({ projection, currency, daysSynced, on
               <div className="gq-figure"><strong>{projection.confidencePct}%</strong><span>projection confidence · {projection.dataDays} real days</span></div>
             </div>
             <div className="gq-card-footer">
-              <button type="button" className="text-button" onClick={onNavigateReports}>Explore trajectory details <ArrowUpRight size={13} /></button>
+              <Button type="button" className="text-button" onClick={onNavigateReports}>Explore trajectory details <ArrowUpRight size={13} /></Button>
             </div>
           </div>
         </>
@@ -113,7 +114,7 @@ export function GrowthIqPositionSection({ position, nextMilestone, onNavigateBen
             <div className="gq-fact"><span>Your stage</span><strong>{position.stage}</strong></div>
             <div className="gq-fact"><span>Strategic focus</span><strong>{position.focus}</strong></div>
             <div className="gq-fact"><span>Next milestone</span><strong>{nextMilestone ?? 'All listed milestones complete'}</strong></div>
-            <button type="button" className="text-button" onClick={onNavigateBenchmarks}>View strategic benchmarks <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={onNavigateBenchmarks}>View strategic benchmarks <ArrowUpRight size={13} /></Button>
           </div>
         </div>
       ) : (
@@ -163,7 +164,7 @@ export function GrowthIqImpactSection({ previews, onNavigate, className = '' }: 
                 <span className="gq-impact-value muted"><LockKeyhole size={12} /> Not measurable yet</span>
               )}
               {preview.detail ? <p>{preview.detail}</p> : null}
-              <button type="button" className="text-button" onClick={() => onNavigate(meta.route)}>Learn more <ArrowUpRight size={13} /></button>
+              <Button type="button" className="text-button" onClick={() => onNavigate(meta.route)}>Learn more <ArrowUpRight size={13} /></Button>
             </div>
           )
         })}
@@ -183,7 +184,7 @@ export function GrowthIqMilestonesSection({ result, onNavigateRoadmaps, classNam
         kicker="Your growth milestones"
         title={`${result.completedCount} of ${result.milestones.length} reached`}
         note="A long-horizon ladder counted from your real synced totals — orders, customers, history, revenue."
-        action={<button type="button" className="text-button" onClick={onNavigateRoadmaps}>View roadmap <ArrowUpRight size={13} /></button>}
+        action={<Button type="button" className="text-button" onClick={onNavigateRoadmaps}>View roadmap <ArrowUpRight size={13} /></Button>}
       />
       <ol className="gq-milestones">
         {result.milestones.map((milestone) => (
@@ -266,7 +267,7 @@ export function GrowthIqDigestSection({ digest, daysSynced, currency, plan, canR
           )}
           <div className="gq-card-footer">
             {canReadReports ? (
-              <button type="button" className="button secondary" onClick={onNavigateReports}>Read full report <ArrowUpRight size={14} /></button>
+              <Button type="button" className="button secondary" onClick={onNavigateReports}>Read full report <ArrowUpRight size={14} /></Button>
             ) : (
               <div className="gq-digest-gate">
                 <span>Full board reports are included in paid plans.</span>
@@ -345,7 +346,7 @@ export function GrowthIqInsightsSidebar({ metrics, currency, tipIndex = 0, onNav
       <div className="gq-insights-block gq-tip">
         <h4><Quote size={12} /> Strategic note</h4>
         <p>“{tip}”</p>
-        <button type="button" className="text-button" onClick={onNavigateReports}>More insights <ArrowUpRight size={13} /></button>
+        <Button type="button" className="text-button" onClick={onNavigateReports}>More insights <ArrowUpRight size={13} /></Button>
       </div>
     </aside>
   )
@@ -372,11 +373,11 @@ export function GrowthIqActionsPanel({ onNavigate }: { onNavigate: (route: strin
         {actions.map((action) => {
           const Icon = action.icon
           return (
-            <button key={action.key} type="button" className="gq-action-card" onClick={() => onNavigate(action.route)}>
+            <Button key={action.key} type="button" className="gq-action-card" onClick={() => onNavigate(action.route)}>
               <span className="gq-action-icon"><Icon size={16} /></span>
               <strong>{action.title}</strong>
               <span>{action.description}</span>
-            </button>
+            </Button>
           )
         })}
       </div>

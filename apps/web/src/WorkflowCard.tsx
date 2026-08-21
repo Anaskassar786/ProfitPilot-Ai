@@ -1,4 +1,5 @@
-import { Archive, ArrowRight, BarChart3, Copy, History, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Zap } from 'lucide-react'
+import { Button } from './polaris-ui.js'
+import { Archive, ArrowRight, BarChart3, Copy, History, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Zap } from './icons.js'
 import type { JSX } from 'react'
 import { useState } from 'react'
 import type { WorkflowRecord } from './automation-model.js'
@@ -53,9 +54,9 @@ export function WorkflowCard({
   return (
     <article className={`automation-workflow-card workflow-card category-${workflow.category.toLowerCase()} status-${workflow.status.toLowerCase()} ${workflow.status.toLowerCase()}`}>
       <div className="workflow-card-topline">
-        <button className="workflow-card-icon-btn" onClick={onOpen} aria-label={`Open ${workflow.name}`}>
+        <Button className="workflow-card-icon-btn" onClick={onOpen} aria-label={`Open ${workflow.name}`}>
           <span className="automation-category-icon workflow-icon-wrap"><Icon size={18} className="workflow-icon" /></span>
-        </button>
+        </Button>
         <div className="workflow-card-heading">
           <span className={`automation-status workflow-status-badge ${workflow.status.toLowerCase()}`}>{friendlyStatus(workflow.status)}</span>
           {renaming ? (
@@ -77,15 +78,15 @@ export function WorkflowCard({
               onBlur={() => void commitRename()}
             />
           ) : (
-            <button className="workflow-name-button" onClick={startRename} title="Rename automation">
+            <Button className="workflow-name-button" onClick={startRename} title="Rename automation">
               <h3 className="workflow-name">{workflow.name}</h3>
               <Pencil size={12} className="workflow-name-edit-icon" aria-hidden="true" />
-            </button>
+            </Button>
           )}
           {workflow.description && <p>{workflow.description}</p>}
         </div>
       </div>
-      <button className="workflow-card-body" onClick={onOpen}>
+      <Button className="workflow-card-body" onClick={onOpen}>
         <div className="workflow-trigger">
           <Zap size={15} className="workflow-trigger-icon" />
           <span>Starts when {friendlyStartsWhen(workflow.triggerSummary)}</span>
@@ -108,49 +109,49 @@ export function WorkflowCard({
             <ArrowRight size={14} className="workflow-empty-hint-arrow" aria-hidden="true" />
           </div>
         )}
-      </button>
+      </Button>
       <div className="workflow-card-actions workflow-actions">
-        <button className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</button>
-        <button className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</button>
+        <Button className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</Button>
+        <Button className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</Button>
         {workflow.status === 'ACTIVE' && (
-          <button className="workflow-action-btn pause" onClick={() => onCommand('pause')}><Pause size={15} /> Pause</button>
+          <Button className="workflow-action-btn pause" onClick={() => onCommand('pause')}><Pause size={15} /> Pause</Button>
         )}
         {workflow.status === 'PAUSED' && (
-          <button className="workflow-action-btn resume" onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</button>
+          <Button className="workflow-action-btn resume" onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</Button>
         )}
         <div className="workflow-more workflow-more-menu">
-          <button aria-label="More automation actions" onClick={() => setMenu((value) => !value)}>
+          <Button aria-label="More automation actions" onClick={() => setMenu((value) => !value)}>
             <MoreHorizontal size={17} />
-          </button>
+          </Button>
           {menu && (
             <div className="workflow-menu">
               {workflow.status === 'ACTIVE' && (
-                <button
+                <Button
                   onClick={() => {
                     setMenu(false)
                     onCommand('run')
                   }}
                 >
                   <Play size={15} /> Run Now
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 onClick={() => {
                   setMenu(false)
                   onCommand('clone')
                 }}
               >
                 <Copy size={15} /> Duplicate
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
                   setMenu(false)
                   onCommand('history')
                 }}
               >
                 <History size={15} /> Run history
-              </button>
-              <button
+              </Button>
+              <Button
                 className="danger"
                 onClick={() => {
                   setMenu(false)
@@ -158,7 +159,7 @@ export function WorkflowCard({
                 }}
               >
                 <Archive size={15} /> Archive
-              </button>
+              </Button>
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
+import { Button } from './polaris-ui.js'
 import { useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { ArrowUpRight, Award, BarChart3, Box, Database, Gauge, Package, RefreshCw, Search, ShoppingBag, SlidersHorizontal, Tag, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, Award, BarChart3, Box, Database, Gauge, Package, RefreshCw, Search, ShoppingBag, SlidersHorizontal, Tag, TrendingUp } from './icons.js'
 import { CustomSelect } from './CustomSelect.js'
 import type { AnalyticsSnapshot, CatalogProduct, WorkspaceContext } from './model.js'
 import { formatMoney, formatNumber } from './model.js'
@@ -54,7 +55,7 @@ function WinningProductCard({ product, onSync }: { product: ProductListItem | nu
     <span className="product-stat-label">Winning Product</span>
     <strong>No sales data yet</strong>
     <small>Sync orders to calculate the top seller.</small>
-    <button className="text-button product-stat-action" onClick={() => void onSync('orders')}><RefreshCw size={13} /> Sync orders</button>
+    <Button className="text-button product-stat-action" onClick={() => void onSync('orders')}><RefreshCw size={13} /> Sync orders</Button>
   </article>
   return <article className="card product-stat-card winning">
     <div className="product-stat-head"><span className="product-stat-icon"><Award size={18} /></span><span className="real-data-pill"><TrendingUp size={11} /> Top seller</span></div>
@@ -163,6 +164,6 @@ function ProductsEmptyState({ title, description, action, onAction, compact = fa
     <span className="empty-icon"><Package size={22} /></span>
     <h3>{title}</h3>
     <p>{description}</p>
-    <button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button>
+    <Button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></Button>
   </div>
 }

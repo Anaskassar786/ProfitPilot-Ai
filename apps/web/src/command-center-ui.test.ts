@@ -153,7 +153,7 @@ describe('PR45 component rendering', () => {
     expect(html).toContain('View details')
     expect(html).toContain('insights today')
     expect(html).toContain('aria-haspopup="menu"')
-    expect(html).not.toContain('font-size: 8px')
+    expect(html).not.toContain('font-size: 12px')
   })
   it('renders a locked card with plan badge, sample insight, and a generic upgrade CTA', () => {
     const locked = overviewFor('trial').find((agent) => agent.id === 'PRICING_AGENT')

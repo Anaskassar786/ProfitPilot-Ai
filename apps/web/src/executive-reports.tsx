@@ -5,8 +5,9 @@
  * navigation, PDF generation (Commander), email delivery, print view, and
  * the trial's clearly-labeled sample report preview.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, FileText, Landmark, Mail, Printer, RefreshCw } from 'lucide-react'
+import { Download, FileText, Landmark, Mail, Printer, RefreshCw } from './icons.js'
 import type { ExecutiveReport } from './executive-model.js'
 import { executiveDateLabel, executiveMonthLabel } from './executive-model.js'
 import {
@@ -139,10 +140,10 @@ export function ExecutiveReportsPage({ context, plan, gates, onToast, onUpgrade,
         description="CEO-level monthly, quarterly, and custom reports generated exclusively from your synced store data and public industry benchmarks."
         actions={
           <>
-            <button type="button" className="button secondary" onClick={() => void load()}><RefreshCw size={14} /> Refresh</button>
-            <button type="button" className="button primary" onClick={() => void generate()} disabled={generating || !storeId}>
+            <Button type="button" className="button secondary" onClick={() => void load()}><RefreshCw size={14} /> Refresh</Button>
+            <Button type="button" className="button primary" onClick={() => void generate()} disabled={generating || !storeId}>
               <FileText size={14} /> {generating ? 'Generating…' : 'Generate Report'}
-            </button>
+            </Button>
           </>
         }
       />
@@ -174,13 +175,13 @@ export function ExecutiveReportsPage({ context, plan, gates, onToast, onUpgrade,
               <div key={year}>
                 <div className="exec-report-year-label">{year}</div>
                 {yearReports.map((report) => (
-                  <button key={report.id} type="button" className={`exec-report-list-item ${selectedId === report.id ? 'selected' : ''}`} onClick={() => setSelectedId(report.id)}>
+                  <Button key={report.id} type="button" className={`exec-report-list-item ${selectedId === report.id ? 'selected' : ''}`} onClick={() => setSelectedId(report.id)}>
                     <span className="exec-report-date">{executiveMonthLabel(report.periodStart)}</span>
                     <span className="exec-report-meta">
                       <ExecutiveStatusPill status={report.reportType} tone="gold" />
                       {report.viewedAt === null ? <span className="exec-pill warning"><i />New</span> : <span>{executiveDateLabel(report.generatedAt)}</span>}
                     </span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             ))}
@@ -211,10 +212,10 @@ function ReportViewer({ report, pdfBusy, pdfJobId, emailing, onDownload, onEmail
         <div className="exec-section-head">
           <div><div className="exec-kicker">Executive summary · {executiveDateLabel(report.generatedAt)}</div><h3>{executiveMonthLabel(report.periodStart)} board report</h3></div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" className="button secondary" onClick={onPrint}><Printer size={14} /> Print</button>
-            <button type="button" className="button secondary" onClick={onEmail} disabled={emailing}><Mail size={14} /> {emailing ? 'Sending…' : 'Email'}</button>
+            <Button type="button" className="button secondary" onClick={onPrint}><Printer size={14} /> Print</Button>
+            <Button type="button" className="button secondary" onClick={onEmail} disabled={emailing}><Mail size={14} /> {emailing ? 'Sending…' : 'Email'}</Button>
             {plan === 'commander' ? (
-              <button type="button" className="button primary" onClick={onDownload} disabled={pdfBusy}><Download size={14} /> {pdfBusy ? (pdfJobId ? 'Preparing PDF…' : 'Preparing…') : 'Download PDF'}</button>
+              <Button type="button" className="button primary" onClick={onDownload} disabled={pdfBusy}><Download size={14} /> {pdfBusy ? (pdfJobId ? 'Preparing PDF…' : 'Preparing…') : 'Download PDF'}</Button>
             ) : (
               <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
             )}

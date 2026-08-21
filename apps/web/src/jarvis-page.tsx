@@ -1,6 +1,7 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { Check, Languages, Mic, Settings2, ShieldCheck, Sparkles, Volume2, Workflow } from 'lucide-react'
+import { Check, Languages, Mic, Settings2, ShieldCheck, Sparkles, Volume2, Workflow } from './icons.js'
 import { fetchJarvisPreferences, saveJarvisPreferences, saveWorkspaceSettings } from './api.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { WorkspaceContext } from './model.js'
@@ -13,9 +14,9 @@ export function JarvisNavIcon({ size = 17, className, strokeWidth: _strokeWidth 
   const px = typeof size === 'number' ? size : Number.parseInt(String(size), 10) || 17
   return (
     <svg width={px} height={px} viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="#0B1B3A" />
-      <circle cx="12" cy="12" r="7.2" fill="#1D4ED8" opacity=".9" />
-      <circle cx="9.4" cy="9.2" r="3.4" fill="#7DD3FC" opacity=".85" />
+      <circle cx="12" cy="12" r="10" fill="rgb(11, 27, 58)" />
+      <circle cx="12" cy="12" r="7.2" fill="rgb(29, 78, 216)" opacity=".9" />
+      <circle cx="9.4" cy="9.2" r="3.4" fill="rgb(125, 211, 252)" opacity=".85" />
     </svg>
   )
 }
@@ -106,9 +107,9 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
 
   return (
     <div className="jarvis-stage">
-      <button type="button" className="jarvis-stage-orb" onClick={onListen} aria-label={context.storeId ? 'Start Jarvis voice' : 'Connect Shopify before using Jarvis'}>
+      <Button type="button" className="jarvis-stage-orb" onClick={onListen} aria-label={context.storeId ? 'Start Jarvis voice' : 'Connect Shopify before using Jarvis'}>
         <JarvisOrb state={context.storeId ? 'idle' : 'warning'} size={176} label={context.storeId ? 'Start Jarvis voice' : 'Connect Shopify for Jarvis'} />
-      </button>
+      </Button>
       <div className="jarvis-stage-copy">
         <span className="section-kicker">SPOKEN STORE ASSISTANT</span>
         <h2>{context.storeId ? 'Tap the orb to speak' : 'Connect Shopify to wake Jarvis'}</h2>
@@ -174,32 +175,32 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
 
           <div className="jarvis-settings-card">
             <div className="jarvis-settings-label"><Sparkles size={15} /> Page guidance</div>
-            <button type="button" className={`jarvis-toggle-card ${offerGuidance ? 'selected' : ''}`} onClick={() => setOfferGuidance((value) => !value)}>
+            <Button type="button" className={`jarvis-toggle-card ${offerGuidance ? 'selected' : ''}`} onClick={() => setOfferGuidance((value) => !value)}>
               <span>
                 <strong>Ask before explaining a new page</strong>
                 <small>Jarvis says “If you want, I can explain this page” instead of briefing every page automatically.</small>
               </span>
               {offerGuidance && <Check size={15} />}
-            </button>
+            </Button>
           </div>
 
           <div className="jarvis-settings-card">
             <div className="jarvis-settings-label"><ShieldCheck size={15} /> Quiet mode</div>
-            <button type="button" className={`jarvis-toggle-card ${answerOnly ? 'selected' : ''}`} onClick={() => setAnswerOnly((value) => !value)}>
+            <Button type="button" className={`jarvis-toggle-card ${answerOnly ? 'selected' : ''}`} onClick={() => setAnswerOnly((value) => !value)}>
               <span>
                 <strong>Only answer when I ask</strong>
                 <small>Useful if you want Jarvis fully on-demand while you browse the store.</small>
               </span>
               {answerOnly && <Check size={15} />}
-            </button>
+            </Button>
           </div>
         </div>
 
         <div className="jarvis-settings-footer">
           <span><Sparkles size={14} /> These settings apply to the floating Jarvis bubble across your workspace.</span>
           <div className="jarvis-settings-actions">
-            <button type="button" className="button secondary" onClick={onListen}>{context.storeId ? 'Start listening' : 'Connect Shopify first'}</button>
-            <button type="button" className="button primary" onClick={() => void saveSettings()} disabled={saving}>{saving ? 'Saving…' : 'Save Jarvis settings'}</button>
+            <Button type="button" className="button secondary" onClick={onListen}>{context.storeId ? 'Start listening' : 'Connect Shopify first'}</Button>
+            <Button type="button" className="button primary" onClick={() => void saveSettings()} disabled={saving}>{saving ? 'Saving…' : 'Save Jarvis settings'}</Button>
           </div>
         </div>
       </section>
@@ -211,17 +212,17 @@ export function JarvisWorkspace({ context, onListen, onToast, workspaceSettings 
 
 function ChoiceButton({ selected, onClick, label, hint }: Readonly<{ selected: boolean; onClick: () => void; label: string; hint: string }>) {
   return (
-    <button type="button" className={`jarvis-choice-button ${selected ? 'selected' : ''}`} onClick={onClick} role="radio" aria-checked={selected}>
+    <Button type="button" className={`jarvis-choice-button ${selected ? 'selected' : ''}`} onClick={onClick} role="radio" aria-checked={selected}>
       <strong>{label}</strong>
       <small>{hint}</small>
-    </button>
+    </Button>
   )
 }
 
 function PillButton({ selected, onClick, children }: Readonly<{ selected: boolean; onClick: () => void; children: string }>) {
   return (
-    <button type="button" className={`jarvis-pill-button ${selected ? 'selected' : ''}`} onClick={onClick} role="radio" aria-checked={selected}>
+    <Button type="button" className={`jarvis-pill-button ${selected ? 'selected' : ''}`} onClick={onClick} role="radio" aria-checked={selected}>
       {children}
-    </button>
+    </Button>
   )
 }

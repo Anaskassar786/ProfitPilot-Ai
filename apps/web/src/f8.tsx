@@ -1,6 +1,7 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Download, LoaderCircle, Send, ShieldCheck, Sparkles } from 'lucide-react'
+import { Download, LoaderCircle, Send, ShieldCheck, Sparkles } from './icons.js'
 import { askCopilot, exportCopilotThread, fetchBilling, fetchCopilotMessages, fetchCopilotThreads, fetchJarvisBriefing, fetchJarvisPreferences, invokeJarvisStoreAction, sendJarvisMessage, setJarvisState, startJarvisSession } from './api.js'
 import { reduceJarvisSession } from './f8-model.js'
 import type { CopilotAnswer, CopilotThread, JarvisEvidence, JarvisPreference, JarvisResponse, JarvisSession } from './f8-model.js'
@@ -348,26 +349,26 @@ export function JarvisExperience({ open, context, page, workspaceSettings, onOpe
   if (!open) {
     if (page === 'jarvis') return null
     return (
-      <button className="jarvis-orb-wrap" onClick={openJarvis} aria-label="Open Jarvis">
+      <Button className="jarvis-orb-wrap" onClick={openJarvis} aria-label="Open Jarvis">
         <JarvisOrb state="idle" size={80} label="Open Jarvis" />
         <span className="jarvis-orb-label">Jarvis</span>
-      </button>
+      </Button>
     )
   }
 
   if (!context.storeId) return (
     page === 'jarvis' ? null : (
-      <button className="jarvis-orb-wrap" onClick={onClose} aria-label="Connect Shopify before opening Jarvis">
+      <Button className="jarvis-orb-wrap" onClick={onClose} aria-label="Connect Shopify before opening Jarvis">
         <JarvisOrb state="warning" size={80} label="Connect Shopify for Jarvis" />
         <span className="jarvis-orb-label">Connect Shopify</span>
-      </button>
+      </Button>
     )
   )
 
   return (
     <>
       {lifecycle.status === 'failed' && (
-        <button className="jarvis-retry-chip" onClick={retry} type="button">Retry Jarvis</button>
+        <Button className="jarvis-retry-chip" onClick={retry} type="button">Retry Jarvis</Button>
       )}
       <FloatingVoiceWidget
         visible
@@ -424,7 +425,7 @@ export function CopilotWorkspace({ context }: CopilotWorkspaceProps) {
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!context.storeId || !query.trim()) return; setLoading(true); setError(null); try { const answer = await askCopilot(context.storeId, query, 'copilot', threadId); setThreadId(answer.threadId); setAnswers((current) => [...current, answer]); setQuery(''); setThreads(await fetchCopilotThreads(context.storeId)) } catch (failure: unknown) { setError(failure instanceof Error ? failure.message : 'Copilot could not answer that question.') } finally { setLoading(false) } }
   const selectThread = async (id: string) => { if (!context.storeId) return; setThreadId(id); setAnswers(await fetchCopilotMessages(context.storeId, id)) }
   const exportThread = async () => { if (!context.storeId || !threadId) return; const file = await exportCopilotThread(context.storeId, threadId); downloadBase64(file.bodyBase64, file.filename, file.contentType) }
-  return <div className="f8-copilot-layout"><section className="copilot-main card"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">CLOSED 10-INTENT GRAMMAR</div><h2>Ask a grounded question.</h2><p>Numbers are rendered from deterministic evidence slots. No open generation.</p></div></div><div className="f8-copilot-answers">{answers.length === 0 ? <div className="copilot-empty"><ShieldCheck size={24} /><strong>Ready for real store evidence</strong><span>Try “What is my revenue?” or “Which products have stockout risk?”</span></div> : answers.map((answer) => <article className="f8-answer" key={answer.id}><div className="f8-answer-head"><span className="status-badge blue">{answer.intent ?? 'ASK'}</span><span>{answer.evidence?.confidenceLevel ?? 'CLARIFY'} confidence</span></div><p>{answer.answer}</p>{answer.clarification && <small>{answer.clarification}</small>}{answer.evidence && <div className="f8-evidence-table">{answer.evidence.facts.map((fact) => <div key={fact.key}><span>{fact.label}</span><strong>{String(fact.value ?? '—')}</strong><small>{fact.source}</small></div>)}</div>}</article>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<form className="copilot-composer f8-copilot-form" onSubmit={(event) => void submit(event)}><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Which products are at stockout risk?" rows={2} aria-label="Ask Copilot" spellCheck={false} autoCorrect="off" autoCapitalize="off" /><button className="send-button" type="submit" disabled={loading || !query.trim()} aria-label="Ask Copilot">{loading ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}</button></form><div className="suggested-prompts"><button onClick={() => setQuery('What changed in revenue?')}>Revenue change</button><button onClick={() => setQuery('Which products have stockout risk?')}>Stockout risk</button><button onClick={() => setQuery('Show store health')}>Store health</button></div></section><aside className="copilot-sidebar card"><div className="card-heading"><div><span className="section-kicker">SAVED THREADS</span><h3>Thread history</h3></div><button className="icon-button" onClick={() => void exportThread()} disabled={!threadId} aria-label="Export Copilot thread"><Download size={15} /></button></div>{threads.length === 0 ? <span className="muted-cell">No saved questions yet.</span> : threads.map((thread) => <button className={`f8-thread ${thread.id === threadId ? 'active' : ''}`} key={thread.id} onClick={() => void selectThread(thread.id)}>{thread.title}<small>{new Date(thread.updatedAt).toLocaleDateString()}</small></button>)}</aside></div>
+  return <div className="f8-copilot-layout"><section className="copilot-main card"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">CLOSED 10-INTENT GRAMMAR</div><h2>Ask a grounded question.</h2><p>Numbers are rendered from deterministic evidence slots. No open generation.</p></div></div><div className="f8-copilot-answers">{answers.length === 0 ? <div className="copilot-empty"><ShieldCheck size={24} /><strong>Ready for real store evidence</strong><span>Try “What is my revenue?” or “Which products have stockout risk?”</span></div> : answers.map((answer) => <article className="f8-answer" key={answer.id}><div className="f8-answer-head"><span className="status-badge blue">{answer.intent ?? 'ASK'}</span><span>{answer.evidence?.confidenceLevel ?? 'CLARIFY'} confidence</span></div><p>{answer.answer}</p>{answer.clarification && <small>{answer.clarification}</small>}{answer.evidence && <div className="f8-evidence-table">{answer.evidence.facts.map((fact) => <div key={fact.key}><span>{fact.label}</span><strong>{String(fact.value ?? '—')}</strong><small>{fact.source}</small></div>)}</div>}</article>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<form className="copilot-composer f8-copilot-form" onSubmit={(event) => void submit(event)}><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Which products are at stockout risk?" rows={2} aria-label="Ask Copilot" spellCheck={false} autoCorrect="off" autoCapitalize="off" /><Button className="send-button" type="submit" disabled={loading || !query.trim()} aria-label="Ask Copilot">{loading ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}</Button></form><div className="suggested-prompts"><Button onClick={() => setQuery('What changed in revenue?')}>Revenue change</Button><Button onClick={() => setQuery('Which products have stockout risk?')}>Stockout risk</Button><Button onClick={() => setQuery('Show store health')}>Store health</Button></div></section><aside className="copilot-sidebar card"><div className="card-heading"><div><span className="section-kicker">SAVED THREADS</span><h3>Thread history</h3></div><Button className="icon-button" onClick={() => void exportThread()} disabled={!threadId} aria-label="Export Copilot thread"><Download size={15} /></Button></div>{threads.length === 0 ? <span className="muted-cell">No saved questions yet.</span> : threads.map((thread) => <Button className={`f8-thread ${thread.id === threadId ? 'active' : ''}`} key={thread.id} onClick={() => void selectThread(thread.id)}>{thread.title}<small>{new Date(thread.updatedAt).toLocaleDateString()}</small></Button>)}</aside></div>
 }
 
 export { ReportsWorkspace } from './reports.js'

@@ -1,5 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import '@shopify/polaris/build/esm/styles.css'
 import App from './App.js'
 import './styles.css'
 import './f4.css'
@@ -25,18 +28,22 @@ import './exports.css'
 import './upgrade-overrides.css'
 import './final-polish.css'
 import './qa-board.css'
-// Loaded last: AI Command Center light-theme surfaces only (dark theme untouched).
 import './command-center-light.css'
 import './settings.css'
 import './light-theme-professional-fix.css'
 import { accessibilityGateEnabled, installAccessibilityGate } from './accessibility.js'
+import { AppFrame } from './polaris-ui.js'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('ProfitPilot root element is missing')
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <AppProvider i18n={enTranslations as never}>
+      <AppFrame>
+        <App />
+      </AppFrame>
+    </AppProvider>
   </StrictMode>,
 )
 

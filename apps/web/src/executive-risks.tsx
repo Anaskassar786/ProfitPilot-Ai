@@ -6,8 +6,9 @@
  * detected deterministically from real rows — an all-clear is a real
  * all-clear, not an empty screen.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
-import { Radar, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Radar, RefreshCw, ShieldCheck } from './icons.js'
 import type { ExecutiveRisk } from './executive-model.js'
 import { executiveDateLabel, formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import { fetchExecutiveRiskTrends, fetchExecutiveRisks, resolveExecutiveRisk, runExecutiveRiskScan } from './executive-api.js'
@@ -94,7 +95,7 @@ export function ExecutiveRisksPage({ context, plan, gates, onToast, onUpgrade }:
         kicker="Early warning"
         title="Risk Radar"
         description="Automated detection across concentration, seasonality, competition, cash flow, operations, and market signals — computed from your store's real rows."
-        actions={<button type="button" className="button primary" onClick={() => void scan()} disabled={scanning || !storeId}><Radar size={14} /> {scanning ? 'Scanning…' : 'Run Risk Scan'}</button>}
+        actions={<Button type="button" className="button primary" onClick={() => void scan()} disabled={scanning || !storeId}><Radar size={14} /> {scanning ? 'Scanning…' : 'Run Risk Scan'}</Button>}
       />
       {loading && <ExecutiveSkeleton rows={5} label="Risk radar" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}
@@ -158,7 +159,7 @@ export function ExecutiveRisksPage({ context, plan, gates, onToast, onUpgrade }:
                     )}
                     {risk.status === 'ACTIVE' && (
                       <div>
-                        <button type="button" className="button secondary" onClick={() => void resolve(risk)}><ShieldCheck size={13} /> Mark resolved</button>
+                        <Button type="button" className="button secondary" onClick={() => void resolve(risk)}><ShieldCheck size={13} /> Mark resolved</Button>
                       </div>
                     )}
                   </article>

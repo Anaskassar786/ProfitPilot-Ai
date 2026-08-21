@@ -1,14 +1,15 @@
-import { Activity, Bell, CheckCircle2, Target, Workflow } from 'lucide-react'
+import { Button } from './polaris-ui.js'
+import { Activity, Bell, CheckCircle2, Target, Workflow } from './icons.js'
 import { useId } from 'react'
 import type { JSX } from 'react'
 import type { AutomationSummary, AutomationUsage } from './automation-model.js'
 import { actionBarHeights, monthSparkPath, usageSegments } from './automation-helpers.js'
 
 const ACTION_BARS = [
-  { key: 'emailsSent', label: 'Email', color: '#7C3AED' },
-  { key: 'customersTagged', label: 'Tag', color: '#3B82F6' },
-  { key: 'notificationsSent', label: 'Notify', color: '#10B981' },
-  { key: 'discountsCreated', label: 'Discount', color: '#F59E0B' },
+  { key: 'emailsSent', label: 'Email', color: 'rgb(124, 58, 237)' },
+  { key: 'customersTagged', label: 'Tag', color: 'rgb(59, 130, 246)' },
+  { key: 'notificationsSent', label: 'Notify', color: 'rgb(16, 185, 129)' },
+  { key: 'discountsCreated', label: 'Discount', color: 'rgb(245, 158, 11)' },
 ] as const
 
 export function AutomationKpis({
@@ -76,12 +77,12 @@ export function AutomationKpis({
           <svg width="100%" height="40" viewBox="0 0 100 40" preserveAspectRatio="none">
             <defs>
               <linearGradient id={`runsGradient-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#7C3AED" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#7C3AED" stopOpacity="0" />
+                <stop offset="0%" stopColor="rgb(124, 58, 237)" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="rgb(124, 58, 237)" stopOpacity="0" />
               </linearGradient>
             </defs>
             <path d={spark.area} fill={`url(#runsGradient-${uid})`} />
-            <path d={spark.line} fill="none" stroke="#7C3AED" strokeWidth="1.5" />
+            <path d={spark.line} fill="none" stroke="rgb(124, 58, 237)" strokeWidth="1.5" />
           </svg>
         </div>
         <div className="kpi-value">{summary?.runs.thisMonth ?? 0}</div>
@@ -127,7 +128,7 @@ export function AutomationKpis({
         <p className="kpi-helper">{actionsTotal > 0 ? impactLine(summary) : 'Measured after successful actions'}</p>
       </article>
 
-      <button type="button" className={`kpi-card pending-approvals ${pending ? 'attention' : ''}`} onClick={onApprovals}>
+      <Button type="button" className={`kpi-card pending-approvals ${pending ? 'attention' : ''}`} onClick={onApprovals}>
         <div className="kpi-header">
           <span className="kpi-icon-wrap">
             <Bell className="kpi-icon" size={14} />
@@ -147,7 +148,7 @@ export function AutomationKpis({
         </div>
         <div className="kpi-value">{pending}</div>
         <p className="kpi-helper">{pending ? 'Review required' : 'No actions waiting'}</p>
-      </button>
+      </Button>
     </section>
   )
 }
@@ -161,8 +162,8 @@ function SuccessGauge({ rate, uid }: { rate: number | null; uid: string }): JSX.
     <svg width="100%" height="60" viewBox="0 0 100 60">
       <defs>
         <linearGradient id={`successGradient-${uid}`}>
-          <stop offset="0%" stopColor="#10B981" />
-          <stop offset="100%" stopColor="#22C55E" />
+          <stop offset="0%" stopColor="rgb(16, 185, 129)" />
+          <stop offset="100%" stopColor="rgb(34, 197, 94)" />
         </linearGradient>
       </defs>
       <path d="M 10,50 A 40,40 0 0,1 90,50" fill="none" stroke="currentColor" className="gauge-track" strokeWidth="8" strokeLinecap="round" />

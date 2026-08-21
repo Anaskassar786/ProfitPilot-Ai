@@ -8,7 +8,7 @@
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
-  background: #07101f;
+  background: rgb(7, 16, 31);
   box-shadow: 0 0 0 1px rgba(112, 223, 255, .34), 0 0 16px rgba(54, 186, 255, .26);
   isolation: isolate;
 }

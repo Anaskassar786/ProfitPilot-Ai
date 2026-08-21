@@ -6,8 +6,9 @@
  * comparison vs the store's real baseline. Save/delete scenarios; every
  * projection carries its model assumptions visibly.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useState } from 'react'
-import { FlaskConical, RefreshCw, Trash2 } from 'lucide-react'
+import { FlaskConical, RefreshCw, Trash2 } from './icons.js'
 import type { ExecutiveScenario, ScenarioTemplate } from './executive-model.js'
 import { executiveDateLabel, formatExecutiveMoney } from './executive-model.js'
 import { deleteExecutiveScenario, fetchExecutiveScenarios, fetchScenarioTemplates, runExecutiveScenario } from './executive-api.js'
@@ -90,7 +91,7 @@ export function ExecutiveScenariosPage({ context, plan, gates, onToast, onUpgrad
         kicker="What-if analysis"
         title="Scenario Planning"
         description="Model pricing, product, marketing, inventory, and custom growth moves against your store's real historical baseline. Every projection lists its assumptions."
-        actions={<button type="button" className="button secondary" onClick={() => void load()}><RefreshCw size={14} /> Refresh</button>}
+        actions={<Button type="button" className="button secondary" onClick={() => void load()}><RefreshCw size={14} /> Refresh</Button>}
       />
       <div className="exec-scenarios-layout">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -118,10 +119,10 @@ export function ExecutiveScenariosPage({ context, plan, gates, onToast, onUpgrad
                       ))}
                     </div>
                     <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                      <button type="button" className="button primary" onClick={() => void run()} disabled={running || !storeId}>
+                      <Button type="button" className="button primary" onClick={() => void run()} disabled={running || !storeId}>
                         <FlaskConical size={14} /> {running ? 'Running scenario…' : 'Run Scenario'}
-                      </button>
-                      <button type="button" className="button secondary" onClick={() => setResult(null)} disabled={!result}>Clear result</button>
+                      </Button>
+                      <Button type="button" className="button secondary" onClick={() => setResult(null)} disabled={!result}>Clear result</Button>
                     </div>
                   </>
                 ) : <p className="exec-muted-note">Select a template from the library to configure a scenario.</p>}
@@ -134,13 +135,13 @@ export function ExecutiveScenariosPage({ context, plan, gates, onToast, onUpgrad
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {scenarios.map((scenario) => (
                       <div key={scenario.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-md)', background: 'var(--exec-surface-2)' }}>
-                        <button type="button" className="text-button" style={{ flex: 1, textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setResult(scenario); setExpanded(scenario.id) }}>
+                        <Button type="button" className="text-button" style={{ flex: 1, textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setResult(scenario); setExpanded(scenario.id) }}>
                           <strong style={{ fontSize: 12.5, color: 'var(--exec-heading)' }}>{scenario.title}</strong>
                           <small style={{ display: 'block', color: 'var(--exec-muted)', fontSize: 11 }}>{scenario.scenarioType} · {executiveDateLabel(scenario.createdAt)}</small>
-                        </button>
+                        </Button>
                         <ExecutiveStatusPill status={scenario.riskLevel} />
                         <ExecutiveConfidenceBar value={scenario.confidence} />
-                        <button type="button" className="icon-button" aria-label="Delete scenario" onClick={() => void remove(scenario)}><Trash2 size={14} /></button>
+                        <Button type="button" className="icon-button" aria-label="Delete scenario" onClick={() => void remove(scenario)}><Trash2 size={14} /></Button>
                       </div>
                     ))}
                   </div>
@@ -152,10 +153,10 @@ export function ExecutiveScenariosPage({ context, plan, gates, onToast, onUpgrad
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div className="exec-kicker" style={{ marginBottom: 2 }}>Template library</div>
           {templates.map((template) => (
-            <button key={template.id} type="button" className={`exec-scenario-template ${selectedTemplate?.id === template.id ? 'selected' : ''}`} onClick={() => chooseTemplate(template)}>
+            <Button key={template.id} type="button" className={`exec-scenario-template ${selectedTemplate?.id === template.id ? 'selected' : ''}`} onClick={() => chooseTemplate(template)}>
               <strong>{template.title}</strong>
               <span>{template.description}</span>
-            </button>
+            </Button>
           ))}
           <div style={{ marginTop: 8 }}>
             <div className="exec-kicker" style={{ marginBottom: 6 }}>Plan allowance</div>
@@ -180,7 +181,7 @@ function ScenarioResults({ scenario, onClose }: { scenario: ExecutiveScenario; o
     })),
   ]
   return (
-    <ExecutiveSection kicker="Scenario results" title={scenario.title} action={<button type="button" className="text-button" onClick={onClose}>Close</button>}>
+    <ExecutiveSection kicker="Scenario results" title={scenario.title} action={<Button type="button" className="text-button" onClick={onClose}>Close</Button>}>
       <div className="exec-scenario-results">
         <div>
           <div className="exec-section-head" style={{ marginBottom: 8 }}>

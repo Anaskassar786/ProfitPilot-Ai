@@ -6,10 +6,11 @@
  * "Upgrade Plan" (never a plan name), educational empty states, and
  * elegant skeleton loaders. Theme-adaptive via the tokens in executive.css.
  */
+import { Button } from './polaris-ui.js'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import { ArrowUpRight, Check, ChevronDown, ChevronUp, CircleHelp, FlaskConical, Gauge, LockKeyhole, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react'
+import type { LucideIcon } from './icons.js'
+import { ArrowUpRight, Check, ChevronDown, ChevronUp, CircleHelp, FlaskConical, Gauge, LockKeyhole, RefreshCw, Sparkles, TrendingUp, X } from './icons.js'
 import { PLAN_TIERS } from '@profitpilot/types'
 import type { PlanTier } from '@profitpilot/types'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -66,9 +67,9 @@ export function ExecutiveEmptyState({ icon: Icon, title, description, action, on
       <h3>{title}</h3>
       <p>{description}</p>
       {locked ? (
-        <button type="button" className="button primary" onClick={onUpgrade}><LockKeyhole size={14} /> Upgrade Plan</button>
+        <Button type="button" className="button primary" onClick={onUpgrade}><LockKeyhole size={14} /> Upgrade Plan</Button>
       ) : action && onAction ? (
-        <button type="button" className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button>
+        <Button type="button" className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></Button>
       ) : null}
     </div>
   )
@@ -111,7 +112,7 @@ export function ExecutiveErrorState({ message, onRetry }: { message: string; onR
     <div className="exec-error" role="alert">
       <span className="exec-error-icon"><X size={16} /></span>
       <div><strong>Something went wrong</strong><p>{message}</p></div>
-      {onRetry ? <button type="button" className="button secondary" onClick={onRetry}><RefreshCw size={13} /> Retry</button> : null}
+      {onRetry ? <Button type="button" className="button secondary" onClick={onRetry}><RefreshCw size={13} /> Retry</Button> : null}
     </div>
   )
 }
@@ -143,7 +144,7 @@ export function ExecutiveUsageBar({ label, used, limit, onUpgrade, plan }: { lab
       <span>{label}</span>
       <div className="exec-usage-track"><span style={{ width: `${percent}%` }} /></div>
       <span className="exec-usage-value">{used} / {limit}</span>
-      {blocked ? <button type="button" className="text-button" onClick={onUpgrade}>Limit reached — <strong>Upgrade Plan</strong></button> : warning ? <button type="button" className="text-button" onClick={onUpgrade}>Near limit — <strong>Upgrade Plan</strong></button> : null}
+      {blocked ? <Button type="button" className="text-button" onClick={onUpgrade}>Limit reached — <strong>Upgrade Plan</strong></Button> : warning ? <Button type="button" className="text-button" onClick={onUpgrade}>Near limit — <strong>Upgrade Plan</strong></Button> : null}
     </div>
   )
 }
@@ -152,15 +153,15 @@ export function ExecutiveUsageBar({ label, used, limit, onUpgrade, plan }: { lab
 export function GrowthCommandTabs({ active, onNavigate }: { active: 'store-coach' | 'executive' | 'insights'; onNavigate: (tab: 'store-coach' | 'executive' | 'insights') => void }) {
   return (
     <div className="growth-tabs" role="tablist" aria-label="AI Growth Command sections">
-      <button type="button" role="tab" aria-selected={active === 'store-coach'} className={active === 'store-coach' ? 'active' : ''} onClick={() => onNavigate('store-coach')}>
+      <Button type="button" role="tab" aria-selected={active === 'store-coach'} className={active === 'store-coach' ? 'active' : ''} onClick={() => onNavigate('store-coach')}>
         <Gauge size={15} /> Store Coach
-      </button>
-      <button type="button" role="tab" aria-selected={active === 'executive'} className={active === 'executive' ? 'active' : ''} onClick={() => onNavigate('executive')}>
+      </Button>
+      <Button type="button" role="tab" aria-selected={active === 'executive'} className={active === 'executive' ? 'active' : ''} onClick={() => onNavigate('executive')}>
         <span className="gq-tab-mark"><GrowthIqMark size={17} /></span> GrowthIQ <span className="growth-tab-note new">New</span>
-      </button>
-      <button type="button" role="tab" aria-selected={active === 'insights'} className={active === 'insights' ? 'active' : ''} onClick={() => onNavigate('insights')}>
+      </Button>
+      <Button type="button" role="tab" aria-selected={active === 'insights'} className={active === 'insights' ? 'active' : ''} onClick={() => onNavigate('insights')}>
         <TrendingUp size={15} /> Insights Hub
-      </button>
+      </Button>
     </div>
   )
 }
@@ -244,7 +245,7 @@ export function GrowthIqPlanPanel({ plan, onUpgrade, defaultExpanded = false }: 
           ? <span className="gq-plan-note">{unlocked.length} features active · all GrowthIQ features unlocked</span>
           : <span className="gq-plan-note">{unlocked.length} features active · {locked.length} more available</span>}
         <span className="gq-plan-head-actions">
-          <button
+          <Button
             type="button"
             className="text-button gq-plan-toggle"
             onClick={() => setExpanded((value) => !value)}
@@ -252,7 +253,7 @@ export function GrowthIqPlanPanel({ plan, onUpgrade, defaultExpanded = false }: 
             aria-controls="gq-plan-details"
           >
             {expanded ? <>Hide details <ChevronUp size={14} /></> : <>Show details <ChevronDown size={14} /></>}
-          </button>
+          </Button>
           {!isCommander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
         </span>
       </div>
@@ -321,8 +322,8 @@ export function GrowthIqWelcomeState({ onExploreReports, onSync }: { onExploreRe
       </div>
       {(onExploreReports || onSync) && (
         <div className="gq-actions">
-          {onExploreReports && <button type="button" className="button primary" onClick={onExploreReports}><FlaskConical size={14} /> Explore a sample report</button>}
-          {onSync && <button type="button" className="button secondary" onClick={onSync}><Sparkles size={14} /> Sync store data</button>}
+          {onExploreReports && <Button type="button" className="button primary" onClick={onExploreReports}><FlaskConical size={14} /> Explore a sample report</Button>}
+          {onSync && <Button type="button" className="button secondary" onClick={onSync}><Sparkles size={14} /> Sync store data</Button>}
         </div>
       )}
     </div>
@@ -374,9 +375,9 @@ export function GrowthIqBaselineState({ readiness, onLogDecision, onViewSample, 
       </div>
       <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--exec-body)' }}>Meanwhile, these work with zero history:</p>
       <div className="gq-actions">
-        {onLogDecision && <button type="button" className="button primary" onClick={onLogDecision}>Log a business decision</button>}
-        {onViewSample && <button type="button" className="button secondary" onClick={onViewSample}>View a sample report</button>}
-        {onSync && <button type="button" className="button secondary" onClick={onSync}>Sync more data</button>}
+        {onLogDecision && <Button type="button" className="button primary" onClick={onLogDecision}>Log a business decision</Button>}
+        {onViewSample && <Button type="button" className="button secondary" onClick={onViewSample}>View a sample report</Button>}
+        {onSync && <Button type="button" className="button secondary" onClick={onSync}>Sync more data</Button>}
       </div>
     </div>
   )

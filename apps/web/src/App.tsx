@@ -1,6 +1,9 @@
+import { Button, AppNavigationMenu, AppTitleBar, showAppBridgeToast, PolarisEmpty, SimpleModal } from './polaris-ui.js'
+import { Banner, Navigation, Page, TextField } from '@shopify/polaris'
+import { isEmbeddedShopifyApp } from './shopify-app-bridge.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from './icons.js'
 // Section icons are Lucide glyphs plus PatternAI's own constellation mark,
 // which renders the same `size`/`className` contract without being a Lucide
 // forwardRef component — hence the widened icon type below.
@@ -82,7 +85,7 @@ import {
   Workflow,
   X,
   Zap,
-} from 'lucide-react'
+} from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
 import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, ApiClientError } from './api.js'
@@ -256,6 +259,8 @@ export default function App() {
     if (window.location.pathname.startsWith('/ai-growth-command/growthiq') || window.location.pathname.startsWith('/ai-growth-command/executive')) return 'ai-executive'
     if (window.location.pathname.startsWith('/ai-growth-command')) return 'store-coach'
     if (window.location.pathname.startsWith('/automation')) return 'automation'
+    const fromPath = sectionFromPath(window.location.pathname)
+    if (fromPath) return fromPath
     return 'dashboard'
   })
   const [collapsed, setCollapsed] = useState(false)
@@ -326,6 +331,7 @@ export default function App() {
   }, [])
 
   const showToast = (message: string, kind: ToastKind = 'success') => {
+    showAppBridgeToast(message, kind)
     setToast({ message, kind })
     window.setTimeout(() => setToast(null), 3600)
   }
@@ -593,10 +599,9 @@ export default function App() {
   return (
     <div className={`app-shell ${lightMode ? 'light-mode' : ''} ${workspacePrefs.reducedMotion ? 'reduce-motion' : ''} ${workspacePrefs.bubbleEnabled ? '' : 'hide-jarvis'} jarvis-pos-${workspacePrefs.bubblePosition}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Sidebar activePage={activePage} collapsed={collapsed} mobileOpen={mobileOpen} context={context} syncHealth={syncHealth} onNavigate={navigate} onCollapse={() => setCollapsed((value) => !value)} onClose={() => setMobileOpen(false)} onOpenCommand={() => setCommandOpen(true)} onOnboarding={() => setOnboardingOpen(true)} />
-      <main id="main-content" tabIndex={-1} className={`main-shell ${collapsed ? 'sidebar-is-collapsed' : ''}`}>
-        <TopBar active={pageMeta[activePage]} unreadCount={unreadNotificationIds.size} onMenu={() => setMobileOpen(true)} onCommand={() => setCommandOpen(true)} onNotifications={() => setNotificationsOpen(true)} onProfile={() => setProfileOpen((value) => !value)} profileOpen={profileOpen} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onShortcuts={() => setShortcutsOpen(true)} />
-        <div className="page-scroll">
+      <AppNavigationMenu />
+      <AppTitleBar title={pageMeta[activePage].title} />
+      <main id="main-content" tabIndex={-1} className="page-scroll">
           {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
           {!context.storeId && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
           <PageRouter
@@ -617,7 +622,6 @@ export default function App() {
             onOpenJarvis={() => setJarvisOpen(true)}
             workspaceSettings={workspacePrefs}
           />
-        </div>
       </main>
       {/* 🛑 JarvisExperience temporarily removed from UI — restore when Jarvis returns */}
       {/* <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} /> */}
@@ -641,12 +645,12 @@ export default function App() {
 function Sidebar({ activePage, collapsed, mobileOpen, context, syncHealth, onNavigate, onCollapse, onClose, onOpenCommand, onOnboarding }: { activePage: SectionId; collapsed: boolean; mobileOpen: boolean; context: WorkspaceContext; syncHealth: import('./api.js').SyncStatus | null; onNavigate: (page: SectionId) => void; onCollapse: () => void; onClose: () => void; onOpenCommand: () => void; onOnboarding: () => void }) {
   const devWorkspace = isDeveloperWorkspace(context)
   return <>
-    {mobileOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={onClose} />}
+    {mobileOpen && <Button className="mobile-backdrop" aria-label="Close navigation" onClick={onClose} />}
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="brand-row"><button className="brand-lockup" onClick={() => onNavigate('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><span /></span>{!collapsed && <span className="brand-name">Profit<span>Pilot</span></span>}</button><button className="sidebar-collapse" onClick={onCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><button className="mobile-close" onClick={onClose} aria-label="Close navigation"><X size={18} /></button></div>
-      {!collapsed ? <button className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></button> : <button className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></button>}
-      {!collapsed && <button className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></button>}
-      <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; const showBillingDevDot = item.id === 'billing' && devWorkspace; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && showBillingDevDot && <span className="nav-dev-dot" role="img" aria-label="Real Shopify Checkout pending (Phase 2)" title="Real Shopify Checkout pending (Phase 2)" />}</button> })}</div>)}</nav>
+      <div className="brand-row"><Button className="brand-lockup" onClick={() => onNavigate('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><span /></span>{!collapsed && <span className="brand-name">Profit<span>Pilot</span></span>}</Button><Button className="sidebar-collapse" onClick={onCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</Button><Button className="mobile-close" onClick={onClose} aria-label="Close navigation"><X size={18} /></Button></div>
+      {!collapsed ? <Button className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></Button> : <Button className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></Button>}
+      {!collapsed && <Button className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></Button>}
+      <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; const showBillingDevDot = item.id === 'billing' && devWorkspace; return <Button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && showBillingDevDot && <span className="nav-dev-dot" role="img" aria-label="Real Shopify Checkout pending (Phase 2)" title="Real Shopify Checkout pending (Phase 2)" />}</Button> })}</div>)}</nav>
       <div className="sidebar-footer">{!collapsed && (context.storeId ? (() => {
         // QA (2026-08-20): the status line used to claim "Synced · All systems
         // active" for any connected store, even one that had never synced.
@@ -668,14 +672,14 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, syncHealth, onNav
             <small className="connection-card-status">{statusText}</small>
           </div>
         )
-      })() : <div className="connection-card idle"><div className="connection-card-head"><span className="live-dot idle" /><strong>Shopify Not Connected</strong></div><span className="connection-card-domain">No store linked yet</span><small className="connection-card-status">Connect your store to get started</small><button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button></div>)}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
+      })() : <div className="connection-card idle"><div className="connection-card-head"><span className="live-dot idle" /><strong>Shopify Not Connected</strong></div><span className="connection-card-domain">No store linked yet</span><small className="connection-card-status">Connect your store to get started</small><Button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></Button></div>)}<Button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</Button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
     </aside>
   </>
 }
 
 function TopBar({ active, unreadCount, onMenu, onCommand, onNotifications, onProfile, profileOpen, lightMode, onTheme, onShortcuts }: { active: Readonly<{ title: string; icon: SectionIcon }>; unreadCount: number; onMenu: () => void; onCommand: () => void; onNotifications: () => void; onProfile: () => void; profileOpen: boolean; lightMode: boolean; onTheme: () => void; onShortcuts: () => void }) {
   const ActiveIcon = active.icon
-  return <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></button><button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></button><div className="topbar-divider" /><button className="icon-button notification-button" onClick={onNotifications} aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} new)` : 'Open notifications'}><Bell size={18} />{unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button><button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</button><button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></button></div></header>
+  return <header className="topbar"><div className="topbar-left"><Button className="mobile-menu-button" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></Button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong><ActiveIcon size={14} />{active.title}</strong></div></div><div className="topbar-actions"><Button className="top-search" onClick={onCommand}><Search size={16} /><span>Search</span><kbd>⌘ K</kbd></Button><Button className="icon-button" onClick={onShortcuts} aria-label="Keyboard shortcuts"><Keyboard size={17} /></Button><div className="topbar-divider" /><Button className="icon-button notification-button" onClick={onNotifications} aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} new)` : 'Open notifications'}><Bell size={18} />{unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}</Button><Button className="icon-button" onClick={onTheme} aria-label="Toggle theme">{lightMode ? <Moon size={18} /> : <Sun size={18} />}</Button><Button className="profile-button" onClick={onProfile} aria-expanded={profileOpen}><span className="profile-avatar">PP</span><span className="profile-name">Workspace</span><ChevronDown size={14} /></Button></div></header>
 }
 
 function PageRouter({
@@ -798,12 +802,12 @@ function DashboardPage({
       description={greetingDescription}
       actions={
         <>
-          <button className="button secondary" onClick={() => onNavigate('analytics')}>
+          <Button className="button secondary" onClick={() => onNavigate('analytics')}>
             <LineChart size={15} /> Open analytics
-          </button>
-          <button className="button primary" disabled={syncAllRunning} onClick={() => void onSyncAll()}>
+          </Button>
+          <Button className="button primary" disabled={syncAllRunning} onClick={() => void onSyncAll()}>
             <RotateCcw size={15} className={syncAllRunning ? 'spin' : ''} /> {syncAllRunning ? 'Syncing all…' : 'Sync all'}
-          </button>
+          </Button>
         </>
       }
     >
@@ -814,7 +818,7 @@ function DashboardPage({
         <span>
           <strong>{context.storeId ? 'Shopify data plane ready' : 'No store context'}</strong> · {latestSyncLabel(data.analytics)}
         </span>
-        <button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></button>
+        <Button onClick={() => void onSync('orders')}>{context.storeId ? 'Sync orders' : 'Connect Shopify'} <ArrowUpRight size={13} /></Button>
       </div>
       {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} dismissing={!!syncDismissing} />}
       <DashboardLayout
@@ -851,7 +855,7 @@ function SyncAllProgress({ modules, dismissing }: { modules: readonly SyncModule
 }
 
 function ProductsPage({ context, catalog, analytics, onSync }: { context: WorkspaceContext; catalog: readonly CatalogProduct[]; analytics: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void> }) {
-  return <PageLayout eyebrow="Catalog intelligence" title="Products" description="A real Shopify product workspace with variant-level stock, prices, images, and sales performance." actions={<><button className="button secondary" onClick={() => void onSync('orders')}><ShoppingBag size={15} /> Sync orders</button><button className="button primary" onClick={() => void onSync('products')}><RefreshCw size={15} /> Sync products</button></>}>
+  return <PageLayout eyebrow="Catalog intelligence" title="Products" description="A real Shopify product workspace with variant-level stock, prices, images, and sales performance." actions={<><Button className="button secondary" onClick={() => void onSync('orders')}><ShoppingBag size={15} /> Sync orders</Button><Button className="button primary" onClick={() => void onSync('products')}><RefreshCw size={15} /> Sync products</Button></>}>
     <ProductsWorkspace context={context} catalog={catalog} analytics={analytics} onSync={onSync} />
   </PageLayout>
 }
@@ -875,14 +879,14 @@ function RecommendationsPage({ context, recommendations, onEvidence, onDecide, o
   }
   const pending = recommendations.filter((item) => item.status === 'PENDING')
   const modeledImpact = recommendations.reduce((sum, item) => sum + item.impactValue, 0)
-  return <PageLayout eyebrow="AI employee" title="Recommendations" description="Real deterministic signals with immutable evidence packs. AI language is optional and never supplies the numbers." actions={<><button className="button secondary" onClick={onEvidence}><Eye size={15} /> Evidence drawer</button><button className="button primary" onClick={onRefresh}><RefreshCw size={15} /> Refresh decisions</button></>}>
+  return <PageLayout eyebrow="AI employee" title="Recommendations" description="Real deterministic signals with immutable evidence packs. AI language is optional and never supplies the numbers." actions={<><Button className="button secondary" onClick={onEvidence}><Eye size={15} /> Evidence drawer</Button><Button className="button primary" onClick={onRefresh}><RefreshCw size={15} /> Refresh decisions</Button></>}>
     <div className="recommendation-summary"><div><strong>{recommendations.length}</strong><span>recommendations returned</span></div><div className="summary-divider" /><div className="summary-stat"><span className="confidence-dot purple" /><strong>{pending.length}</strong><small>pending approval</small></div><div className="summary-stat"><span className="confidence-dot high" /><strong>{formatMoney(modeledImpact)}</strong><small>deterministic impact</small></div><div className="summary-spacer" /><span className="data-contract"><ShieldCheck size={14} /> Tenant-scoped API</span></div>
     {recommendations.length === 0 ? <EmptyState icon={Sparkles} title="No recommendations yet" description="Evidence is generated from your synced Shopify snapshot. After products and orders sync, click Generate recommendations. ProfitPilot will not invent a recommendation without store rows." action="How evidence works" onAction={onEvidence} /> : <div className="recommendation-list">{recommendations.map((item) => <RecommendationCard key={item.id} recommendation={item} onEvidence={onEvidence} onDecide={onDecide} />)}</div>}
   </PageLayout>
 }
 
 function RecommendationCard({ recommendation, onEvidence, onDecide }: { recommendation: Recommendation; onEvidence: () => void; onDecide: (id: string, decision: 'approve' | 'reject', expectedVersion: number) => Promise<void> }) {
-  return <article className="recommendation-card"><div className="recommendation-card-main"><div className="recommendation-card-top"><span className="agent-pill"><span />{recommendation.agent}</span><span className={`confidence-pill ${recommendation.confidenceLevel.toLowerCase()}`}><span />{recommendation.confidenceLevel}</span><span className="recommendation-time">{recommendation.status}</span></div><h3>{recommendation.title}</h3><p>{recommendation.reason}</p><div className="evidence-snippets"><span><Database size={13} /> Rule {recommendation.ruleId} · v1.0.0</span><span><ShieldCheck size={13} /> {recommendation.explanationStatus}</span>{recommendation.explanation && <span><MessageSquare size={13} /> {recommendation.explanation}</span>}</div></div><div className="recommendation-card-side"><span className="impact-label">{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><button className="text-button" onClick={onEvidence}><Eye size={14} /> Evidence</button>{recommendation.status === 'PENDING' ? <div className="recommendation-actions"><button className="button reject" onClick={() => void onDecide(recommendation.id, 'reject', recommendation.version)}>Reject</button><button className="button approve" onClick={() => void onDecide(recommendation.id, 'approve', recommendation.version)}><Check size={14} /> Approve</button></div> : <span className="resolved-label"><CheckCircle2 size={14} />{recommendation.status}</span>}</div></article>
+  return <article className="recommendation-card"><div className="recommendation-card-main"><div className="recommendation-card-top"><span className="agent-pill"><span />{recommendation.agent}</span><span className={`confidence-pill ${recommendation.confidenceLevel.toLowerCase()}`}><span />{recommendation.confidenceLevel}</span><span className="recommendation-time">{recommendation.status}</span></div><h3>{recommendation.title}</h3><p>{recommendation.reason}</p><div className="evidence-snippets"><span><Database size={13} /> Rule {recommendation.ruleId} · v1.0.0</span><span><ShieldCheck size={13} /> {recommendation.explanationStatus}</span>{recommendation.explanation && <span><MessageSquare size={13} /> {recommendation.explanation}</span>}</div></div><div className="recommendation-card-side"><span className="impact-label">{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><Button className="text-button" onClick={onEvidence}><Eye size={14} /> Evidence</Button>{recommendation.status === 'PENDING' ? <div className="recommendation-actions"><Button className="button reject" onClick={() => void onDecide(recommendation.id, 'reject', recommendation.version)}>Reject</Button><Button className="button approve" onClick={() => void onDecide(recommendation.id, 'approve', recommendation.version)}><Check size={14} /> Approve</Button></div> : <span className="resolved-label"><CheckCircle2 size={14} />{recommendation.status}</span>}</div></article>
 }
 
 function CampaignsComingSoon({ onNavigate, onNavigateAutomation }: { onNavigate: () => void; onNavigateAutomation: () => void }) {
@@ -898,8 +902,8 @@ function CampaignsComingSoon({ onNavigate, onNavigateAutomation }: { onNavigate:
           {previewFeatures.map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}
         </div>
         <div className="campaigns-coming-soon-actions">
-          <button className="button primary" onClick={onNavigate}><GraduationCap size={15} /> Try AI Growth Command Instead</button>
-          <button className="button secondary" onClick={onNavigateAutomation}><Workflow size={15} /> Open Automation for transactional emails</button>
+          <Button className="button primary" onClick={onNavigate}><GraduationCap size={15} /> Try AI Growth Command Instead</Button>
+          <Button className="button secondary" onClick={onNavigateAutomation}><Workflow size={15} /> Open Automation for transactional emails</Button>
         </div>
         <p className="campaigns-coming-soon-note">Your existing campaign templates are safe — nothing has been deleted, and they will be available again when Campaigns launches.</p>
       </div>
@@ -907,9 +911,9 @@ function CampaignsComingSoon({ onNavigate, onNavigateAutomation }: { onNavigate:
   )
 }
 
-function CopilotPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { const [query, setQuery] = useState(''); return <PageLayout eyebrow="Advanced query" title="Copilot" description="A closed-intent grammar will answer from evidence packs once F8 is implemented." actions={<button className="button secondary"><Clock3 size={15} /> Thread history</button>}><div className="copilot-layout"><section className="copilot-main"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">10 SUPPORTED INTENTS · F8</div><h2>Ask a grounded question.</h2><p>There are no generated answers in this phase.</p></div></div><div className="copilot-empty"><Database size={24} /><strong>Copilot is not answering yet</strong><span>F8 will connect closed grammar intents to real evidence tables.</span><button className="button secondary" onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><LockKeyhole size={14} /> View gate</button></div><div className="copilot-composer"><div className="composer-label"><span><Command size={13} /> Try a future intent</span><span>Numbers will come from F2 tables</span></div><div className="composer-input"><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Why did sales change this week?" rows={2} /><button className="send-button" disabled={!query.trim()} onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><ArrowUpRight size={16} /></button></div><div className="suggested-prompts"><button onClick={() => setQuery('Which products are at stockout risk?')}>Stockout risk</button><button onClick={() => setQuery('What changed in revenue?')}>Revenue change</button></div></div></section><aside className="card copilot-sidebar"><CardHeading kicker="Thread history" dot="blue" title="No questions yet" /><EmptySmall icon={MessageSquare} text="F8 threads are not created yet." /></aside></div></PageLayout> }
+function CopilotPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { const [query, setQuery] = useState(''); return <PageLayout eyebrow="Advanced query" title="Copilot" description="A closed-intent grammar will answer from evidence packs once F8 is implemented." actions={<Button className="button secondary"><Clock3 size={15} /> Thread history</Button>}><div className="copilot-layout"><section className="copilot-main"><div className="copilot-welcome"><span className="copilot-orb"><Sparkles size={22} /></span><div><div className="section-kicker">10 SUPPORTED INTENTS · F8</div><h2>Ask a grounded question.</h2><p>There are no generated answers in this phase.</p></div></div><div className="copilot-empty"><Database size={24} /><strong>Copilot is not answering yet</strong><span>F8 will connect closed grammar intents to real evidence tables.</span><Button className="button secondary" onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><LockKeyhole size={14} /> View gate</Button></div><div className="copilot-composer"><div className="composer-label"><span><Command size={13} /> Try a future intent</span><span>Numbers will come from F2 tables</span></div><div className="composer-input"><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. Why did sales change this week?" rows={2} /><Button className="send-button" disabled={!query.trim()} onClick={() => onPhaseGate('F8', 'Copilot answer generation')}><ArrowUpRight size={16} /></Button></div><div className="suggested-prompts"><Button onClick={() => setQuery('Which products are at stockout risk?')}>Stockout risk</Button><Button onClick={() => setQuery('What changed in revenue?')}>Revenue change</Button></div></div></section><aside className="card copilot-sidebar"><CardHeading kicker="Thread history" dot="blue" title="No questions yet" /><EmptySmall icon={MessageSquare} text="F8 threads are not created yet." /></aside></div></PageLayout> }
 
-function ReportsPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { return <PageLayout eyebrow="Reporting shell" title="Reports" description="Report vault and scheduling will only render closed-period PDFs from F8." actions={<button className="button primary" onClick={() => onPhaseGate('F8', 'PDF report generation')}><Plus size={15} /> Generate report</button>}><div className="report-banner"><span className="report-banner-icon"><FileBarChart size={22} /></span><div><div className="section-kicker">DETERMINISTIC PDF VAULT</div><h2>Reporting is not enabled yet.</h2><p>F8 will add closed periods, R2 storage, and idempotent delivery.</p></div><span className="phase-tag">AI</span></div><EmptyState icon={FileText} title="No reports generated" description="There are no placeholder PDFs in this vault. Generate reports after the F8 reporting package is implemented." action="View F8 boundary" onAction={() => onPhaseGate('F8', 'PDF report generation')} /></PageLayout> }
+function ReportsPage({ onPhaseGate }: { onPhaseGate: (phase: string, capability: string) => void }) { return <PageLayout eyebrow="Reporting shell" title="Reports" description="Report vault and scheduling will only render closed-period PDFs from F8." actions={<Button className="button primary" onClick={() => onPhaseGate('F8', 'PDF report generation')}><Plus size={15} /> Generate report</Button>}><div className="report-banner"><span className="report-banner-icon"><FileBarChart size={22} /></span><div><div className="section-kicker">DETERMINISTIC PDF VAULT</div><h2>Reporting is not enabled yet.</h2><p>F8 will add closed periods, R2 storage, and idempotent delivery.</p></div><span className="phase-tag">AI</span></div><EmptyState icon={FileText} title="No reports generated" description="There are no placeholder PDFs in this vault. Generate reports after the F8 reporting package is implemented." action="View F8 boundary" onAction={() => onPhaseGate('F8', 'PDF report generation')} /></PageLayout> }
 
 function ExportsPage({ context, onToast, onNavigateBilling }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigateBilling: () => void }) {
   return <PageLayout
@@ -1067,7 +1071,7 @@ export function UsageMeterRow({ meter, plan }: { meter: import('./model.js').Usa
         </small>
       )}
       {!isUnlimited && percent >= 100 && (
-        <button type="button" className="billing-upgrade-link" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Upgrade for higher limits</button>
+        <Button type="button" className="billing-upgrade-link" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Upgrade for higher limits</Button>
       )}
     </div>
   )
@@ -1205,16 +1209,16 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
       title="Billing"
       description="Manage your plan, monitor usage, and track AI-attributed return — all grounded in real subscription data."
       actions={
-        <button className="button secondary" disabled={loading} onClick={() => context.storeId ? void reload() : onToast('Connect Shopify from Settings.', 'info')}>
+        <Button className="button secondary" disabled={loading} onClick={() => context.storeId ? void reload() : onToast('Connect Shopify from Settings.', 'info')}>
           <RefreshCw size={14} className={loading ? 'spin' : ''} /> {context.storeId ? (loading ? 'Refreshing…' : 'Refresh billing') : 'Connect Shopify'}
-        </button>
+        </Button>
       }
     >
       {devWorkspace && !devNoteDismissed && (
         <div className="billing-dev-note" role="note">
           <AlertTriangle size={14} aria-hidden />
           <span><strong>DEV NOTE:</strong> Billing is currently in mock mode. Phase 2 (Real Shopify Checkout) is pending.</span>
-          <button type="button" onClick={dismissDevNote} aria-label="Dismiss developer note"><X size={13} /></button>
+          <Button type="button" onClick={dismissDevNote} aria-label="Dismiss developer note"><X size={13} /></Button>
         </div>
       )}
       {!context.storeId ? (
@@ -1254,10 +1258,10 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
               </div>
             </div>
             <div className="billing-interval-toggle" role="group" aria-label="Billing interval">
-              <button type="button" className={billingInterval === 'MONTHLY' ? 'active' : ''} onClick={() => setBillingInterval('MONTHLY')}>Monthly</button>
-              <button type="button" className={billingInterval === 'ANNUAL' ? 'active' : ''} onClick={() => setBillingInterval('ANNUAL')}>
+              <Button type="button" className={billingInterval === 'MONTHLY' ? 'active' : ''} onClick={() => setBillingInterval('MONTHLY')}>Monthly</Button>
+              <Button type="button" className={billingInterval === 'ANNUAL' ? 'active' : ''} onClick={() => setBillingInterval('ANNUAL')}>
                 Annual <span className="billing-save-badge">2 Months Free</span>
-              </button>
+              </Button>
             </div>
           </section>
 
@@ -1295,14 +1299,14 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                         <li key={feature}><Check size={14} strokeWidth={2.5} />{feature}</li>
                       ))}
                     </ul>
-                    <button
+                    <Button
                       className={`button ${isCurrent ? 'secondary' : 'primary'} billing-plan-cta`}
                       disabled={isCurrent || upgradeLoading === plan.code}
                       onClick={() => void startCharge(plan.code)}
                     >
                       {isCurrent ? 'Current plan' : upgradeLoading === plan.code ? 'Updating…' : 'Choose plan'}
                       {!isCurrent && <ArrowUpRight size={14} />}
-                    </button>
+                    </Button>
                     <p className="billing-trust-line">Prices in USD. Applicable taxes appear on your Shopify bill.</p>
                   </article>
                 )
@@ -1391,9 +1395,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
               </div>
               <p className="billing-roi-help">
                 Revenue tied to an approved ProfitPilot action. $0 means no attributed outcomes yet — not a billing error.
-                <button type="button" className="billing-tooltip-trigger" title="Attribution credits revenue only when a merchant-approved recommendation can be linked to a later order or recovery. Unapproved insights never inflate ROI.">
+                <Button type="button" className="billing-tooltip-trigger" title="Attribution credits revenue only when a merchant-approved recommendation can be linked to a later order or recovery. Unapproved insights never inflate ROI.">
                   <Info size={13} /> How attribution works
-                </button>
+                </Button>
               </p>
               {roi ? (
                 <div className="billing-roi-live">
@@ -1427,10 +1431,10 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 aria-label="Gift code"
                 disabled={giftLoading}
               />
-              <button className="button primary billing-gift-redeem" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
+              <Button className="button primary billing-gift-redeem" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
                 {giftLoading ? <RefreshCw size={14} className="spin" /> : <Gift size={14} />}
                 {giftLoading ? 'Redeeming…' : 'Redeem'}
-              </button>
+              </Button>
             </div>
           </section>
 
@@ -1445,10 +1449,10 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 const open = openFaq === index
                 return (
                   <div key={item.q} className={`billing-faq-item ${open ? 'open' : ''}`}>
-                    <button type="button" className="billing-faq-q" aria-expanded={open} onClick={() => setOpenFaq(open ? null : index)}>
+                    <Button type="button" className="billing-faq-q" aria-expanded={open} onClick={() => setOpenFaq(open ? null : index)}>
                       <span>{item.q}</span>
                       <ChevronDown size={16} />
-                    </button>
+                    </Button>
                     {open && <div className="billing-faq-a"><p>{item.a}</p></div>}
                   </div>
                 )
@@ -1472,7 +1476,15 @@ function BillingCell({ value }: { value: string | boolean }) {
   return <span className="billing-matrix-text">{value}</span>
 }
 
-function PageLayout({ eyebrow, title, description, actions, children }: { eyebrow: ReactNode; title: string; description: string; actions?: ReactNode; children: ReactNode }) { return <div className="page-content"><div className="page-header"><div><div className="page-eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>{children}</div> }
+function PageLayout({ eyebrow, title, description, actions, children }: { eyebrow: ReactNode; title: string; description: string; actions?: ReactNode; children: ReactNode }) {
+  return (
+    <Page title={title} subtitle={description}>
+      <AppTitleBar title={title} />
+      {actions ? <div className="page-actions">{actions}</div> : null}
+      {children}
+    </Page>
+  )
+}
 
 function CardHeading({ kicker, dot, title, action }: { kicker: string; dot: string; title: string; action?: ReactNode }) { return <div className="card-heading"><div><div className="section-kicker"><span className={`kicker-dot ${dot}`} />{kicker}</div><h3>{title}</h3></div>{action ?? <MoreHorizontal size={18} className="muted-icon" />}</div> }
 function MetricCard({ label, value, detail, icon: Icon, tone, gated }: { label: string; value: string; detail: string; icon: LucideIcon; tone: string; gated?: boolean }) { return <div className="card stat-card"><div className="stat-top"><span className={`stat-icon ${tone}`}><Icon size={17} /></span>{gated ? <span className="phase-tag">F4</span> : <span className="data-mark"><CheckCircle2 size={13} /></span>}</div><div className="stat-value">{value}</div><div className="stat-bottom"><span>{label}<small>{detail}</small></span></div></div> }
@@ -1492,25 +1504,27 @@ function AreaChart({ points }: { points: readonly import('./model.js').RevenuePo
   const coords = points.map((point, index) => ({ x: (index / Math.max(points.length - 1, 1)) * 100, y: 92 - ((point.value - min) / span) * 78, point }))
   const line = coords.map((coord) => `${coord.x},${coord.y}`).join(' ')
   const active = hover !== null ? coords[hover] : null
-  return <div className="revenue-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Revenue trend"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity=".3" /><stop offset="100%" stopColor="#3B82F6" stopOpacity="0" /></linearGradient></defs>{[16, 40, 64, 88].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} className="chart-grid-line" />)}<polygon points={`0,100 ${line} 100,100`} fill="url(#areaFill)" /><polyline points={line} fill="none" stroke="#5994FF" strokeWidth="1.7" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{coords.map((coord, index) => <circle key={coord.point.day} cx={coord.x} cy={coord.y} r={hover === index ? 1.8 : 1.1} fill="#93C5FD" onMouseEnter={() => setHover(index)} onMouseLeave={() => setHover(null)} />)}</svg><div className="chart-y-labels"><span>{formatMoney(max)}</span><span>{formatMoney((max + min) / 2)}</span><span>{formatMoney(min)}</span></div><div className="chart-x-labels"><span>{points[0]?.day ?? ''}</span><span>{points[points.length - 1]?.day ?? ''}</span></div>{active && <div className="chart-tooltip" style={{ left: `${Math.min(86, Math.max(8, active.x))}%` }}><strong>{formatMoney(active.point.value)}</strong><span>{active.point.day}</span></div>}</div>
+  return <div className="revenue-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Revenue trend"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity=".3" /><stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0" /></linearGradient></defs>{[16, 40, 64, 88].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} className="chart-grid-line" />)}<polygon points={`0,100 ${line} 100,100`} fill="url(#areaFill)" /><polyline points={line} fill="none" stroke="rgb(89, 148, 255)" strokeWidth="1.7" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{coords.map((coord, index) => <circle key={coord.point.day} cx={coord.x} cy={coord.y} r={hover === index ? 1.8 : 1.1} fill="rgb(147, 197, 253)" onMouseEnter={() => setHover(index)} onMouseLeave={() => setHover(null)} />)}</svg><div className="chart-y-labels"><span>{formatMoney(max)}</span><span>{formatMoney((max + min) / 2)}</span><span>{formatMoney(min)}</span></div><div className="chart-x-labels"><span>{points[0]?.day ?? ''}</span><span>{points[points.length - 1]?.day ?? ''}</span></div>{active && <div className="chart-tooltip" style={{ left: `${Math.min(86, Math.max(8, active.x))}%` }}><strong>{formatMoney(active.point.value)}</strong><span>{active.point.day}</span></div>}</div>
 }
-function EmptyChart({ onSync }: { onSync: () => void }) { return <div className="empty-chart"><LineChart size={24} /><strong>No closed-period analytics yet</strong><span>Run a real sync to draw this chart.</span><button className="text-button" onClick={onSync}><RefreshCw size={14} /> Sync data</button></div> }
-function EmptyState({ icon: Icon, title, description, action, onAction }: { icon: SectionIcon; title: string; description: string; action: string; onAction: () => void }) { return <div className="empty-state"><span className="empty-icon"><Icon size={22} /></span><h3>{title}</h3><p>{description}</p><button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button></div> }
+function EmptyChart({ onSync }: { onSync: () => void }) { return <div className="empty-chart"><LineChart size={24} /><strong>No closed-period analytics yet</strong><span>Run a real sync to draw this chart.</span><Button className="text-button" onClick={onSync}><RefreshCw size={14} /> Sync data</Button></div> }
+function EmptyState({ icon: _Icon, title, description, action, onAction }: { icon: SectionIcon; title: string; description: string; action: string; onAction: () => void }) {
+  return <PolarisEmpty heading={title} description={description} action={action} onAction={onAction} />
+}
 function EmptySmall({ icon: Icon, text }: { icon: LucideIcon; text: string }) { return <div className="empty-small"><Icon size={18} /><span>{text}</span></div> }
 function InsightItem({ icon: Icon, title, detail, tone }: { icon: LucideIcon; title: string; detail: string; tone: string }) { return <div className="insight-item"><span className={`insight-icon ${tone}`}><Icon size={16} /></span><span><strong>{title}</strong><small>{detail}</small></span><ArrowUpRight size={15} /></div> }
 function MetricLine({ label, value }: { label: string; value: string }) { return <div className="metric-line"><span>{label}</span><strong>{value}</strong></div> }
 function Quota({ label, value, percent }: { label: string; value: string; percent: number }) { return <div className="quota"><div><span>{label}</span><strong>{value}</strong></div><div className="usage-track"><span style={{ width: `${percent}%` }} /></div></div> }
-function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><button onClick={onSettings}><Settings size={15} /> Settings</button><button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</button><button onClick={onClose}><LockKeyhole size={15} /> Security boundary</button></div> }
-function OfflineBanner({ error, partial = false, onRetry }: { error: string | null; partial?: boolean; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>{partial ? 'Partial data load' : 'API unavailable'}</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><button onClick={onRetry}><RotateCcw size={14} /> Retry</button></div> }
-function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></button></div> }
+function ProfileMenu({ lightMode, onTheme, onClose, onSettings }: { lightMode: boolean; onTheme: () => void; onClose: () => void; onSettings: () => void }) { return <div className="profile-menu"><div className="profile-menu-head"><span className="profile-avatar large">PP</span><span><strong>ProfitPilot</strong><small>Foundation workspace</small></span></div><Button onClick={onSettings}><Settings size={15} /> Settings</Button><Button onClick={onTheme}>{lightMode ? <Sun size={15} /> : <Moon size={15} />} {lightMode ? 'Dark mode' : 'Light mode'}</Button><Button onClick={onClose}><LockKeyhole size={15} /> Security boundary</Button></div> }
+function OfflineBanner({ error, partial = false, onRetry }: { error: string | null; partial?: boolean; onRetry: () => void }) { return <div className="offline-banner"><CloudOff size={16} /><span><strong>{partial ? 'Partial data load' : 'API unavailable'}</strong>{error ? ` · ${error}` : ' · Showing empty states, never demo data.'}</span><Button onClick={onRetry}><RotateCcw size={14} /> Retry</Button></div> }
+function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>No Shopify store context detected.</strong> Open the install flow to attach a real tenant before syncing.</span><Button onClick={onConnect}>Connect Shopify <ArrowUpRight size={13} /></Button></div> }
 function EvidenceDrawer({ recommendation, jarvisEvidence, onClose }: { recommendation: Recommendation | null; jarvisEvidence: JarvisEvidence | null; onClose: () => void }) {
   const hash = recommendation && typeof recommendation.evidencePack.sha256 === 'string' ? recommendation.evidencePack.sha256 : null
   const evidence = jarvisEvidence
-  return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close evidence drawer" /><aside className="evidence-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Database size={13} /> {evidence ? 'JARVIS GROUNDED EVIDENCE' : 'IMMUTABLE EVIDENCE PACK'}</span><h2>{evidence ? 'Review before action' : recommendation ? recommendation.title : 'No evidence yet'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="drawer-scroll">{evidence ? <><div className="drawer-hero"><span>{evidence.page} · {evidence.confidenceLevel} confidence</span><strong>{evidence.suggestedAction?.label ?? 'Evidence only'}</strong><small>Generated from real tenant data · {evidence.generatedAt}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Facts and sources</div><div className="evidence-stack">{evidence.facts.map((fact, index) => <div className="evidence-line" key={fact.key}><span>{String(index + 1).padStart(2, '0')}</span><strong>{fact.label}: {String(fact.value ?? '—')}</strong><small>{fact.source}</small><CheckCircle2 size={15} /></div>)}</div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> AI sees language-safe evidence only</span><span><Check size={14} /> Risky actions require explicit confirmation</span><span><Check size={14} /> Merchant-owned draft/sender checks remain enforced</span></div></div></> : recommendation ? <><div className="drawer-hero"><span>{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><small>Deterministic rule output · {recommendation.ruleId}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Proof and status</div><div className="evidence-stack"><div className="evidence-line"><span>01</span><strong>{recommendation.reason}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>02</span><strong>Confidence: {recommendation.confidenceLevel}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>03</span><strong className="mono">SHA-256: {hash ?? 'unavailable'}</strong><CheckCircle2 size={15} /></div></div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> {recommendation.actionRisk.replaceAll('_', ' ')} policy</span><span><Check size={14} /> CAS approval version {recommendation.version}</span><span><Check size={14} /> AI language: {recommendation.explanationStatus}</span></div></div></> : <div className="gated-panel"><LockKeyhole size={22} /><strong>No persisted evidence packs</strong><p>Run analysis after the store snapshot is available. The UI will never fabricate evidence.</p></div>}</div><div className="drawer-footer"><button className="button secondary" onClick={onClose}>Close</button></div></aside></>
+  return <><Button className="drawer-backdrop" onClick={onClose} aria-label="Close evidence drawer" /><aside className="evidence-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Database size={13} /> {evidence ? 'JARVIS GROUNDED EVIDENCE' : 'IMMUTABLE EVIDENCE PACK'}</span><h2>{evidence ? 'Review before action' : recommendation ? recommendation.title : 'No evidence yet'}</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div><div className="drawer-scroll">{evidence ? <><div className="drawer-hero"><span>{evidence.page} · {evidence.confidenceLevel} confidence</span><strong>{evidence.suggestedAction?.label ?? 'Evidence only'}</strong><small>Generated from real tenant data · {evidence.generatedAt}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Facts and sources</div><div className="evidence-stack">{evidence.facts.map((fact, index) => <div className="evidence-line" key={fact.key}><span>{String(index + 1).padStart(2, '0')}</span><strong>{fact.label}: {String(fact.value ?? '—')}</strong><small>{fact.source}</small><CheckCircle2 size={15} /></div>)}</div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> AI sees language-safe evidence only</span><span><Check size={14} /> Risky actions require explicit confirmation</span><span><Check size={14} /> Merchant-owned draft/sender checks remain enforced</span></div></div></> : recommendation ? <><div className="drawer-hero"><span>{recommendation.impactLabel}</span><strong>{formatMoney(recommendation.impactValue, recommendation.currency)}</strong><small>Deterministic rule output · {recommendation.ruleId}</small></div><div className="drawer-section"><div className="drawer-section-title"><ShieldCheck size={15} /> Proof and status</div><div className="evidence-stack"><div className="evidence-line"><span>01</span><strong>{recommendation.reason}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>02</span><strong>Confidence: {recommendation.confidenceLevel}</strong><CheckCircle2 size={15} /></div><div className="evidence-line"><span>03</span><strong className="mono">SHA-256: {hash ?? 'unavailable'}</strong><CheckCircle2 size={15} /></div></div></div><div className="drawer-section"><div className="drawer-section-title"><LockKeyhole size={15} /> Action safety</div><div className="safety-list"><span><Check size={14} /> {recommendation.actionRisk.replaceAll('_', ' ')} policy</span><span><Check size={14} /> CAS approval version {recommendation.version}</span><span><Check size={14} /> AI language: {recommendation.explanationStatus}</span></div></div></> : <div className="gated-panel"><LockKeyhole size={22} /><strong>No persisted evidence packs</strong><p>Run analysis after the store snapshot is available. The UI will never fabricate evidence.</p></div>}</div><div className="drawer-footer"><Button className="button secondary" onClick={onClose}>Close</Button></div></aside></>
 }
 
 function PassiveRecommendationCard({ recommendation, onReview, onDismiss, onSnooze }: { recommendation: Recommendation; onReview: () => void; onDismiss: () => void; onSnooze: () => void }) {
-  return <aside className="passive-recommendation-card" aria-live="polite"><div className="passive-card-heading"><span className="passive-card-icon"><Sparkles size={15} /></span><span><small>JARVIS RECOMMENDATION</small><strong>{recommendation.title}</strong></span><button onClick={onDismiss} aria-label="Dismiss recommendation"><X size={14} /></button></div><p>{recommendation.reason}</p><div className="passive-card-meta"><span className={`status-badge ${recommendation.confidenceLevel === 'HIGH' ? 'green' : 'amber'}`}>{recommendation.confidenceLevel} confidence</span><span>Already in your recommendations</span></div><div className="passive-card-actions"><button className="button primary" onClick={onReview}><Eye size={13} /> Review evidence</button><button className="button secondary" onClick={onSnooze}><Clock3 size={13} /> Snooze 1 hour</button></div></aside>
+  return <aside className="passive-recommendation-card" aria-live="polite"><div className="passive-card-heading"><span className="passive-card-icon"><Sparkles size={15} /></span><span><small>JARVIS RECOMMENDATION</small><strong>{recommendation.title}</strong></span><Button onClick={onDismiss} aria-label="Dismiss recommendation"><X size={14} /></Button></div><p>{recommendation.reason}</p><div className="passive-card-meta"><span className={`status-badge ${recommendation.confidenceLevel === 'HIGH' ? 'green' : 'amber'}`}>{recommendation.confidenceLevel} confidence</span><span>Already in your recommendations</span></div><div className="passive-card-actions"><Button className="button primary" onClick={onReview}><Eye size={13} /> Review evidence</Button><Button className="button secondary" onClick={onSnooze}><Clock3 size={13} /> Snooze 1 hour</Button></div></aside>
 }
 
 /**
@@ -1521,13 +1535,13 @@ function PassiveRecommendationCard({ recommendation, onReview, onDismiss, onSnoo
 function NotificationDrawer({ recommendations, unreadIds, onOpenRecommendation, onMarkAllRead, onClose }: { recommendations: readonly Recommendation[]; unreadIds: ReadonlySet<string>; onOpenRecommendation: (id: string) => void; onMarkAllRead: () => void; onClose: () => void }) {
   const pending = recommendations.filter((item) => item.status === 'PENDING').slice(0, 10)
   const unreadCount = pending.filter((item) => unreadIds.has(item.id)).length
-  return <><button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><Sparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</button>)}{unreadCount > 0 && <button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></button>}</div>}<button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></button></aside></>
+  return <><Button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <Button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><Sparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</Button>)}{unreadCount > 0 && <Button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></Button>}</div>}<Button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></Button></aside></>
 }
-function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: boolean; onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = visibleNavGroups(devWorkspace).flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span><ChevronRight size={15} /></button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
-function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></button></div></div></div> }
-function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><button className="button primary full-width" onClick={onClose}>Done</button></div></div> }
+function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: boolean; onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = visibleNavGroups(devWorkspace).flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><Button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <Button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span><ChevronRight size={15} /></Button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
+function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><Button className="button secondary" onClick={onClose}>Cancel</Button><Button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></Button></div></div></div> }
+function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><Button className="button primary full-width" onClick={onClose}>Done</Button></div></div> }
 function Shortcut({ keys, label }: { keys: string; label: string }) { return <div className="shortcut-row"><kbd>{keys}</kbd><span>{label}</span><Check size={14} /></div> }
-function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) { const Icon = toast.kind === 'success' ? CheckCircle2 : toast.kind === 'error' ? AlertCircle : Info; return <div className={`toast ${toast.kind}`}><span className="toast-icon"><Icon size={16} /></span><span>{toast.message}</span><button onClick={onClose} aria-label="Close notification"><X size={15} /></button></div> }
+function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) { const Icon = toast.kind === 'success' ? CheckCircle2 : toast.kind === 'error' ? AlertCircle : Info; return <div className={`toast ${toast.kind}`}><span className="toast-icon"><Icon size={16} /></span><span>{toast.message}</span><Button onClick={onClose} aria-label="Close notification"><X size={15} /></Button></div> }
 function readStoredStringArray(key: string): readonly string[] { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] } catch { return [] } }
 function readStoredNumberRecord(key: string): Readonly<Record<string, number>> { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '{}'); if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}; return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))) } catch { return {} } }
 function storeStringArray(key: string, value: readonly string[]): void { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* Storage may be disabled in a hardened embedded browser. */ } }
@@ -1558,4 +1572,37 @@ function growthCommandPath(page: SectionId): string | null {
   if (page === 'store-coach' || page === 'ai-growth-command') return '/ai-growth-command/coach'
   return null
 }
+
+const SECTION_PATHS: Readonly<Record<string, SectionId>> = {
+  '/': 'dashboard',
+  '/command': 'command-center',
+  '/recommendations': 'recommendations',
+  '/automation': 'automation',
+  '/products': 'products',
+  '/orders': 'orders',
+  '/customers': 'customers',
+  '/inventory': 'inventory',
+  '/analytics': 'analytics',
+  '/reports': 'reports',
+  '/exports': 'exports',
+  '/support': 'support',
+  '/billing': 'billing',
+  '/settings': 'settings',
+  '/ai-command': 'ai-command',
+}
+
+function sectionFromPath(pathname: string): SectionId | null {
+  const trimmed = pathname.replace(/\/+$/, '') || '/'
+  if (SECTION_PATHS[trimmed]) return SECTION_PATHS[trimmed] ?? null
+  if (trimmed.startsWith('/command')) return 'command-center'
+  return null
+}
+
+function sectionPath(page: SectionId): string {
+  const growth = growthCommandPath(page)
+  if (growth) return growth
+  const found = Object.entries(SECTION_PATHS).find(([, section]) => section === page)
+  return found?.[0] ?? '/'
+}
+
 function isTypingTarget(target: EventTarget | null): boolean { return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement }

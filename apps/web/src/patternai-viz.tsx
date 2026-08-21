@@ -20,6 +20,7 @@
  *    time, so every component renders through renderToStaticMarkup in tests.
  */
 
+import { Button } from './polaris-ui.js'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -290,7 +291,7 @@ export function DiscoveryPipelineFunnel({ funnel, activeStage, onSelect, onActio
           Conversion <strong>{funnel.conversion === null ? '—' : formatPlainPercent(funnel.conversion)}</strong>
         </span>
         {onAction && funnel.discovered > 0 && funnel.actedOn === 0
-          ? <button type="button" className="pa-funnel-action" onClick={onAction}>Take action on a discovery →</button>
+          ? <Button type="button" className="pa-funnel-action" onClick={onAction}>Take action on a discovery →</Button>
           : <span className="pa-funnel-hint">{funnel.hint}</span>}
       </footer>
     </div>

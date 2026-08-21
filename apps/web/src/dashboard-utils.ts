@@ -383,8 +383,8 @@ export function previousPeriodRevenue(
 }
 
 const CATEGORY_COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#9B7CF6', '#EF4444',
-  '#57C6E9', '#F97316', '#8B5CF6', '#EC4899', '#14B8A6',
+  'rgb(59, 130, 246)', 'rgb(16, 185, 129)', 'rgb(245, 158, 11)', 'rgb(155, 124, 246)', 'rgb(239, 68, 68)',
+  'rgb(87, 198, 233)', 'rgb(249, 115, 22)', 'rgb(139, 92, 246)', 'rgb(236, 72, 153)', 'rgb(20, 184, 166)',
 ]
 
 /**
@@ -419,7 +419,7 @@ export function aggregateByCategory(
     .sort((a, b) => b.value - a.value)
 
   const pickColor = (index: number): string => {
-    return CATEGORY_COLORS[index % CATEGORY_COLORS.length] ?? '#6B7280'
+    return CATEGORY_COLORS[index % CATEGORY_COLORS.length] ?? 'rgb(107, 114, 128)'
   }
 
   if (sorted.length <= 6) {
@@ -437,7 +437,7 @@ export function aggregateByCategory(
       ...item,
       color: pickColor(index),
     })),
-    { name: 'Others', value: others, color: '#6B7280' },
+    { name: 'Others', value: others, color: 'rgb(107, 114, 128)' },
   ]
 }
 

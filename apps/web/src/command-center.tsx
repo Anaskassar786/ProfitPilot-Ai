@@ -1,6 +1,7 @@
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from './icons.js'
 import {
   AlertCircle,
   ArrowDownRight,
@@ -47,7 +48,7 @@ import {
   WandSparkles,
   X,
   Zap,
-} from 'lucide-react'
+} from './icons.js'
 import {
   decideRecommendation,
   fetchAgentActivity,
@@ -187,7 +188,7 @@ export function CommandCenterWorkspace({ context, onToast, onNavigate }: { conte
         <div className="cc-error-banner" role="alert">
           <AlertCircle size={16} />
           <span>{loadError}</span>
-          <button className="cc-button ghost" onClick={() => { setLoading(true); void load() }}><RefreshCw size={14} /> Retry</button>
+          <Button className="cc-button ghost" onClick={() => { setLoading(true); void load() }}><RefreshCw size={14} /> Retry</Button>
         </div>
       )}
 
@@ -436,7 +437,7 @@ export function AgentCard({ agent, activity, onOpen, onTogglePause }: { agent: A
   return (
     <article className={`cc-agent-card ${tone}`}>
       <div className="cc-agent-card-top">
-        <button type="button" className={`cc-agent-icon ${tone}`} onClick={() => onOpen('overview')} aria-label={`Open ${agent.label} details`}><Icon size={20} /></button>
+        <Button type="button" className={`cc-agent-icon ${tone}`} onClick={() => onOpen('overview')} aria-label={`Open ${agent.label} details`}><Icon size={20} /></Button>
         <span className={`cc-status-pill ${tone}`}><i />{agentStatusLabel(agent)}</span>
         <AgentMenu
           items={[
@@ -448,10 +449,10 @@ export function AgentCard({ agent, activity, onOpen, onTogglePause }: { agent: A
           label={`${agent.label} actions`}
         />
       </div>
-      <button type="button" className="cc-agent-title" onClick={() => onOpen('overview')}>
+      <Button type="button" className="cc-agent-title" onClick={() => onOpen('overview')}>
         <h3>{agent.label}</h3>
         <span className="cc-agent-version">v{agent.promptVersion}</span>
-      </button>
+      </Button>
       <p className="cc-agent-tagline">{agent.tagline}</p>
       <div className="cc-agent-stats">
         <div><strong>{todayCount}</strong><span>insights today</span></div>
@@ -466,7 +467,7 @@ export function AgentCard({ agent, activity, onOpen, onTogglePause }: { agent: A
         </div>
       )}
       <div className="cc-agent-actions">
-        <button type="button" className="cc-button secondary full" onClick={() => onOpen('overview')}>View details <ChevronRight size={14} /></button>
+        <Button type="button" className="cc-button secondary full" onClick={() => onOpen('overview')}>View details <ChevronRight size={14} /></Button>
       </div>
     </article>
   )
@@ -494,9 +495,9 @@ export function LockedAgentCard({ agent, onUpgrade, onLearnMore }: { agent: Agen
       <p className="cc-agent-tagline">{agent.tagline}</p>
       <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“{agent.sampleInsight}”</span></blockquote>
       <div className="cc-agent-actions">
-        <button type="button" className="cc-button upgrade" onClick={onUpgrade}>
+        <Button type="button" className="cc-button upgrade" onClick={onUpgrade}>
           <Zap size={14} /> Upgrade Plan
-        </button>
+        </Button>
       </div>
     </article>
   )
@@ -518,7 +519,7 @@ function SyncMetricsPrompt({ onSync, compact = false }: { onSync: () => void; co
     <div className={`cc-metrics-empty ${compact ? 'compact' : ''}`}>
       {!compact && <Database size={22} />}
       <span>Sync your Shopify store to see what these agents can do for you.</span>
-      <button type="button" className="cc-sync-metrics" onClick={onSync}>Sync Store <ArrowUpRight size={13} /></button>
+      <Button type="button" className="cc-sync-metrics" onClick={onSync}>Sync Store <ArrowUpRight size={13} /></Button>
     </div>
   )
 }
@@ -634,7 +635,7 @@ export function StoreSnapshotCard({ metrics, onSync }: { metrics: AiCommandPageM
       </div>
       <footer className="cc-value-footer cc-snapshot-footer">
         <RefreshCw size={13} /><span>Auto-refreshes every 60 seconds</span>
-        {!hasLiveData && <button type="button" className="cc-sync-metrics inline" onClick={onSync}>Sync Store <ArrowUpRight size={12} /></button>}
+        {!hasLiveData && <Button type="button" className="cc-sync-metrics inline" onClick={onSync}>Sync Store <ArrowUpRight size={12} /></Button>}
       </footer>
     </article>
   )
@@ -706,9 +707,9 @@ export function GrowthModuleCard({ module, plan, onOpen, onDetails, onUpgrade }:
           label={`${module.label} actions`}
         />
       </div>
-      <button type="button" className="cc-agent-title" onClick={onOpen}>
+      <Button type="button" className="cc-agent-title" onClick={onOpen}>
         <h3>{module.label}</h3>
-      </button>
+      </Button>
       <p className="cc-agent-tagline">{module.description}</p>
       <div className="cc-plan-badge-row">
         <span className={`cc-plan-badge ${access.badge}`}>{available ? <Check size={12} /> : <LockKeyhole size={12} />} {access.badgeLabel}</span>
@@ -717,8 +718,8 @@ export function GrowthModuleCard({ module, plan, onOpen, onDetails, onUpgrade }:
       {access.note && <p className="cc-module-note">{access.note}</p>}
       <blockquote className="cc-sample-insight"><Sparkles size={13} /><span>“{module.sampleInsight}”</span></blockquote>
       <div className="cc-agent-actions">
-        <button type="button" className="cc-button secondary" onClick={onDetails}>Details</button>
-        <button type="button" className="cc-button primary" onClick={onOpen}><ArrowUpRight size={14} /> Open {module.label}</button>
+        <Button type="button" className="cc-button secondary" onClick={onDetails}>Details</Button>
+        <Button type="button" className="cc-button primary" onClick={onOpen}><ArrowUpRight size={14} /> Open {module.label}</Button>
       </div>
     </article>
   )
@@ -746,7 +747,7 @@ export function GrowthModuleDrawer({ module, plan, onClose, onOpen, onUpgrade }:
             <h2>{module.label}</h2>
             <p>{module.description}</p>
           </div>
-          <button ref={closeRef} type="button" className="cc-menu-trigger" aria-label="Close details" onClick={onClose}><X size={17} /></button>
+          <Button ref={closeRef} type="button" className="cc-menu-trigger" aria-label="Close details" onClick={onClose}><X size={17} /></Button>
         </header>
         <div className="cc-drawer-body">
           <div className="cc-available-banner"><CheckCircle2 size={16} /><span>{module.label} is live — open the module to start using it.</span></div>
@@ -781,9 +782,9 @@ export function GrowthModuleDrawer({ module, plan, onClose, onOpen, onUpgrade }:
             <span className="cc-category-chip">AI Employee</span>
           </section>
 
-          <button type="button" className="cc-button primary full" onClick={onOpen}><ArrowUpRight size={14} /> Open {module.label}</button>
+          <Button type="button" className="cc-button primary full" onClick={onOpen}><ArrowUpRight size={14} /> Open {module.label}</Button>
           {access.requiresUpgrade && access.upgradePlan && (
-            <button type="button" className="cc-button upgrade" onClick={() => onUpgrade(access.upgradePlan as PlanTier)}><Zap size={14} /> Upgrade Plan</button>
+            <Button type="button" className="cc-button upgrade" onClick={() => onUpgrade(access.upgradePlan as PlanTier)}><Zap size={14} /> Upgrade Plan</Button>
           )}
         </div>
       </aside>
@@ -806,14 +807,14 @@ export function AgentMenu({ items, label }: { items: readonly Readonly<{ label: 
   }, [open])
   return (
     <div className="cc-menu" ref={rootRef}>
-      <button type="button" className="cc-menu-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={label} onClick={() => setOpen((value) => !value)}>
+      <Button type="button" className="cc-menu-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={label} onClick={() => setOpen((value) => !value)}>
         <MoreHorizontal size={17} />
-      </button>
+      </Button>
       {open && (
         <div className="cc-menu-list" role="menu">
           {items.map((item) => {
             const ItemIcon = item.icon
-            return <button key={item.label} type="button" role="menuitem" onClick={() => { setOpen(false); item.onSelect() }}><ItemIcon size={14} /> {item.label}</button>
+            return <Button key={item.label} type="button" role="menuitem" onClick={() => { setOpen(false); item.onSelect() }}><ItemIcon size={14} /> {item.label}</Button>
           })}
         </div>
       )}
@@ -840,7 +841,7 @@ export function RunAllBanner({ state, onDismiss }: { state: RunAllState; onDismi
         </div>
       </div>
       <div className="cc-run-progress"><i style={{ width: `${percent}%` }} /></div>
-      {!state.running && <button type="button" className="cc-menu-trigger" aria-label="Dismiss run status" onClick={onDismiss}><X size={15} /></button>}
+      {!state.running && <Button type="button" className="cc-menu-trigger" aria-label="Dismiss run status" onClick={onDismiss}><X size={15} /></Button>}
     </section>
   )
 }
@@ -885,9 +886,9 @@ export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly
                 )
               })}
             </div>
-            <button type="button" className="cc-button ghost" aria-expanded={learnOpen} onClick={() => setLearnOpen((value) => !value)}>
+            <Button type="button" className="cc-button ghost" aria-expanded={learnOpen} onClick={() => setLearnOpen((value) => !value)}>
               <BookOpen size={14} /> {learnOpen ? 'Hide how agents work' : 'Learn how agents work'}
-            </button>
+            </Button>
             {learnOpen && (
               <ol className="cc-how-it-works">
                 <li><strong>1 · Sync</strong><span>Real Shopify data becomes a deterministic store snapshot.</span></li>
@@ -902,14 +903,14 @@ export function ActivityFeed({ recent, agents, onOpenAgent }: { recent: readonly
           const agent = agents.find((entry) => entry.id === item.agent)
           const fresh = item.createdAt.slice(0, 10) === new Date().toISOString().slice(0, 10)
           return (
-            <button type="button" key={item.id} className={`cc-feed-row ${fresh ? 'is-fresh' : ''}`} onClick={() => onOpenAgent(item.agent)}>
+            <Button type="button" key={item.id} className={`cc-feed-row ${fresh ? 'is-fresh' : ''}`} onClick={() => onOpenAgent(item.agent)}>
               <span className={`cc-feed-dot ${item.agent.toLowerCase()}`} aria-hidden="true" />
               <span className="cc-feed-agent">{agent?.label ?? prettyAgent(item.agent)}</span>
               <span className="cc-feed-title">{item.title}</span>
               <span className={`cc-feed-status ${item.status.toLowerCase()}`}>{item.status}</span>
               <span className="cc-feed-time">{relativeTime(item.createdAt)}</span>
               <ChevronRight size={14} className="cc-feed-chevron" />
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -972,7 +973,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
             <h2>{agent.label}</h2>
             <p>{agent.tagline}</p>
           </div>
-          <button ref={closeRef} type="button" className="cc-menu-trigger" aria-label="Close details" onClick={onClose}><X size={17} /></button>
+          <Button ref={closeRef} type="button" className="cc-menu-trigger" aria-label="Close details" onClick={onClose}><X size={17} /></Button>
         </header>
 
         {agent.locked ? (
@@ -984,15 +985,15 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
               <h3>Rules this agent will run for you</h3>
               {rules.map((rule) => <div key={rule.id} className="cc-rule-row"><strong>{rule.name}</strong><span>{rule.purpose}</span></div>)}
             </div>
-            <button type="button" className="cc-button upgrade" onClick={onUpgrade}><Zap size={14} /> Upgrade Plan</button>
+            <Button type="button" className="cc-button upgrade" onClick={onUpgrade}><Zap size={14} /> Upgrade Plan</Button>
           </div>
         ) : (
           <>
             <nav className="cc-drawer-tabs" role="tablist" aria-label="Agent detail sections">
               {(['overview', 'rules', 'activity', 'settings'] as const).map((key) => (
-                <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? 'is-active' : ''} onClick={() => onTab(key)}>
+                <Button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? 'is-active' : ''} onClick={() => onTab(key)}>
                   {key.charAt(0).toUpperCase() + key.slice(1)}
-                </button>
+                </Button>
               ))}
             </nav>
 
@@ -1087,8 +1088,8 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                       <em>{relativeTime(item.createdAt)}</em>
                       {item.status === 'PENDING' && (
                         <span className="cc-activity-actions">
-                          <button type="button" className="cc-button reject" onClick={() => void decideInline(item, 'reject')}>Reject</button>
-                          <button type="button" className="cc-button approve" onClick={() => void decideInline(item, 'approve')}><Check size={13} /> Approve</button>
+                          <Button type="button" className="cc-button reject" onClick={() => void decideInline(item, 'reject')}>Reject</Button>
+                          <Button type="button" className="cc-button approve" onClick={() => void decideInline(item, 'approve')}><Check size={13} /> Approve</Button>
                         </span>
                       )}
                     </div>
@@ -1104,7 +1105,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
                     <strong>Agent status</strong>
                     <span>{agent.paused ? 'Paused — this agent is skipped and will not produce insights.' : 'Active — this agent runs automatically on the system schedule.'}</span>
                   </div>
-                  <button type="button" className="cc-button secondary" onClick={onTogglePause}>{agent.paused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}</button>
+                  <Button type="button" className="cc-button secondary" onClick={onTogglePause}>{agent.paused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}</Button>
                 </div>
                 <div className="cc-setting-row">
                   <div>

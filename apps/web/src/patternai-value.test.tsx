@@ -191,7 +191,7 @@ describe('discovery pipeline funnel', () => {
   })
   it('is clickable when a select handler is supplied', () => {
     const html = renderToStaticMarkup(createElement(DiscoveryPipelineFunnel, { funnel, onSelect: noop }))
-    expect(html).toContain('<button')
+    expect(html).toContain('type="button"')
   })
 })
 

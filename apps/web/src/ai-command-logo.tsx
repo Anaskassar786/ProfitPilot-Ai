@@ -8,7 +8,7 @@
  *
  * The mark is pure SVG with a per-instance gradient id (so several marks can
  * share a page safely), scales cleanly from 16px favicons to 64px headers,
- * and reads correctly on both the dark (#0F0F0F) and light (#FFFFFF)
+ * and reads correctly on both the dark (rgb(15, 15, 15)) and light (rgb(255, 255, 255))
  * canvases — gradients and strokes use theme-aware brand values so the node
  * never disappears into either background.
  */
@@ -53,18 +53,18 @@ export function AiCommandMark({ size = 24, variant = 'plain', title = 'AI Comman
       <title>{title}</title>
       <defs>
         <linearGradient id={stroke} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--ac-mark-from, #A78BFA)" />
-          <stop offset="55%" stopColor="var(--ac-mark-mid, #8B5CF6)" />
-          <stop offset="100%" stopColor="var(--ac-mark-to, #C084FC)" />
+          <stop offset="0%" stopColor="var(--ac-mark-from, rgb(167, 139, 250))" />
+          <stop offset="55%" stopColor="var(--ac-mark-mid, rgb(139, 92, 246))" />
+          <stop offset="100%" stopColor="var(--ac-mark-to, rgb(192, 132, 252))" />
         </linearGradient>
         <radialGradient id={hubFill} cx="38%" cy="32%" r="85%">
-          <stop offset="0%" stopColor="var(--ac-hub-core, #FFFFFF)" />
-          <stop offset="48%" stopColor="var(--ac-hub-mid, #C4B5FD)" />
-          <stop offset="100%" stopColor="var(--ac-hub-edge, #8B5CF6)" />
+          <stop offset="0%" stopColor="var(--ac-hub-core, rgb(255, 255, 255))" />
+          <stop offset="48%" stopColor="var(--ac-hub-mid, rgb(196, 181, 253))" />
+          <stop offset="100%" stopColor="var(--ac-hub-edge, rgb(139, 92, 246))" />
         </radialGradient>
         <radialGradient id={node} cx="35%" cy="30%" r="80%">
-          <stop offset="0%" stopColor="var(--ac-node-core, #FFFFFF)" />
-          <stop offset="100%" stopColor="var(--ac-node-edge, #8B5CF6)" />
+          <stop offset="0%" stopColor="var(--ac-node-core, rgb(255, 255, 255))" />
+          <stop offset="100%" stopColor="var(--ac-node-edge, rgb(139, 92, 246))" />
         </radialGradient>
         <linearGradient id={plate} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--ac-plate-from, rgba(139, 92, 246, 0.2))" />
@@ -88,7 +88,7 @@ export function AiCommandMark({ size = 24, variant = 'plain', title = 'AI Comman
       {SATELLITES.map((point, index) => (
         <g key={index}>
           <circle cx={point.cx} cy={point.cy} r={point.r + 1.4} fill="var(--ac-halo, rgba(139, 92, 246, 0.18))" />
-          <circle cx={point.cx} cy={point.cy} r={point.r} fill={point.accent ? 'var(--ac-accent-dot, #C084FC)' : `url(#${node})`} />
+          <circle cx={point.cx} cy={point.cy} r={point.r} fill={point.accent ? 'var(--ac-accent-dot, rgb(192, 132, 252))' : `url(#${node})`} />
         </g>
       ))}
 
@@ -97,7 +97,7 @@ export function AiCommandMark({ size = 24, variant = 'plain', title = 'AI Comman
       <circle cx={HUB.cx} cy={HUB.cy} r={HUB.r} fill={`url(#${hubFill})`} stroke="var(--ac-hub-ring, rgba(255, 255, 255, 0.55))" strokeWidth="0.8" />
 
       {/* Command-prompt chevron in the core */}
-      <g stroke="var(--ac-chevron, #4C1D95)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <g stroke="var(--ac-chevron, rgb(76, 29, 149))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
         <path d="M 12.9 13.2 L 17.4 16 L 12.9 18.8" />
         <path d="M 14.2 20.2 H 17.8" />
       </g>

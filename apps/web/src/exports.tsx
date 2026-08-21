@@ -13,6 +13,7 @@
  *   · no developer jargon reaches the merchant.
  */
 
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -34,8 +35,8 @@ import {
   ShoppingBag,
   Sparkles,
   Wallet,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from './icons.js'
+import type { LucideIcon } from './icons.js'
 import type { ExportDataset, PlanTier } from '@profitpilot/types'
 import { ApiClientError, fetchExportsOverview, generateExport } from './api.js'
 import type { WorkspaceContext } from './model.js'
@@ -214,9 +215,9 @@ export function PlanBanner({
         {lockedCount > 0 ? <small className="dx-plan-locked">{lockedCount} more export{lockedCount === 1 ? '' : 's'} unlock on a higher plan</small> : null}
       </div>
       <div className="dx-plan-actions">
-        <button type="button" className="dx-ghost-button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh exports">
+        <Button type="button" className="dx-ghost-button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh exports">
           <RefreshCw size={14} className={refreshing ? 'dx-spin' : ''} /> Refresh
-        </button>
+        </Button>
         <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
       </div>
     </section>
@@ -281,10 +282,10 @@ export function ExportCardView({
         {card.locked ? (
           <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} className="dx-card-upgrade" />
         ) : (
-          <button type="button" className="dx-download" onClick={onDownload} disabled={disabled} aria-busy={busy}>
+          <Button type="button" className="dx-download" onClick={onDownload} disabled={disabled} aria-busy={busy}>
             {busy ? <Loader2 size={15} className="dx-spin" /> : <Download size={15} />}
             {downloadButtonLabel(card, busy)}
-          </button>
+          </Button>
         )}
       </div>
       {confirmed ? <p className="dx-confirm" role="status"><CheckCircle2 size={13} /> Downloaded — check your browser downloads.</p> : null}
@@ -354,7 +355,7 @@ export function ExportsError({ message, onRetry }: { message: string; onRetry: (
       <span className="dx-state-icon"><AlertCircle size={22} /></span>
       <strong>We could not load your exports</strong>
       <p>{message}</p>
-      <button type="button" className="dx-ghost-button" onClick={onRetry}><RefreshCw size={14} /> Try again</button>
+      <Button type="button" className="dx-ghost-button" onClick={onRetry}><RefreshCw size={14} /> Try again</Button>
     </div>
   )
 }

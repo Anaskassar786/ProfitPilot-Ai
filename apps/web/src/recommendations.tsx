@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -50,8 +51,8 @@ import {
   X,
   XCircle,
   Zap,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from './icons.js'
+import type { LucideIcon } from './icons.js'
 import {
   ApiClientError,
   analyzeRecommendations,
@@ -147,12 +148,12 @@ const AGENT_ICONS: Readonly<Record<AgentId, LucideIcon>> = {
 }
 
 const AGENT_COLORS: Readonly<Record<AgentId, string>> = {
-  REVENUE_AGENT: '#10B981',
-  INVENTORY_AGENT: '#3B82F6',
-  CUSTOMER_AGENT: '#9B7CF6',
-  PRICING_AGENT: '#F59E0B',
-  PRODUCT_AGENT: '#EF4444',
-  EXECUTIVE_AGENT: '#FBBF24',
+  REVENUE_AGENT: 'rgb(16, 185, 129)',
+  INVENTORY_AGENT: 'rgb(59, 130, 246)',
+  CUSTOMER_AGENT: 'rgb(155, 124, 246)',
+  PRICING_AGENT: 'rgb(245, 158, 11)',
+  PRODUCT_AGENT: 'rgb(239, 68, 68)',
+  EXECUTIVE_AGENT: 'rgb(251, 191, 36)',
 }
 
 const SORT_OPTIONS: readonly Readonly<{ id: RecommendationSort; direction: 'asc' | 'desc'; label: string }>[] = [
@@ -468,19 +469,19 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
               <History size={14} /> Last look {formatRelativeTime(lastAnalyzedAt)}
             </span>
           )}
-          <button className="button secondary" onClick={() => setHowItWorksOpen(true)}><Info size={14} /> How it works</button>
-          <button className={`button primary recs-discover ${analyzeBlocked ? 'blocked' : ''}`} onClick={() => void runAnalysis()} disabled={analyzing} title={analyzeBlocked ? `Monthly limit reached (${usage.label}). Upgrade Plan to continue.` : lastAnalyzedAt ? `Last look ${formatRelativeTime(lastAnalyzedAt)}` : 'Ask your AI team to look through your store'}>
+          <Button className="button secondary" onClick={() => setHowItWorksOpen(true)}><Info size={14} /> How it works</Button>
+          <Button className={`button primary recs-discover ${analyzeBlocked ? 'blocked' : ''}`} onClick={() => void runAnalysis()} disabled={analyzing} title={analyzeBlocked ? `Monthly limit reached (${usage.label}). Upgrade Plan to continue.` : lastAnalyzedAt ? `Last look ${formatRelativeTime(lastAnalyzedAt)}` : 'Ask your AI team to look through your store'}>
             {analyzing ? <RefreshCw size={15} className="spin" /> : analyzeBlocked ? <LockKeyhole size={15} /> : <Sparkles size={15} />}
             {analyzing ? 'Discovering opportunities…' : analyzeBlocked ? 'Limit reached' : 'Discover Opportunities'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {usage.nearLimit && !usage.atLimit && (
-        <div className="recs-banner warning"><AlertTriangle size={16} /><span><strong>{usage.remaining} recommendation{usage.remaining === 1 ? '' : 's'} left this month</strong> on your {plan ? PLAN_LABELS[plan] : ''} plan ({usage.label}).</span><button className="button secondary compact" onClick={onNavigateBilling}>View plans <ArrowUpRight size={13} /></button></div>
+        <div className="recs-banner warning"><AlertTriangle size={16} /><span><strong>{usage.remaining} recommendation{usage.remaining === 1 ? '' : 's'} left this month</strong> on your {plan ? PLAN_LABELS[plan] : ''} plan ({usage.label}).</span><Button className="button secondary compact" onClick={onNavigateBilling}>View plans <ArrowUpRight size={13} /></Button></div>
       )}
       {usage.atLimit && usage.limit !== null && (
-        <div className="recs-banner blocked"><LockKeyhole size={16} /><span><strong>Monthly limit reached — {usage.label}.</strong> Your AI team found value {usage.limit} times this month. Upgrade Plan to keep the recommendations coming.</span><button className="button primary compact" onClick={onNavigateBilling}>Upgrade Plan <ArrowUpRight size={13} /></button></div>
+        <div className="recs-banner blocked"><LockKeyhole size={16} /><span><strong>Monthly limit reached — {usage.label}.</strong> Your AI team found value {usage.limit} times this month. Upgrade Plan to keep the recommendations coming.</span><Button className="button primary compact" onClick={onNavigateBilling}>Upgrade Plan <ArrowUpRight size={13} /></Button></div>
       )}
 
       <section className="recs-section" aria-label="Overview">
@@ -501,40 +502,40 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
           <div className="recs-toolbar">
             <div className="recs-tabs" role="tablist" aria-label="Recommendation status">
               {STATUS_TABS.map((tab) => (
-                <button key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab recs-tip-anchor ${statusTab === tab ? 'active' : ''}`} data-tip={STATUS_TAB_TOOLTIPS[tab]} data-tip-align={tab === 'ALL' ? 'left' : tab === 'EXECUTED' ? 'right' : 'center'} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
+                <Button key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab recs-tip-anchor ${statusTab === tab ? 'active' : ''}`} data-tip={STATUS_TAB_TOOLTIPS[tab]} data-tip-align={tab === 'ALL' ? 'left' : tab === 'EXECUTED' ? 'right' : 'center'} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
                   {statusTabLabel(tab)}
                   <span className="recs-tab-count">{statusTabCount(tab, counts)}</span>
-                </button>
+                </Button>
               ))}
             </div>
             <div className="recs-toolbar-row">
-              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Search by title, product, customer, or rule…" aria-label="Search recommendations by title, product, customer, or rule" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button>}</div>
+              <div className="recs-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Search by title, product, customer, or rule…" aria-label="Search recommendations by title, product, customer, or rule" />{query && <Button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></Button>}</div>
               <span className="recs-tip-anchor recs-sort-wrap" data-tip={SORT_TOOLTIP}>
                 <select className="recs-select" value={sortIndex} onChange={(event) => setSortIndex(Number(event.target.value))} aria-label={`Sort recommendations. ${SORT_TOOLTIP}`}>
                   {SORT_OPTIONS.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}
                 </select>
               </span>
               <div className="recs-group-toggle" role="group" aria-label="Group recommendations">
-                <button className={groupMode === 'none' ? 'active' : ''} onClick={() => setGroupMode('none')}>List</button>
-                <button className={groupMode === 'agent' ? 'active' : ''} onClick={() => setGroupMode('agent')}>By agent</button>
-                <button className={groupMode === 'rule' ? 'active' : ''} onClick={() => setGroupMode('rule')}>By rule</button>
+                <Button className={groupMode === 'none' ? 'active' : ''} onClick={() => setGroupMode('none')}>List</Button>
+                <Button className={groupMode === 'agent' ? 'active' : ''} onClick={() => setGroupMode('agent')}>By agent</Button>
+                <Button className={groupMode === 'rule' ? 'active' : ''} onClick={() => setGroupMode('rule')}>By rule</Button>
               </div>
               <div className="recs-dates">
                 <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} onInput={(event) => setDateFrom(event.currentTarget.value)} aria-label="From date" />
                 <span>–</span>
                 <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} onInput={(event) => setDateTo(event.currentTarget.value)} aria-label="To date" />
               </div>
-              <button className="icon-button recs-refresh" onClick={() => void load()} title={refreshedAt ? `Refreshed ${formatRelativeTime(new Date(refreshedAt).toISOString())}` : 'Refresh'} aria-label="Refresh recommendations"><RefreshCw size={15} /></button>
+              <Button className="icon-button recs-refresh" onClick={() => void load()} title={refreshedAt ? `Refreshed ${formatRelativeTime(new Date(refreshedAt).toISOString())}` : 'Refresh'} aria-label="Refresh recommendations"><RefreshCw size={15} /></Button>
             </div>
             <div className="recs-agent-chips" role="group" aria-label="Filter by agent">
-              <button className={`recs-chip ${agentFilter === null ? 'active' : ''}`} onClick={() => setAgentFilter(null)}>All agents</button>
+              <Button className={`recs-chip ${agentFilter === null ? 'active' : ''}`} onClick={() => setAgentFilter(null)}>All agents</Button>
               {AGENT_UNLOCK_ORDER.map((agent) => {
                 const Icon = AGENT_ICONS[agent]
                 const locked = agentLockedForPlan(agent, plan)
                 if (locked) {
-                  return <button key={agent} className="recs-chip locked" onClick={onNavigateBilling} title={`${agentLabel(agent)} unlocks on a higher plan. Upgrade Plan to add this teammate.`}><LockKeyhole size={11} /> {agentLabel(agent)}<small>{PLAN_LABELS[planRequiredForAgent(agent)]}</small></button>
+                  return <Button key={agent} className="recs-chip locked" onClick={onNavigateBilling} title={`${agentLabel(agent)} unlocks on a higher plan. Upgrade Plan to add this teammate.`}><LockKeyhole size={11} /> {agentLabel(agent)}<small>{PLAN_LABELS[planRequiredForAgent(agent)]}</small></Button>
                 }
-                return <button key={agent} className={`recs-chip ${agentFilter === agent ? 'active' : ''}`} style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }} onClick={() => setAgentFilter((current) => (current === agent ? null : agent))}><Icon size={12} /> {agentLabel(agent)}</button>
+                return <Button key={agent} className={`recs-chip ${agentFilter === agent ? 'active' : ''}`} style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }} onClick={() => setAgentFilter((current) => (current === agent ? null : agent))}><Icon size={12} /> {agentLabel(agent)}</Button>
               })}
             </div>
           </div>
@@ -542,9 +543,9 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
           {selected.size > 0 && (
             <div className="recs-bulk-bar" role="toolbar" aria-label="Bulk actions">
               <span><strong>{selected.size}</strong> selected</span>
-              <button className="button approve compact" disabled={bulkBusy} onClick={() => void bulkDecide('approve')}><Check size={13} /> Approve {selected.size}</button>
-              <button className="button reject compact" disabled={bulkBusy} onClick={() => void bulkDecide('reject')}><X size={13} /> Skip {selected.size}</button>
-              <button className="text-button" onClick={() => setSelected(new Set())}>Clear</button>
+              <Button className="button approve compact" disabled={bulkBusy} onClick={() => void bulkDecide('approve')}><Check size={13} /> Approve {selected.size}</Button>
+              <Button className="button reject compact" disabled={bulkBusy} onClick={() => void bulkDecide('reject')}><X size={13} /> Skip {selected.size}</Button>
+              <Button className="text-button" onClick={() => setSelected(new Set())}>Clear</Button>
             </div>
           )}
 
@@ -554,7 +555,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
               <AlertCircle size={22} />
               <strong>We could not load your recommendations</strong>
               <p>{loadError ?? 'We could not reach the server just now.'}</p>
-              <button className="button primary" onClick={() => void load()}><RefreshCw size={14} /> Retry</button>
+              <Button className="button primary" onClick={() => void load()}><RefreshCw size={14} /> Retry</Button>
             </div>
           )}
           {phase === 'ready' && visibleItems.length === 0 && (
@@ -564,7 +565,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                 : usage.used > 0
                   ? <AllClearState summary={summary} onAnalyze={() => void runAnalysis()} analyzing={analyzing} />
                   : <FirstRunState onAnalyze={() => void runAnalysis()} analyzing={analyzing} onHow={() => setHowItWorksOpen(true)} onInspectRule={(rule) => setRuleModal(rule)} hasRun={lastAnalyzedAt !== null} />)
-              : <RecsEmptyCard icon={Search} title={statusTab === 'ALL' ? 'Nothing matches these filters' : `No ${statusTabLabel(statusTab).toLowerCase()} recommendations yet`} description="Try another tab, a different teammate, or clear the search and dates." action={<button className="button secondary" onClick={() => { setStatusTab('ALL'); setAgentFilter(null); setQuery(''); setDateFrom(''); setDateTo('') }}>Clear filters</button>} />
+              : <RecsEmptyCard icon={Search} title={statusTab === 'ALL' ? 'Nothing matches these filters' : `No ${statusTabLabel(statusTab).toLowerCase()} recommendations yet`} description="Try another tab, a different teammate, or clear the search and dates." action={<Button className="button secondary" onClick={() => { setStatusTab('ALL'); setAgentFilter(null); setQuery(''); setDateFrom(''); setDateTo('') }}>Clear filters</Button>} />
           )}
           {phase === 'ready' && visibleItems.length > 0 && (
             <div className="recs-list">
@@ -590,7 +591,7 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                   ))}
                 </div>
               ))}
-              {hasMore && <button className="button secondary recs-load-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? <RefreshCw size={14} className="spin" /> : <ChevronDown size={14} />} Load more ({total - items.length} remaining)</button>}
+              {hasMore && <Button className="button secondary recs-load-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? <RefreshCw size={14} className="spin" /> : <ChevronDown size={14} />} Load more ({total - items.length} remaining)</Button>}
             </div>
           )}
           </section>
@@ -746,7 +747,7 @@ function KpiHero({ summary, usage, plan, onUpgrade }: { summary: RecommendationS
             {usage.atLimit && <small className="recs-usage-limit-message">Come back next month or Upgrade Plan</small>}
           </div>
         </div>
-        {usage.limit !== null && <button className="text-button recs-upgrade-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></button>}
+        {usage.limit !== null && <Button className="text-button recs-upgrade-link" onClick={onUpgrade}>Upgrade Plan <ArrowUpRight size={12} /></Button>}
       </div>
     </div>
   )
@@ -942,18 +943,18 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
         <span className="recs-impact-label">{impactLabelText(recommendation.impactLabel)}</span>
         <strong className="recs-impact-value">{formatImpact(recommendation.impactValue, recommendation.currency)}</strong>
         <span className="recs-impact-bar" aria-hidden><i style={{ width: `${impactRatio(recommendation.impactValue, maxImpact) * 100}%` }} /></span>
-        <button className="text-button recs-evidence-link" onClick={onEvidence}><Eye size={14} /> View Full Details</button>
+        <Button className="text-button recs-evidence-link" onClick={onEvidence}><Eye size={14} /> View Full Details</Button>
         {pending ? (
           <div className="recs-card-actions">
-            <button className="button reject compact" onClick={onReject} disabled={busy}><X size={13} /> {busy ? 'Saving…' : 'Skip This'}</button>
-            <button className="button approve compact" onClick={onApprove} disabled={busy}><Check size={13} /> {busy ? 'Saving…' : highRisk ? 'Review & Approve' : 'Approve & Take Action'}</button>
+            <Button className="button reject compact" onClick={onReject} disabled={busy}><X size={13} /> {busy ? 'Saving…' : 'Skip This'}</Button>
+            <Button className="button approve compact" onClick={onApprove} disabled={busy}><Check size={13} /> {busy ? 'Saving…' : highRisk ? 'Review & Approve' : 'Approve & Take Action'}</Button>
             <div className="recs-card-menu-wrap">
-              <button className="icon-button compact" aria-label="More actions" onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={14} /></button>
+              <Button className="icon-button compact" aria-label="More actions" onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal size={14} /></Button>
               {menuOpen && (
                 <div className="recs-card-menu" onMouseLeave={() => setMenuOpen(false)}>
-                  <button onClick={() => { setMenuOpen(false); onSnooze(1) }}><Clock3 size={13} /> Remind me in 1 hour</button>
-                  <button onClick={() => { setMenuOpen(false); onSnooze(24) }}><Clock3 size={13} /> Remind me tomorrow</button>
-                  <button onClick={() => { setMenuOpen(false); onCopyLink() }}><Copy size={13} /> Copy link</button>
+                  <Button onClick={() => { setMenuOpen(false); onSnooze(1) }}><Clock3 size={13} /> Remind me in 1 hour</Button>
+                  <Button onClick={() => { setMenuOpen(false); onSnooze(24) }}><Clock3 size={13} /> Remind me tomorrow</Button>
+                  <Button onClick={() => { setMenuOpen(false); onCopyLink() }}><Copy size={13} /> Copy link</Button>
                 </div>
               )}
             </div>
@@ -966,7 +967,7 @@ function RecommendationCard({ recommendation, maxImpact, selected, onSelect, onE
             {recommendation.status === 'FAILED' && <><AlertCircle size={14} /> Could not finish</>}
             {recommendation.status === 'EXPIRED' && <><Clock3 size={14} /> Expired</>}
             {decisionDelay && <small>{decisionDelay}</small>}
-            {undoAvailable && <button className="text-button" onClick={onUndo}><RotateCcw size={13} /> Undo</button>}
+            {undoAvailable && <Button className="text-button" onClick={onUndo}><RotateCcw size={13} /> Undo</Button>}
           </div>
         )}
       </div>
@@ -1027,14 +1028,14 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
   }
   return (
     <>
-      <button className="drawer-backdrop" onClick={onClose} aria-label="Close evidence drawer" />
+      <Button className="drawer-backdrop" onClick={onClose} aria-label="Close evidence drawer" />
       <aside className="evidence-drawer recs-drawer" role="dialog" aria-label="Recommendation evidence">
         <div className="drawer-header">
           <div>
             <span className="drawer-kicker"><ShieldCheck size={13} /> WHY WE ARE TELLING YOU</span>
             <h2>{recommendation.title}</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <Button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></Button>
         </div>
         <div className="drawer-scroll">
           <div className="drawer-hero recs-drawer-hero">
@@ -1054,7 +1055,7 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
                       <strong>{field.label}: {String(field.value ?? '—')}</strong>
                       <small className="mono">{field.source}</small>
                     </div>
-                    <button className="icon-button compact" onClick={() => copy(field.key, `${field.label}: ${String(field.value ?? '—')} (${field.source})`)} aria-label={`Copy ${field.label}`}>{copied === field.key ? <Check size={13} /> : <Copy size={13} />}</button>
+                    <Button className="icon-button compact" onClick={() => copy(field.key, `${field.label}: ${String(field.value ?? '—')} (${field.source})`)} aria-label={`Copy ${field.label}`}>{copied === field.key ? <Check size={13} /> : <Copy size={13} />}</Button>
                   </div>
                 ))}
               </div>
@@ -1071,10 +1072,10 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
               {verification?.verified === false && <span className="recs-verify-status bad"><AlertTriangle size={13} /> Verification incomplete — this pack predates field-level sealing</span>}
               {verifyFailed && <span className="recs-verify-status bad"><AlertTriangle size={13} /> Verification service unavailable right now</span>}
               {sha && (
-                <button className="recs-hash" onClick={() => copy('sha', sha)} title="Copy full SHA-256">
+                <Button className="recs-hash" onClick={() => copy('sha', sha)} title="Copy full SHA-256">
                   <span className="mono">SHA-256: {sha.slice(0, 18)}…</span>
                   {copied === 'sha' ? <Check size={12} /> : <Copy size={12} />}
-                </button>
+                </Button>
               )}
               <small>Generated {new Date(generatedAt).toLocaleString()}{typeof recommendation.evidencePack.ruleVersion === 'string' ? ` · Rule ${ruleLabel(recommendation.ruleId)} v${recommendation.evidencePack.ruleVersion}` : ''}</small>
             </div>
@@ -1114,7 +1115,7 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
             </div>
           </div>
         </div>
-        <div className="drawer-footer"><button className="button secondary" onClick={onClose}>Close</button></div>
+        <div className="drawer-footer"><Button className="button secondary" onClick={onClose}>Close</Button></div>
       </aside>
     </>
   )
@@ -1137,8 +1138,8 @@ function ApproveConfirmSheet({ recommendation, onCancel, onConfirm }: { recommen
           {recommendation.entityKey && <span><Database size={13} /> Applies to {entityChipLabel(recommendation).toLowerCase()}</span>}
         </div>
         <div className="modal-actions">
-          <button className="button secondary" onClick={onCancel}>Cancel</button>
-          <button className="button approve" onClick={onConfirm}><Check size={14} /> Confirm & Approve</button>
+          <Button className="button secondary" onClick={onCancel}>Cancel</Button>
+          <Button className="button approve" onClick={onConfirm}><Check size={14} /> Confirm & Approve</Button>
         </div>
       </div>
     </div>
@@ -1155,13 +1156,13 @@ function RejectReasonSheet({ recommendation, onCancel, onReject }: { recommendat
         <p className="recs-confirm-what">Telling your AI team <em>why</em> makes future recommendations better — skipping lowers a teammate's confidence until it earns your trust back.</p>
         <div className="recs-reason-chips" role="group" aria-label="Rejection reason">
           {REJECT_REASON_OPTIONS.map((option) => (
-            <button key={option} className={`recs-chip ${reason === option ? 'active' : ''}`} onClick={() => setReason((current) => (current === option ? null : option))}>{REJECT_REASON_LABELS[option]}</button>
+            <Button key={option} className={`recs-chip ${reason === option ? 'active' : ''}`} onClick={() => setReason((current) => (current === option ? null : option))}>{REJECT_REASON_LABELS[option]}</Button>
           ))}
         </div>
         <div className="modal-actions">
-          <button className="button secondary" onClick={onCancel}>Cancel</button>
-          <button className="text-button" onClick={() => onReject(null)}>Reject without reason</button>
-          <button className="button reject" disabled={reason === null} onClick={() => onReject(reason)}><X size={14} /> Reject</button>
+          <Button className="button secondary" onClick={onCancel}>Cancel</Button>
+          <Button className="text-button" onClick={() => onReject(null)}>Reject without reason</Button>
+          <Button className="button reject" disabled={reason === null} onClick={() => onReject(reason)}><X size={14} /> Reject</Button>
         </div>
       </div>
     </div>
@@ -1181,8 +1182,8 @@ function UndoSnackbar({ undo, onUndo, onDismiss }: { undo: UndoState; onUndo: ()
   return (
     <div className="recs-undo-snackbar" role="status">
       <span>{undo.decision === 'approved' ? <CheckCircle2 size={14} /> : <XCircle size={14} />} Recommendation {undo.decision}.</span>
-      <button className="button secondary compact" onClick={onUndo}><RotateCcw size={13} /> Undo ({secondsLeft}s)</button>
-      <button className="icon-button compact" onClick={onDismiss} aria-label="Dismiss"><X size={13} /></button>
+      <Button className="button secondary compact" onClick={onUndo}><RotateCcw size={13} /> Undo ({secondsLeft}s)</Button>
+      <Button className="icon-button compact" onClick={onDismiss} aria-label="Dismiss"><X size={13} /></Button>
     </div>
   )
 }
@@ -1212,15 +1213,15 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
             const pending = byAgent.get(agent)?.pending ?? 0
             if (locked) {
               return (
-                <button key={agent} className="recs-agent-row locked" onClick={onUpgrade} title={`${agentLabel(agent)} unlocks on a higher plan. ${AGENT_DESCRIPTIONS[agent]}`}>
+                <Button key={agent} className="recs-agent-row locked" onClick={onUpgrade} title={`${agentLabel(agent)} unlocks on a higher plan. ${AGENT_DESCRIPTIONS[agent]}`}>
                   <span className="recs-agent-row-icon"><LockKeyhole size={13} /></span>
                   <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
                   <span className="recs-agent-row-plan">{PLAN_LABELS[planRequiredForAgent(agent)]}</span>
-                </button>
+                </Button>
               )
             }
             return (
-              <button key={agent} className="recs-agent-row" onClick={() => onFilterAgent(agent)} title={`${AGENT_DESCRIPTIONS[agent]} — click to see only ${agentLabel(agent)}.`}>
+              <Button key={agent} className="recs-agent-row" onClick={() => onFilterAgent(agent)} title={`${AGENT_DESCRIPTIONS[agent]} — click to see only ${agentLabel(agent)}.`}>
                 <span className="recs-agent-row-icon" style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }}>
                   <Icon size={13} />
                   <i className={`recs-live-dot ${pending > 0 ? 'on' : ''}`} aria-hidden />
@@ -1228,7 +1229,7 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
                 <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
                 <span className="recs-agent-row-count">{pending}<small>waiting</small></span>
                 <span className="recs-agent-row-bar" aria-hidden><i style={{ width: `${maxPending > 0 ? Math.max(0, (pending / maxPending) * 100) : 0}%`, background: AGENT_COLORS[agent] }} /></span>
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -1258,21 +1259,21 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
         {summary.byRule.length > 0 ? (
           <div className="recs-rule-list">
             {summary.byRule.slice(0, 5).map((entry) => (
-              <button key={entry.ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(entry.ruleId)} title={`${RULE_DESCRIPTIONS[entry.ruleId]} — click to learn more.`}>
+              <Button key={entry.ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(entry.ruleId)} title={`${RULE_DESCRIPTIONS[entry.ruleId]} — click to learn more.`}>
                 <span>{RULE_EMOJIS[entry.ruleId]} {ruleLabel(entry.ruleId)}</span>
                 <span className="recs-rule-row-share" aria-hidden><i style={{ width: `${maxRuleTotal > 0 ? Math.max(6, (entry.total / maxRuleTotal) * 100) : 0}%` }} /></span>
                 <strong>{entry.total}</strong>
-              </button>
+              </Button>
             ))}
           </div>
         ) : (
           <>
             <div className="recs-rule-list">
               {RULE_ORDER.map((ruleId) => (
-                <button key={ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click to learn more.`}>
+                <Button key={ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click to learn more.`}>
                   <span>{RULE_EMOJIS[ruleId]} {RULE_LABELS[ruleId]}</span>
                   <strong>0</strong>
-                </button>
+                </Button>
               ))}
             </div>
             <p className="recs-side-empty">We alert you when something important happens — each trigger shows up here.</p>
@@ -1389,7 +1390,7 @@ function SampleActivityChart() {
       </div>
       <div className="recs-trend-axis-labels"><span>30 days ago</span><span>today</span></div>
       <p className="recs-side-empty">Your timeline fills in as your AI team works — generated vs approved, day by day.</p>
-      <button className="text-button" onClick={() => setShowSample((value) => !value)}>{showSample ? 'Hide sample' : 'See sample activity'}</button>
+      <Button className="text-button" onClick={() => setShowSample((value) => !value)}>{showSample ? 'Hide sample' : 'See sample activity'}</Button>
     </div>
   )
 }
@@ -1406,8 +1407,8 @@ function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: {
         <h2>{hasRun ? 'Time to see what your AI team found for you' : "Let's find your growth opportunities! 🚀"}</h2>
         <p>Your smart AI assistants are ready to explore your store and find real opportunities to boost your revenue, retain customers, and grow your business. Just click below to get started!</p>
         <div className="recs-first-actions">
-          <button className="button primary recs-cta-primary recs-discover" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={16} className="spin" /> : <Sparkles size={16} />} {analyzing ? 'Discovering opportunities…' : 'Discover Opportunities'}</button>
-          <button className="button secondary" onClick={onHow}><Info size={14} /> How it works</button>
+          <Button className="button primary recs-cta-primary recs-discover" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={16} className="spin" /> : <Sparkles size={16} />} {analyzing ? 'Discovering opportunities…' : 'Discover Opportunities'}</Button>
+          <Button className="button secondary" onClick={onHow}><Info size={14} /> How it works</Button>
         </div>
       </div>
 
@@ -1431,12 +1432,12 @@ function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: {
       <div className="recs-rule-grid">
         {RULE_ORDER.map((ruleId) => {
           return (
-            <button className="recs-rule-card" key={ruleId} onClick={() => onInspectRule(ruleId)} title={`${RULE_TAGLINES[ruleId]} — tap to see how this works.`}>
+            <Button className="recs-rule-card" key={ruleId} onClick={() => onInspectRule(ruleId)} title={`${RULE_TAGLINES[ruleId]} — tap to see how this works.`}>
               <span className="recs-rule-card-head"><span className="recs-rule-card-icon">{RULE_EMOJIS[ruleId]}</span><strong>{RULE_LABELS[ruleId]}</strong></span>
               <p className="recs-rule-card-tagline">{RULE_TAGLINES[ruleId]}</p>
               <p>{RULE_DESCRIPTIONS[ruleId]}</p>
               <span className="recs-rule-card-uses"><Database size={12} /> Analyzes: {RULE_DATA_SOURCES[ruleId]}</span>
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -1516,10 +1517,10 @@ function SampleRecommendationPreview() {
           <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
           <span className="recs-sample-actions">
             <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button reject compact" disabled tabIndex={-1} aria-label="Skip This — preview only, action unavailable">Skip This</button>
+              <Button className="button reject compact" disabled tabIndex={-1} aria-label="Skip This — preview only, action unavailable">Skip This</Button>
             </span>
             <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <button className="button approve compact" disabled tabIndex={-1} aria-label="Approve — preview only, action unavailable"><Check size={13} /> Approve & Take Action</button>
+              <Button className="button approve compact" disabled tabIndex={-1} aria-label="Approve — preview only, action unavailable"><Check size={13} /> Approve & Take Action</Button>
             </span>
           </span>
         </div>
@@ -1542,7 +1543,7 @@ function AllClearState({ summary, onAnalyze, analyzing }: { summary: Recommendat
         ))}
       </div>
       <div className="recs-all-clear-actions">
-        <button className="button secondary compact recs-discover" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />} Discover Opportunities</button>
+        <Button className="button secondary compact recs-discover" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />} Discover Opportunities</Button>
         {summary.usage.used !== null && summary.usage.used > 0 && <small>{summary.usage.used} recommendation{summary.usage.used === 1 ? '' : 's'} generated this month across earlier runs.</small>}
       </div>
     </div>
@@ -1560,7 +1561,7 @@ function RuleDetailModal({ ruleId, plan, onClose, onUpgrade }: { ruleId: RuleId;
       <div className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
         <div className="modal-card-top">
           <span className="recs-rule-modal-icon"><Icon size={17} /></span>
-          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <Button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></Button>
         </div>
         <div className="section-kicker"><Layers size={13} /> SMART TRIGGER</div>
         <h2>{RULE_EMOJIS[ruleId]} {RULE_LABELS[ruleId]}</h2>
@@ -1574,8 +1575,8 @@ function RuleDetailModal({ ruleId, plan, onClose, onUpgrade }: { ruleId: RuleId;
         </div>
         <div className="modal-actions">
           {locked
-            ? <><button className="button secondary" onClick={onClose}>Close</button><button className="button primary" onClick={onUpgrade}><LockKeyhole size={13} /> Upgrade Plan</button></>
-            : <button className="button primary" onClick={onClose}>Got it</button>}
+            ? <><Button className="button secondary" onClick={onClose}>Close</Button><Button className="button primary" onClick={onUpgrade}><LockKeyhole size={13} /> Upgrade Plan</Button></>
+            : <Button className="button primary" onClick={onClose}>Got it</Button>}
         </div>
       </div>
     </div>
@@ -1614,7 +1615,7 @@ function AnalysisProgressModal({ step, elapsedMs, onHide }: { step: number; elap
         </ol>
         <div className="recs-analysis-foot">
           <span>Most runs finish in seconds. You can keep browsing — the results will land on this page.</span>
-          <button className="button secondary compact" onClick={onHide}>Keep browsing</button>
+          <Button className="button secondary compact" onClick={onHide}>Keep browsing</Button>
         </div>
       </div>
     </div>
@@ -1643,7 +1644,7 @@ function AnalysisReportPanel({ report, onDismiss, onNavigateSection, onHow, onRe
         <div className="recs-report-meta">
           <span title={new Date(report.receivedAt).toLocaleString()}><History size={12} /> Last analysis {formatRelativeTime(report.receivedAt)}</span>
           <span title="How long the run took"><Clock3 size={12} /> took {report.elapsedMs < 1000 ? 'under a second' : `${(report.elapsedMs / 1000).toFixed(1)}s`}</span>
-          <button className="icon-button compact" onClick={onDismiss} aria-label="Dismiss report" title="Dismiss"><X size={14} /></button>
+          <Button className="icon-button compact" onClick={onDismiss} aria-label="Dismiss report" title="Dismiss"><X size={14} /></Button>
         </div>
       </div>
 
@@ -1678,10 +1679,10 @@ function AnalysisReportPanel({ report, onDismiss, onNavigateSection, onHow, onRe
       {!stats?.dataFreshAt && <p className="recs-report-note"><Info size={13} /> Come back tomorrow for new insights — or tap Discover Opportunities anytime after fresh data syncs.</p>}
 
       <div className="recs-report-actions">
-        {onNavigateSection && <button className="button secondary" onClick={() => onNavigateSection('analytics')}><BarChart3 size={14} /> View analytics</button>}
-        {onNavigateSection && <button className="button secondary" onClick={() => onNavigateSection('automation')}><Workflow size={14} /> Set up automation</button>}
-        <button className="button secondary" onClick={onHow}><Info size={14} /> How it works</button>
-        <button className="button primary recs-discover" onClick={onRerun} disabled={rerunBlocked} title="Ask your AI team to look again"><Sparkles size={14} /> Discover Opportunities</button>
+        {onNavigateSection && <Button className="button secondary" onClick={() => onNavigateSection('analytics')}><BarChart3 size={14} /> View analytics</Button>}
+        {onNavigateSection && <Button className="button secondary" onClick={() => onNavigateSection('automation')}><Workflow size={14} /> Set up automation</Button>}
+        <Button className="button secondary" onClick={onHow}><Info size={14} /> How it works</Button>
+        <Button className="button primary recs-discover" onClick={onRerun} disabled={rerunBlocked} title="Ask your AI team to look again"><Sparkles size={14} /> Discover Opportunities</Button>
       </div>
     </section>
   )
@@ -1742,7 +1743,7 @@ function HowItWorksModal({ onClose }: { onClose: () => void }) {
             <div className="section-kicker"><ShieldCheck size={13} /> HOW RECOMMENDATIONS WORK</div>
             <h2>Real numbers. Friendly words. Your decision.</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <Button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></Button>
         </div>
         <div className="recs-how-scroll">
           <section>
@@ -1777,7 +1778,7 @@ function HowItWorksModal({ onClose }: { onClose: () => void }) {
             <p><strong>What counts against my monthly limit?</strong> Only newly generated recommendations. Reviewing, approving, or rejecting existing ones is always free.</p>
           </section>
         </div>
-        <div className="modal-actions"><button className="button primary" onClick={onClose}>Got it</button></div>
+        <div className="modal-actions"><Button className="button primary" onClick={onClose}>Got it</Button></div>
       </div>
     </div>
   )

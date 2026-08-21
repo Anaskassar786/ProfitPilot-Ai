@@ -7,8 +7,8 @@ describe('Settings professional theme contracts', () => {
   it('ships a dedicated light surface matching the merchant spec', () => {
     expect(css).toContain('.app-shell.light-mode .settings-nav')
     expect(css).toContain('.app-shell.light-mode .settings-panel')
-    expect(css).toContain('background: #FFFFFF')
-    expect(css).toContain('color: #111827')
+    expect(css).toContain('background: rgb(255, 255, 255)')
+    expect(css).toContain('color: rgb(17, 24, 39)')
     expect(css).toContain('.app-shell.light-mode .setting-input')
     expect(css).toContain('.app-shell.light-mode .settings-toggle')
     expect(css).toContain('.app-shell.light-mode .settings-nav-item.active')

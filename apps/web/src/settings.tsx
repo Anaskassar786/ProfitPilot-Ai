@@ -5,6 +5,8 @@
  * Every control either writes to a real API, persists locally for this store,
  * or is honestly plan-gated. Nothing is decorative.
  */
+import { Button, AppSaveBar } from './polaris-ui.js'
+import { Checkbox, Page } from '@shopify/polaris'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -26,8 +28,8 @@ import {
   Trash2,
   Users,
   Settings as SettingsIcon,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from './icons.js'
+import type { LucideIcon } from './icons.js'
 import {
   ApiClientError,
   exportRows,
@@ -123,9 +125,21 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
     return () => { cancelled = true }
   }, [context.storeId])
 
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(readWorkspaceSettings(context.storeId, defaultWorkspaceSettings(lightMode))))
   const persist = (next: WorkspaceSettings) => {
     setSettings(next)
     writeWorkspaceSettings(context.storeId, next)
+  }
+  const dirty = JSON.stringify(settings) !== savedSnapshot
+  const saveAll = async () => {
+    await persistWorkspaceSettings(context.storeId, settings)
+    setSavedSnapshot(JSON.stringify(settings))
+    onToast('Settings saved.', 'success')
+  }
+  const discardAll = () => {
+    const next = readWorkspaceSettings(context.storeId, defaultWorkspaceSettings(lightMode))
+    setSettings(next)
+    setSavedSnapshot(JSON.stringify(next))
   }
 
   const goBilling = () => {
@@ -134,20 +148,15 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
   }
 
   return (
+    <Page title="Settings" subtitle="Manage your store preferences, notifications, and account.">
+      <AppSaveBar open={dirty} onSave={() => { void saveAll() }} onDiscard={discardAll} />
     <div className="page-content settings-page" data-settings-tab={tab}>
-      <div className="page-header">
-        <div>
-          <div className="page-eyebrow"><SettingsIcon size={12} /> Settings</div>
-          <h1>Settings</h1>
-          <p>Manage your store preferences, notifications, and account.</p>
-        </div>
-      </div>
       <div className="settings-layout">
         <aside className="settings-nav card" aria-label="Settings sections">
           {SETTINGS_TABS.map((item) => {
             const Icon = tabIcon(item.id)
             return (
-              <button
+              <Button
                 key={item.id}
                 type="button"
                 className={`settings-nav-item ${tab === item.id ? 'active' : ''} ${item.danger ? 'danger' : ''}`}
@@ -155,7 +164,7 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
                 onClick={() => setTab(item.id)}
               >
                 <Icon size={16} /> {item.label}
-              </button>
+              </Button>
             )
           })}
         </aside>
@@ -205,6 +214,7 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
         </div>
       </div>
     </div>
+    </Page>
   )
 }
 
@@ -312,7 +322,7 @@ function GeneralTab({
       <SettingsPanel icon={Store} title="Store information" description="This information is read from your Shopify connection and cannot be changed here.">
         <SettingRow label="Shopify store" description="Opens your Shopify admin in a new tab">
           {adminUrl && context.shop
-            ? <a className="setting-store-link" href={adminUrl} target="_blank" rel="noopener noreferrer">{context.shop} <ExternalLink size={13} /></a>
+            ? <a className="setting-store-link" href={adminUrl}>{context.shop}</a>
             : <span className="setting-readonly">{context.shop ?? 'Not connected'}</span>}
         </SettingRow>
         {context.storeId && (
@@ -331,13 +341,13 @@ function GeneralTab({
         </SettingRow>
         <div className="email-verification-row">
           <span className={`status-badge ${badge.tone}`}>{verified ? <><Check size={11} /> {badge.label}</> : badge.label}</span>
-          <button type="button" className="button secondary" onClick={() => void saveEmail()} disabled={!email || !fromName || savingEmail}>
+          <Button type="button" className="button secondary" onClick={() => void saveEmail()} disabled={!email || !fromName || savingEmail}>
             {savingEmail ? 'Saving…' : 'Save and verify'}
-          </button>
+          </Button>
           {verificationToken && !verified && (
-            <button type="button" className="button primary" onClick={() => void confirmVerification()} disabled={savingEmail}>
+            <Button type="button" className="button primary" onClick={() => void confirmVerification()} disabled={savingEmail}>
               Confirm verification
-            </button>
+            </Button>
           )}
         </div>
         {!verified && email && (
@@ -348,8 +358,8 @@ function GeneralTab({
       <SettingsPanel icon={Palette} title="Appearance" description="Choose your preferred visual theme and motion.">
         <SettingRow label="Theme" description="Choose your preferred visual theme.">
           <div className="theme-choice" role="group" aria-label="Theme">
-            <button type="button" className={!lightMode ? 'selected' : ''} onClick={() => lightMode && onTheme()}><Moon size={15} /> Dark</button>
-            <button type="button" className={lightMode ? 'selected' : ''} onClick={() => !lightMode && onTheme()}><Sun size={15} /> Light</button>
+            <Button type="button" className={!lightMode ? 'selected' : ''} onClick={() => lightMode && onTheme()}><Moon size={15} /> Dark</Button>
+            <Button type="button" className={lightMode ? 'selected' : ''} onClick={() => !lightMode && onTheme()}><Sun size={15} /> Light</Button>
           </div>
         </SettingRow>
         <SettingRow label="Reduced motion" description="Reduces animations for accessibility.">
@@ -363,9 +373,9 @@ function GeneralTab({
 
       <div className="settings-save">
         <span><ShieldCheck size={15} /> Preferences stay on this device and sync when the API is available.</span>
-        <button type="button" className="button primary" onClick={() => void savePreferences()} disabled={savingPrefs}>
+        <Button type="button" className="button primary" onClick={() => void savePreferences()} disabled={savingPrefs}>
           {savingPrefs ? 'Saving…' : 'Save preferences'}
-        </button>
+        </Button>
       </div>
     </>
   )
@@ -416,9 +426,9 @@ function NotificationsTab({
       </SettingsPanel>
       <div className="settings-save">
         <span><Bell size={15} /> Changes apply on this device immediately and save when you confirm.</span>
-        <button type="button" className="button primary" onClick={() => void save()} disabled={saving}>
+        <Button type="button" className="button primary" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save notification preferences'}
-        </button>
+        </Button>
       </div>
     </>
   )
@@ -516,7 +526,7 @@ function AiPreferencesTab({
       <SettingsPanel icon={Bot} title="AI assistant mode" description="Configure how the floating assistant behaves across the workspace.">
         <div className="settings-choice-stack" role="radiogroup" aria-label="AI assistant mode">
           {modes.map((mode) => (
-            <button
+            <Button
               key={mode.id}
               type="button"
               className={`settings-choice ${settings.assistantMode === mode.id ? 'selected' : ''}`}
@@ -526,7 +536,7 @@ function AiPreferencesTab({
             >
               <i />
               <span><strong>{mode.label}</strong><small>{mode.hint}</small></span>
-            </button>
+            </Button>
           ))}
         </div>
       </SettingsPanel>
@@ -569,7 +579,7 @@ function AiPreferencesTab({
             const locked = !allowedPersonalities.includes(item)
             const meta = PERSONALITY_META[item]
             return (
-              <button
+              <Button
                 key={item}
                 type="button"
                 className={personality === item ? 'selected' : ''}
@@ -581,7 +591,7 @@ function AiPreferencesTab({
               >
                 <strong>{meta.emoji} {meta.label}{locked ? ' · Upgrade Plan' : ''}</strong>
                 <small>{meta.tagline}</small>
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -615,9 +625,9 @@ function AiPreferencesTab({
 
       <div className="settings-save">
         <span><Bot size={15} /> Assistant, coach, and command preferences save together.</span>
-        <button type="button" className="button primary" onClick={() => void save()} disabled={saving}>
+        <Button type="button" className="button primary" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save AI preferences'}
-        </button>
+        </Button>
       </div>
     </>
   )
@@ -644,16 +654,11 @@ function TeamTab({ context, plan, onUpgrade }: { context: WorkspaceContext; plan
           <p>Team access is scoped to a connected Shopify store.</p>
         </div>
       )}
-      <div className="settings-empty">
-        <Lock size={18} />
-        <strong>Coming soon</strong>
-        <p>Team management will let you invite staff members with specific roles and permissions. Available on Growth and Commander plans.</p>
-      </div>
-      <div className="settings-actions-row">
-        {canInvite
-          ? <button type="button" className="button secondary" disabled title="Invites are not available yet">+ Invite team member</button>
-          : <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
-      </div>
+      {!canInvite && (
+        <div className="settings-actions-row">
+          <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
+        </div>
+      )}
     </SettingsPanel>
   )
 }
@@ -738,12 +743,12 @@ function SecurityTab({
           <li><CheckCircle2 size={14} /> All AI responses are grounded in your synced store data.</li>
         </ul>
         <div className="settings-actions-row">
-          <button type="button" className="button secondary" onClick={() => void download('audit')} disabled={exporting !== null}>
+          <Button type="button" className="button secondary" onClick={() => void download('audit')} disabled={exporting !== null}>
             <Download size={14} /> {exporting === 'audit' ? 'Preparing…' : 'View full audit log'}
-          </button>
-          <button type="button" className="button secondary" onClick={() => void download('orders')} disabled={exporting !== null}>
+          </Button>
+          <Button type="button" className="button secondary" onClick={() => void download('orders')} disabled={exporting !== null}>
             <Download size={14} /> {exporting === 'orders' ? 'Preparing…' : 'Download data export'}
-          </button>
+          </Button>
         </div>
       </SettingsPanel>
     </>
@@ -805,7 +810,7 @@ function DangerTab({
             <strong>Clear AI data</strong>
             <p>This does not delete products, orders, or customers from Shopify.</p>
           </div>
-          <button type="button" className="button danger" onClick={() => setClearOpen(true)}>Clear AI data</button>
+          <Button type="button" className="button danger" onClick={() => setClearOpen(true)}>Clear AI data</Button>
         </div>
       </SettingsPanel>
       <SettingsPanel icon={AlertTriangle} tone="red" title="Disconnect store" description="Remove ProfitPilot from your Shopify store. All synced data will be deleted after uninstall.">
@@ -814,7 +819,7 @@ function DangerTab({
             <strong>Disconnect</strong>
             <p>You will confirm by typing your store domain, then continue in Shopify admin.</p>
           </div>
-          <button type="button" className="button danger" onClick={() => { setTyped(''); setDisconnectOpen(true) }} disabled={!context.shop}>Disconnect</button>
+          <Button type="button" className="button danger" onClick={() => { setTyped(''); setDisconnectOpen(true) }} disabled={!context.shop}>Disconnect</Button>
         </div>
       </SettingsPanel>
 
@@ -884,7 +889,7 @@ function ToggleRow({ label, hint, on, onChange }: { label: string; hint: string;
 
 export function SettingsToggle({ label, on, onChange }: { label: string; on: boolean; onChange: (value: boolean) => void }) {
   return (
-    <button
+    <Button
       type="button"
       className={`settings-toggle ${on ? 'on' : ''}`}
       role="switch"
@@ -893,7 +898,7 @@ export function SettingsToggle({ label, on, onChange }: { label: string; on: boo
       onClick={() => onChange(!on)}
     >
       <span />
-    </button>
+    </Button>
   )
 }
 
@@ -924,8 +929,8 @@ function ConfirmModal({
         <p>{body}</p>
         {children}
         <div className="modal-actions">
-          <button type="button" className="button secondary" onClick={onCancel}>Cancel</button>
-          <button type="button" className={`button ${danger ? 'danger' : 'primary'}`} onClick={onConfirm} disabled={disabled}>{confirmLabel}</button>
+          <Button type="button" className="button secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" className={`button ${danger ? 'danger' : 'primary'}`} onClick={onConfirm} disabled={disabled}>{confirmLabel}</Button>
         </div>
       </div>
     </div>

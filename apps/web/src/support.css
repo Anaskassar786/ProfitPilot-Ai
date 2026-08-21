@@ -3,8 +3,8 @@
    ─────────────────────────────────────────────────────────────────────
    Scoped to `.support-workspace` — no global tokens are touched.
 
-   · Dark (default) — deep space wash, layered #161922 cards, blue accents.
-   · Light          — #F8FAFC canvas, pure white cards with #E2E8F0 borders
+   · Dark (default) — deep space wash, layered rgb(22, 25, 34) cards, blue accents.
+   · Light          — rgb(248, 250, 252) canvas, pure white cards with rgb(226, 232, 240) borders
                        and soft shadows, strong status colors, prominent
                        buttons (the PR's light-theme spec).
    Rules honored: nothing smaller than 12px, 12px card radius, 18–24px
@@ -13,29 +13,29 @@
 
 .support-workspace {
   /* accents */
-  --s-blue: #7CB0F8;
-  --s-blue-strong: #A5C8FF;
+  --s-blue: rgb(124, 176, 248);
+  --s-blue-strong: rgb(165, 200, 255);
   --s-blue-soft: rgba(88, 140, 240, 0.14);
-  --s-green: #34D399;
-  --s-green-strong: #6EE7B7;
+  --s-green: rgb(52, 211, 153);
+  --s-green-strong: rgb(110, 231, 183);
   --s-green-soft: rgba(52, 211, 153, 0.13);
-  --s-amber: #FBBF24;
-  --s-amber-strong: #FCD34D;
+  --s-amber: rgb(251, 191, 36);
+  --s-amber-strong: rgb(252, 211, 77);
   --s-amber-soft: rgba(251, 191, 36, 0.13);
-  --s-purple: #A78BFA;
+  --s-purple: rgb(167, 139, 250);
   --s-purple-soft: rgba(167, 139, 250, 0.14);
-  --s-gold: #FBBF24;
+  --s-gold: rgb(251, 191, 36);
   --s-gold-soft: rgba(251, 191, 36, 0.13);
   /* surfaces */
-  --s-card: #161922;
-  --s-card-raised: #1B1F2B;
-  --s-card-inset: #12151D;
-  --s-border: #262B38;
-  --s-border-strong: #333A4B;
+  --s-card: rgb(22, 25, 34);
+  --s-card-raised: rgb(27, 31, 43);
+  --s-card-inset: rgb(18, 21, 29);
+  --s-border: rgb(38, 43, 56);
+  --s-border-strong: rgb(51, 58, 75);
   /* text */
-  --s-text: #F4F6FB;
-  --s-text-2: #A9B2C7;
-  --s-text-3: #7C879E;
+  --s-text: rgb(244, 246, 251);
+  --s-text-2: rgb(169, 178, 199);
+  --s-text-3: rgb(124, 135, 158);
   /* effects */
   --s-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --s-shadow-lift: 0 14px 34px rgba(0, 0, 0, 0.38);
@@ -107,14 +107,14 @@
 }
 
 .support-button.primary {
-  color: #FFFFFF;
+  color: rgb(255, 255, 255);
   border: 1px solid rgba(96, 143, 255, 0.6);
-  background: linear-gradient(135deg, #2A66D9, #4E6DE3);
+  background: linear-gradient(135deg, rgb(42, 102, 217), rgb(78, 109, 227));
   box-shadow: 0 7px 18px rgba(47, 98, 214, 0.28);
 }
 
 .support-button.primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #3B7BF0, #6578EA);
+  background: linear-gradient(135deg, rgb(59, 123, 240), rgb(101, 120, 234));
   transform: translateY(-1px);
 }
 
@@ -261,11 +261,11 @@
   height: 100%;
   min-width: 6px;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+  background: linear-gradient(90deg, rgb(59, 130, 246), rgb(139, 92, 246));
   transition: width 300ms ease;
 }
 
-.support-usage-track > span.at-limit { background: linear-gradient(90deg, #F59E0B, #EF4444); }
+.support-usage-track > span.at-limit { background: linear-gradient(90deg, rgb(245, 158, 11), rgb(239, 68, 68)); }
 
 .support-plan-cta {
   display: flex;
@@ -1084,36 +1084,36 @@
 }
 
 /* ==========================================================================
-   LIGHT THEME — #F8FAFC canvas, white cards, strong badges (PR spec)
+   LIGHT THEME — rgb(248, 250, 252) canvas, white cards, strong badges (PR spec)
    ========================================================================== */
 
 .app-shell.light-mode .support-workspace {
-  --s-blue: #2563EB;
-  --s-blue-strong: #1D4ED8;
-  --s-blue-soft: #EFF6FF;
-  --s-green: #059669;
-  --s-green-strong: #047857;
-  --s-green-soft: #ECFDF5;
-  --s-amber: #D97706;
-  --s-amber-strong: #B45309;
-  --s-amber-soft: #FFFBEB;
-  --s-purple: #7C3AED;
-  --s-purple-soft: #F5F3FF;
-  --s-gold: #B45309;
-  --s-gold-soft: #FEF3C7;
-  --s-card: #FFFFFF;
-  --s-card-raised: #FFFFFF;
-  --s-card-inset: #F8FAFC;
-  --s-border: #E2E8F0;
-  --s-border-strong: #CBD5E1;
-  --s-text: #0F172A;
-  --s-text-2: #475569;
-  --s-text-3: #64748B;
+  --s-blue: rgb(37, 99, 235);
+  --s-blue-strong: rgb(29, 78, 216);
+  --s-blue-soft: rgb(239, 246, 255);
+  --s-green: rgb(5, 150, 105);
+  --s-green-strong: rgb(4, 120, 87);
+  --s-green-soft: rgb(236, 253, 245);
+  --s-amber: rgb(217, 119, 6);
+  --s-amber-strong: rgb(180, 83, 9);
+  --s-amber-soft: rgb(255, 251, 235);
+  --s-purple: rgb(124, 58, 237);
+  --s-purple-soft: rgb(245, 243, 255);
+  --s-gold: rgb(180, 83, 9);
+  --s-gold-soft: rgb(254, 243, 199);
+  --s-card: rgb(255, 255, 255);
+  --s-card-raised: rgb(255, 255, 255);
+  --s-card-inset: rgb(248, 250, 252);
+  --s-border: rgb(226, 232, 240);
+  --s-border-strong: rgb(203, 213, 225);
+  --s-text: rgb(15, 23, 42);
+  --s-text-2: rgb(71, 85, 105);
+  --s-text-3: rgb(100, 116, 139);
   --s-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
   --s-shadow-lift: 0 10px 25px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
   --s-hero-wash: radial-gradient(120% 150% at 0% 0%, rgba(37, 99, 235, 0.06), transparent 55%),
                   radial-gradient(90% 120% at 100% 100%, rgba(124, 58, 237, 0.04), transparent 55%);
-  background: #F8FAFC;
+  background: rgb(248, 250, 252);
 }
 
 .app-shell.light-mode .support-workspace .support-plan-card,
@@ -1121,63 +1121,63 @@
 .app-shell.light-mode .support-workspace .support-form-card,
 .app-shell.light-mode .support-workspace .support-tickets,
 .app-shell.light-mode .support-workspace .support-empty {
-  background: #FFFFFF;
-  border-color: #E2E8F0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
 }
 
 .app-shell.light-mode .support-workspace .support-faq-category,
 .app-shell.light-mode .support-workspace .support-option-card,
 .app-shell.light-mode .support-workspace .support-ticket-card {
-  background: #FFFFFF;
-  border-color: #E2E8F0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .app-shell.light-mode .support-workspace .support-faq-item,
 .app-shell.light-mode .support-workspace .support-past-item {
-  background: #F8FAFC;
-  border-color: #E2E8F0;
+  background: rgb(248, 250, 252);
+  border-color: rgb(226, 232, 240);
 }
 
 .app-shell.light-mode .support-workspace .support-past-details dl {
-  background: #FFFFFF;
-  border-color: #E2E8F0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .app-shell.light-mode .support-workspace .support-loading-bar {
-  background: linear-gradient(90deg, #F1F5F9 25%, #FFFFFF 50%, #F1F5F9 75%);
+  background: linear-gradient(90deg, rgb(241, 245, 249) 25%, rgb(255, 255, 255) 50%, rgb(241, 245, 249) 75%);
   background-size: 200% 100%;
 }
 
 .app-shell.light-mode .support-workspace .support-load-error {
-  border-color: #FCD34D;
+  border-color: rgb(252, 211, 77);
 }
 
 .app-shell.light-mode .support-workspace .support-empty-refresh {
-  color: #047857;
-  border-color: #A7F3D0;
+  color: rgb(4, 120, 87);
+  border-color: rgb(167, 243, 208);
 }
 
-.app-shell.light-mode .support-workspace .support-empty-refresh:hover { border-color: #059669; }
+.app-shell.light-mode .support-workspace .support-empty-refresh:hover { border-color: rgb(5, 150, 105); }
 
 .app-shell.light-mode .support-workspace .support-form-card {
-  border-color: #BFDBFE;
+  border-color: rgb(191, 219, 254);
 }
 
 .app-shell.light-mode .support-workspace .support-button.secondary {
-  background: #FFFFFF;
-  border-color: #CBD5E1;
-  color: #0F172A;
+  background: rgb(255, 255, 255);
+  border-color: rgb(203, 213, 225);
+  color: rgb(15, 23, 42);
 }
 
 .app-shell.light-mode .support-workspace .support-button.secondary:hover:not(:disabled) {
-  border-color: #2563EB;
+  border-color: rgb(37, 99, 235);
 }
 
 .app-shell.light-mode .support-workspace .support-ticket-details dl {
-  background: #F8FAFC;
-  border-color: #E2E8F0;
+  background: rgb(248, 250, 252);
+  border-color: rgb(226, 232, 240);
 }
 
-.app-shell.light-mode .support-workspace .support-plan-gem { color: #B45309; }
+.app-shell.light-mode .support-workspace .support-plan-gem { color: rgb(180, 83, 9); }

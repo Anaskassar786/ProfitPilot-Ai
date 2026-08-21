@@ -67,7 +67,7 @@
   gap: 6px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -92,7 +92,7 @@
   gap: 12px;
   margin-bottom: 8px;
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 .dash-chart-legend .legend-line {
   width: 14px;
@@ -170,7 +170,7 @@
   padding: 4px 8px;
   border-radius: 99px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
 }
 .growth-badge.up {
@@ -209,18 +209,18 @@
 }
 .metric-label {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .metric-growth-label {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 .metric-detail {
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 /* ─── Period Toggle ───────────────────────────────────────────────── */
@@ -235,7 +235,7 @@
   flex-shrink: 0;
 }
 .light-mode .period-toggle-group {
-  background: #F8FAFC;
+  background: rgb(248, 250, 252);
 }
 
 .period-toggle-btn {
@@ -244,7 +244,7 @@
   border-radius: 5px;
   background: transparent;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   transition: 120ms ease;
@@ -272,11 +272,11 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   background: rgba(15,17,23,.3);
-  font-size: 9px;
+  font-size: 12px;
 }
 .range-picker span {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* ─── Store Health ───────────────────────────────────────────────── */
@@ -307,7 +307,7 @@
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .health-dot {
   width: 6px;
@@ -327,7 +327,7 @@
 }
 .health-value {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .health-value.green { color: var(--green); }
 .health-value.muted { color: var(--text-tertiary); }
@@ -340,12 +340,12 @@
   margin-top: 10px;
   color: var(--blue-bright);
   background: transparent;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   transition: 120ms ease;
 }
 .dash-text-link:hover {
-  color: #BCD5FF;
+  color: rgb(188, 213, 255);
 }
 
 /* ─── AI Summary Card ────────────────────────────────────────────── */
@@ -369,7 +369,7 @@
 .ai-summary-body p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.65;
 }
 .ai-summary-body p strong {
@@ -382,7 +382,7 @@
   align-items: center;
   gap: 8px;
   color: var(--purple);
-  font-size: 9px;
+  font-size: 12px;
   padding: 16px 0;
 }
 
@@ -394,7 +394,7 @@
   padding-top: 8px;
   border-top: 1px solid var(--border-soft);
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 /* ─── Recent Orders ──────────────────────────────────────────────── */
@@ -430,12 +430,12 @@
 .order-id {
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
 }
 .order-customer {
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -450,7 +450,7 @@
 .order-amount {
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
 }
 .order-status.status-badge {
@@ -480,7 +480,7 @@
 .order-date {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 
 .orders-loading {
@@ -529,7 +529,7 @@
   color: var(--text);
   border-radius: 6px;
   background: transparent;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: -0.01em;
   text-align: center;
@@ -570,7 +570,7 @@
   text-align: center;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .04em;
 }
@@ -615,7 +615,7 @@
 .cal-day-number {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 500;
 }
 .cal-cell.other .cal-day-number {
@@ -632,11 +632,11 @@
 .cal-hover-line strong {
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .cal-hover-line > span {
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .cal-legend {
@@ -645,7 +645,7 @@
   gap: 5px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 .cal-legend-bar {
   display: flex;
@@ -672,7 +672,7 @@
 .cal-total-label {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
   letter-spacing: .07em;
   text-transform: uppercase;
 }
@@ -690,7 +690,7 @@
 }
 .cal-total-sub {
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 /* ─── Chart skeleton ────────────────────────────────────────────── */
@@ -737,10 +737,10 @@
 }
 .dash-card .empty-chart strong {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .dash-card .empty-chart span {
-  font-size: 9px;
+  font-size: 12px;
   max-width: 220px;
   line-height: 1.4;
 }
@@ -765,7 +765,7 @@
 .recharts-tooltip-custom span {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 .recharts-text {
   fill: var(--text-tertiary) !important;
@@ -773,7 +773,7 @@
 
 .pie-legend-text {
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 /* ─── Sparse-data affordances ────────────────────────────────────── */
@@ -785,7 +785,7 @@
   margin-top: 4px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 .empty-bar-swatch {
   width: 9px;
@@ -823,7 +823,7 @@
 .single-category-ring span {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -841,7 +841,7 @@
 }
 .single-category-note {
   color: var(--text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .orders-list.sparse {
@@ -872,12 +872,12 @@
   gap: 2px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .order-row-detail em {
   color: var(--text-tertiary);
   font-family: var(--font-sans);
-  font-size: 7px;
+  font-size: 12px;
   font-style: normal;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -894,7 +894,7 @@
   border: 1px dashed rgba(59,130,246,.32);
   border-radius: 8px;
   background: rgba(59,130,246,.05);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   transition: 120ms ease;
 }
@@ -963,7 +963,7 @@
     max-height: none;
   }
   .cal-day-number {
-    font-size: 8px;
+    font-size: 12px;
   }
   .calendar-card-compact {
     padding: 14px 15px;
@@ -975,7 +975,7 @@
     flex-wrap: wrap;
   }
   .period-toggle-btn {
-    font-size: 7px;
+    font-size: 12px;
     padding: 4px 6px;
   }
   .order-row {
@@ -994,13 +994,13 @@
 .three-col-row > .dash-card { padding: 20px 22px !important; }
 .dash-card-header { margin-bottom: 18px !important; gap: 14px !important; }
 .dash-card-header h3 { font-size: 16px !important; }
-.dash-kicker { font-size: 11px !important; }
+.dash-kicker { font-size: 12px !important; }
 .dash-chart-legend { font-size: 12px !important; gap: 14px !important; margin-bottom: 12px !important; }
 .metric-card-enhanced { min-height: 140px !important; gap: 10px !important; padding: 20px !important; }
 .metric-label { font-size: 13px !important; }
-.metric-growth-label { font-size: 11px !important; }
+.metric-growth-label { font-size: 12px !important; }
 .metric-detail { font-size: 12px !important; }
-.growth-badge { font-size: 11px !important; padding: 5px 10px !important; }
+.growth-badge { font-size: 12px !important; padding: 5px 10px !important; }
 .metric-value { font-size: 28px !important; }
 .period-toggle-btn { font-size: 12px !important; padding: 6px 12px !important; }
 .range-picker input[type="date"] { font-size: 13px !important; min-height: 36px !important; }
@@ -1014,21 +1014,21 @@
 .order-id { font-size: 13px !important; }
 .order-customer { font-size: 12px !important; }
 .order-amount { font-size: 13px !important; }
-.order-date { font-size: 11px !important; }
+.order-date { font-size: 12px !important; }
 .cal-month-label { font-size: 14px !important; }
-.cal-day-name { font-size: 10px !important; }
+.cal-day-name { font-size: 12px !important; }
 .cal-day-number { font-size: 12px !important; }
 .cal-hover-line strong { font-size: 14px !important; }
 .cal-hover-line > span { font-size: 12px !important; }
-.cal-legend { font-size: 11px !important; }
-.cal-total-label { font-size: 11px !important; }
+.cal-legend { font-size: 12px !important; }
+.cal-total-label { font-size: 12px !important; }
 .cal-total-value { font-size: 22px !important; }
 .cal-total-sub { font-size: 12px !important; }
-.chart-empty-note { font-size: 11px !important; }
+.chart-empty-note { font-size: 12px !important; }
 .single-category-name { font-size: 16px !important; }
 .single-category-note { font-size: 12px !important; }
 .order-row-detail span { font-size: 12px !important; }
-.order-row-detail em { font-size: 10px !important; }
+.order-row-detail em { font-size: 12px !important; }
 .orders-cta { font-size: 13px !important; padding: 12px !important; }
 
 
@@ -1052,7 +1052,7 @@
 .app-shell.light-mode .cal-cell,
 .light-mode .cal-cell {
   border-color: transparent !important;
-  background-color: #F1F5F9;
+  background-color: rgb(241, 245, 249);
 }
 .app-shell.light-mode .cal-cell.has-data,
 .light-mode .cal-cell.has-data {
@@ -1060,16 +1060,16 @@
 }
 .app-shell.light-mode .cal-day-number,
 .light-mode .cal-day-number {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 .app-shell.light-mode .cal-cell.other .cal-day-number,
 .light-mode .cal-cell.other .cal-day-number {
-  color: #9CA3AF !important;
+  color: rgb(156, 163, 175) !important;
 }
 .app-shell.light-mode .customer-avatar-timeline,
 .light-mode .customer-avatar-timeline {
   background: rgba(37,99,235,.1) !important;
-  color: #1D4ED8 !important;
+  color: rgb(29, 78, 216) !important;
 }
 .app-shell.light-mode .ai-summary-card,
 .light-mode .ai-summary-card {
@@ -1100,7 +1100,7 @@
 .summary-pill svg { color: var(--blue-bright); flex: 0 0 auto; }
 .summary-pill > span { display: flex; flex-direction: column; gap: 2px; }
 .summary-pill strong { font-size: 14px; color: var(--text); }
-.summary-pill small { font-size: 11px; color: var(--text-tertiary); }
+.summary-pill small { font-size: 12px; color: var(--text-tertiary); }
 .ai-summary-insight { display: flex; gap: 10px; padding: 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: rgba(155,124,246,.06); }
 .ai-summary-insight svg { color: var(--purple); margin-top: 2px; flex: 0 0 auto; }
 .ai-summary-insight p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
@@ -1116,7 +1116,7 @@
 .legend-row .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
 .legend-name { flex: 1; font-size: 14px; font-weight: 500; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .legend-value { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
-.top-badge { display: inline-flex; align-items: center; padding: 2px 7px; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--green); background: rgba(16,185,129,.14); border: 1px solid rgba(16,185,129,.25); border-radius: 999px; }
+.top-badge { display: inline-flex; align-items: center; padding: 2px 7px; margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--green); background: rgba(16,185,129,.14); border: 1px solid rgba(16,185,129,.25); border-radius: 999px; }
 
 .activity-timeline { position: relative; display: flex; flex-direction: column; gap: 0; padding-left: 20px; }
 .activity-timeline::before { content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(to bottom, var(--border-soft), transparent); border-radius: 2px; }
@@ -1125,11 +1125,11 @@
 .timeline-dot { position: absolute; left: -20px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); border: 2px solid var(--card); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
 .timeline-content { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .timeline-top { display: flex; align-items: center; gap: 8px; }
-.customer-avatar-timeline { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--bg-hover); color: var(--text-secondary); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+.customer-avatar-timeline { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; font-weight: 700; flex: 0 0 auto; }
 .timeline-customer { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-middle { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .timeline-product { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-amount { font-size: 13px; font-weight: 600; color: var(--text); }
-.timeline-bottom { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-tertiary); }
+.timeline-bottom { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-tertiary); }
 .timeline-id { font-family: var(--font-mono); }
 

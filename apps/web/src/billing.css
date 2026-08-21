@@ -10,14 +10,14 @@
   gap: 9px;
   margin-bottom: 16px;
   padding: 9px 12px;
-  color: #FCD34D;
+  color: rgb(252, 211, 77);
   border: 1px solid rgba(245, 158, 11, 0.32);
   border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.08);
   font-size: 12.5px;
   line-height: 1.45;
 }
-.billing-dev-note > svg { flex: 0 0 auto; color: #F59E0B; }
+.billing-dev-note > svg { flex: 0 0 auto; color: rgb(245, 158, 11); }
 .billing-dev-note span { flex: 1; }
 .billing-dev-note strong { font-weight: 700; }
 .billing-dev-note button {
@@ -33,8 +33,8 @@
   opacity: 0.75;
 }
 .billing-dev-note button:hover { background: rgba(245, 158, 11, 0.14); opacity: 1; }
-.light-mode .billing-dev-note { color: #92400E; border-color: rgba(217, 119, 6, 0.3); background: #FFFBEB; }
-.light-mode .billing-dev-note > svg { color: #D97706; }
+.light-mode .billing-dev-note { color: rgb(146, 64, 14); border-color: rgba(217, 119, 6, 0.3); background: rgb(255, 251, 235); }
+.light-mode .billing-dev-note > svg { color: rgb(217, 119, 6); }
 .light-mode .billing-dev-note button:hover { background: rgba(217, 119, 6, 0.12); }
 
 .billing-v2 {
@@ -61,7 +61,7 @@
 }
 
 .billing-v2 .section-kicker {
-  font-size: 11px !important;
+  font-size: 12px !important;
   letter-spacing: 0.08em;
 }
 
@@ -151,19 +151,19 @@
 }
 
 .billing-status-badge.green {
-  color: #059669;
+  color: rgb(5, 150, 105);
   background: rgba(16, 185, 129, 0.14);
   border: 1px solid rgba(16, 185, 129, 0.28);
 }
 
 .billing-status-badge.amber {
-  color: #b45309;
+  color: rgb(180, 83, 9);
   background: rgba(245, 158, 11, 0.16);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .billing-status-badge.purple {
-  color: #7c3aed;
+  color: rgb(124, 58, 237);
   background: rgba(155, 124, 246, 0.16);
   border: 1px solid rgba(155, 124, 246, 0.3);
 }
@@ -207,7 +207,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(90deg, rgb(59, 130, 246), rgb(139, 92, 246));
   transition: width 0.35s ease;
 }
 
@@ -224,7 +224,7 @@
 
 .light-mode .billing-interval-toggle,
 .app-shell.light-mode .billing-interval-toggle {
-  background: #f1f5f9;
+  background: rgb(241, 245, 249);
 }
 
 .billing-interval-toggle button {
@@ -256,8 +256,8 @@
   padding: 0 7px;
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.16);
-  color: #059669;
-  font-size: 11px;
+  color: rgb(5, 150, 105);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -319,13 +319,13 @@
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .billing-plan-ribbon {
-  color: #1d4ed8;
+  color: rgb(29, 78, 216);
   background: rgba(59, 130, 246, 0.16);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
@@ -333,7 +333,7 @@
 .billing-plan-current-tag {
   left: 12px;
   right: auto;
-  color: #047857;
+  color: rgb(4, 120, 87);
   background: rgba(16, 185, 129, 0.16);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
@@ -376,9 +376,9 @@
 }
 
 .billing-gift-redeem:hover:not(:disabled) {
-  background: var(--blue, #3b82f6) !important;
-  border-color: var(--blue, #3b82f6) !important;
-  color: #fff !important;
+  background: var(--blue, rgb(59, 130, 246)) !important;
+  border-color: var(--blue, rgb(59, 130, 246)) !important;
+  color: rgb(255, 255, 255) !important;
 }
 
 .billing-plan-card-head {
@@ -425,7 +425,7 @@
 
 .billing-plan-annual-note {
   padding: 6px 26px 0;
-  color: #059669;
+  color: rgb(5, 150, 105);
   font-size: 12px;
   font-weight: 600;
 }
@@ -452,7 +452,7 @@
 .billing-plan-features li svg {
   flex: 0 0 auto;
   margin-top: 2px;
-  color: #10b981;
+  color: rgb(16, 185, 129);
 }
 
 .billing-plan-cta {
@@ -520,12 +520,12 @@
 }
 
 .billing-check.ok {
-  color: #059669;
+  color: rgb(5, 150, 105);
   background: rgba(16, 185, 129, 0.14);
 }
 
 .billing-check.no {
-  color: #9ca3af;
+  color: rgb(156, 163, 175);
   background: rgba(107, 114, 128, 0.1);
 }
 
@@ -588,15 +588,15 @@
 }
 
 .billing-usage-meter.tone-green .billing-usage-bar > span {
-  background: linear-gradient(90deg, #10b981, #34d399);
+  background: linear-gradient(90deg, rgb(16, 185, 129), rgb(52, 211, 153));
 }
 
 .billing-usage-meter.tone-yellow .billing-usage-bar > span {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, rgb(245, 158, 11), rgb(251, 191, 36));
 }
 
 .billing-usage-meter.tone-red .billing-usage-bar > span {
-  background: linear-gradient(90deg, #ef4444, #f87171);
+  background: linear-gradient(90deg, rgb(239, 68, 68), rgb(248, 113, 113));
 }
 
 /* Capacity chip used for the AI-agents meter (e.g. "3 of 3 agents available"). */
@@ -609,14 +609,14 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.12);
-  color: var(--accent-green, #10b981);
-  font-size: 11px;
+  color: var(--accent-green, rgb(16, 185, 129));
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 .billing-usage-chip.subtle {
   background: rgba(148, 163, 184, 0.14);
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted, rgb(148, 163, 184));
 }
 
 /* Fair-use nudge — only shown on Commander when a soft cap is exceeded. */
@@ -625,8 +625,8 @@
   align-items: center;
   gap: 4px;
   margin-top: 6px;
-  font-size: 11px;
-  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  color: var(--text-muted, rgb(148, 163, 184));
 }
 
 .billing-roi-period select {
@@ -641,7 +641,7 @@
 
 .light-mode .billing-roi-period select,
 .app-shell.light-mode .billing-roi-period select {
-  background: #f8fafc;
+  background: rgb(248, 250, 252);
 }
 
 .billing-roi-help {
@@ -672,7 +672,7 @@
 }
 
 .billing-roi-live > strong {
-  color: var(--profit, #fbbf24);
+  color: var(--profit, rgb(251, 191, 36));
   font-size: 32px;
   letter-spacing: -0.05em;
 }
@@ -718,7 +718,7 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  color: #d97706;
+  color: rgb(217, 119, 6);
   border-radius: 12px;
   background: rgba(251, 191, 36, 0.16);
   border: 1px solid rgba(251, 191, 36, 0.28);
@@ -757,7 +757,7 @@
 
 .light-mode .billing-gift-form input,
 .app-shell.light-mode .billing-gift-form input {
-  background: #ffffff;
+  background: rgb(255, 255, 255);
 }
 
 .billing-gift-form input:focus {
@@ -842,18 +842,18 @@
 .app-shell.light-mode .billing-roi,
 .app-shell.light-mode .billing-gift,
 .app-shell.light-mode .billing-faq {
-  background-color: #ffffff !important;
+  background-color: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .billing-hero {
   background:
     radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.08), transparent 42%),
-    #ffffff !important;
+    rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .billing-gift {
   background:
-    linear-gradient(135deg, rgba(251, 191, 36, 0.1), #ffffff 55%) !important;
+    linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgb(255, 255, 255) 55%) !important;
 }
 
 .app-shell.light-mode .billing-hero-title-row h2,
@@ -863,16 +863,16 @@
 .app-shell.light-mode .billing-gift-copy h3,
 .app-shell.light-mode .billing-matrix-table tbody th,
 .app-shell.light-mode .billing-faq-q {
-  color: #0f172a !important;
+  color: rgb(15, 23, 42) !important;
 }
 
 .app-shell.light-mode .billing-plan-price strong,
 .app-shell.light-mode .billing-roi-live > strong {
-  color: #0f172a !important;
+  color: rgb(15, 23, 42) !important;
 }
 
 .app-shell.light-mode .billing-roi-live > strong {
-  color: #b45309 !important;
+  color: rgb(180, 83, 9) !important;
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */

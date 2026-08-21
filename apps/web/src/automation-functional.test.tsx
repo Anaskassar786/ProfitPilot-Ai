@@ -979,7 +979,7 @@ describe('Automation page — static style contracts', () => {
 
   it('ships one green Upgrade Plan contract and no half-visible buttons', () => {
     const tail = css().slice(css().lastIndexOf('Automation hub overhaul'))
-    expect(tail).toContain('background: linear-gradient(135deg, #22c55e, #16a34a)')
+    expect(tail).toContain('background: linear-gradient(135deg, rgb(34, 197, 94), rgb(22, 163, 74))')
     expect(tail).toContain('visibility: visible !important')
     expect(tail).toContain('opacity: 1 !important')
     expect(tail).toContain('min-width: 120px !important')
@@ -989,12 +989,12 @@ describe('Automation page — static style contracts', () => {
   it('keeps the category stripe and badge palette documented in the spec', () => {
     const source = css()
     expect(source).toContain('.template-card.operations::after')
-    expect(source).toContain('linear-gradient(90deg, #8b5cf6, #a78bfa)')
+    expect(source).toContain('linear-gradient(90deg, rgb(139, 92, 246), rgb(167, 139, 250))')
     expect(source).toContain('.template-card.revenue-retention::after')
-    expect(source).toContain('linear-gradient(90deg, #ef4444, #f87171)')
+    expect(source).toContain('linear-gradient(90deg, rgb(239, 68, 68), rgb(248, 113, 113))')
     expect(source).toContain('.template-plan-badge.all-plans')
     expect(source).toContain('rgba(16, 185, 129, 0.14)')
-    expect(source).toContain('outline: 2px solid #7c3aed')
+    expect(source).toContain('outline: 2px solid rgb(124, 58, 237)')
     expect(source).toContain('@media (max-width: 480px)')
     expect(source).toContain('.template-tabs')
   })

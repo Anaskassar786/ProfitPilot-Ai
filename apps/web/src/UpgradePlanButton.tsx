@@ -1,10 +1,6 @@
-import { ArrowUpRight, Zap } from 'lucide-react'
+import { Button } from '@shopify/polaris'
+import { MagicIcon } from '@shopify/polaris-icons'
 
-/**
- * Global Upgrade CTA — single clean button "Upgrade Plan" across all pages.
- * No Trial/Start/Growth label, no overlapping text.
- * Commander returns null (already top tier).
- */
 export function UpgradePlanButton({
   plan,
   onUpgrade,
@@ -16,16 +12,13 @@ export function UpgradePlanButton({
 }) {
   if (plan === 'commander') return null
   return (
-    <button
-      type="button"
-      className={`upgrade-plan-cta ${className}`}
+    <Button
+      variant="primary"
+      icon={MagicIcon}
       onClick={onUpgrade}
-      aria-label="Upgrade plan"
-      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+      accessibilityLabel="Upgrade plan"
     >
-      <Zap size={14} fill="currentColor" />
-      <span>Upgrade Plan</span>
-      <ArrowUpRight size={14} />
-    </button>
+      Upgrade Plan
+    </Button>
   )
 }

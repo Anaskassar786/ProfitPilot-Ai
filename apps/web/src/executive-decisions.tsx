@@ -5,8 +5,9 @@
  * gauges, quality ratings, lessons learned, and analytics (average
  * accuracy, quality distribution, best decisions, improvement areas).
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardList, Plus, Trash2, TrendingUp } from 'lucide-react'
+import { ClipboardList, Plus, Trash2, TrendingUp } from './icons.js'
 import type { DecisionQuality, DecisionType, ExecutiveDecision } from './executive-model.js'
 import { executiveDateLabel } from './executive-model.js'
 import { deleteExecutiveDecision, fetchExecutiveDecisionAnalytics, fetchExecutiveDecisions, logExecutiveDecision, reviewExecutiveDecision } from './executive-api.js'
@@ -98,7 +99,7 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
         kicker="Decision intelligence"
         title="Decision Log"
         description="Log strategic decisions with predicted outcomes, record what actually happened, and let the accuracy engine grade your forecasting — so the next decision starts wiser."
-        actions={<button type="button" className="button primary" onClick={() => setFormOpen(true)}><Plus size={14} /> Log New Decision</button>}
+        actions={<Button type="button" className="button primary" onClick={() => setFormOpen(true)}><Plus size={14} /> Log New Decision</Button>}
       />
       {loading && <ExecutiveSkeleton rows={5} label="Decisions" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}
@@ -124,8 +125,8 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
             </label>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button type="button" className="button primary" onClick={() => void create()} disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Log decision'}</button>
-            <button type="button" className="button secondary" onClick={() => setFormOpen(false)}>Cancel</button>
+            <Button type="button" className="button primary" onClick={() => void create()} disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Log decision'}</Button>
+            <Button type="button" className="button secondary" onClick={() => setFormOpen(false)}>Cancel</Button>
           </div>
         </ExecutiveSection>
       )}
@@ -180,9 +181,9 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
               </div>
               <div className="exec-decision-actions">
                 {decision.actualOutcome === null && (
-                  <button type="button" className="button secondary" onClick={() => { setReviewTarget(decision); setActualValue('') }}><TrendingUp size={13} /> Add outcome</button>
+                  <Button type="button" className="button secondary" onClick={() => { setReviewTarget(decision); setActualValue('') }}><TrendingUp size={13} /> Add outcome</Button>
                 )}
-                <button type="button" className="icon-button" aria-label="Delete decision" onClick={() => void remove(decision)}><Trash2 size={14} /></button>
+                <Button type="button" className="icon-button" aria-label="Delete decision" onClick={() => void remove(decision)}><Trash2 size={14} /></Button>
               </div>
             </div>
           </article>
@@ -198,8 +199,8 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
               <input type="number" autoFocus value={actualValue} onChange={(event) => setActualValue(event.target.value)} placeholder="e.g. 4800" />
             </label>
             <div className="modal-actions">
-              <button type="button" className="button secondary" onClick={() => setReviewTarget(null)}>Cancel</button>
-              <button type="button" className="button primary" onClick={() => void review()} disabled={actualValue.trim() === ''}>Save outcome</button>
+              <Button type="button" className="button secondary" onClick={() => setReviewTarget(null)}>Cancel</Button>
+              <Button type="button" className="button primary" onClick={() => void review()} disabled={actualValue.trim() === ''}>Save outcome</Button>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
-import { BellRing, Boxes, Repeat, ShoppingCart, Sparkles, Users } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { BellRing, Boxes, Repeat, ShoppingCart, Sparkles, Users } from './icons.js'
+import type { LucideIcon } from './icons.js'
 import type { WorkflowCategory, WorkflowRecord, WorkflowStatus } from './automation-model.js'
 
 /** Minimal node shape used by friendly-label helpers. */

@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
@@ -29,7 +30,7 @@ import {
   TrendingUp,
   Truck,
   X,
-} from 'lucide-react'
+} from './icons.js'
 import { fetchInventory, fetchInventoryHistory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
@@ -133,9 +134,9 @@ export function InventoryWorkspace({ context, onSync, onNavigate, onToast }: Inv
 
   return <div className="inventory-workspace">
     <div className="inventory-page-actions">
-      <button className="button secondary" disabled={syncing} onClick={() => void sync()}>
+      <Button className="button secondary" disabled={syncing} onClick={() => void sync()}>
         <RefreshCw size={15} className={syncing ? 'spin' : ''} /> {syncing ? 'Syncing…' : 'Sync inventory'}
-      </button>
+      </Button>
     </div>
 
     {error ? <InventoryErrorState message={error} onRetry={() => setRefreshVersion((value) => value + 1)} /> : nothingSynced ? <>
@@ -292,7 +293,7 @@ export function InventoryHealthCard({ data, loading, storeId }: { data: Inventor
           <strong>{item.status === 'out' ? 'Out of stock' : item.status === 'untracked' ? 'Untracked' : quantityLabel(item)}</strong>
         </li>)}
       </ul> : <p className="health-all-good"><CheckCircle2 size={13} /> All items healthy</p>}
-      <button type="button" className="health-recs-button" onClick={() => document.querySelector('.inventory-ai-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View All Recommendations →</button>
+      <Button type="button" className="health-recs-button" onClick={() => document.querySelector('.inventory-ai-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View All Recommendations →</Button>
     </>}
   </article>
 }
@@ -404,9 +405,9 @@ export function StockDistributionChart({ data, loading, onSelectTab }: { data: I
           <div><strong>{formatUnits(stats.averageStock)}</strong><span>Avg units / SKU</span></div>
         </div>
         <div className="distribution-actions">
-          <button type="button" onClick={() => onSelectTab?.('low')} disabled={!onSelectTab}>View Low Stock Items</button>
-          <button type="button" onClick={() => document.querySelector('.inventory-ai-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Reorder Recommendations</button>
-          <button type="button" onClick={exportStockReport} disabled={data.items.length === 0}>Export Stock Report</button>
+          <Button type="button" onClick={() => onSelectTab?.('low')} disabled={!onSelectTab}>View Low Stock Items</Button>
+          <Button type="button" onClick={() => document.querySelector('.inventory-ai-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Reorder Recommendations</Button>
+          <Button type="button" onClick={exportStockReport} disabled={data.items.length === 0}>Export Stock Report</Button>
         </div>
       </div>
     </>}
@@ -461,8 +462,8 @@ export function InventoryValueSummary({ data, loading }: { data: InventoryPageRe
           })}
         </ul>
         <div className="value-actions">
-          <button type="button" onClick={() => document.querySelector('.inventory-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View Full Report</button>
-          <button type="button" onClick={exportValuation} disabled={topValueItems.length === 0}>Export Valuation</button>
+          <Button type="button" onClick={() => document.querySelector('.inventory-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View Full Report</Button>
+          <Button type="button" onClick={exportValuation} disabled={topValueItems.length === 0}>Export Valuation</Button>
         </div>
       </>}
     </>}
@@ -530,9 +531,9 @@ function InventoryTabs({ counts, active, onSelect }: { counts: InventoryPageResu
     { id: 'untracked', label: 'Not Tracked', count: counts.untracked },
   ]
   return <div className="inventory-tabs" role="tablist" aria-label="Stock status">
-    {tabs.map((tab) => <button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}>
+    {tabs.map((tab) => <Button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}>
       <span>{tab.label}</span><strong>{tab.count}</strong>
-    </button>)}
+    </Button>)}
   </div>
 }
 
@@ -574,7 +575,7 @@ export function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDi
       <label className="inventory-search">
         <Search size={16} />
         <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search by product name or SKU" aria-label="Search inventory" />
-        {query && <button type="button" onClick={() => onQuery('')} aria-label="Clear search"><X size={14} /></button>}
+        {query && <Button type="button" onClick={() => onQuery('')} aria-label="Clear search"><X size={14} /></Button>}
       </label>
       <div className="inventory-sort-control" role="group" aria-label="Sort inventory">
         <CustomSelect
@@ -586,21 +587,21 @@ export function InventoryToolbar({ query, onQuery, sort, direction, onSort, onDi
           icon={<ArrowUpDown size={14} />}
           label="Sort by"
         />
-        <button
+        <Button
           type="button"
           onClick={onDirection}
           aria-label={`Sort ${nextDirection}`}
           title={`Currently ${direction === 'asc' ? 'ascending' : 'descending'}. Switch to ${nextDirection}.`}
         >
           {direction === 'asc' ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
-        </button>
+        </Button>
       </div>
     </div>
     {showFilters && <div className="inventory-toolbar-filters">
       {categories.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by category" value={filters.category} options={categoryOptions} onChange={(value) => onFilters({ ...filters, category: value })} icon={<Tag size={13} />} />}
       {vendors.length > 0 && <CustomSelect className="inventory-select" ariaLabel="Filter by vendor" value={filters.vendor} options={vendorOptions} onChange={(value) => onFilters({ ...filters, vendor: value })} icon={<Truck size={13} />} />}
       {locations.length > 1 && <CustomSelect className="inventory-select" ariaLabel="Filter by location" value={filters.locationId} options={locationOptions} onChange={(value) => onFilters({ ...filters, locationId: value })} icon={<MapPin size={13} />} />}
-      {hasActiveFilters && onClear && <button type="button" className="inventory-clear-filters" onClick={onClear}>Clear filters</button>}
+      {hasActiveFilters && onClear && <Button type="button" className="inventory-clear-filters" onClick={onClear}>Clear filters</Button>}
     </div>}
   </div>
 }
@@ -630,7 +631,7 @@ function InventoryTableRow({ item, multiLocation, showDaysOfCover, onSelect }: {
     {showDaysOfCover && <td data-label="Days of Cover"><DaysOfCoverCell cover={item.daysOfCover} /></td>}
     <td data-label="Value"><strong>{formatMoney(item.value, item.currency)}</strong>{item.price !== null && <small>{formatMoney(item.price, item.currency)} each</small>}</td>
     <td data-label="Status"><StockLevelBadge status={item.status} /></td>
-    <td data-label="Actions"><button className="inventory-action-button" aria-label={`View ${item.title}`} onClick={(event) => { event.stopPropagation(); onSelect(item.variantId) }}><MoreHorizontal size={17} /></button></td>
+    <td data-label="Actions"><Button className="inventory-action-button" aria-label={`View ${item.title}`} onClick={(event) => { event.stopPropagation(); onSelect(item.variantId) }}><MoreHorizontal size={17} /></Button></td>
   </tr>
 }
 
@@ -677,9 +678,9 @@ function InventoryPagination({ pagination, onPage }: { pagination: InventoryPage
   return <footer className="inventory-pagination">
     <span>Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} real items</span>
     <div>
-      <button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button>
+      <Button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)} aria-label="Previous page"><ChevronLeft size={15} /></Button>
       <strong>Page {pagination.page} of {pagination.pages}</strong>
-      <button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)} aria-label="Next page"><ChevronRight size={15} /></button>
+      <Button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)} aria-label="Next page"><ChevronRight size={15} /></Button>
     </div>
   </footer>
 }
@@ -698,16 +699,16 @@ function InventoryDetailDrawer({ storeId, variantId, shop, onClose, onToast }: {
   }, [storeId, variantId])
 
   return <div className="inventory-drawer-layer">
-    <button className="inventory-drawer-backdrop" onClick={onClose} aria-label="Close inventory details" />
+    <Button className="inventory-drawer-backdrop" onClick={onClose} aria-label="Close inventory details" />
     <aside className="inventory-details-drawer" aria-label="Inventory item details">
-      {loading || !item ? <div className="drawer-skeleton"><button onClick={onClose} aria-label="Close inventory details"><X size={18} /></button><span /><span /><span /><span /></div> : <>
+      {loading || !item ? <div className="drawer-skeleton"><Button onClick={onClose} aria-label="Close inventory details"><X size={18} /></Button><span /><span /><span /><span /></div> : <>
         <header>
           <div>
             <div className="section-kicker">SHOPIFY INVENTORY · READ ONLY</div>
             <h2>{item.title}</h2>
             <span><StockLevelBadge status={item.status} />{item.sku && <small className="inventory-drawer-sku">SKU {item.sku}</small>}</span>
           </div>
-          <button onClick={onClose} aria-label="Close inventory details"><X size={19} /></button>
+          <Button onClick={onClose} aria-label="Close inventory details"><X size={19} /></Button>
         </header>
         <div className="inventory-drawer-scroll">
           <section className="inventory-detail-section">
@@ -763,12 +764,12 @@ export function InventoryEmptyState({ title, description, action, onAction, comp
     <span className="inventory-empty-icon"><Boxes size={compact ? 20 : 26} /></span>
     <strong>{title}</strong>
     <p>{description}</p>
-    <button className="button primary" disabled={busy} onClick={onAction}>{action}</button>
+    <Button className="button primary" disabled={busy} onClick={onAction}>{action}</Button>
   </div>
 }
 
 function InventoryErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <div className="inventory-error"><AlertTriangle size={18} /><div><strong>Inventory could not be loaded</strong><p>{message}</p></div><button className="button secondary" onClick={onRetry}>Retry</button></div>
+  return <div className="inventory-error"><AlertTriangle size={18} /><div><strong>Inventory could not be loaded</strong><p>{message}</p></div><Button className="button secondary" onClick={onRetry}>Retry</Button></div>
 }
 
 function InventoryTableSkeleton() {

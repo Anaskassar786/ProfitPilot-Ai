@@ -6,8 +6,9 @@
  * quarterly, yearly). AI generates the milestone plan from the store's
  * facts; the deterministic template covers provider downtime.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Map, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { CheckCircle2, Map, Plus, RefreshCw, Trash2 } from './icons.js'
 import type { ExecutiveRoadmap, RoadmapType } from './executive-model.js'
 import { executiveDateLabel, executiveRoadmapTypeLabel } from './executive-model.js'
 import { createExecutiveRoadmap, deleteExecutiveRoadmap, fetchExecutiveRoadmaps, markExecutiveMilestone } from './executive-api.js'
@@ -84,7 +85,7 @@ export function ExecutiveRoadmapsPage({ context, plan, gates, onToast, onUpgrade
         kicker="Strategic direction"
         title="Strategic Roadmaps"
         description="30/60/90-day, quarterly, and yearly plans with weekly milestones, dependencies, success metrics, and expected outcomes — generated from your current business state."
-        actions={<button type="button" className="button primary" onClick={() => setFormOpen(true)}><Plus size={14} /> Create Roadmap</button>}
+        actions={<Button type="button" className="button primary" onClick={() => setFormOpen(true)}><Plus size={14} /> Create Roadmap</Button>}
       />
       {loading && <ExecutiveSkeleton rows={4} label="Roadmaps" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}
@@ -103,10 +104,10 @@ export function ExecutiveRoadmapsPage({ context, plan, gates, onToast, onUpgrade
             </label>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button type="button" className="button primary" onClick={() => void create()} disabled={generating || !storeId || !gates[ROADMAP_TYPES.find((entry) => entry.type === roadmapType)?.feature ?? 'roadmaps']?.allowed}>
+            <Button type="button" className="button primary" onClick={() => void create()} disabled={generating || !storeId || !gates[ROADMAP_TYPES.find((entry) => entry.type === roadmapType)?.feature ?? 'roadmaps']?.allowed}>
               {generating ? 'Generating plan…' : 'Generate Roadmap'}
-            </button>
-            <button type="button" className="button secondary" onClick={() => setFormOpen(false)}>Cancel</button>
+            </Button>
+            <Button type="button" className="button secondary" onClick={() => setFormOpen(false)}>Cancel</Button>
           </div>
         </ExecutiveSection>
       )}
@@ -156,7 +157,7 @@ function RoadmapHero({ roadmap, onComplete, onRemove }: { roadmap: ExecutiveRoad
       <div className="exec-roadmap-progress">
         <div className="exec-roadmap-progress-track"><span style={{ width: `${progress}%` }} /></div>
         <div className="exec-roadmap-progress-meta"><span>{progress}% complete</span><span>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} / {roadmap.milestones.length} milestones</span></div>
-        <button type="button" className="button secondary" style={{ alignSelf: 'flex-end', marginTop: 8 }} onClick={onRemove}><Trash2 size={13} /> Remove</button>
+        <Button type="button" className="button secondary" style={{ alignSelf: 'flex-end', marginTop: 8 }} onClick={onRemove}><Trash2 size={13} /> Remove</Button>
       </div>
       <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
         <div className="exec-milestone-timeline">
@@ -168,7 +169,7 @@ function RoadmapHero({ roadmap, onComplete, onRemove }: { roadmap: ExecutiveRoad
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <ExecutiveStatusPill status={milestone.status === 'COMPLETE' ? 'COMPLETE' : milestone.status === 'CURRENT' ? 'CURRENT' : 'PENDING'} />
-                {milestone.status !== 'COMPLETE' && <button type="button" className="text-button" onClick={() => onComplete(milestone.key)}><CheckCircle2 size={13} /> Complete</button>}
+                {milestone.status !== 'COMPLETE' && <Button type="button" className="text-button" onClick={() => onComplete(milestone.key)}><CheckCircle2 size={13} /> Complete</Button>}
               </div>
               {milestone.description && <p>{milestone.description}</p>}
               {milestone.successMetrics.length > 0 && (

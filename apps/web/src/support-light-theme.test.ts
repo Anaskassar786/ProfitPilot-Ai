@@ -5,7 +5,7 @@ const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'u
 
 /**
  * Theme contracts for the Help & Support redesign (FIX 7). The light theme is
- * the PR spec verbatim — #F8FAFC canvas, white cards with borders/shadows,
+ * the PR spec verbatim — rgb(248, 250, 252) canvas, white cards with borders/shadows,
  * visible FAQ cards, strong status colors, prominent buttons. The dark theme
  * is asserted separately (and negatively) to prove it stays untouched.
  */
@@ -13,12 +13,12 @@ describe('Help & Support theme contracts', () => {
   const css = source('./support.css')
   const lightBlock = css.slice(css.indexOf('LIGHT THEME'))
 
-  it('gives the light workspace the #F8FAFC canvas from the spec', () => {
+  it('gives the light workspace the rgb(248, 250, 252) canvas from the spec', () => {
     expect(lightBlock).toContain('.app-shell.light-mode .support-workspace')
-    expect(lightBlock).toContain('background: #F8FAFC')
+    expect(lightBlock).toContain('background: rgb(248, 250, 252)')
   })
 
-  it('renders light cards as #FFFFFF with #E2E8F0 borders and soft shadows', () => {
+  it('renders light cards as rgb(255, 255, 255) with rgb(226, 232, 240) borders and soft shadows', () => {
     for (const selector of [
       '.app-shell.light-mode .support-workspace .support-plan-card',
       '.app-shell.light-mode .support-workspace .support-faq,',
@@ -27,8 +27,8 @@ describe('Help & Support theme contracts', () => {
     ]) {
       expect(lightBlock).toContain(selector)
     }
-    expect(lightBlock).toContain('background: #FFFFFF')
-    expect(lightBlock).toContain('border-color: #E2E8F0')
+    expect(lightBlock).toContain('background: rgb(255, 255, 255)')
+    expect(lightBlock).toContain('border-color: rgb(226, 232, 240)')
     expect(lightBlock).toContain('box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07)')
   })
 
@@ -40,16 +40,16 @@ describe('Help & Support theme contracts', () => {
   })
 
   it('uses strong, readable status colors in light mode', () => {
-    expect(lightBlock).toContain('--s-green-strong: #047857')
-    expect(lightBlock).toContain('--s-amber-strong: #B45309')
-    expect(lightBlock).toContain('--s-blue-strong: #1D4ED8')
-    expect(lightBlock).toContain('--s-green: #059669')
-    expect(lightBlock).toContain('--s-amber: #D97706')
+    expect(lightBlock).toContain('--s-green-strong: rgb(4, 120, 87)')
+    expect(lightBlock).toContain('--s-amber-strong: rgb(180, 83, 9)')
+    expect(lightBlock).toContain('--s-blue-strong: rgb(29, 78, 216)')
+    expect(lightBlock).toContain('--s-green: rgb(5, 150, 105)')
+    expect(lightBlock).toContain('--s-amber: rgb(217, 119, 6)')
   })
 
   it('keeps buttons prominent in light mode with the brand gradient', () => {
     expect(css).toContain('.support-button.primary')
-    expect(css).toContain('background: linear-gradient(135deg, #2A66D9, #4E6DE3)')
+    expect(css).toContain('background: linear-gradient(135deg, rgb(42, 102, 217), rgb(78, 109, 227))')
     expect(css).toContain('box-shadow: 0 7px 18px rgba(47, 98, 214, 0.28)')
   })
 
@@ -63,11 +63,11 @@ describe('Help & Support theme contracts', () => {
 
   it('keeps the dark theme as the untouched default', () => {
     const dark = css.slice(0, css.indexOf('LIGHT THEME'))
-    expect(dark).toContain('--s-card: #161922')
-    expect(dark).toContain('--s-card-inset: #12151D')
-    expect(dark).toContain('--s-border: #262B38')
-    expect(dark).not.toContain('background: #F8FAFC')
-    expect(dark).not.toContain('background: #FFFFFF')
+    expect(dark).toContain('--s-card: rgb(22, 25, 34)')
+    expect(dark).toContain('--s-card-inset: rgb(18, 21, 29)')
+    expect(dark).toContain('--s-border: rgb(38, 43, 56)')
+    expect(dark).not.toContain('background: rgb(248, 250, 252)')
+    expect(dark).not.toContain('background: rgb(255, 255, 255)')
   })
 
   it('never uses fonts below 12px in either theme', () => {

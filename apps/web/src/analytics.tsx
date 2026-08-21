@@ -1,7 +1,8 @@
+import { Button } from './polaris-ui.js'
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, Percent, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Brain, CalendarDays, ChevronDown, ChevronUp, Clock3, Download, Globe2, Lightbulb, LineChart, LockKeyhole, MapPin, PackageSearch, Percent, RefreshCw, Send, ShoppingBag, Target, Trophy, Users, Wand2, Zap } from './icons.js'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
 import { fetchAnalyticsInsights, fetchCustomers, fetchInventory, queryAnalyticsInsights } from './api.js'
 import { analyticsKpis, periodTrend } from './analytics-model.js'
@@ -12,7 +13,7 @@ import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { AnalyticsInsights, AnalyticsPeriod, Kpi, TrendPoint } from './analytics-model.js'
 import './analytics.css'
 
-const COLORS = ['#38bdf8', '#8b5cf6', '#2dd4bf', '#f59e0b', '#ec4899', '#84cc16', '#06b6d4', '#f97316']
+const COLORS = ['rgb(56, 189, 248)', 'rgb(139, 92, 246)', 'rgb(45, 212, 191)', 'rgb(245, 158, 11)', 'rgb(236, 72, 153)', 'rgb(132, 204, 22)', 'rgb(6, 182, 212)', 'rgb(249, 115, 22)']
 const PLAN_RANK = { trial: 0, start: 1, growth: 2, commander: 3 } as const
 
 type PageProps = { context: WorkspaceContext; snapshot: AnalyticsSnapshot | null; onSync: (module: string) => Promise<void>; onNavigateBilling: () => void }
@@ -109,9 +110,9 @@ function AnalyticsHeader({ period, setPeriod, customRange, onCustomRange, syncin
   return <header className="analytics-page-header">
     <div className="analytics-heading"><span className="analytics-page-icon"><BarChart3 size={20} /></span><div><div className="analytics-eyebrow"></div><h1>Analytics</h1><p>Smart insights from your store data</p></div></div>
     <div className="analytics-toolbar">
-      <div className="date-range-control"><div className="period-toggle" aria-label="Date range">{([7, 30, 90, 365] as const).map((days) => <button className={!customRange && period === days ? 'active' : ''} onClick={() => setPeriod(days)} key={days}>{days === 365 ? '1y' : `${days}d`}</button>)}<button className={customRange ? 'active' : ''} onClick={() => setCustomOpen((value) => !value)}>Custom</button></div>{customOpen && <div className="custom-range-popover"><label>From<input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label><label>To<input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} /></label><button onClick={() => { if (from && to && from <= to) { onCustomRange({ from, to }); setCustomOpen(false) } }}>Apply range</button></div>}</div>
-      <button className="analytics-tool-button" onClick={exportCsv} disabled={!snapshot?.revenue.length}><Download size={14} /> Export</button>
-      <button className="analytics-tool-button primary" onClick={() => void onSync()} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Refresh</button>
+      <div className="date-range-control"><div className="period-toggle" aria-label="Date range">{([7, 30, 90, 365] as const).map((days) => <Button className={!customRange && period === days ? 'active' : ''} onClick={() => setPeriod(days)} key={days}>{days === 365 ? '1y' : `${days}d`}</Button>)}<Button className={customRange ? 'active' : ''} onClick={() => setCustomOpen((value) => !value)}>Custom</Button></div>{customOpen && <div className="custom-range-popover"><label>From<input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label><label>To<input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} /></label><Button onClick={() => { if (from && to && from <= to) { onCustomRange({ from, to }); setCustomOpen(false) } }}>Apply range</Button></div>}</div>
+      <Button className="analytics-tool-button" onClick={exportCsv} disabled={!snapshot?.revenue.length}><Download size={14} /> Export</Button>
+      <Button className="analytics-tool-button primary" onClick={() => void onSync()} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Refresh</Button>
     </div>
   </header>
 }
@@ -191,22 +192,22 @@ export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonl
   const peak = pacing.peak
   const closing = pacing.projectedClose ?? (pacing.daysTotal > pacing.daysElapsed ? pacing.runRateClose : null)
   const closeSource = pacing.projectedClose !== null ? 'AI forecast' : 'current run rate'
-  return <Widget className="revenue-trend pacing" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="widget-actions">{pacing.hasData ? <span className="scope-pill" title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}><Zap size={12} />{money(pacing.total)} banked</span> : null}<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</button>)}</div></div>}>
+  return <Widget className="revenue-trend pacing" eyebrow="Revenue Analysis" title="Revenue momentum" action={<div className="widget-actions">{pacing.hasData ? <span className="scope-pill" title={`Revenue banked across ${pacing.daysElapsed} ${pacing.daysElapsed === 1 ? 'day' : 'days'} of this period`}><Zap size={12} />{money(pacing.total)} banked</span> : null}<div className="period-toggle compact">{([7, 30, 90, 365] as const).map((value) => <Button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{value === 365 ? '1y' : `${value}d`}</Button>)}</div></div>}>
     {pacing.hasData ? <>
       <div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...pacing.rows]} margin={{ top: 18, right: 16, left: -8 }}>
         <defs>
-          <linearGradient id="pacingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563EB" stopOpacity=".34"/><stop offset="1" stopColor="#2563EB" stopOpacity=".02"/></linearGradient>
-          <linearGradient id="pacingProjection" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity=".18"/><stop offset="1" stopColor="#8b5cf6" stopOpacity=".01"/></linearGradient>
+          <linearGradient id="pacingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgb(37, 99, 235)" stopOpacity=".34"/><stop offset="1" stopColor="rgb(37, 99, 235)" stopOpacity=".02"/></linearGradient>
+          <linearGradient id="pacingProjection" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgb(139, 92, 246)" stopOpacity=".18"/><stop offset="1" stopColor="rgb(139, 92, 246)" stopOpacity=".01"/></linearGradient>
         </defs>
-        <CartesianGrid stroke="#374151" strokeDasharray="3 7" vertical={false}/>
-        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/>
-        <YAxis tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
-        <Tooltip content={<PacingTooltip/>} cursor={{ stroke:'#475569', strokeDasharray:'3 3' }}/>
-        {pacing.previousTotal !== null && pacing.previousTotal > 0 && <ReferenceLine y={pacing.previousTotal} stroke="#64748b" strokeDasharray="2 6" strokeWidth={1} label={{ position: 'insideTopLeft', offset: 6, content: <PeakLabel value={`Last period close ${money(pacing.previousTotal)}`} /> }} />}
-        <Line type="monotone" dataKey="previousCumulative" name="Previous" stroke="#64748b" strokeDasharray="5 6" strokeWidth={1.8} dot={false} connectNulls/>
-        <Area type="monotone" dataKey="projected" name="AI forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 5" fill="url(#pacingProjection)" dot={false} connectNulls/>
-        <Area type="monotone" dataKey="cumulative" name="Current" stroke="#60A5FA" strokeWidth={2.6} fill="url(#pacingFill)" dot={false} activeDot={{ r:4.5, strokeWidth:2.5, fill:'#ffffff', stroke:'#60A5FA' }}/>
-        {peak && <ReferenceLine x={peak.day} stroke="#f59e0b" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak day ${money(peak.revenue)}`} /> }} />}
+        <CartesianGrid stroke="rgb(55, 65, 81)" strokeDasharray="3 7" vertical={false}/>
+        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/>
+        <YAxis tickFormatter={compactMoney} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <Tooltip content={<PacingTooltip/>} cursor={{ stroke:'rgb(71, 85, 105)', strokeDasharray:'3 3' }}/>
+        {pacing.previousTotal !== null && pacing.previousTotal > 0 && <ReferenceLine y={pacing.previousTotal} stroke="rgb(100, 116, 139)" strokeDasharray="2 6" strokeWidth={1} label={{ position: 'insideTopLeft', offset: 6, content: <PeakLabel value={`Last period close ${money(pacing.previousTotal)}`} /> }} />}
+        <Line type="monotone" dataKey="previousCumulative" name="Previous" stroke="rgb(100, 116, 139)" strokeDasharray="5 6" strokeWidth={1.8} dot={false} connectNulls/>
+        <Area type="monotone" dataKey="projected" name="AI forecast" stroke="rgb(167, 139, 250)" strokeWidth={2} strokeDasharray="5 5" fill="url(#pacingProjection)" dot={false} connectNulls/>
+        <Area type="monotone" dataKey="cumulative" name="Current" stroke="rgb(96, 165, 250)" strokeWidth={2.6} fill="url(#pacingFill)" dot={false} activeDot={{ r:4.5, strokeWidth:2.5, fill:'rgb(255, 255, 255)', stroke:'rgb(96, 165, 250)' }}/>
+        {peak && <ReferenceLine x={peak.day} stroke="rgb(245, 158, 11)" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak day ${money(peak.revenue)}`} /> }} />}
       </ComposedChart></ResponsiveContainer></div>
       <div className="chart-caption">
         <span><i className="legend current"/>Current</span>
@@ -233,7 +234,7 @@ export function OrdersAOVCorrelation({ trend }: { trend: readonly TrendPoint[] }
   const peakOrderDay = rows.length ? [...rows].sort((a, b) => b.orders - a.orders)[0] : null
   const peakAovDay = rows.length ? [...rows].sort((a, b) => b.aov - a.aov)[0] : null
   return <Widget className="orders-aov" eyebrow="Volume & Value" title="Orders & AOV correlation" action={<span className="scope-pill"><ShoppingBag size={12} />{real ? `${orders} orders · ${money(avg)} AOV` : 'Awaiting orders'}</span>}>
-    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={rows} margin={{ top: 12, right: 4, left: -20 }}><defs><linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#818cf8" stopOpacity=".5"/><stop offset="1" stopColor="#818cf8" stopOpacity=".06"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: '#728197', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip average={avg} />} cursor={{ fill: 'rgba(148,163,184,.06)' }} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="url(#ordersFill)" radius={[5, 5, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="#2dd4bf" strokeWidth={2.4} dot={{ r: 2, fill: '#2dd4bf' }} activeDot={{ r: 4, strokeWidth: 2, fill: '#ffffff', stroke: '#2dd4bf' }}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend orders" />Orders</span><span><i className="legend aov" />AOV</span><b>{peakOrderDay ? `Busiest day ${shortDay(peakOrderDay.day)} · ${peakOrderDay.orders} orders` : 'Busiest day building…'}</b></div><div className="insight-strip"><Brain size={14}/><span>Average order value <b>{money(avg)}</b>{peakAovDay && peakAovDay.aov > avg ? <> with a peak of <b>{money(peakAovDay.aov)}</b> on {shortDay(peakAovDay.day)}</> : null}. When AOV climbs faster than order count, growth comes from bigger baskets — not just more buyers.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
+    {real ? <><div className="chart-large"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={rows} margin={{ top: 12, right: 4, left: -20 }}><defs><linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgb(129, 140, 248)" stopOpacity=".5"/><stop offset="1" stopColor="rgb(129, 140, 248)" stopOpacity=".06"/></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/><XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill: 'rgb(114, 129, 151)', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={30}/><YAxis yAxisId="orders" tick={{ fill: 'rgb(114, 129, 151)', fontSize: 9 }} axisLine={false} tickLine={false}/><YAxis yAxisId="aov" orientation="right" tickFormatter={compactMoney} tick={{ fill: 'rgb(114, 129, 151)', fontSize: 9 }} axisLine={false} tickLine={false}/><Tooltip content={<OrdersAovTooltip average={avg} />} cursor={{ fill: 'rgba(148,163,184,.06)' }} /><Bar yAxisId="orders" dataKey="orders" name="Orders" fill="url(#ordersFill)" radius={[5, 5, 0, 0]}/><Line yAxisId="aov" type="monotone" dataKey="aov" name="AOV" stroke="rgb(45, 212, 191)" strokeWidth={2.4} dot={{ r: 2, fill: 'rgb(45, 212, 191)' }} activeDot={{ r: 4, strokeWidth: 2, fill: 'rgb(255, 255, 255)', stroke: 'rgb(45, 212, 191)' }}/></ComposedChart></ResponsiveContainer></div><div className="chart-caption"><span><i className="legend orders" />Orders</span><span><i className="legend aov" />AOV</span><b>{peakOrderDay ? `Busiest day ${shortDay(peakOrderDay.day)} · ${peakOrderDay.orders} orders` : 'Busiest day building…'}</b></div><div className="insight-strip"><Brain size={14}/><span>Average order value <b>{money(avg)}</b>{peakAovDay && peakAovDay.aov > avg ? <> with a peak of <b>{money(peakAovDay.aov)}</b> on {shortDay(peakAovDay.day)}</> : null}. When AOV climbs faster than order count, growth comes from bigger baskets — not just more buyers.</span></div></> : <RichEmpty icon={ShoppingBag} title="See value and volume together" message="Order bars and AOV will reveal whether growth comes from more buyers or larger baskets." progress={0} goal="Sync an order" />}
   </Widget>
 }
 
@@ -282,7 +283,7 @@ export function CategoryDistribution({ categories }: { categories: AnalyticsInsi
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <PieChart>
               <Pie data={[...categories]} dataKey="revenue" nameKey="name" innerRadius="62%" outerRadius="84%" paddingAngle={3}>
-                {categories.map((row, index) => <Cell key={row.name} fill={COLORS[index % COLORS.length] ?? '#38bdf8'} />)}
+                {categories.map((row, index) => <Cell key={row.name} fill={COLORS[index % COLORS.length] ?? 'rgb(56, 189, 248)'} />)}
               </Pie>
               <Tooltip formatter={(value) => money(safe(value))} />
             </PieChart>
@@ -339,15 +340,15 @@ export function DiscountLeakage({ snapshot, trend }: { snapshot: AnalyticsSnapsh
   return <Widget className="leakage-widget" eyebrow="Margin Protection" title="Discount & revenue leakage" action={data.hasData ? <span className={`scope-pill ${rate !== null && rate >= 15 ? 'warn' : ''}`} title="Share of merchandise value given away as discounts"><Percent size={12} />{rate === null ? 'No discounts' : `${rate.toFixed(1)}% discount rate`}</span> : undefined}>
     {data.hasData ? <>
       <div className="chart-mid"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={[...data.rows]} margin={{ top: 14, right: 6, left: -18 }}>
-        <defs><linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".55"/><stop offset="1" stopColor="#38bdf8" stopOpacity=".12"/></linearGradient></defs>
+        <defs><linearGradient id="collectedFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgb(56, 189, 248)" stopOpacity=".55"/><stop offset="1" stopColor="rgb(56, 189, 248)" stopOpacity=".12"/></linearGradient></defs>
         <CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false}/>
-        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={30}/>
-        <YAxis yAxisId="money" tickFormatter={compactMoney} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
-        <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(value: number) => `${Math.round(safe(value))}%`} tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={30}/>
+        <YAxis yAxisId="money" tickFormatter={compactMoney} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false}/>
+        <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(value: number) => `${Math.round(safe(value))}%`} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false}/>
         <Tooltip content={<LeakageTooltip average={rate} />} cursor={{ fill:'rgba(148,163,184,.06)' }}/>
         <Bar yAxisId="money" stackId="value" dataKey="collected" name="Collected" fill="url(#collectedFill)" radius={[0, 0, 0, 0]} maxBarSize={22}/>
-        <Bar yAxisId="money" stackId="value" dataKey="discounts" name="Discounts" fill="#f59e0b" fillOpacity={.85} radius={[4, 4, 0, 0]} maxBarSize={22}/>
-        {data.discounts > 0 && <Line yAxisId="rate" type="monotone" dataKey="discountRate" name="Discount rate" stroke="#fb923c" strokeWidth={2.2} dot={false} activeDot={{ r:4, strokeWidth:2, fill:'#ffffff', stroke:'#fb923c' }} connectNulls/>}
+        <Bar yAxisId="money" stackId="value" dataKey="discounts" name="Discounts" fill="rgb(245, 158, 11)" fillOpacity={.85} radius={[4, 4, 0, 0]} maxBarSize={22}/>
+        {data.discounts > 0 && <Line yAxisId="rate" type="monotone" dataKey="discountRate" name="Discount rate" stroke="rgb(251, 146, 60)" strokeWidth={2.2} dot={false} activeDot={{ r:4, strokeWidth:2, fill:'rgb(255, 255, 255)', stroke:'rgb(251, 146, 60)' }} connectNulls/>}
       </ComposedChart></ResponsiveContainer></div>
       <div className="chart-caption">
         <span><i className="legend collected"/>Collected</span>
@@ -376,10 +377,10 @@ function LeakageTooltip({ active, payload, label, average }: { active?: boolean;
   return <div className="analytics-tooltip">
     <strong>{formatDateLabel(label ?? point.day)}</strong>
     <div className="tooltip-metrics">
-      <div className="tooltip-row"><i style={{ background:'#38bdf8' }} /><span>Collected:</span><strong>{money(point.collected)}</strong></div>
-      <div className="tooltip-row"><i style={{ background:'#f59e0b' }} /><span>Discounts:</span><strong>{point.discounts > 0 ? `−${money(point.discounts)}` : money(0)}</strong></div>
-      <div className="tooltip-row"><i style={{ background:'#94a3b8' }} /><span>Merchandise:</span><strong>{money(merchandise)}</strong></div>
-      {point.discountRate !== null && <div className="tooltip-row"><i style={{ background:'#fb923c' }} /><span>Discount rate:</span><strong className={average != null && point.discountRate > average ? 'negative' : 'positive'}>{point.discountRate.toFixed(1)}%</strong></div>}
+      <div className="tooltip-row"><i style={{ background:'rgb(56, 189, 248)' }} /><span>Collected:</span><strong>{money(point.collected)}</strong></div>
+      <div className="tooltip-row"><i style={{ background:'rgb(245, 158, 11)' }} /><span>Discounts:</span><strong>{point.discounts > 0 ? `−${money(point.discounts)}` : money(0)}</strong></div>
+      <div className="tooltip-row"><i style={{ background:'rgb(148, 163, 184)' }} /><span>Merchandise:</span><strong>{money(merchandise)}</strong></div>
+      {point.discountRate !== null && <div className="tooltip-row"><i style={{ background:'rgb(251, 146, 60)' }} /><span>Discount rate:</span><strong className={average != null && point.discountRate > average ? 'negative' : 'positive'}>{point.discountRate.toFixed(1)}%</strong></div>}
     </div>
   </div>
 }
@@ -396,17 +397,17 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
   const risk = useMemo(() => stockRisk(inventory), [inventory])
   const chartRows = risk.items.filter((item) => item.days !== null).map((item) => ({ ...item, days: item.days ?? 0, short: item.label.length > 22 ? `${item.label.slice(0, 21)}…` : item.label }))
   const worst = risk.items[0] ?? null
-  const colorFor = (days: number, status: string) => (status === 'out' || days <= 3 ? '#f43f5e' : days <= risk.reorderWindowDays ? '#f59e0b' : '#34d399')
+  const colorFor = (days: number, status: string) => (status === 'out' || days <= 3 ? 'rgb(244, 63, 94)' : days <= risk.reorderWindowDays ? 'rgb(245, 158, 11)' : 'rgb(52, 211, 153)')
   return <Widget className="stockout-widget" eyebrow="Inventory Risk" title="Stock-out risk & cover" action={risk.hasInventory ? <span className={`scope-pill ${risk.urgentCount > 0 ? 'warn' : ''}`} title="SKUs out of stock or inside the reorder window"><PackageSearch size={12} />{risk.urgentCount > 0 ? `${risk.urgentCount} need action` : 'All SKUs covered'}</span> : undefined}>
     {loading ? <div className="stock-risk-loading"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line short" /></div>
       : !risk.hasInventory ? <RichEmpty icon={PackageSearch} title="Protect your bestsellers" message={risk.explanation} progress={0} goal="Sync products to measure stock cover" />
       : <>
         {chartRows.length ? <div className="chart-mid risk-chart"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart layout="vertical" data={chartRows} margin={{ top: 10, right: 22, left: 4, bottom: 4 }}>
           <CartesianGrid stroke="rgba(148,163,184,.08)" horizontal={false}/>
-          <XAxis type="number" tick={{ fill:'#728197', fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${Math.round(safe(value))}d`} />
-          <YAxis type="category" dataKey="short" width={104} tick={{ fill:'#8fa3bc', fontSize:9 }} axisLine={false} tickLine={false} />
+          <XAxis type="number" tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${Math.round(safe(value))}d`} />
+          <YAxis type="category" dataKey="short" width={104} tick={{ fill:'rgb(143, 163, 188)', fontSize:9 }} axisLine={false} tickLine={false} />
           <Tooltip content={<StockRiskTooltip window={risk.reorderWindowDays} />} cursor={{ fill:'rgba(148,163,184,.06)' }}/>
-          <ReferenceLine x={risk.reorderWindowDays} stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={1.2} label={{ position:'top', offset: 6, content: <PeakLabel value={`Reorder point ${risk.reorderWindowDays}d`} /> }} />
+          <ReferenceLine x={risk.reorderWindowDays} stroke="rgb(245, 158, 11)" strokeDasharray="4 4" strokeWidth={1.2} label={{ position:'top', offset: 6, content: <PeakLabel value={`Reorder point ${risk.reorderWindowDays}d`} /> }} />
           <Bar dataKey="days" name="Days of cover" radius={[0, 5, 5, 0]} maxBarSize={17}>
             {chartRows.map((row) => <Cell key={row.variantId} fill={colorFor(row.days, row.status)} />)}
           </Bar>
@@ -436,7 +437,7 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
                 : <><b>{worst.label}</b> is flagged {worst.status === 'low' ? 'low' : 'at risk'}{worst.quantity !== null ? <> with <b>{worst.quantity}</b> units left</> : null}.</>}
             {' '}Reorder before the {risk.reorderWindowDays}-day window closes to keep the revenue you already earn.</>
           : <>No SKU is inside the {risk.reorderWindowDays}-day reorder window — stock cover is healthy across {risk.trackedCount || risk.healthyCount} tracked {(risk.trackedCount || risk.healthyCount) === 1 ? 'SKU' : 'SKUs'}.</>}</span></div>
-        {!risk.coverAvailable && risk.hasInventory ? <div className="risk-note"><LockKeyhole size={12} /><span>{risk.explanation}</span><button type="button" onClick={onUpgrade}>Upgrade <ArrowUpRight size={12} /></button></div> : null}
+        {!risk.coverAvailable && risk.hasInventory ? <div className="risk-note"><LockKeyhole size={12} /><span>{risk.explanation}</span><Button type="button" onClick={onUpgrade}>Upgrade <ArrowUpRight size={12} /></Button></div> : null}
         {risk.untrackedCount > 0 ? <p className="risk-footnote">{risk.untrackedCount} SKU{risk.untrackedCount === 1 ? '' : 's'} are not tracked in Shopify, so they carry no stock signal.</p> : null}
       </>}
   </Widget>
@@ -449,11 +450,11 @@ function StockRiskTooltip({ active, payload, window }: { active?: boolean; paylo
   return <div className="analytics-tooltip">
     <strong>{point.label}</strong>
     <div className="tooltip-metrics">
-      <div className="tooltip-row"><i style={{ background: point.days <= window ? '#f59e0b' : '#34d399' }} /><span>Days of cover:</span><strong>{point.days.toFixed(1)}</strong></div>
-      {point.quantity !== null && <div className="tooltip-row"><i style={{ background:'#38bdf8' }} /><span>Units left:</span><strong>{point.quantity.toLocaleString()}</strong></div>}
-      {point.velocity !== null && <div className="tooltip-row"><i style={{ background:'#818cf8' }} /><span>Sells / day:</span><strong>{point.velocity.toFixed(2)}</strong></div>}
-      {point.exposure !== null && <div className="tooltip-row"><i style={{ background:'#f43f5e' }} /><span>30-day exposure:</span><strong className="negative">≈ {money(point.exposure)}</strong></div>}
-      {point.sku ? <div className="tooltip-row"><i style={{ background:'#94a3b8' }} /><span>SKU:</span><strong>{point.sku}</strong></div> : null}
+      <div className="tooltip-row"><i style={{ background: point.days <= window ? 'rgb(245, 158, 11)' : 'rgb(52, 211, 153)' }} /><span>Days of cover:</span><strong>{point.days.toFixed(1)}</strong></div>
+      {point.quantity !== null && <div className="tooltip-row"><i style={{ background:'rgb(56, 189, 248)' }} /><span>Units left:</span><strong>{point.quantity.toLocaleString()}</strong></div>}
+      {point.velocity !== null && <div className="tooltip-row"><i style={{ background:'rgb(129, 140, 248)' }} /><span>Sells / day:</span><strong>{point.velocity.toFixed(2)}</strong></div>}
+      {point.exposure !== null && <div className="tooltip-row"><i style={{ background:'rgb(244, 63, 94)' }} /><span>30-day exposure:</span><strong className="negative">≈ {money(point.exposure)}</strong></div>}
+      {point.sku ? <div className="tooltip-row"><i style={{ background:'rgb(148, 163, 184)' }} /><span>SKU:</span><strong>{point.sku}</strong></div> : null}
     </div>
   </div>
 }
@@ -476,7 +477,7 @@ export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insigh
       </div>
       <div className="widget-actions">
         {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}
-        <button className="icon-button" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse AI intelligence' : 'Expand AI intelligence'}>{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
+        <Button className="icon-button" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse AI intelligence' : 'Expand AI intelligence'}>{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</Button>
       </div>
     </header>
     {open && <div className="ai-grid">
@@ -492,9 +493,9 @@ export function AIIntelligence({ insights, trend, loading, onUpgrade }: { insigh
               {forecast?.status === 'available' ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <ComposedChart data={[...trend.slice(-14)]}>
-                    <Area type="monotone" dataKey="upper" fill="#8b5cf6" fillOpacity={0.12} stroke="none" />
-                    <Line type="monotone" dataKey="revenue" stroke="#38bdf8" dot={false} />
-                    <Line type="monotone" dataKey="forecast" stroke="#a78bfa" strokeDasharray="4 4" dot={false} />
+                    <Area type="monotone" dataKey="upper" fill="rgb(139, 92, 246)" fillOpacity={0.12} stroke="none" />
+                    <Line type="monotone" dataKey="revenue" stroke="rgb(56, 189, 248)" dot={false} />
+                    <Line type="monotone" dataKey="forecast" stroke="rgb(167, 139, 250)" strokeDasharray="4 4" dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
@@ -618,11 +619,11 @@ export function TemporalPatterns({ insights }: { insights: AnalyticsInsights | n
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <ComposedChart data={[...weekdays]}>
               <CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: '#8090a5', fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={compactMoney} tick={{ fill: '#8090a5', fontSize: 8 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="day" tick={{ fill: 'rgb(128, 144, 165)', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={compactMoney} tick={{ fill: 'rgb(128, 144, 165)', fontSize: 8 }} axisLine={false} tickLine={false} />
               <Tooltip formatter={(value) => money(safe(value))} />
               <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
-                {weekdays.map((row) => <Cell key={row.day} fill={row.day === best?.day ? '#38bdf8' : 'rgba(56,189,248,.22)'} />)}
+                {weekdays.map((row) => <Cell key={row.day} fill={row.day === best?.day ? 'rgb(56, 189, 248)' : 'rgba(56,189,248,.22)'} />)}
               </Bar>
             </ComposedChart>
           </ResponsiveContainer>
@@ -666,11 +667,11 @@ export function TemporalPatterns({ insights }: { insights: AnalyticsInsights | n
   </section>
 }
 
-export function ConversionFunnel({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget wide icon={Target} title="Conversion funnel" eyebrow="Conversion Journey" plan="Growth" message="See how visitors move from browsing to buying." onUpgrade={onUpgrade}/>; const funnel=insights?.funnel; return <Widget eyebrow="Conversion Journey" title="Conversion funnel" action={<span className="scope-pill"><Activity size={12}/> Order-based view</span>}><div className="funnel-layout"><div className="funnel-bars">{(funnel?.stages??[]).map((stage,index)=><div className={stage.value===null?'unavailable':''} style={{width:`${100-index*10}%`}} key={stage.name}><span>{stage.name}</span><strong>{stage.value===null?'Connect Shopify Analytics':stage.value.toLocaleString()}</strong></div>)}</div><div className="funnel-note"><Target size={22}/><div><strong>Order data is ready. Connect Shopify Analytics to track visitors.</strong><p>{funnel?.message??'Connect Shopify Analytics to track visitors and product views.'}</p><button className="text-button">View connection roadmap →</button></div></div></div></Widget> }
+export function ConversionFunnel({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'growth')) return <LockedWidget wide icon={Target} title="Conversion funnel" eyebrow="Conversion Journey" plan="Growth" message="See how visitors move from browsing to buying." onUpgrade={onUpgrade}/>; const funnel=insights?.funnel; return <Widget eyebrow="Conversion Journey" title="Conversion funnel" action={<span className="scope-pill"><Activity size={12}/> Order-based view</span>}><div className="funnel-layout"><div className="funnel-bars">{(funnel?.stages??[]).map((stage,index)=><div className={stage.value===null?'unavailable':''} style={{width:`${100-index*10}%`}} key={stage.name}><span>{stage.name}</span><strong>{stage.value===null?'Connect Shopify Analytics':stage.value.toLocaleString()}</strong></div>)}</div><div className="funnel-note"><Target size={22}/><div><strong>Order data is ready. Connect Shopify Analytics to track visitors.</strong><p>{funnel?.message??'Connect Shopify Analytics to track visitors and product views.'}</p><Button className="text-button">View connection roadmap →</Button></div></div></div></Widget> }
 
 export function Benchmarks({insights,onUpgrade}:{insights:AnalyticsInsights|null;onUpgrade:()=>void}) { if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={BarChart3} title="Benchmarks & advanced comparisons" eyebrow="Executive Overview" plan="Commander" message="Compare your performance across different time periods." onUpgrade={onUpgrade}/>; const comparisons=insights?.comparisons??[]; return <Widget eyebrow="Executive Overview" title="Benchmarks & advanced comparisons" badge="Commander">{comparisons.length?<div className="comparison-grid">{comparisons.map((row)=><div key={row.metric}><small>{row.metric}</small><strong>{row.metric==='Revenue'?money(row.current):row.current.toLocaleString()}</strong><span>Previous: {row.metric==='Revenue'?money(row.previous):row.previous.toLocaleString()}</span><b className={row.change!==null&&row.change<0?'negative':'positive'}>{row.change===null?'Baseline needed':`${row.change>=0?'↑':'↓'} ${Math.abs(row.change).toFixed(1)}%`}</b></div>)}{insights?.advancedForecast?.status==='available'&&<div><small>30-day predictive revenue</small><strong>{money(insights.advancedForecast.points.reduce((sum,row)=>sum+row.value,0))}</strong><span>Confidence range included</span><b className="positive">AI projection</b></div>}<div className="benchmark-pending"><Globe2 size={18}/><p><strong>Industry comparison</strong><small>Available when industry data is connected.</small></p></div></div>:<RichEmpty icon={BarChart3} title="Building comparison data" message="Sync more sales to compare different time periods." progress={Math.min(60,insights?.salesHistoryDays??0)} goal="60 sales days" />}</Widget> }
 
-export function CustomAIQuery({context,insights,onUpgrade}:{context:WorkspaceContext;insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const [question,setQuestion]=useState(''); const [answer,setAnswer]=useState(''); const [asking,setAsking]=useState(false); if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={Brain} title="Commander Copilot" eyebrow="AI Assistant" plan="Commander" message="Ask AI anything about your store data." onUpgrade={onUpgrade}/>; const ask=async(value=question)=>{if(!context.storeId||!value.trim())return;setQuestion(value);setAsking(true);try{const result=await queryAnalyticsInsights(context.storeId,value);setAnswer(result.text)}catch{setAnswer('AI is temporarily unavailable. Your dashboard data is still current.')}finally{setAsking(false)}}; const suggestions=['Which products should I promote this weekend?','Why did revenue change last period?','What is my strongest growth opportunity?']; return <Widget className="ai-query-widget" eyebrow="AI Assistant" title="Commander Copilot" badge={insights?.usage.limit===null?'Unlimited':`${insights?.usage.remaining??0} left today`}><div className="query-shell">{answer?<div className="analyst-answer"><span><Brain size={17}/></span><p>{answer}</p></div>:<div className="query-welcome"><Brain size={28}/><div><strong>Ask anything about your store</strong><p>AI uses only your store totals, never customer details.</p></div></div>}<div className="query-suggestions">{suggestions.map((item)=><button key={item} onClick={()=>void ask(item)}>{item}</button>)}</div><div className="query-input"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void ask()}} placeholder="Ask about revenue, products, customers, or timing…"/><button onClick={()=>void ask()} disabled={!question.trim()||asking}>{asking?<RefreshCw size={16} className="spin"/>:<Send size={16}/>}</button></div></div></Widget> }
+export function CustomAIQuery({context,insights,onUpgrade}:{context:WorkspaceContext;insights:AnalyticsInsights|null;onUpgrade:()=>void}) { const [question,setQuestion]=useState(''); const [answer,setAnswer]=useState(''); const [asking,setAsking]=useState(false); if(!hasPlan(insights,'commander')) return <LockedWidget wide icon={Brain} title="Commander Copilot" eyebrow="AI Assistant" plan="Commander" message="Ask AI anything about your store data." onUpgrade={onUpgrade}/>; const ask=async(value=question)=>{if(!context.storeId||!value.trim())return;setQuestion(value);setAsking(true);try{const result=await queryAnalyticsInsights(context.storeId,value);setAnswer(result.text)}catch{setAnswer('AI is temporarily unavailable. Your dashboard data is still current.')}finally{setAsking(false)}}; const suggestions=['Which products should I promote this weekend?','Why did revenue change last period?','What is my strongest growth opportunity?']; return <Widget className="ai-query-widget" eyebrow="AI Assistant" title="Commander Copilot" badge={insights?.usage.limit===null?'Unlimited':`${insights?.usage.remaining??0} left today`}><div className="query-shell">{answer?<div className="analyst-answer"><span><Brain size={17}/></span><p>{answer}</p></div>:<div className="query-welcome"><Brain size={28}/><div><strong>Ask anything about your store</strong><p>AI uses only your store totals, never customer details.</p></div></div>}<div className="query-suggestions">{suggestions.map((item)=><Button key={item} onClick={()=>void ask(item)}>{item}</Button>)}</div><div className="query-input"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void ask()}} placeholder="Ask about revenue, products, customers, or timing…"/><Button onClick={()=>void ask()} disabled={!question.trim()||asking}>{asking?<RefreshCw size={16} className="spin"/>:<Send size={16}/>}</Button></div></div></Widget> }
 
 function Widget({eyebrow,title,badge,action,className='',children}:{eyebrow:string;title:string;badge?:ReactNode;action?:ReactNode;className?:string;children:ReactNode}) {
   return <article className={`analytics-widget ${className}`}><header className="widget-header"><div className="widget-title">{eyebrow ? <small>{eyebrow}</small> : null}<h2>{title}</h2></div>{action??(badge?<span className="widget-badge">{badge}</span>:null)}</header><div className="widget-body">{children}</div></article>
@@ -703,9 +704,9 @@ function LockedWidget({
           <b>{plan} feature</b>
           <p>{message}</p>
         </div>
-        <button type="button" onClick={onUpgrade}>
+        <Button type="button" onClick={onUpgrade}>
           Upgrade to unlock <ArrowUpRight size={13} />
-        </button>
+        </Button>
       </div>
     </Widget>
   )
@@ -726,9 +727,9 @@ function LockedInline({
       </span>
       <strong>{plan} insight</strong>
       <p>{message}</p>
-      <button type="button" onClick={onUpgrade}>
+      <Button type="button" onClick={onUpgrade}>
         Upgrade to unlock <ArrowUpRight size={12} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -765,16 +766,16 @@ function PacingTooltip({ active, payload, label }: { active?: boolean; payload?:
       <time className="tooltip-date">{formatDateLabel(label ?? point.day)}</time>
       <div className="tooltip-metrics">
         {point.revenue > 0 && (
-          <div className="tooltip-row"><i style={{ background: '#2563EB' }} /><span>That day</span><strong>{money(point.revenue)}</strong></div>
+          <div className="tooltip-row"><i style={{ background: 'rgb(37, 99, 235)' }} /><span>That day</span><strong>{money(point.revenue)}</strong></div>
         )}
         {previous !== null && previous > 0 && (
-          <div className="tooltip-row"><i style={{ background: '#64748b' }} /><span>Previous pace</span><strong>{money(previous)}</strong></div>
+          <div className="tooltip-row"><i style={{ background: 'rgb(100, 116, 139)' }} /><span>Previous pace</span><strong>{money(previous)}</strong></div>
         )}
         {delta !== null && (
-          <div className="tooltip-row"><i style={{ background: delta >= 0 ? '#34d399' : '#fb7185' }} /><span>vs previous</span><strong className={delta >= 0 ? 'positive' : 'negative'}>{delta >= 0 ? '+' : ''}{delta.toFixed(1)}%</strong></div>
+          <div className="tooltip-row"><i style={{ background: delta >= 0 ? 'rgb(52, 211, 153)' : 'rgb(251, 113, 133)' }} /><span>vs previous</span><strong className={delta >= 0 ? 'positive' : 'negative'}>{delta >= 0 ? '+' : ''}{delta.toFixed(1)}%</strong></div>
         )}
         {point.forecast !== null && (
-          <div className="tooltip-row"><i style={{ background: '#a78bfa' }} /><span>AI forecast day</span><strong>{money(point.forecast)}</strong></div>
+          <div className="tooltip-row"><i style={{ background: 'rgb(167, 139, 250)' }} /><span>AI forecast day</span><strong>{money(point.forecast)}</strong></div>
         )}
       </div>
     </div>
@@ -799,20 +800,20 @@ export function RevenueTooltip({ active, payload, label }: { active?: boolean; p
       <time className="tooltip-date">{formattedDate}</time>
       <div className="tooltip-metrics">
         <div className="tooltip-row">
-          <i style={{ background: '#2563EB' }} />
+          <i style={{ background: 'rgb(37, 99, 235)' }} />
           <span>Orders</span>
           <strong>{orders}</strong>
         </div>
         {previous !== null && previous > 0 && (
           <div className="tooltip-row">
-            <i style={{ background: '#64748b' }} />
+            <i style={{ background: 'rgb(100, 116, 139)' }} />
             <span>vs Previous</span>
             <strong>{money(previous)}</strong>
           </div>
         )}
         {forecast !== null && (
           <div className="tooltip-row">
-            <i style={{ background: '#a78bfa' }} />
+            <i style={{ background: 'rgb(167, 139, 250)' }} />
             <span>AI Forecast</span>
             <strong>{money(forecast)}</strong>
           </div>
@@ -836,25 +837,25 @@ function OrdersAovTooltip({ active, payload, label, average }: { active?: boolea
       <strong>{formattedDate}</strong>
       <div className="tooltip-metrics">
         <div className="tooltip-row">
-          <i style={{ background: '#818cf8' }} />
+          <i style={{ background: 'rgb(129, 140, 248)' }} />
           <span>Orders:</span>
           <strong>{orders}</strong>
         </div>
         <div className="tooltip-row">
-          <i style={{ background: '#2dd4bf' }} />
+          <i style={{ background: 'rgb(45, 212, 191)' }} />
           <span>AOV:</span>
           <strong>{money(aov)}</strong>
         </div>
         {revenue > 0 && (
           <div className="tooltip-row">
-            <i style={{ background: '#38bdf8' }} />
+            <i style={{ background: 'rgb(56, 189, 248)' }} />
             <span>Revenue:</span>
             <strong>{money(revenue)}</strong>
           </div>
         )}
         {aovDelta !== null && (
           <div className="tooltip-row">
-            <i style={{ background: '#2dd4bf' }} />
+            <i style={{ background: 'rgb(45, 212, 191)' }} />
             <span>vs period avg:</span>
             <strong className={aovDelta >= 0 ? 'positive' : 'negative'}>{aovDelta >= 0 ? '+' : ''}{aovDelta.toFixed(0)}%</strong>
           </div>
@@ -863,7 +864,7 @@ function OrdersAovTooltip({ active, payload, label, average }: { active?: boolea
     </div>
   )
 }
-class Boundary extends Component<{label:string;children:ReactNode},{error:string|null}> { public state={error:null as string|null}; static getDerivedStateFromError(error:unknown){return{error:error instanceof Error?error.message:'Render error'}} componentDidCatch(error:unknown,info:ErrorInfo){console.error(`[analytics:${this.props.label}]`,error,info.componentStack)} render(){return this.state.error?<div className="section-fallback" role="alert"><AlertTriangle size={20}/><strong>{this.props.label} is taking a pause</strong><p>The rest of your analytics are still available.</p><button onClick={()=>this.setState({error:null})}>Retry section</button></div>:this.props.children} }
+class Boundary extends Component<{label:string;children:ReactNode},{error:string|null}> { public state={error:null as string|null}; static getDerivedStateFromError(error:unknown){return{error:error instanceof Error?error.message:'Render error'}} componentDidCatch(error:unknown,info:ErrorInfo){console.error(`[analytics:${this.props.label}]`,error,info.componentStack)} render(){return this.state.error?<div className="section-fallback" role="alert"><AlertTriangle size={20}/><strong>{this.props.label} is taking a pause</strong><p>The rest of your analytics are still available.</p><Button onClick={()=>this.setState({error:null})}>Retry section</Button></div>:this.props.children} }
 export const AnalyticsSectionBoundary = Boundary
 function hasPlan(insights:AnalyticsInsights|null,required:'growth'|'commander'){return Boolean(insights&&PLAN_RANK[insights.plan]>=PLAN_RANK[required])}
 function normalizeInsights(value:AnalyticsInsights|null|undefined):AnalyticsInsights|null { if(!value||typeof value!=='object')return null; return {...value,categories:Array.isArray(value.categories)?value.categories:[],topProducts:Array.isArray(value.topProducts)?value.topProducts:[],weekdays:Array.isArray(value.weekdays)?value.weekdays:[],peakHours:Array.isArray(value.peakHours)?value.peakHours:null,anomalies:Array.isArray(value.anomalies)?value.anomalies:value.anomalies===null?null:[],channels:Array.isArray(value.channels)?value.channels:[],geography:Array.isArray(value.geography)?value.geography:value.geography===null?null:[],cohorts:Array.isArray(value.cohorts)?value.cohorts:value.cohorts===null?null:[],comparisons:Array.isArray(value.comparisons)?value.comparisons:value.comparisons===null?null:[],opportunities:Array.isArray(value.opportunities)?value.opportunities:value.opportunities===null?null:[],locked:Array.isArray(value.locked)?value.locked:[],available:Array.isArray(value.available)?value.available:[],forecast:value.forecast??{status:'insufficient_data',message:'Connect your first sales days to begin forecasting.',points:[],standardDeviation:0}} }

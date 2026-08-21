@@ -1,5 +1,6 @@
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bot, CalendarDays, ChevronRight, MessageSquare, X } from 'lucide-react'
+import { Bot, CalendarDays, ChevronRight, MessageSquare, X } from './icons.js'
 import { ApiClientError, fetchCoachHuddle, fetchCoachPreferences, fetchCoachPriorities, fetchCoachStreak, streamCoachChat } from './api.js'
 import { PLAN_LABEL } from './store-coach-model.js'
 import type { CoachHuddle, CoachPlan, CoachPriority, CoachStreakView } from './store-coach-model.js'
@@ -76,7 +77,7 @@ export function CoachWidget({ storeId, onToast }: { storeId: string; onToast: (m
           >
             <span className="coach-widget-title"><Bot size={15} /> Store Coach</span>
             <span className="coach-widget-plan">{PLAN_LABEL[plan]}</span>
-            <button className="icon-button" onClick={() => setDismissed(true)} aria-label="Dismiss widget for this session"><X size={14} /></button>
+            <Button className="icon-button" onClick={() => setDismissed(true)} aria-label="Dismiss widget for this session"><X size={14} /></Button>
           </div>
           <div className="coach-widget-body">
             <div className="coach-widget-status">
@@ -96,20 +97,20 @@ export function CoachWidget({ storeId, onToast }: { storeId: string; onToast: (m
             {reply !== null && <div className="coach-widget-reply">{reply || <span className="coach-typing"><i /><i /><i /></span>}</div>}
             <div className="coach-widget-composer">
               <input value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void ask() }} placeholder="Ask your coach…" disabled={busy} />
-              <button className="icon-button" onClick={() => void ask()} disabled={busy || !message.trim()} aria-label="Send"><MessageSquare size={14} /></button>
+              <Button className="icon-button" onClick={() => void ask()} disabled={busy || !message.trim()} aria-label="Send"><MessageSquare size={14} /></Button>
             </div>
           </div>
           <a className="coach-widget-open" href={`/ai-growth-command/coach${window.location.search}`}>Open Store Coach <ChevronRight size={13} /></a>
         </div>
       )}
-      <button
+      <Button
         className="coach-widget-fab"
         onClick={() => setOpen((value) => !value)}
         aria-label={open ? 'Collapse Store Coach widget' : 'Expand Store Coach widget'}
       >
         {open ? <X size={18} /> : <Bot size={18} />}
         {!open && unread && <span className="coach-widget-dot" />}
-      </button>
+      </Button>
     </div>
   )
 }

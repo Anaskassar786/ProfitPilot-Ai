@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -18,7 +19,7 @@ import {
   Trash2,
   TrendingUp,
   X,
-} from 'lucide-react'
+} from './icons.js'
 import { downloadReport, fetchAnalytics, fetchBilling, fetchForecast, fetchReports, generateReport } from './api.js'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
 import type { ForecastBundle, ReportRun } from './f8-model.js'
@@ -248,13 +249,13 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
               <option value="CUSTOM">Custom</option>
             </select>
           </label>
-          <button type="button" className="button primary" onClick={() => void generate(headerKind)} disabled={generating !== null || !context.storeId}>
+          <Button type="button" className="button primary" onClick={() => void generate(headerKind)} disabled={generating !== null || !context.storeId}>
             {generating ? <LoaderCircle className="spin" size={15} /> : <FileBarChart size={15} />}
             Generate Report
-          </button>
-          <button type="button" className="button secondary" onClick={() => setSettingsOpen(true)} aria-label="Report settings">
+          </Button>
+          <Button type="button" className="button secondary" onClick={() => setSettingsOpen(true)} aria-label="Report settings">
             <Settings size={15} /> Settings
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -317,9 +318,9 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
             <span className="reports-kicker">Your reports</span>
             <h2>Recent reports generated</h2>
           </div>
-          <button type="button" className="button secondary" onClick={() => void refresh()} disabled={loading}>
+          <Button type="button" className="button secondary" onClick={() => void refresh()} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh
-          </button>
+          </Button>
         </div>
         {loading && visibleRuns.length === 0 ? (
           <div className="reports-empty"><LoaderCircle className="spin" size={18} /><span>Loading reports from your store…</span></div>
@@ -379,9 +380,9 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
               <small>{forecast.revenue.lower.toLocaleString()} – {forecast.revenue.upper.toLocaleString()} from your synced orders</small>
             </div>
           )}
-          <button type="button" className="text-button" onClick={() => setMethodologyOpen((open) => !open)}>
+          <Button type="button" className="text-button" onClick={() => setMethodologyOpen((open) => !open)}>
             {methodologyOpen ? 'Hide methodology' : 'Learn more about our methodology'} →
-          </button>
+          </Button>
           {methodologyOpen && (
             <div className="reports-method-more">
               <p>We never invent a number. If a closed period has no synced rows, the report states that the metric is not yet measurable. Forecast bands only appear after two closed weekly periods exist in your store data.</p>
@@ -407,7 +408,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
           <div className="reports-modal" role="dialog" aria-labelledby="reports-settings-title">
             <header>
               <h3 id="reports-settings-title">Report settings</h3>
-              <button type="button" className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={16} /></button>
+              <Button type="button" className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={16} /></Button>
             </header>
             <label className="reports-toggle-row">
               <span>
@@ -437,7 +438,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
           <div className="reports-modal" role="dialog" aria-labelledby="reports-custom-title">
             <header>
               <h3 id="reports-custom-title">Custom report range</h3>
-              <button type="button" className="icon-button" onClick={() => setCustomOpen(false)} aria-label="Close custom range"><X size={16} /></button>
+              <Button type="button" className="icon-button" onClick={() => setCustomOpen(false)} aria-label="Close custom range"><X size={16} /></Button>
             </header>
             {customGate.allowed ? (
               <>
@@ -447,11 +448,11 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
                   <label>End date<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} /></label>
                 </div>
                 <div className="reports-modal-actions">
-                  <button type="button" className="button secondary" onClick={() => setCustomOpen(false)}>Cancel</button>
-                  <button type="button" className="button primary" onClick={submitCustom} disabled={!customStart || !customEnd || generating === 'CUSTOM'}>
+                  <Button type="button" className="button secondary" onClick={() => setCustomOpen(false)}>Cancel</Button>
+                  <Button type="button" className="button primary" onClick={submitCustom} disabled={!customStart || !customEnd || generating === 'CUSTOM'}>
                     {generating === 'CUSTOM' ? <LoaderCircle className="spin" size={14} /> : <CalendarRange size={14} />}
                     Generate
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : (
@@ -474,7 +475,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
                 <h3 id="reports-preview-title">{preview.content.title}</h3>
                 <small>{preview.content.periodLabel}</small>
               </div>
-              <button type="button" className="icon-button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16} /></button>
+              <Button type="button" className="icon-button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16} /></Button>
             </header>
             <p>{preview.content.summary}</p>
             <div className="reports-preview-metrics">
@@ -514,10 +515,10 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
               </div>
             </div>
             <div className="reports-modal-actions">
-              <button type="button" className="button secondary" onClick={() => setPreview(null)}>Close</button>
-              <button type="button" className="button primary" onClick={() => void download(preview.run)} disabled={preview.run.status !== 'COMPLETED'}>
+              <Button type="button" className="button secondary" onClick={() => setPreview(null)}>Close</Button>
+              <Button type="button" className="button primary" onClick={() => void download(preview.run)} disabled={preview.run.status !== 'COMPLETED'}>
                 <Download size={14} /> Download PDF
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -558,10 +559,10 @@ function GenerateCard({
           <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
         </div>
       ) : (
-        <button type="button" className="button primary" onClick={onGenerate} disabled={generating || !gate.allowed} title={gate.reason ?? undefined}>
+        <Button type="button" className="button primary" onClick={onGenerate} disabled={generating || !gate.allowed} title={gate.reason ?? undefined}>
           {generating ? <LoaderCircle className="spin" size={14} /> : <FileBarChart size={14} />}
           Generate
-        </button>
+        </Button>
       )}
     </article>
   )
@@ -611,18 +612,18 @@ function ReportCard({
       <div className="reports-run-actions">
         {run.status === 'COMPLETED' && (
           <>
-            <button type="button" className="button primary" onClick={onDownload} disabled={busy}><Download size={13} /> Download PDF</button>
-            <button type="button" className="button secondary" onClick={onPreview}><Eye size={13} /> Preview</button>
+            <Button type="button" className="button primary" onClick={onDownload} disabled={busy}><Download size={13} /> Download PDF</Button>
+            <Button type="button" className="button secondary" onClick={onPreview}><Eye size={13} /> Preview</Button>
             {emailAllowed ? (
-              <button type="button" className="button secondary" onClick={onEmail} disabled={busy}><Mail size={13} /> Email</button>
+              <Button type="button" className="button secondary" onClick={onEmail} disabled={busy}><Mail size={13} /> Email</Button>
             ) : (
-              <button type="button" className="button secondary" onClick={onUpgrade}><Mail size={13} /> Upgrade Plan</button>
+              <Button type="button" className="button secondary" onClick={onUpgrade}><Mail size={13} /> Upgrade Plan</Button>
             )}
           </>
         )}
-        {run.status === 'GENERATING' && <button type="button" className="button secondary" disabled><LoaderCircle className="spin" size={13} /> Processing…</button>}
-        {run.status === 'FAILED' && <button type="button" className="button secondary" onClick={onRetry} disabled={busy}><RotateCcw size={13} /> Retry</button>}
-        <button type="button" className="icon-button" onClick={onDelete} aria-label={`Remove ${name} from this view`}><Trash2 size={14} /></button>
+        {run.status === 'GENERATING' && <Button type="button" className="button secondary" disabled><LoaderCircle className="spin" size={13} /> Processing…</Button>}
+        {run.status === 'FAILED' && <Button type="button" className="button secondary" onClick={onRetry} disabled={busy}><RotateCcw size={13} /> Retry</Button>}
+        <Button type="button" className="icon-button" onClick={onDelete} aria-label={`Remove ${name} from this view`}><Trash2 size={14} /></Button>
       </div>
     </article>
   )

@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import {
@@ -35,8 +36,8 @@ import {
   Users,
   X,
   Zap,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from './icons.js'
+import type { LucideIcon } from './icons.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 import { AiCommandMark } from './ai-command-logo.js'
 import { useAiCommandWorkspace } from './ai-command-hooks.js'
@@ -208,9 +209,9 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
           <span className={`aic-status ${workspace.busy ? 'busy' : 'live'}`} aria-live="polite">
             <i />{workspace.busy ? 'Thinking…' : 'Live'}
           </span>
-          <button type="button" className="aic-button secondary" onClick={workspace.newChat}><Plus size={15} /> New Chat</button>
-          <button type="button" className="aic-button ghost" onClick={() => { setHistoryOpen((value) => !value); setSettingsOpen(false) }} aria-expanded={historyOpen}><History size={15} /> History</button>
-          <button type="button" className="aic-button ghost icon-only" onClick={() => { setSettingsOpen((value) => !value); setHistoryOpen(false) }} aria-label="AI Command settings" aria-expanded={settingsOpen}><Settings size={15} /></button>
+          <Button type="button" className="aic-button secondary" onClick={workspace.newChat}><Plus size={15} /> New Chat</Button>
+          <Button type="button" className="aic-button ghost" onClick={() => { setHistoryOpen((value) => !value); setSettingsOpen(false) }} aria-expanded={historyOpen}><History size={15} /> History</Button>
+          <Button type="button" className="aic-button ghost icon-only" onClick={() => { setSettingsOpen((value) => !value); setHistoryOpen(false) }} aria-label="AI Command settings" aria-expanded={settingsOpen}><Settings size={15} /></Button>
         </div>
       </header>
 
@@ -304,9 +305,9 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 }}
               />
               <div className="aic-composer-side">
-                <button type="submit" className="aic-send" disabled={workspace.busy || !draft.trim()} aria-label="Send command">
+                <Button type="submit" className="aic-send" disabled={workspace.busy || !draft.trim()} aria-label="Send command">
                   {workspace.busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
-                </button>
+                </Button>
               </div>
             </div>
             {workspace.preferences?.autoSuggestionsEnabled !== false && <Suggestions draft={draft} onPick={(value) => { setDraft(value); draftRef.current?.focus() }} />}
@@ -328,11 +329,11 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
 
       {(historyOpen || settingsOpen) && (
         <div className="aic-drawer-wrap">
-          <button type="button" className="aic-drawer-backdrop" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }} aria-label="Close panel" />
+          <Button type="button" className="aic-drawer-backdrop" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }} aria-label="Close panel" />
           <aside className="aic-drawer" aria-label={settingsOpen ? 'AI Command settings' : 'AI Command history'}>
             <div className="aic-drawer-head">
               <h3>{settingsOpen ? 'Settings' : 'Conversations'}</h3>
-              <button type="button" className="aic-icon" aria-label="Close panel" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }}><X size={16} /></button>
+              <Button type="button" className="aic-icon" aria-label="Close panel" onClick={() => { setHistoryOpen(false); setSettingsOpen(false) }}><X size={16} /></Button>
             </div>
             <div className="aic-drawer-scroll">
               {settingsOpen && workspace.preferences && (
@@ -382,15 +383,15 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                           const preview = conversationPreview(item)
                           return (
                             <div key={item.id} className={`aic-thread ${workspace.conversation?.id === item.id ? 'active' : ''}`}>
-                              <button type="button" className="aic-thread-main" onClick={() => void workspace.openConversation(item.id)}>
+                              <Button type="button" className="aic-thread-main" onClick={() => void workspace.openConversation(item.id)}>
                                 <strong>{item.title}</strong>
                                 <small>{preview.question}</small>
                                 {preview.answer && <em>{preview.answer}</em>}
-                              </button>
-                              <button type="button" className="aic-icon" aria-label="Save conversation as command" onClick={() => void workspace.saveCurrent(item.title.slice(0, 40), lastUserQuestion(item))}><Star size={13} /></button>
-                              {(plan === 'growth' || plan === 'commander') && <button type="button" className="aic-icon" aria-label="Export conversation" onClick={() => void workspace.exportConversation(item.id)}><Download size={13} /></button>}
-                              <button type="button" className="aic-icon" aria-label="Archive conversation" onClick={() => void workspace.archive(item.id)}><Archive size={13} /></button>
-                              <button type="button" className="aic-icon" aria-label="Delete conversation" onClick={() => void workspace.removeConversation(item.id)}><Trash2 size={13} /></button>
+                              </Button>
+                              <Button type="button" className="aic-icon" aria-label="Save conversation as command" onClick={() => void workspace.saveCurrent(item.title.slice(0, 40), lastUserQuestion(item))}><Star size={13} /></Button>
+                              {(plan === 'growth' || plan === 'commander') && <Button type="button" className="aic-icon" aria-label="Export conversation" onClick={() => void workspace.exportConversation(item.id)}><Download size={13} /></Button>}
+                              <Button type="button" className="aic-icon" aria-label="Archive conversation" onClick={() => void workspace.archive(item.id)}><Archive size={13} /></Button>
+                              <Button type="button" className="aic-icon" aria-label="Delete conversation" onClick={() => void workspace.removeConversation(item.id)}><Trash2 size={13} /></Button>
                             </div>
                           )
                         })}
@@ -405,9 +406,9 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                     </div>
                   )}
                   {workspace.conversations.length > 0 && (
-                    <button type="button" className="aic-text-button danger" onClick={() => { if (window.confirm('Delete all conversations? This cannot be undone.')) { void clearAllConversations(workspace.conversations, workspace.removeConversation) } }}>
+                    <Button type="button" className="aic-text-button danger" onClick={() => { if (window.confirm('Delete all conversations? This cannot be undone.')) { void clearAllConversations(workspace.conversations, workspace.removeConversation) } }}>
                       <Trash2 size={13} /> Clear all
-                    </button>
+                    </Button>
                   )}
                 </section>
               )}
@@ -416,8 +417,8 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 {workspace.saved.length === 0 && <p className="aic-muted">Star a command to save it here.</p>}
                 {workspace.saved.map((item) => (
                   <div key={item.id} className="aic-saved">
-                    <button type="button" onClick={() => void workspace.runSaved(item.id)}><Star size={13} /> {item.name}<small>{item.useCount} uses</small></button>
-                    <button type="button" className="aic-icon" aria-label="Delete saved command" onClick={() => void workspace.removeSaved(item.id)}><X size={13} /></button>
+                    <Button type="button" onClick={() => void workspace.runSaved(item.id)}><Star size={13} /> {item.name}<small>{item.useCount} uses</small></Button>
+                    <Button type="button" className="aic-icon" aria-label="Delete saved command" onClick={() => void workspace.removeSaved(item.id)}><X size={13} /></Button>
                   </div>
                 ))}
               </section>
@@ -495,14 +496,14 @@ function WelcomeScreen({ plan, usage, now, actionsEnabled, onPrompt, onUpgrade }
         </div>
         <div className="aic-capabilities-grid">
           {CAPABILITIES.map((capability) => (
-            <button type="button" key={capability.title} className={`aic-capability tone-${capability.tone}`} onClick={() => onPrompt(capability.sample)}>
+            <Button type="button" key={capability.title} className={`aic-capability tone-${capability.tone}`} onClick={() => onPrompt(capability.sample)}>
               <span className="aic-capability-icon"><capability.icon size={16} /></span>
               <span className="aic-capability-copy">
                 <strong>{capability.title}</strong>
                 <small><em>“{capability.sample}”</em></small>
               </span>
               <ArrowUpRight size={14} className="aic-capability-arrow" />
-            </button>
+            </Button>
           ))}
           <div className={`aic-capability store-actions ${actionMode ? 'enabled' : 'locked'}`}>
             <span className="aic-capability-icon"><Zap size={16} /></span>
@@ -517,7 +518,7 @@ function WelcomeScreen({ plan, usage, now, actionsEnabled, onPrompt, onUpgrade }
                 : (
                   <span className="aic-capability-lock">
                     <Lock size={14} /> Locked
-                    <button type="button" className="aic-mini-upgrade" onClick={onUpgrade}>Upgrade Plan</button>
+                    <Button type="button" className="aic-mini-upgrade" onClick={onUpgrade}>Upgrade Plan</Button>
                   </span>
                 )}
           </div>
@@ -528,9 +529,9 @@ function WelcomeScreen({ plan, usage, now, actionsEnabled, onPrompt, onUpgrade }
         <span className="aic-popular-label">Or try these popular questions</span>
         <div className="aic-popular-chips">
           {POPULAR_QUESTIONS.map((question) => (
-            <button type="button" key={question.label} className={`tone-${question.tone}`} onClick={() => onPrompt(question.prompt)}>
+            <Button type="button" key={question.label} className={`tone-${question.tone}`} onClick={() => onPrompt(question.prompt)}>
               <span className="aic-chip-icon"><question.icon size={13} /></span> {question.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -542,14 +543,14 @@ function WelcomeScreen({ plan, usage, now, actionsEnabled, onPrompt, onUpgrade }
         </div>
         <div className="aic-templates-grid">
           {TEMPLATES.map((template) => (
-            <button type="button" key={template.title} className={`aic-template tone-${template.tone}`} onClick={() => onPrompt(template.command)}>
+            <Button type="button" key={template.title} className={`aic-template tone-${template.tone}`} onClick={() => onPrompt(template.command)}>
               <span className="aic-template-icon"><template.icon size={15} /></span>
               <span className="aic-template-copy">
                 <strong>{template.title}</strong>
                 <small>{template.command}</small>
               </span>
               <ChevronRight size={14} className="aic-template-arrow" />
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -594,7 +595,7 @@ export function PostChatActivity({ usageHistory, now, lastCommand = '', insights
         <div className="aic-postchat-head"><ArrowUpRight size={14} /> Continue exploring <small>Based on your last command</small></div>
         <div className="aic-followups-grid">
           {suggestions.slice(0, 6).map((suggestion) => (
-            <button key={suggestion.command} type="button" disabled={disabled} onClick={() => onPrompt(suggestion.command)}>{suggestion.label}<ChevronRight size={13} /></button>
+            <Button key={suggestion.command} type="button" disabled={disabled} onClick={() => onPrompt(suggestion.command)}>{suggestion.label}<ChevronRight size={13} /></Button>
           ))}
         </div>
       </section>
@@ -603,11 +604,11 @@ export function PostChatActivity({ usageHistory, now, lastCommand = '', insights
         <div className="aic-postchat-head"><Zap size={14} /> Quick insights <small>{insights?.sources.length ? 'Live synced store data' : 'Waiting for synced store data'}</small></div>
         <div className="aic-insights-grid">
           {insightCards.map((card) => (
-            <button key={card.label} type="button" className={`tone-${card.tone}`} disabled={disabled} onClick={() => onPrompt(card.prompt)}>
+            <Button key={card.label} type="button" className={`tone-${card.tone}`} disabled={disabled} onClick={() => onPrompt(card.prompt)}>
               <span className="aic-insight-icon"><card.icon size={16} /></span>
               <span><small>{card.label}</small><strong>{card.value}</strong><em>{card.detail}</em></span>
               <ChevronRight size={14} />
-            </button>
+            </Button>
           ))}
         </div>
       </section>
@@ -616,7 +617,7 @@ export function PostChatActivity({ usageHistory, now, lastCommand = '', insights
         <div className="aic-postchat-head"><Star size={14} /> Popular commands <small>Always available</small></div>
         <div className="aic-popular-compact">
           {POPULAR_COMPACT.map((item) => (
-            <button key={item.label} type="button" disabled={disabled} onClick={() => onPrompt(item.command)}><item.icon size={14} /> {item.label}</button>
+            <Button key={item.label} type="button" disabled={disabled} onClick={() => onPrompt(item.command)}><item.icon size={14} /> {item.label}</Button>
           ))}
         </div>
       </section>
@@ -624,7 +625,7 @@ export function PostChatActivity({ usageHistory, now, lastCommand = '', insights
       <section className="aic-daily-tip" aria-label="AI tip of the day">
         <span className="aic-tip-icon">💡</span>
         <div><strong>AI tip of the day</strong><p>{tip.text}</p></div>
-        <button type="button" disabled={disabled} onClick={() => onPrompt(tip.command)}>Try it <ArrowUpRight size={13} /></button>
+        <Button type="button" disabled={disabled} onClick={() => onPrompt(tip.command)}>Try it <ArrowUpRight size={13} /></Button>
       </section>
 
       <section className="aic-activity" aria-label="Your command activity for the last 7 days">
@@ -760,35 +761,35 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo
 
         {message.contentType === 'action_preview' && message.action?.id && message.action.status === 'PENDING' && (
           <div className="aic-preview-actions">
-            <button type="button" className="aic-button approve" disabled={busy} onClick={() => onApprove(message.action!.id!)}><Check size={14} /> Approve</button>
-            <button type="button" className="aic-button secondary" disabled={busy} onClick={() => onEdit(message.action!.id!)}><Pencil size={14} /> Edit</button>
-            <button type="button" className="aic-button ghost" disabled={busy} onClick={() => onCancel(message.action!.id!)}><X size={14} /> Cancel</button>
+            <Button type="button" className="aic-button approve" disabled={busy} onClick={() => onApprove(message.action!.id!)}><Check size={14} /> Approve</Button>
+            <Button type="button" className="aic-button secondary" disabled={busy} onClick={() => onEdit(message.action!.id!)}><Pencil size={14} /> Edit</Button>
+            <Button type="button" className="aic-button ghost" disabled={busy} onClick={() => onCancel(message.action!.id!)}><X size={14} /> Cancel</Button>
           </div>
         )}
         {message.contentType === 'action_result' && message.action?.rollbackAvailable && undoLeft > 0 && (
-          <button type="button" className="aic-button secondary" onClick={() => onUndo(message.action!.id!)}><Undo2 size={14} /> Undo ({undoLeft}s remaining)</button>
+          <Button type="button" className="aic-button secondary" onClick={() => onUndo(message.action!.id!)}><Undo2 size={14} /> Undo ({undoLeft}s remaining)</Button>
         )}
         {message.contentType === 'upgrade' && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
 
         {!mine && (
           <div className="aic-bubble-actions">
             {copyable && (
-              <button type="button" className="aic-chip-action" onClick={copy} aria-label="Copy response" title="Copy"><Copy size={13} /></button>
+              <Button type="button" className="aic-chip-action" onClick={copy} aria-label="Copy response" title="Copy"><Copy size={13} /></Button>
             )}
             {copyable && (
-              <button type="button" className="aic-chip-action" onClick={() => void share()} aria-label="Share response" title="Share"><Share2 size={13} /></button>
+              <Button type="button" className="aic-chip-action" onClick={() => void share()} aria-label="Share response" title="Share"><Share2 size={13} /></Button>
             )}
             {message.contentType === 'text' || message.contentType === 'structured_data' ? (
-              <button type="button" className="aic-chip-action" onClick={onRegenerate} aria-label="Regenerate response" title="Regenerate"><RefreshCw size={13} /></button>
+              <Button type="button" className="aic-chip-action" onClick={onRegenerate} aria-label="Regenerate response" title="Regenerate"><RefreshCw size={13} /></Button>
             ) : null}
             {copyable && (
               <>
-                <button type="button" className="aic-chip-action" onClick={() => onFeedback('HELPFUL')} aria-label="Good response" title="Helpful"><ThumbsUp size={13} /></button>
-                <button type="button" className="aic-chip-action" onClick={() => onFeedback('NOT_HELPFUL')} aria-label="Poor response" title="Not helpful"><ThumbsDown size={13} /></button>
+                <Button type="button" className="aic-chip-action" onClick={() => onFeedback('HELPFUL')} aria-label="Good response" title="Helpful"><ThumbsUp size={13} /></Button>
+                <Button type="button" className="aic-chip-action" onClick={() => onFeedback('NOT_HELPFUL')} aria-label="Poor response" title="Not helpful"><ThumbsDown size={13} /></Button>
               </>
             )}
             {message.contentType === 'text' && (
-              <button type="button" className="aic-chip-action" onClick={onSave} aria-label="Save this command" title="Save command"><Star size={13} /></button>
+              <Button type="button" className="aic-chip-action" onClick={onSave} aria-label="Save this command" title="Save command"><Star size={13} /></Button>
             )}
           </div>
         )}
@@ -808,9 +809,9 @@ function OffTopicBlock({ content, onPrompt }: { content: string; onPrompt: (valu
       <p>{content}</p>
       <div className="aic-offtopic-suggestions">
         {suggestions.map((suggestion) => (
-          <button key={suggestion.label} type="button" className="aic-offtopic-chip" onClick={() => onPrompt(suggestion.prompt)}>
+          <Button key={suggestion.label} type="button" className="aic-offtopic-chip" onClick={() => onPrompt(suggestion.prompt)}>
             <suggestion.icon size={13} /> {suggestion.label}
-          </button>
+          </Button>
         ))}
       </div>
       <p className="aic-offtopic-cta">What would you like to know about your store?</p>
@@ -887,7 +888,7 @@ function GrowthPlanBlock({ data, source, onPrompt }: { data: Record<string, unkn
           <div>{commands.map((command) => {
             const label = typeof command.label === 'string' ? command.label : 'Continue'
             const prompt = typeof command.command === 'string' ? command.command : ''
-            return <button key={`${label}-${prompt}`} type="button" disabled={!prompt} onClick={() => onPrompt(prompt)}>{actionMode ? <Zap size={13} /> : <Search size={13} />}{label}<ChevronRight size={13} /></button>
+            return <Button key={`${label}-${prompt}`} type="button" disabled={!prompt} onClick={() => onPrompt(prompt)}>{actionMode ? <Zap size={13} /> : <Search size={13} />}{label}<ChevronRight size={13} /></Button>
           })}</div>
         </div>
       )}
@@ -969,7 +970,7 @@ function ThinkingCard({ steps, streaming, onCancel }: { steps: readonly string[]
         <span className="aic-thinking-dots"><i /><i /><i /></span>
         AI Command is thinking…
         <span className="aic-thinking-eta">usually under 15 seconds</span>
-        <button type="button" className="aic-thinking-cancel" onClick={onCancel} aria-label="Cancel command">Cancel <X size={12} /></button>
+        <Button type="button" className="aic-thinking-cancel" onClick={onCancel} aria-label="Cancel command">Cancel <X size={12} /></Button>
       </div>
       <ol className="aic-thinking-steps">
         {STEPS.map((step, index) => (
@@ -995,9 +996,9 @@ function Suggestions({ draft, onPick }: { draft: string; onPick: (value: string)
   return (
     <div className="aic-suggestions" role="listbox" aria-label="Suggestions">
       {matches.map((item) => (
-        <button key={item} type="button" role="option" onClick={() => onPick(item)}>
+        <Button key={item} type="button" role="option" onClick={() => onPick(item)}>
           <Search size={12} /> {item}
-        </button>
+        </Button>
       ))}
     </div>
   )
@@ -1021,7 +1022,7 @@ function QuickCommands({ commands, disabled, onSend }: {
     <div className="aic-quick" aria-label="Quick commands">
       <div className="aic-quick-tabs" role="tablist">
         {categories.map((category) => (
-          <button
+          <Button
             key={category.id}
             type="button"
             role="tab"
@@ -1030,14 +1031,14 @@ function QuickCommands({ commands, disabled, onSend }: {
             onClick={() => setActive(category.id)}
           >
             <category.icon size={13} /> {category.label}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="aic-quick-pills">
         {groups[current].map((command) => (
-          <button key={command.id} type="button" className={`tone-${quickCommandTone(command)}`} onClick={() => onSend(command.command)} disabled={disabled}>
+          <Button key={command.id} type="button" className={`tone-${quickCommandTone(command)}`} onClick={() => onSend(command.command)} disabled={disabled}>
             {command.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -1097,7 +1098,7 @@ function RecentCommandsCard({ conversations, onOpen, onNewChat }: {
     <section className="aic-side-block recent">
       <div className="aic-side-head-row">
         <h3>Recent commands</h3>
-        <button type="button" className="aic-text-button" onClick={onNewChat}><Plus size={12} /> New</button>
+        <Button type="button" className="aic-text-button" onClick={onNewChat}><Plus size={12} /> New</Button>
       </div>
       {recent.length === 0 && (
         <div className="aic-inline-empty">
@@ -1109,14 +1110,14 @@ function RecentCommandsCard({ conversations, onOpen, onNewChat }: {
       {recent.map((item) => {
         const preview = conversationPreview(item)
         return (
-          <button key={item.id} type="button" className="aic-recent" onClick={() => onOpen(item.id)}>
+          <Button key={item.id} type="button" className="aic-recent" onClick={() => onOpen(item.id)}>
             <span className="aic-recent-meta">
               <time>{new Date(item.lastMessageAt).toLocaleString()}</time>
               <ChevronRight size={12} />
             </span>
             <strong>{preview.question}</strong>
             {preview.answer && <small>{preview.answer}</small>}
-          </button>
+          </Button>
         )
       })}
     </section>
@@ -1174,13 +1175,13 @@ function ShowcaseCard({ onPrompt }: { onPrompt: (value: string) => void }) {
         <span className="aic-showcase-icon"><current.icon size={18} /></span>
         <strong>{current.title}</strong>
         <p>{current.description}</p>
-        <button type="button" className="aic-showcase-run" onClick={() => onPrompt(current.sample)}>
+        <Button type="button" className="aic-showcase-run" onClick={() => onPrompt(current.sample)}>
           <Search size={12} /> {current.sample}
-        </button>
+        </Button>
       </div>
       <div className="aic-showcase-dots" role="tablist" aria-label="Showcase pages">
         {SHOWCASES.map((item, dotIndex) => (
-          <button
+          <Button
             key={item.title}
             type="button"
             role="tab"

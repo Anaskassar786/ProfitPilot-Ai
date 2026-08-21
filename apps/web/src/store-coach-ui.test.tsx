@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { TrendingUp, Trophy } from 'lucide-react'
+import { TrendingUp, Trophy } from './icons.js'
 import {
   BadgeRadar,
   BigNumberCard,

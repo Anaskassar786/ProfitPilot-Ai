@@ -4,8 +4,9 @@
  * Large health gauge, eight vital signs with status pills and trends,
  * diagnosed conditions, prescriptions, and the real score history trend.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useState } from 'react'
-import { Activity, HeartPulse, RefreshCw, Stethoscope } from 'lucide-react'
+import { Activity, HeartPulse, RefreshCw, Stethoscope } from './icons.js'
 import type { ExecutiveHealthDiagnosis } from './executive-model.js'
 import { executiveDateLabel } from './executive-model.js'
 import { fetchExecutiveHealth, fetchExecutiveHealthTrends, runExecutiveDiagnosis } from './executive-api.js'
@@ -54,7 +55,7 @@ export function ExecutiveHealthPage({ context, plan, gates, onToast, onUpgrade }
         kicker="Business checkup"
         title="Business Health Diagnosis"
         description="Eight vital signs computed from real store rows — revenue growth, retention, inventory turnover, cash conversion, marketing ROI, product diversity, order velocity, and acquisition."
-        actions={<button type="button" className="button primary" onClick={() => void diagnose()} disabled={running || !storeId}><Stethoscope size={14} /> {running ? 'Diagnosing…' : 'Run Diagnosis'}</button>}
+        actions={<Button type="button" className="button primary" onClick={() => void diagnose()} disabled={running || !storeId}><Stethoscope size={14} /> {running ? 'Diagnosing…' : 'Run Diagnosis'}</Button>}
       />
       {loading && <ExecutiveSkeleton rows={6} label="Health diagnosis" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}

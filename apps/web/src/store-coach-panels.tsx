@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useState } from 'react'
 import {
   Check,
@@ -7,7 +8,7 @@ import {
   Send,
   Sparkles,
   X,
-} from 'lucide-react'
+} from './icons.js'
 import { completeCoachOnboardingStep, fetchCoachOnboarding, fetchCoachPreferences, skipCoachOnboarding } from './api.js'
 import { COACH_LIMITS, PERSONALITY_META, PLAN_LABEL, coachPersonalitiesForPlan, huddleTimeLabel } from './store-coach-model.js'
 import type { CoachPlan } from './store-coach-model.js'
@@ -74,7 +75,7 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
             <h2>Meet Store Coach</h2>
             <p>Your AI business advisor — five steps, two minutes.</p>
           </div>
-          <button className="icon-button" onClick={onClose}><X size={17} /></button>
+          <Button className="icon-button" onClick={onClose}><X size={17} /></Button>
         </div>
         <div className="coach-onboarding-steps">
           {ONBOARDING_STEPS.map((entry) => (
@@ -98,11 +99,11 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
               {(Object.keys(PERSONALITY_META) as (keyof typeof PERSONALITY_META)[]).map((id) => {
                 const allowed = coachPersonalitiesForPlan(plan).includes(id)
                 return (
-                  <button key={id} className={`${personality === id ? 'active' : ''}`} disabled={!allowed} onClick={() => setPersonality(id)}>
+                  <Button key={id} className={`${personality === id ? 'active' : ''}`} disabled={!allowed} onClick={() => setPersonality(id)}>
                     <strong>{PERSONALITY_META[id].label}{!allowed && <small className="coach-personality-locked"> · {PLAN_LABEL[id === 'MOTIVATIONAL' ? 'start' : 'growth']}+</small>}</strong>
                     <small>{PERSONALITY_META[id].tagline}</small>
                     <p>“{PERSONALITY_META[id].sample}”</p>
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -111,10 +112,10 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
             <div className="coach-onboarding-time">
               <div className="coach-time-presets">
                 {([[420, 'Morning', '7:00 AM — recommended'], [600, 'Late morning', '10:00 AM'], [840, 'Afternoon', '2:00 PM'], [1080, 'Evening', '6:00 PM']] as const).map(([minutes, label, detail]) => (
-                  <button key={minutes} type="button" className={`coach-time-preset ${huddleMinutes === minutes ? 'active' : ''}`} onClick={() => setHuddleMinutes(minutes)}>
+                  <Button key={minutes} type="button" className={`coach-time-preset ${huddleMinutes === minutes ? 'active' : ''}`} onClick={() => setHuddleMinutes(minutes)}>
                     <strong>{label}</strong>
                     <small>{detail}</small>
-                  </button>
+                  </Button>
                 ))}
               </div>
               <div className="coach-onboarding-time-row">
@@ -139,19 +140,19 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
               </div>
               <div className="coach-chat-try-label"><Lightbulb size={13} /> Try your first question in AI Command</div>
               <div className="coach-chat-suggestions">
-                <button onClick={finish}>How did my store do yesterday?</button>
-                <button onClick={finish}>What should I focus on today?</button>
-                <button onClick={finish}>Suggest a goal for this week</button>
+                <Button onClick={finish}>How did my store do yesterday?</Button>
+                <Button onClick={finish}>What should I focus on today?</Button>
+                <Button onClick={finish}>Suggest a goal for this week</Button>
               </div>
             </div>
           )}
         </div>
         <div className="coach-onboarding-actions">
-          <button className="text-button" onClick={skip} disabled={busy}>Skip the tour</button>
+          <Button className="text-button" onClick={skip} disabled={busy}>Skip the tour</Button>
           <span className="coach-onboarding-progress">{Math.min(visibleStep, 5)} of 5</span>
           <div>
-            {visibleStep > 1 && <button className="button secondary" onClick={() => advance(visibleStep - 1)} disabled={busy}>Back</button>}
-            {visibleStep < 5 ? <button className="button primary" onClick={() => advance()} disabled={busy}>{visibleStep === 2 ? 'Save personality' : visibleStep === 3 ? 'Save time' : 'Continue'} <Sparkles size={13} /></button> : <button className="button primary" onClick={finish} disabled={busy}>Finish & explore <Send size={13} /></button>}
+            {visibleStep > 1 && <Button className="button secondary" onClick={() => advance(visibleStep - 1)} disabled={busy}>Back</Button>}
+            {visibleStep < 5 ? <Button className="button primary" onClick={() => advance()} disabled={busy}>{visibleStep === 2 ? 'Save personality' : visibleStep === 3 ? 'Save time' : 'Continue'} <Sparkles size={13} /></Button> : <Button className="button primary" onClick={finish} disabled={busy}>Finish & explore <Send size={13} /></Button>}
           </div>
         </div>
       </div>

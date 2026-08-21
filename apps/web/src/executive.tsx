@@ -15,10 +15,11 @@
  * The dashboard is plan-aware: every locked section renders an aspirational
  * overlay whose CTA is always "Upgrade Plan" — never a plan name.
  */
+import { Button } from './polaris-ui.js'
 import './executive.css'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowUpRight, CalendarDays, Compass, Download, Eye, FileBarChart, Gauge, Lightbulb, ListChecks, Map, Settings, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, Compass, Download, Eye, FileBarChart, Gauge, Lightbulb, ListChecks, Map, Settings, ShieldCheck } from './icons.js'
 import type { PlanTier } from '@profitpilot/types'
 import type { WorkspaceContext } from './model.js'
 import type { ExecutiveDashboard, ExecutiveGate } from './executive-model.js'
@@ -296,8 +297,8 @@ function GrowthIqHeader({ plan, onNavigate, onUpgrade }: { plan: PlanTier; onNav
         </div>
       </div>
       <div className="exec-page-actions">
-        <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/settings`)}><Settings size={14} /> Settings</button>
-        <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports/generate`)}><FileBarChart size={14} /> Generate Report</button>
+        <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/settings`)}><Settings size={14} /> Settings</Button>
+        <Button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports/generate`)}><FileBarChart size={14} /> Generate Report</Button>
         <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
       </div>
     </div>
@@ -400,7 +401,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         {/* 1 — Executive summary */}
         <section className="exec-summary-hero span-12">
           <div>
-            <div className="exec-kicker" style={{ color: '#A78BFA' }}>Executive summary{dashboard.latestReport ? ` · ${executiveMonthLabel(dashboard.latestReport.periodStart)}` : ''}</div>
+            <div className="exec-kicker" style={{ color: 'rgb(167, 139, 250)' }}>Executive summary{dashboard.latestReport ? ` · ${executiveMonthLabel(dashboard.latestReport.periodStart)}` : ''}</div>
             <h2>{summary ?? (plan === 'trial' ? 'Your summary appears with your first board report.' : 'No board report yet — generate one to open your strategy room.')}</h2>
             <p>{summary
               ? `${summary.slice(0, 340)}${summary.length > 340 ? '…' : ''}`
@@ -418,9 +419,9 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
             </div>
           </div>
           <div className="exec-summary-actions">
-            <button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports`)}>Read Full Report <ArrowUpRight size={14} /></button>
+            <Button type="button" className="button primary" onClick={() => onNavigate(`${base}/reports`)}>Read Full Report <ArrowUpRight size={14} /></Button>
             {gateFor('reports')?.allowed && plan !== 'trial' && (
-              <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports`)}><FileBarChart size={14} /> Generate Report</button>
+              <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports`)}><FileBarChart size={14} /> Generate Report</Button>
             )}
           </div>
         </section>
@@ -434,7 +435,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Vital signs</div><h3>Strategic Health</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/health`)}>Full diagnosis <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/health`)}>Full diagnosis <ArrowUpRight size={13} /></Button>
           </div>
           {health ? (
             <div className="exec-health-row">
@@ -458,7 +459,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Benchmarks</div><h3>Industry Position</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/benchmarks`)}>All benchmarks <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/benchmarks`)}>All benchmarks <ArrowUpRight size={13} /></Button>
           </div>
           {position ? (
             <>
@@ -483,18 +484,18 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-4">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Growth</div><h3>Strategic Opportunities</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/opportunities`)}>View all <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/opportunities`)}>View all <ArrowUpRight size={13} /></Button>
           </div>
           {dashboard.opportunities.length === 0 ? (
             <ExecutiveEmptyState icon={Lightbulb} title="No opportunities yet" description="Analyze your business to identify growth moves with computed annual impact." action="Analyze now" onAction={() => onNavigate(`${base}/opportunities`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {dashboard.opportunities.slice(0, 3).map((opportunity) => (
-                <button key={opportunity.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/opportunities`)}>
+                <Button key={opportunity.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/opportunities`)}>
                   <strong>{opportunity.title}</strong>
                   <span style={{ color: 'var(--exec-purple)', fontWeight: 700 }}>{formatExecutiveMoney(opportunity.estimatedImpactAnnual, opportunity.impactCurrency, 0)} / yr</span>
                   <span>{opportunity.effortLevel.toLowerCase()} effort · {opportunity.timeline.replace('_', ' ').toLowerCase()}</span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -504,7 +505,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-4">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Early warning</div><h3>Risk Radar</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/risks`)}>Open radar <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/risks`)}>Open radar <ArrowUpRight size={13} /></Button>
           </div>
           {risks.length === 0 ? (
             <ExecutiveEmptyState icon={ShieldCheck} title="No significant risks detected" description="Your diversification currently sits inside healthy bands. Scans re-check this automatically." action="Run scan" onAction={() => onNavigate(`${base}/risks`)} />
@@ -540,17 +541,17 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">What-if</div><h3>Scenario Planning</h3></div>
-            <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/scenarios`)}><Compass size={14} /> New Scenario</button>
+            <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/scenarios`)}><Compass size={14} /> New Scenario</Button>
           </div>
           {dashboard.scenarios.length === 0 ? (
             <ExecutiveEmptyState icon={Compass} title="No scenarios yet" description="Model a price change, product launch, or marketing move against your real baseline." action="Create scenario" onAction={() => onNavigate(`${base}/scenarios`)} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {dashboard.scenarios.slice(0, 3).map((scenario) => (
-                <button key={scenario.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/scenarios`)}>
+                <Button key={scenario.id} type="button" className="exec-scenario-template" onClick={() => onNavigate(`${base}/scenarios`)}>
                   <strong>{scenario.title}</strong>
                   <span>{scenario.scenarioType} · {scenario.predictions.currency} {formatExecutiveMoney(Math.round(scenario.predictions.delta.monthlyRevenue ?? 0), null, 0)}/mo projected delta · {executiveDateLabel(scenario.createdAt)}</span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -560,7 +561,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Direction</div><h3>Strategic Roadmap</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/roadmaps`)}>Full roadmap <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/roadmaps`)}>Full roadmap <ArrowUpRight size={13} /></Button>
           </div>
           {roadmap ? (
             <>
@@ -593,7 +594,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Accountability</div><h3>Recent Decisions</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/decisions`)}>Decision log <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/decisions`)}>Decision log <ArrowUpRight size={13} /></Button>
           </div>
           {dashboard.decisions.length === 0 ? (
             <ExecutiveEmptyState icon={ListChecks} title="No decisions logged" description="Log strategic decisions and record real outcomes — accuracy grades follow automatically." action="Log a decision" onAction={() => onNavigate(`${base}/decisions`)} />
@@ -616,7 +617,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Boardroom</div><h3>Monthly Board Report</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/reports`)}>All reports <ArrowUpRight size={13} /></button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/reports`)}>All reports <ArrowUpRight size={13} /></Button>
           </div>
           {dashboard.latestReport ? (
             <>
@@ -626,7 +627,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                   <strong style={{ fontSize: 14, color: 'var(--exec-heading)', fontFamily: 'var(--exec-sans)', fontWeight: 700 }}>{executiveMonthLabel(dashboard.latestReport.periodStart)} board report</strong>
                   <p style={{ margin: '4px 0 8px', fontSize: 12.5, color: 'var(--exec-body)', lineHeight: 1.55 }}>Executive summary · strategic position · key insights · financial forecast · recommendations.</p>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports/${dashboard.latestReport!.id}`)}><Eye size={14} /> View Report</button>
+                    <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports/${dashboard.latestReport!.id}`)}><Eye size={14} /> View Report</Button>
                     {plan === 'commander' && (
                       <a className="button secondary" href={executivePdfDownloadUrl(dashboard.latestReport!.id)}><Download size={14} /> Download PDF</a>
                     )}
@@ -649,7 +650,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
         <section className="exec-section span-6">
           <div className="exec-section-head">
             <div><div className="exec-kicker">Your plan</div><h3>GrowthIQ Features</h3></div>
-            <button type="button" className="text-button" onClick={() => onNavigate(`${base}/settings`)}>Preferences</button>
+            <Button type="button" className="text-button" onClick={() => onNavigate(`${base}/settings`)}>Preferences</Button>
           </div>
           <GrowthIqPlanPanel plan={plan} onUpgrade={onUpgrade} />
         </section>

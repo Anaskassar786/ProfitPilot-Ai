@@ -12,6 +12,7 @@
  *
  * No production component, layout, or data path is changed by this file.
  */
+import { Button } from './polaris-ui.js'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
@@ -158,11 +159,11 @@ function Harness() {
       <div data-harness-bar style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--card)', flexWrap: 'wrap', color: 'var(--text)', fontSize: 12 }}>
         <strong style={{ marginRight: 6 }}>AI Command Center — theme verification</strong>
         {(['fresh', 'populated'] as Scenario[]).map((id) => (
-          <button key={id} onClick={() => switchScenario(id)} className={`button ${scenario === id ? 'primary' : 'secondary'}`}>{id}</button>
+          <Button key={id} onClick={() => switchScenario(id)} className={`button ${scenario === id ? 'primary' : 'secondary'}`}>{id}</Button>
         ))}
         <span style={{ color: 'var(--text-tertiary)' }}>event → {note}</span>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setLight((value) => !value)} className="button secondary">{light ? 'Dark' : 'Light'} mode</button>
+        <Button onClick={() => setLight((value) => !value)} className="button secondary">{light ? 'Dark' : 'Light'} mode</Button>
       </div>
       <div className="page-scroll">
         <div className="page-content">

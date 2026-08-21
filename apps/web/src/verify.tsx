@@ -4,6 +4,7 @@
  * server and open /verify.html to inspect every affected surface in both
  * themes with realistic mock data. No backend required.
  */
+import { Button } from './polaris-ui.js'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
@@ -119,13 +120,13 @@ function Harness() {
       <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--bg-secondary)', flexWrap: 'wrap' }}>
         <strong style={{ fontSize: 13, color: 'var(--text)', marginRight: 6 }}>PR #44 verification</strong>
         {(['dashboard', 'analytics', 'inventory', 'orders'] as Page[]).map((id) => (
-          <button key={id} onClick={() => setPage(id)} className={`period-toggle-btn ${page === id ? 'active' : ''}`} style={{ textTransform: 'capitalize' }}>
+          <Button key={id} onClick={() => setPage(id)} className={`period-toggle-btn ${page === id ? 'active' : ''}`} style={{ textTransform: 'capitalize' }}>
             {id}
-          </button>
+          </Button>
         ))}
         <span style={{ flex: 1 }} />
-        <button onClick={() => setLight(false)} className={`period-toggle-btn ${light ? '' : 'active'}`}>Dark</button>
-        <button onClick={() => setLight(true)} className={`period-toggle-btn ${light ? 'active' : ''}`}>Light</button>
+        <Button onClick={() => setLight(false)} className={`period-toggle-btn ${light ? '' : 'active'}`}>Dark</Button>
+        <Button onClick={() => setLight(true)} className={`period-toggle-btn ${light ? 'active' : ''}`}>Light</Button>
       </div>
       <div className="page-content" style={{ padding: 22, maxWidth: 1240, margin: '0 auto' }}>
         {page === 'dashboard' && <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />}

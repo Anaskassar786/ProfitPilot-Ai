@@ -5,25 +5,25 @@
    ========================================================================== */
 
 .aic-shell {
-  --aic-bg: #0F0F0F;
-  --aic-panel: #1A1A1A;
-  --aic-panel-2: #242424;
-  --aic-border: #2E2E2E;
+  --aic-bg: rgb(15, 15, 15);
+  --aic-panel: rgb(26, 26, 26);
+  --aic-panel-2: rgb(36, 36, 36);
+  --aic-border: rgb(46, 46, 46);
   --aic-border-soft: rgba(120, 133, 157, .18);
-  --aic-text: #F5F5F5;
-  --aic-text-secondary: #A3A3A3;
-  --aic-text-muted: #737373;
-  --aic-accent: #8B5CF6;
-  --aic-accent-strong: #7C3AED;
+  --aic-text: rgb(245, 245, 245);
+  --aic-text-secondary: rgb(163, 163, 163);
+  --aic-text-muted: rgb(115, 115, 115);
+  --aic-accent: rgb(139, 92, 246);
+  --aic-accent-strong: rgb(124, 58, 237);
   --aic-accent-soft: rgba(139, 92, 246, .14);
   --aic-accent-border: rgba(139, 92, 246, .3);
-  --aic-user-bg: #2A2A2A;
-  --aic-user-border: #3A3A3A;
-  --aic-ai-bg: #1F1F1F;
-  --aic-ai-border: #2C2C2C;
-  --aic-success: #10B981;
-  --aic-warning: #F59E0B;
-  --aic-danger: #EF4444;
+  --aic-user-bg: rgb(42, 42, 42);
+  --aic-user-border: rgb(58, 58, 58);
+  --aic-ai-bg: rgb(31, 31, 31);
+  --aic-ai-border: rgb(44, 44, 44);
+  --aic-success: rgb(16, 185, 129);
+  --aic-warning: rgb(245, 158, 11);
+  --aic-danger: rgb(239, 68, 68);
   --aic-shadow: 0 8px 30px rgba(0, 0, 0, .35);
   --aic-ring-track: rgba(120, 133, 157, .22);
 
@@ -35,25 +35,25 @@
 }
 
 .app-shell.light-mode .aic-shell {
-  --aic-bg: #F8FAFC;
-  --aic-panel: #FFFFFF;
-  --aic-panel-2: #FFFFFF;
-  --aic-border: #E2E8F0;
-  --aic-border-soft: #E2E8F0;
-  --aic-text: #0F172A;
-  --aic-text-secondary: #475569;
-  --aic-text-muted: #64748B;
-  --aic-accent: #7C3AED;
-  --aic-accent-strong: #6D28D9;
+  --aic-bg: rgb(248, 250, 252);
+  --aic-panel: rgb(255, 255, 255);
+  --aic-panel-2: rgb(255, 255, 255);
+  --aic-border: rgb(226, 232, 240);
+  --aic-border-soft: rgb(226, 232, 240);
+  --aic-text: rgb(15, 23, 42);
+  --aic-text-secondary: rgb(71, 85, 105);
+  --aic-text-muted: rgb(100, 116, 139);
+  --aic-accent: rgb(124, 58, 237);
+  --aic-accent-strong: rgb(109, 40, 217);
   --aic-accent-soft: rgba(124, 58, 237, .1);
   --aic-accent-border: rgba(124, 58, 237, .35);
-  --aic-user-bg: #F3E8FF;
+  --aic-user-bg: rgb(243, 232, 255);
   --aic-user-border: rgba(124, 58, 237, .25);
-  --aic-ai-bg: #FFFFFF;
-  --aic-ai-border: #E2E8F0;
-  --aic-success: #16A34A;
-  --aic-warning: #D97706;
-  --aic-danger: #DC2626;
+  --aic-ai-bg: rgb(255, 255, 255);
+  --aic-ai-border: rgb(226, 232, 240);
+  --aic-success: rgb(22, 163, 74);
+  --aic-warning: rgb(217, 119, 6);
+  --aic-danger: rgb(220, 38, 38);
   --aic-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 24px rgba(16, 24, 40, .05);
   --aic-ring-track: rgba(107, 114, 128, .2);
 }
@@ -80,7 +80,7 @@
 }
 .ac-wordmark-text em {
   font-style: normal;
-  background: linear-gradient(120deg, var(--aic-accent), #C084FC);
+  background: linear-gradient(120deg, var(--aic-accent), rgb(192, 132, 252));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -219,8 +219,8 @@
 .aic-button.ghost:hover { color: var(--aic-text); border-color: var(--aic-border); background: var(--aic-panel-2); }
 .aic-button.ghost.icon-only { width: 38px; padding: 0; }
 .aic-button.approve {
-  color: #fff;
-  background: linear-gradient(135deg, #059669, #10B981);
+  color: rgb(255, 255, 255);
+  background: linear-gradient(135deg, rgb(5, 150, 105), rgb(16, 185, 129));
   border-color: rgba(16, 185, 129, .4);
   box-shadow: 0 4px 12px rgba(16, 185, 129, .28);
 }
@@ -295,14 +295,14 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6D28D9, #8B5CF6);
+  background: linear-gradient(90deg, rgb(109, 40, 217), rgb(139, 92, 246));
   transition: width 300ms ease;
 }
 .aic-planbar.amber { border-color: rgba(245, 158, 11, .35); }
-.aic-planbar.amber .aic-planbar-track i { background: linear-gradient(90deg, #D97706, #F59E0B); }
+.aic-planbar.amber .aic-planbar-track i { background: linear-gradient(90deg, rgb(217, 119, 6), rgb(245, 158, 11)); }
 .aic-planbar.red { border-color: rgba(239, 68, 68, .4); }
-.aic-planbar.red .aic-planbar-track i { background: linear-gradient(90deg, #DC2626, #EF4444); }
-.aic-planbar.unlimited .aic-planbar-track i { width: 100% !important; background: linear-gradient(90deg, #6D28D9, #C084FC); }
+.aic-planbar.red .aic-planbar-track i { background: linear-gradient(90deg, rgb(220, 38, 38), rgb(239, 68, 68)); }
+.aic-planbar.unlimited .aic-planbar-track i { width: 100% !important; background: linear-gradient(90deg, rgb(109, 40, 217), rgb(192, 132, 252)); }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
 .aic-layout {
@@ -349,20 +349,20 @@
   font-size: 13px;
 }
 .aic-banner.error {
-  color: #FCA5A5;
+  color: rgb(252, 165, 165);
   border: 1px solid rgba(239, 68, 68, .3);
   background: rgba(239, 68, 68, .08);
 }
 .aic-banner.limit {
-  color: #FDE68A;
+  color: rgb(253, 230, 138);
   border: 1px solid rgba(245, 158, 11, .35);
   background: rgba(245, 158, 11, .1);
   align-items: flex-start;
 }
 .app-shell.light-mode .aic-banner.limit {
-  color: #92400E;
-  border-color: #FDE68A;
-  background: #FFFBEB;
+  color: rgb(146, 64, 14);
+  border-color: rgb(253, 230, 138);
+  background: rgb(255, 251, 235);
 }
 .aic-limit-copy {
   display: flex;
@@ -374,7 +374,7 @@
 .aic-limit-copy strong { font-size: 13px; font-weight: 700; color: inherit; }
 .aic-limit-copy span { font-size: 12px; opacity: .9; }
 .app-shell.light-mode .aic-banner.error {
-  color: #B91C1C;
+  color: rgb(185, 28, 28);
   border-color: rgba(220, 38, 38, .25);
   background: rgba(254, 226, 226, .6);
 }
@@ -446,8 +446,8 @@
   text-align: left;
 }
 .app-shell.light-mode .aic-welcome-limit {
-  background: #FFFBEB;
-  color: #92400E;
+  background: rgb(255, 251, 235);
+  color: rgb(146, 64, 14);
 }
 .aic-welcome-limit span { flex: 1; min-width: 220px; }
 .aic-welcome-limit strong { font-weight: 700; }
@@ -463,7 +463,7 @@
   box-shadow: var(--aic-shadow);
 }
 .app-shell.light-mode .aic-capabilities {
-  background: #FFFFFF;
+  background: rgb(255, 255, 255);
 }
 .aic-capabilities-head {
   display: flex;
@@ -493,7 +493,7 @@
   cursor: pointer;
   transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
-.app-shell.light-mode .aic-capability { background: #FFFFFF; }
+.app-shell.light-mode .aic-capability { background: rgb(255, 255, 255); }
 .aic-capability:hover {
   background: var(--aic-accent-soft);
   z-index: 1;
@@ -540,9 +540,9 @@
   padding: 4px 9px;
   border: 1px solid var(--aic-accent-border);
   border-radius: 999px;
-  background: linear-gradient(135deg, #2563EB, #7C3AED);
-  color: #fff;
-  font-size: 11px;
+  background: linear-gradient(135deg, rgb(37, 99, 235), rgb(124, 58, 237));
+  color: rgb(255, 255, 255);
+  font-size: 12px;
   font-weight: 700;
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
@@ -550,12 +550,12 @@
 
 /* Category tones */
 .tone-purple .aic-capability-icon, .aic-capability.tone-purple .aic-capability-icon { color: var(--aic-accent); background: var(--aic-accent-soft); }
-.tone-blue .aic-capability-icon, .aic-capability.tone-blue .aic-capability-icon { color: #3B82F6; background: rgba(59, 130, 246, .12); }
-.app-shell.light-mode .aic-capability.tone-blue .aic-capability-icon { color: #2563EB; }
-.tone-green .aic-capability-icon, .aic-capability.tone-green .aic-capability-icon { color: #10B981; background: rgba(16, 185, 129, .12); }
-.app-shell.light-mode .aic-capability.tone-green .aic-capability-icon { color: #059669; }
-.tone-orange .aic-capability-icon, .aic-capability.tone-orange .aic-capability-icon { color: #F97316; background: rgba(249, 115, 22, .12); }
-.app-shell.light-mode .aic-capability.tone-orange .aic-capability-icon { color: #EA580C; }
+.tone-blue .aic-capability-icon, .aic-capability.tone-blue .aic-capability-icon { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .12); }
+.app-shell.light-mode .aic-capability.tone-blue .aic-capability-icon { color: rgb(37, 99, 235); }
+.tone-green .aic-capability-icon, .aic-capability.tone-green .aic-capability-icon { color: rgb(16, 185, 129); background: rgba(16, 185, 129, .12); }
+.app-shell.light-mode .aic-capability.tone-green .aic-capability-icon { color: rgb(5, 150, 105); }
+.tone-orange .aic-capability-icon, .aic-capability.tone-orange .aic-capability-icon { color: rgb(249, 115, 22); background: rgba(249, 115, 22, .12); }
+.app-shell.light-mode .aic-capability.tone-orange .aic-capability-icon { color: rgb(234, 88, 12); }
 .aic-capability.tone-purple:hover { background: var(--aic-accent-soft); }
 .aic-capability.tone-blue:hover { background: rgba(59, 130, 246, .08); }
 .aic-capability.tone-green:hover { background: rgba(16, 185, 129, .08); }
@@ -598,7 +598,7 @@
   cursor: pointer;
   transition: border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
-.app-shell.light-mode .aic-popular-chips button { background: #FFFFFF; }
+.app-shell.light-mode .aic-popular-chips button { background: rgb(255, 255, 255); }
 .aic-popular-chips button:hover {
   color: var(--aic-text);
   border-color: var(--aic-accent-border);
@@ -615,12 +615,12 @@
   color: var(--aic-accent);
   background: var(--aic-accent-soft);
 }
-.aic-popular-chips button.tone-blue .aic-chip-icon { color: #3B82F6; background: rgba(59, 130, 246, .12); }
-.app-shell.light-mode .aic-popular-chips button.tone-blue .aic-chip-icon { color: #2563EB; }
-.aic-popular-chips button.tone-green .aic-chip-icon { color: #10B981; background: rgba(16, 185, 129, .12); }
-.app-shell.light-mode .aic-popular-chips button.tone-green .aic-chip-icon { color: #059669; }
-.aic-popular-chips button.tone-orange .aic-chip-icon { color: #F97316; background: rgba(249, 115, 22, .12); }
-.app-shell.light-mode .aic-popular-chips button.tone-orange .aic-chip-icon { color: #EA580C; }
+.aic-popular-chips button.tone-blue .aic-chip-icon { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .12); }
+.app-shell.light-mode .aic-popular-chips button.tone-blue .aic-chip-icon { color: rgb(37, 99, 235); }
+.aic-popular-chips button.tone-green .aic-chip-icon { color: rgb(16, 185, 129); background: rgba(16, 185, 129, .12); }
+.app-shell.light-mode .aic-popular-chips button.tone-green .aic-chip-icon { color: rgb(5, 150, 105); }
+.aic-popular-chips button.tone-orange .aic-chip-icon { color: rgb(249, 115, 22); background: rgba(249, 115, 22, .12); }
+.app-shell.light-mode .aic-popular-chips button.tone-orange .aic-chip-icon { color: rgb(234, 88, 12); }
 
 /* ── Command templates ──────────────────────────────────────────────────── */
 .aic-templates {
@@ -633,7 +633,7 @@
   overflow: hidden;
   text-align: left;
 }
-.app-shell.light-mode .aic-templates { background: #FFFFFF; }
+.app-shell.light-mode .aic-templates { background: rgb(255, 255, 255); }
 .aic-templates-head {
   display: flex;
   align-items: center;
@@ -669,7 +669,7 @@
   cursor: pointer;
   transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
-.app-shell.light-mode .aic-template { background: #FFFFFF; }
+.app-shell.light-mode .aic-template { background: rgb(255, 255, 255); }
 .aic-template:hover { z-index: 1; background: var(--aic-accent-soft); }
 .aic-template-icon {
   width: 30px;
@@ -681,14 +681,14 @@
   color: var(--aic-accent);
   background: var(--aic-accent-soft);
 }
-.aic-template.tone-blue .aic-template-icon { color: #3B82F6; background: rgba(59, 130, 246, .12); }
-.app-shell.light-mode .aic-template.tone-blue .aic-template-icon { color: #2563EB; }
-.aic-template.tone-green .aic-template-icon { color: #10B981; background: rgba(16, 185, 129, .12); }
-.app-shell.light-mode .aic-template.tone-green .aic-template-icon { color: #059669; }
-.aic-template.tone-orange .aic-template-icon { color: #F97316; background: rgba(249, 115, 22, .12); }
-.app-shell.light-mode .aic-template.tone-orange .aic-template-icon { color: #EA580C; }
-.aic-template.tone-amber .aic-template-icon { color: #F59E0B; background: rgba(245, 158, 11, .12); }
-.app-shell.light-mode .aic-template.tone-amber .aic-template-icon { color: #D97706; }
+.aic-template.tone-blue .aic-template-icon { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .12); }
+.app-shell.light-mode .aic-template.tone-blue .aic-template-icon { color: rgb(37, 99, 235); }
+.aic-template.tone-green .aic-template-icon { color: rgb(16, 185, 129); background: rgba(16, 185, 129, .12); }
+.app-shell.light-mode .aic-template.tone-green .aic-template-icon { color: rgb(5, 150, 105); }
+.aic-template.tone-orange .aic-template-icon { color: rgb(249, 115, 22); background: rgba(249, 115, 22, .12); }
+.app-shell.light-mode .aic-template.tone-orange .aic-template-icon { color: rgb(234, 88, 12); }
+.aic-template.tone-amber .aic-template-icon { color: rgb(245, 158, 11); background: rgba(245, 158, 11, .12); }
+.app-shell.light-mode .aic-template.tone-amber .aic-template-icon { color: rgb(217, 119, 6); }
 .aic-template-copy {
   display: flex;
   flex-direction: column;
@@ -780,8 +780,8 @@
   font-size: 12px;
   font-weight: 750;
 }
-.aic-avatar.user { color: #3B82F6; background: rgba(59, 130, 246, .12); }
-.app-shell.light-mode .aic-avatar.user { color: #2563EB; background: rgba(37, 99, 235, .1); }
+.aic-avatar.user { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .12); }
+.app-shell.light-mode .aic-avatar.user { color: rgb(37, 99, 235); background: rgba(37, 99, 235, .1); }
 .aic-avatar.ai { color: var(--aic-accent); background: var(--aic-accent-soft); }
 
 .aic-bubble-body {
@@ -811,8 +811,8 @@
 }
 .app-shell.light-mode .aic-bubble.upgrade .aic-bubble-body,
 .app-shell.light-mode .aic-bubble.blocked .aic-bubble-body {
-  background: #FFFBEB;
-  border-color: #FDE68A;
+  background: rgb(255, 251, 235);
+  border-color: rgb(253, 230, 138);
 }
 .aic-bubble.offtopic .aic-bubble-body { border-color: var(--aic-accent-border); }
 .aic-bubble.action_result .aic-bubble-body { border-color: rgba(16, 185, 129, .3); }
@@ -962,7 +962,7 @@
   background: var(--aic-panel);
 }
 .aic-growth-signals svg { grid-row: span 2; color: var(--aic-accent); }
-.aic-growth-signals span { color: var(--aic-text-muted); font-size: 11px; }
+.aic-growth-signals span { color: var(--aic-text-muted); font-size: 12px; }
 .aic-growth-signals strong { overflow: hidden; color: var(--aic-text); font-size: 14px; text-overflow: ellipsis; }
 .aic-growth-priorities { display: grid; gap: 7px; margin: 0; padding-left: 20px; color: var(--aic-text-secondary); font-size: 13px; }
 .aic-growth-actions { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--aic-border-soft); }
@@ -1004,9 +1004,9 @@
   border-radius: 12px;
   background: var(--aic-panel-2);
 }
-.app-shell.light-mode .aic-metric { background: #F9FAFB; }
+.app-shell.light-mode .aic-metric { background: rgb(249, 250, 251); }
 .aic-metric.primary { border-color: var(--aic-accent-border); background: var(--aic-accent-soft); }
-.app-shell.light-mode .aic-metric.primary { background: #F5F3FF; }
+.app-shell.light-mode .aic-metric.primary { background: rgb(245, 243, 255); }
 .aic-metric-label { font-size: 12px; color: var(--aic-text-muted); }
 .aic-metric strong { font-size: clamp(16px, 1.8vw, 21px); font-weight: 800; color: var(--aic-text); letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .aic-metric small { font-size: 12px; font-weight: 650; }
@@ -1024,14 +1024,14 @@
   border-radius: 12px;
   background: var(--aic-panel-2);
 }
-.app-shell.light-mode .aic-compare { background: #F9FAFB; }
+.app-shell.light-mode .aic-compare { background: rgb(249, 250, 251); }
 .aic-compare-label { font-size: 12px; color: var(--aic-text-muted); }
 .aic-compare-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.aic-compare-row > i { font-size: 11px; font-style: normal; color: var(--aic-text-muted); }
+.aic-compare-row > i { font-size: 12px; font-style: normal; color: var(--aic-text-muted); }
 .aic-compare-row em {
   display: flex;
   align-items: center;
@@ -1042,7 +1042,7 @@
   display: block;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6D28D9, #8B5CF6);
+  background: linear-gradient(90deg, rgb(109, 40, 217), rgb(139, 92, 246));
   min-width: 4px;
   transition: width 400ms ease;
 }
@@ -1059,7 +1059,7 @@
   border-radius: 12px;
   background: var(--aic-panel-2);
 }
-.app-shell.light-mode .aic-health { background: #F9FAFB; }
+.app-shell.light-mode .aic-health { background: rgb(249, 250, 251); }
 .aic-health-ring {
   width: 72px;
   height: 72px;
@@ -1080,7 +1080,7 @@
   background: var(--aic-panel);
 }
 .aic-health-ring-inner strong { font-size: 22px; font-weight: 800; color: var(--aic-text); line-height: 1; }
-.aic-health-ring-inner small { font-size: 11px; color: var(--aic-text-muted); }
+.aic-health-ring-inner small { font-size: 12px; color: var(--aic-text-muted); }
 .aic-health-copy { display: flex; flex-direction: column; gap: 3px; }
 .aic-health-copy strong { font-size: 15px; color: var(--aic-text); }
 .aic-health-copy small { font-size: 12px; color: var(--aic-text-secondary); }
@@ -1126,7 +1126,7 @@
 .aic-thinking-eta {
   margin-left: auto;
   color: var(--aic-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .aic-thinking-cancel {
@@ -1215,7 +1215,7 @@
   resize: vertical;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.app-shell.light-mode .aic-composer textarea { background: #FFFFFF; }
+.app-shell.light-mode .aic-composer textarea { background: rgb(255, 255, 255); }
 .aic-composer textarea::placeholder { color: var(--aic-text-muted); }
 .aic-composer textarea:focus {
   outline: none;
@@ -1245,10 +1245,10 @@
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: rgb(255, 255, 255);
   border: none;
   border-radius: 12px;
-  background: linear-gradient(140deg, #6D28D9, #8B5CF6);
+  background: linear-gradient(140deg, rgb(109, 40, 217), rgb(139, 92, 246));
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(139, 92, 246, .3);
   transition: transform 150ms ease, box-shadow 150ms ease;
@@ -1303,7 +1303,7 @@
   border-radius: 5px;
   background: var(--aic-panel-2);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--aic-text-secondary);
 }
 
@@ -1341,14 +1341,14 @@
   background: var(--aic-accent-soft);
   border-color: var(--aic-accent-border);
 }
-.aic-quick-tabs button.active.tone-blue { color: #3B82F6; background: rgba(59, 130, 246, .1); border-color: rgba(59, 130, 246, .3); }
-.aic-quick-tabs button.active.tone-green { color: #10B981; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
-.aic-quick-tabs button.active.tone-orange { color: #F97316; background: rgba(249, 115, 22, .1); border-color: rgba(249, 115, 22, .3); }
-.aic-quick-tabs button.active.tone-amber { color: #F59E0B; background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .3); }
-.app-shell.light-mode .aic-quick-tabs button.active.tone-blue { color: #2563EB; }
-.app-shell.light-mode .aic-quick-tabs button.active.tone-green { color: #059669; }
-.app-shell.light-mode .aic-quick-tabs button.active.tone-orange { color: #EA580C; }
-.app-shell.light-mode .aic-quick-tabs button.active.tone-amber { color: #D97706; }
+.aic-quick-tabs button.active.tone-blue { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .1); border-color: rgba(59, 130, 246, .3); }
+.aic-quick-tabs button.active.tone-green { color: rgb(16, 185, 129); background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+.aic-quick-tabs button.active.tone-orange { color: rgb(249, 115, 22); background: rgba(249, 115, 22, .1); border-color: rgba(249, 115, 22, .3); }
+.aic-quick-tabs button.active.tone-amber { color: rgb(245, 158, 11); background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .3); }
+.app-shell.light-mode .aic-quick-tabs button.active.tone-blue { color: rgb(37, 99, 235); }
+.app-shell.light-mode .aic-quick-tabs button.active.tone-green { color: rgb(5, 150, 105); }
+.app-shell.light-mode .aic-quick-tabs button.active.tone-orange { color: rgb(234, 88, 12); }
+.app-shell.light-mode .aic-quick-tabs button.active.tone-amber { color: rgb(217, 119, 6); }
 .aic-quick-pills {
   display: flex;
   gap: 8px;
@@ -1367,7 +1367,7 @@
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
-.app-shell.light-mode .aic-quick-pills button { background: #FFFFFF; }
+.app-shell.light-mode .aic-quick-pills button { background: rgb(255, 255, 255); }
 .aic-quick-pills button:hover {
   color: var(--aic-text);
   border-color: var(--aic-accent-border);
@@ -1557,7 +1557,7 @@
 }
 .aic-usage-ring.amber .aic-ring { background: conic-gradient(var(--aic-warning) var(--ring-pct), var(--aic-ring-track) 0); }
 .aic-usage-ring.red .aic-ring { background: conic-gradient(var(--aic-danger) var(--ring-pct), var(--aic-ring-track) 0); }
-.aic-usage-ring.unlimited .aic-ring { background: conic-gradient(#6D28D9 120deg, #C084FC 200deg, var(--aic-ring-track) 0); }
+.aic-usage-ring.unlimited .aic-ring { background: conic-gradient(rgb(109, 40, 217) 120deg, rgb(192, 132, 252) 200deg, var(--aic-ring-track) 0); }
 .aic-ring-inner {
   width: 68px;
   height: 68px;
@@ -1570,7 +1570,7 @@
   background: var(--aic-panel);
 }
 .aic-ring-inner strong { font-size: 22px; font-weight: 800; color: var(--aic-text); line-height: 1; font-variant-numeric: tabular-nums; }
-.aic-ring-inner small { font-size: 11px; color: var(--aic-text-muted); }
+.aic-ring-inner small { font-size: 12px; color: var(--aic-text-muted); }
 .aic-usage-ring-copy {
   display: flex;
   flex-direction: column;
@@ -1619,7 +1619,7 @@
   justify-content: space-between;
   gap: 6px;
 }
-.aic-recent-meta time { font-size: 11px; color: var(--aic-text-muted); }
+.aic-recent-meta time { font-size: 12px; color: var(--aic-text-muted); }
 .aic-recent-meta svg { color: var(--aic-text-muted); transition: transform 150ms ease, color 150ms ease; }
 .aic-recent:hover .aic-recent-meta svg { transform: translateX(2px); color: var(--aic-accent); }
 .aic-recent strong {
@@ -1665,7 +1665,7 @@
   margin-bottom: 10px;
 }
 .aic-value-chart-head span { font-size: 12px; font-weight: 700; color: var(--aic-text-secondary); }
-.aic-value-chart-head small { font-size: 11px; color: var(--aic-text-muted); }
+.aic-value-chart-head small { font-size: 12px; color: var(--aic-text-muted); }
 .aic-value-bars {
   display: flex;
   align-items: flex-end;
@@ -1689,12 +1689,12 @@
   max-width: 22px;
   display: block;
   border-radius: 5px 5px 0 0;
-  background: linear-gradient(180deg, #C084FC, #7C3AED);
+  background: linear-gradient(180deg, rgb(192, 132, 252), rgb(124, 58, 237));
   min-height: 4px;
   transition: height 400ms ease;
 }
-.aic-value-bars > span.today i { background: linear-gradient(180deg, #F5C044, #F59E0B); }
-.aic-value-bars small { font-size: 10px; color: var(--aic-text-muted); text-transform: uppercase; letter-spacing: .03em; }
+.aic-value-bars > span.today i { background: linear-gradient(180deg, rgb(245, 192, 68), rgb(245, 158, 11)); }
+.aic-value-bars small { font-size: 12px; color: var(--aic-text-muted); text-transform: uppercase; letter-spacing: .03em; }
 
 /* ── Showcase ───────────────────────────────────────────────────────────── */
 .aic-showcase {
@@ -1721,14 +1721,14 @@
   color: var(--aic-accent);
   background: var(--aic-accent-soft);
 }
-.aic-showcase.tone-blue .aic-showcase-icon { color: #3B82F6; background: rgba(59, 130, 246, .12); }
-.app-shell.light-mode .aic-showcase.tone-blue .aic-showcase-icon { color: #2563EB; }
-.aic-showcase.tone-green .aic-showcase-icon { color: #10B981; background: rgba(16, 185, 129, .12); }
-.app-shell.light-mode .aic-showcase.tone-green .aic-showcase-icon { color: #059669; }
-.aic-showcase.tone-orange .aic-showcase-icon { color: #F97316; background: rgba(249, 115, 22, .12); }
-.app-shell.light-mode .aic-showcase.tone-orange .aic-showcase-icon { color: #EA580C; }
-.aic-showcase.tone-amber .aic-showcase-icon { color: #F59E0B; background: rgba(245, 158, 11, .12); }
-.app-shell.light-mode .aic-showcase.tone-amber .aic-showcase-icon { color: #D97706; }
+.aic-showcase.tone-blue .aic-showcase-icon { color: rgb(59, 130, 246); background: rgba(59, 130, 246, .12); }
+.app-shell.light-mode .aic-showcase.tone-blue .aic-showcase-icon { color: rgb(37, 99, 235); }
+.aic-showcase.tone-green .aic-showcase-icon { color: rgb(16, 185, 129); background: rgba(16, 185, 129, .12); }
+.app-shell.light-mode .aic-showcase.tone-green .aic-showcase-icon { color: rgb(5, 150, 105); }
+.aic-showcase.tone-orange .aic-showcase-icon { color: rgb(249, 115, 22); background: rgba(249, 115, 22, .12); }
+.app-shell.light-mode .aic-showcase.tone-orange .aic-showcase-icon { color: rgb(234, 88, 12); }
+.aic-showcase.tone-amber .aic-showcase-icon { color: rgb(245, 158, 11); background: rgba(245, 158, 11, .12); }
+.app-shell.light-mode .aic-showcase.tone-amber .aic-showcase-icon { color: rgb(217, 119, 6); }
 .aic-showcase strong { font-size: 13.5px; font-weight: 750; color: var(--aic-text); }
 .aic-showcase p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--aic-text-secondary); }
 .aic-showcase-run {
@@ -1882,13 +1882,13 @@
 
 /* Light-theme safety net: never pastel text on white */
 .app-shell.light-mode .aic-bubble.theirs .aic-bubble-body,
-.app-shell.light-mode .aic-bubble.mine .aic-bubble-body { color: #111827; }
+.app-shell.light-mode .aic-bubble.mine .aic-bubble-body { color: rgb(17, 24, 39); }
 .app-shell.light-mode .aic-title h2,
 .app-shell.light-mode .aic-welcome h2,
-.app-shell.light-mode .aic-empty h2 { color: #111827; }
+.app-shell.light-mode .aic-empty h2 { color: rgb(17, 24, 39); }
 .app-shell.light-mode .aic-welcome p,
 .app-shell.light-mode .aic-empty p,
-.app-shell.light-mode .aic-title p { color: #4B5563; }
+.app-shell.light-mode .aic-title p { color: rgb(75, 85, 99); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    AI Command — eyebrow
@@ -1896,7 +1896,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 .aic-eyebrow {
   margin: 0 0 1px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -1930,7 +1930,7 @@
 .aic-postchat-head svg { color: var(--aic-accent); }
 .aic-postchat-head small {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--aic-text-muted);
 }
@@ -2096,7 +2096,7 @@
 .aic-insights-grid > button:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--aic-accent-border); box-shadow: var(--aic-shadow); }
 .aic-insight-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--aic-accent-soft); color: var(--aic-accent); }
 .aic-insights-grid button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.aic-insights-grid small { color: var(--aic-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+.aic-insights-grid small { color: var(--aic-text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
 .aic-insights-grid strong { overflow: hidden; text-overflow: ellipsis; color: var(--aic-text); font-size: 15px; white-space: nowrap; }
 .aic-insights-grid em { color: var(--aic-text-muted); font-size: 10.5px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aic-popular-compact { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
@@ -2116,7 +2116,7 @@
 .aic-tip-icon { font-size: 19px; }
 .aic-daily-tip strong { color: var(--aic-text); font-size: 12px; }
 .aic-daily-tip p { margin: 2px 0 0; color: var(--aic-text-secondary); font-size: 11.5px; line-height: 1.4; }
-.aic-daily-tip button { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border: 0; border-radius: 8px; background: #CA8A04; color: #fff; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.aic-daily-tip button { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border: 0; border-radius: 8px; background: rgb(202, 138, 4); color: rgb(255, 255, 255); font-weight: 750; cursor: pointer; white-space: nowrap; }
 @media (max-width: 900px) {
   .aic-insights-grid, .aic-popular-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -2159,132 +2159,132 @@
   line-height: 1.25;
 }
 .aic-ring-inner small.size-sm { font-size: 9.5px; }
-.aic-ring-inner small.size-xs { font-size: 8px; }
+.aic-ring-inner small.size-xs { font-size: 12px; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    AI Command — LIGHT THEME (high-contrast, Claude/ChatGPT-grade)
    Loaded last so these win. Dark theme is never matched (all rules are
    scoped to `.app-shell.light-mode .aic-*`). Palette per spec:
-   canvas #F8FAFC, ink #0F172A, secondary #475569, muted #64748B,
-   borders #E2E8F0, purple #7C3AED, amber surfaces #FEF3C7/#FDE68A.
+   canvas rgb(248, 250, 252), ink rgb(15, 23, 42), secondary rgb(71, 85, 105), muted rgb(100, 116, 139),
+   borders rgb(226, 232, 240), purple rgb(124, 58, 237), amber surfaces rgb(254, 243, 199)/rgb(253, 230, 138).
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* Page canvas */
-.app-shell.light-mode .aic-shell { background: #F8FAFC; }
+.app-shell.light-mode .aic-shell { background: rgb(248, 250, 252); }
 
 /* Header: eyebrow, title, subtitle, orb (logo) */
-.app-shell.light-mode .aic-eyebrow { color: #7C3AED; }
-.app-shell.light-mode .aic-title h2 { color: #0F172A; }
-.app-shell.light-mode .aic-title p { color: #475569; }
-.app-shell.light-mode .aic-orb { background: #F3E8FF; border-color: rgba(124, 58, 237, .25); }
+.app-shell.light-mode .aic-eyebrow { color: rgb(124, 58, 237); }
+.app-shell.light-mode .aic-title h2 { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-title p { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-orb { background: rgb(243, 232, 255); border-color: rgba(124, 58, 237, .25); }
 
 /* Sub-header bar */
 .app-shell.light-mode .aic-header {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: rgb(255, 255, 255);
+  border: 1px solid rgb(226, 232, 240);
   border-radius: 14px;
   padding: 10px 14px;
 }
-.app-shell.light-mode .aic-header .aic-status { color: #475569; border-color: #E2E8F0; background: #F8FAFC; }
-.app-shell.light-mode .aic-header .aic-status i { background: #16A34A; box-shadow: 0 0 8px #16A34A; }
-.app-shell.light-mode .aic-header .aic-status.busy i { background: #7C3AED; box-shadow: 0 0 8px #7C3AED; }
-.app-shell.light-mode .aic-button.secondary { color: #0F172A; border-color: #CBD5E1; background: #FFFFFF; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
-.app-shell.light-mode .aic-button.ghost { color: #64748B; border-color: #E2E8F0; background: transparent; }
-.app-shell.light-mode .aic-button.ghost:hover { color: #0F172A; background: #F3E8FF; border-color: #7C3AED; }
+.app-shell.light-mode .aic-header .aic-status { color: rgb(71, 85, 105); border-color: rgb(226, 232, 240); background: rgb(248, 250, 252); }
+.app-shell.light-mode .aic-header .aic-status i { background: rgb(22, 163, 74); box-shadow: 0 0 8px rgb(22, 163, 74); }
+.app-shell.light-mode .aic-header .aic-status.busy i { background: rgb(124, 58, 237); box-shadow: 0 0 8px rgb(124, 58, 237); }
+.app-shell.light-mode .aic-button.secondary { color: rgb(15, 23, 42); border-color: rgb(203, 213, 225); background: rgb(255, 255, 255); box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
+.app-shell.light-mode .aic-button.ghost { color: rgb(100, 116, 139); border-color: rgb(226, 232, 240); background: transparent; }
+.app-shell.light-mode .aic-button.ghost:hover { color: rgb(15, 23, 42); background: rgb(243, 232, 255); border-color: rgb(124, 58, 237); }
 
 /* Plan status bar (trial) */
-.app-shell.light-mode .aic-planbar { background: linear-gradient(90deg, #FEF3C7, #FDE68A); border-color: #FCD34D; }
-.app-shell.light-mode .aic-planbar.unlimited { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-planbar-plan { background: #7C3AED; color: #FFFFFF; border-color: #7C3AED; }
-.app-shell.light-mode .aic-planbar-usage { color: #92400E; }
-.app-shell.light-mode .aic-planbar-reset { color: #64748B; }
-.app-shell.light-mode .aic-planbar-actions.locked { color: #DC2626; }
-.app-shell.light-mode .aic-planbar-actions.unlocked { color: #16A34A; }
-.app-shell.light-mode .aic-planbar-track { background: #FDE68A; }
+.app-shell.light-mode .aic-planbar { background: linear-gradient(90deg, rgb(254, 243, 199), rgb(253, 230, 138)); border-color: rgb(252, 211, 77); }
+.app-shell.light-mode .aic-planbar.unlimited { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-planbar-plan { background: rgb(124, 58, 237); color: rgb(255, 255, 255); border-color: rgb(124, 58, 237); }
+.app-shell.light-mode .aic-planbar-usage { color: rgb(146, 64, 14); }
+.app-shell.light-mode .aic-planbar-reset { color: rgb(100, 116, 139); }
+.app-shell.light-mode .aic-planbar-actions.locked { color: rgb(220, 38, 38); }
+.app-shell.light-mode .aic-planbar-actions.unlocked { color: rgb(22, 163, 74); }
+.app-shell.light-mode .aic-planbar-track { background: rgb(253, 230, 138); }
 
 /* Welcome */
-.app-shell.light-mode .aic-welcome-icon { background: #F3E8FF; border-color: rgba(124, 58, 237, .3); box-shadow: 0 8px 30px rgba(124, 58, 237, .18); }
-.app-shell.light-mode .aic-welcome h2 { color: #0F172A; }
-.app-shell.light-mode .aic-welcome-sub { color: #7C3AED; }
-.app-shell.light-mode .aic-welcome-lede { color: #475569; }
-.app-shell.light-mode .aic-welcome-limit { background: #FEF3C7; border-color: #FCD34D; color: #92400E; }
-.app-shell.light-mode .aic-welcome-plan { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-welcome-plan-usage { color: #475569; }
-.app-shell.light-mode .aic-welcome-plan-actions { color: #DC2626; }
-.app-shell.light-mode .aic-welcome-plan .aic-plan-badge { background: #7C3AED; color: #FFFFFF; border-color: #7C3AED; }
+.app-shell.light-mode .aic-welcome-icon { background: rgb(243, 232, 255); border-color: rgba(124, 58, 237, .3); box-shadow: 0 8px 30px rgba(124, 58, 237, .18); }
+.app-shell.light-mode .aic-welcome h2 { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-welcome-sub { color: rgb(124, 58, 237); }
+.app-shell.light-mode .aic-welcome-lede { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-welcome-limit { background: rgb(254, 243, 199); border-color: rgb(252, 211, 77); color: rgb(146, 64, 14); }
+.app-shell.light-mode .aic-welcome-plan { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-welcome-plan-usage { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-welcome-plan-actions { color: rgb(220, 38, 38); }
+.app-shell.light-mode .aic-welcome-plan .aic-plan-badge { background: rgb(124, 58, 237); color: rgb(255, 255, 255); border-color: rgb(124, 58, 237); }
 
 /* "What I can help with" panel */
-.app-shell.light-mode .aic-capabilities { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-capability { background: #F8FAFC; }
-.app-shell.light-mode .aic-capability:hover { background: #F3E8FF; }
-.app-shell.light-mode .aic-capability-copy strong { color: #0F172A; }
-.app-shell.light-mode .aic-capability-copy small { color: #475569; }
-.app-shell.light-mode .aic-capability.store-actions.locked { background: #FEF3C7; }
-.app-shell.light-mode .aic-capability-lock { color: #DC2626; }
-.app-shell.light-mode .aic-capability-lock.unlocked { color: #16A34A; }
-.app-shell.light-mode .aic-mini-upgrade { background: #7C3AED; border-color: #7C3AED; }
+.app-shell.light-mode .aic-capabilities { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-capability { background: rgb(248, 250, 252); }
+.app-shell.light-mode .aic-capability:hover { background: rgb(243, 232, 255); }
+.app-shell.light-mode .aic-capability-copy strong { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-capability-copy small { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-capability.store-actions.locked { background: rgb(254, 243, 199); }
+.app-shell.light-mode .aic-capability-lock { color: rgb(220, 38, 38); }
+.app-shell.light-mode .aic-capability-lock.unlocked { color: rgb(22, 163, 74); }
+.app-shell.light-mode .aic-mini-upgrade { background: rgb(124, 58, 237); border-color: rgb(124, 58, 237); }
 
 /* Popular questions pills */
-.app-shell.light-mode .aic-popular-chips button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
-.app-shell.light-mode .aic-popular-chips button:hover { border-color: #7C3AED; background: #F3E8FF; color: #0F172A; }
+.app-shell.light-mode .aic-popular-chips button { background: rgb(248, 250, 252); border-color: rgb(226, 232, 240); color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-popular-chips button:hover { border-color: rgb(124, 58, 237); background: rgb(243, 232, 255); color: rgb(15, 23, 42); }
 
 /* Popular command templates */
-.app-shell.light-mode .aic-templates { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-template { background: #FFFFFF; }
-.app-shell.light-mode .aic-template:hover { background: #F3E8FF; }
-.app-shell.light-mode .aic-template-copy strong { color: #0F172A; }
-.app-shell.light-mode .aic-template-copy small { color: #475569; }
+.app-shell.light-mode .aic-templates { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-template { background: rgb(255, 255, 255); }
+.app-shell.light-mode .aic-template:hover { background: rgb(243, 232, 255); }
+.app-shell.light-mode .aic-template-copy strong { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-template-copy small { color: rgb(71, 85, 105); }
 
 /* Composer / input */
-.app-shell.light-mode .aic-composer { background: #FFFFFF; }
-.app-shell.light-mode .aic-composer-label { color: #475569; }
-.app-shell.light-mode .aic-counter { color: #94A3B8; }
-.app-shell.light-mode .aic-composer textarea { background: #FFFFFF; border-color: #E2E8F0; color: #0F172A; }
-.app-shell.light-mode .aic-composer textarea::placeholder { color: #94A3B8; }
-.app-shell.light-mode .aic-composer textarea:focus { border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124, 58, 237, .15); }
-.app-shell.light-mode .aic-send { background: #7C3AED; box-shadow: 0 4px 14px rgba(124, 58, 237, .3); }
+.app-shell.light-mode .aic-composer { background: rgb(255, 255, 255); }
+.app-shell.light-mode .aic-composer-label { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-counter { color: rgb(148, 163, 184); }
+.app-shell.light-mode .aic-composer textarea { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-composer textarea::placeholder { color: rgb(148, 163, 184); }
+.app-shell.light-mode .aic-composer textarea:focus { border-color: rgb(124, 58, 237); box-shadow: 0 0 0 3px rgba(124, 58, 237, .15); }
+.app-shell.light-mode .aic-send { background: rgb(124, 58, 237); box-shadow: 0 4px 14px rgba(124, 58, 237, .3); }
 
 /* Category tabs */
-.app-shell.light-mode .aic-quick-tabs button { color: #475569; background: #F8FAFC; }
-.app-shell.light-mode .aic-quick-tabs button:hover { background: #F3E8FF; color: #0F172A; }
+.app-shell.light-mode .aic-quick-tabs button { color: rgb(71, 85, 105); background: rgb(248, 250, 252); }
+.app-shell.light-mode .aic-quick-tabs button:hover { background: rgb(243, 232, 255); color: rgb(15, 23, 42); }
 .app-shell.light-mode .aic-quick-tabs button.active,
 .app-shell.light-mode .aic-quick-tabs button.active.tone-purple,
 .app-shell.light-mode .aic-quick-tabs button.active.tone-blue,
 .app-shell.light-mode .aic-quick-tabs button.active.tone-green,
 .app-shell.light-mode .aic-quick-tabs button.active.tone-orange,
 .app-shell.light-mode .aic-quick-tabs button.active.tone-amber {
-  background: #7C3AED;
-  color: #FFFFFF;
-  border-color: #7C3AED;
+  background: rgb(124, 58, 237);
+  color: rgb(255, 255, 255);
+  border-color: rgb(124, 58, 237);
 }
 
 /* Quick command pills */
-.app-shell.light-mode .aic-quick-pills button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
-.app-shell.light-mode .aic-quick-pills button:hover { border-color: #7C3AED; color: #0F172A; }
+.app-shell.light-mode .aic-quick-pills button { background: rgb(248, 250, 252); border-color: rgb(226, 232, 240); color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-quick-pills button:hover { border-color: rgb(124, 58, 237); color: rgb(15, 23, 42); }
 
 /* Side rail */
-.app-shell.light-mode .aic-side-block { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-side-block h3 { color: #0F172A; }
-.app-shell.light-mode .aic-usage-ring { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-ring-inner { background: #FFFFFF; }
-.app-shell.light-mode .aic-value-stat { background: #F8FAFC; }
-.app-shell.light-mode .aic-value-stat strong { color: #0F172A; }
-.app-shell.light-mode .aic-value-chart-head small { color: #64748B; }
-.app-shell.light-mode .aic-showcase { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-side-block { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-side-block h3 { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-usage-ring { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-ring-inner { background: rgb(255, 255, 255); }
+.app-shell.light-mode .aic-value-stat { background: rgb(248, 250, 252); }
+.app-shell.light-mode .aic-value-stat strong { color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-value-chart-head small { color: rgb(100, 116, 139); }
+.app-shell.light-mode .aic-showcase { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
 
 /* Message bubbles */
-.app-shell.light-mode .aic-bubble.mine .aic-bubble-body { background: #F3E8FF; color: #0F172A; border-color: rgba(124, 58, 237, .2); }
-.app-shell.light-mode .aic-bubble.theirs .aic-bubble-body { background: #FFFFFF; color: #0F172A; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-bubble-meta { color: #94A3B8; }
-.app-shell.light-mode .aic-source { color: #64748B; }
-.app-shell.light-mode .aic-steps summary { color: #475569; }
-.app-shell.light-mode .aic-thinking { background: #FFFFFF; border-color: #E2E8F0; }
+.app-shell.light-mode .aic-bubble.mine .aic-bubble-body { background: rgb(243, 232, 255); color: rgb(15, 23, 42); border-color: rgba(124, 58, 237, .2); }
+.app-shell.light-mode .aic-bubble.theirs .aic-bubble-body { background: rgb(255, 255, 255); color: rgb(15, 23, 42); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-bubble-meta { color: rgb(148, 163, 184); }
+.app-shell.light-mode .aic-source { color: rgb(100, 116, 139); }
+.app-shell.light-mode .aic-steps summary { color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-thinking { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
 
 /* Limit banner */
-.app-shell.light-mode .aic-banner.limit { background: #FEF3C7; color: #92400E; border-color: #FCD34D; }
+.app-shell.light-mode .aic-banner.limit { background: rgb(254, 243, 199); color: rgb(146, 64, 14); border-color: rgb(252, 211, 77); }
 
 /* Post-chat activity */
-.app-shell.light-mode .aic-quickactions-grid button { background: #F8FAFC; border-color: #E2E8F0; color: #475569; }
-.app-shell.light-mode .aic-quickactions-grid button:hover { border-color: #7C3AED; background: #F3E8FF; color: #0F172A; }
-.app-shell.light-mode .aic-activity { background: #FFFFFF; border-color: #E2E8F0; }
-.app-shell.light-mode .aic-activity-footer { color: #475569; }
+.app-shell.light-mode .aic-quickactions-grid button { background: rgb(248, 250, 252); border-color: rgb(226, 232, 240); color: rgb(71, 85, 105); }
+.app-shell.light-mode .aic-quickactions-grid button:hover { border-color: rgb(124, 58, 237); background: rgb(243, 232, 255); color: rgb(15, 23, 42); }
+.app-shell.light-mode .aic-activity { background: rgb(255, 255, 255); border-color: rgb(226, 232, 240); }
+.app-shell.light-mode .aic-activity-footer { color: rgb(71, 85, 105); }
