@@ -417,7 +417,7 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     if (!connection) return { ok: false, error: 'Shopify store is not connected.' }
     const token = await this.deps.shopify.tokens.get(connection.shopDomain)
     if (!token) return { ok: false, error: 'Shopify access token is missing.' }
-    return { ok: true, client: new ShopifyClient(connection.shopDomain, token, fetch, this.deps.shopify.apiVersion ?? '2025-10') }
+    return { ok: true, client: new ShopifyClient(connection.shopDomain, token, fetch, this.deps.shopify.apiVersion ?? '2026-07') }
   }
 }
 

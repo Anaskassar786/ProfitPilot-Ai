@@ -9,7 +9,7 @@ import type { TargetedCampaignService } from './targeted-campaigns.js'
 
 type WorkflowAi = Readonly<{ generate(system:string,user:string,context?:Readonly<{requestId?:string;maxTokens?:number}>):Promise<Readonly<{text:string;model:string}>> }>
 export class ProductionWorkflowActions implements WorkflowActionAdapters {
-  public constructor(private readonly database:SqlExecutor,private readonly directory:StoreDirectory,private readonly tokens:TokenVault,private readonly campaigns:Pick<TargetedCampaignService,'send'>|null,private readonly ai:WorkflowAi|null,private readonly apiVersion='2025-10'){}
+  public constructor(private readonly database:SqlExecutor,private readonly directory:StoreDirectory,private readonly tokens:TokenVault,private readonly campaigns:Pick<TargetedCampaignService,'send'>|null,private readonly ai:WorkflowAi|null,private readonly apiVersion='2026-07'){}
   public async execute(tenant:string,node:WorkflowNode,context:Readonly<Record<string,unknown>>,idempotencyKey:string,testMode:boolean){
     if(node.type==='ai'){
       if(testMode)return{action:'ai',wouldExecute:true}

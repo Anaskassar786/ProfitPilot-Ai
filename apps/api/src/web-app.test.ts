@@ -56,7 +56,14 @@ describe('API-hosted web app', () => {
     expect(root.status).toBe(200)
     expect(root.headers.get('content-type')).toContain('text/html')
     expect(root.headers.get('cache-control')).toBe('no-cache')
-    expect(root.headers.get('content-security-policy')).toContain('frame-ancestors https://admin.shopify.com https://*.myshopify.com')
+    const webCsp = root.headers.get('content-security-policy') ?? ''
+    expect(webCsp).toContain('frame-ancestors https://admin.shopify.com https://*.myshopify.com')
+    expect(webCsp).toContain("script-src 'self' https://cdn.shopify.com")
+    expect(webCsp).not.toContain("script-src 'self' 'unsafe-inline'")
+    expect(webCsp).not.toContain('unsafe-eval')
+    expect(webCsp).toContain("style-src 'self' 'unsafe-inline'")
+    expect(webCsp).not.toContain('https://fonts.googleapis.com')
+    expect(root.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains; preload')
     expect(root.headers.get('permissions-policy')).toContain('microphone=(self *)')
     expect(root.headers.get('x-frame-options')).toBeNull()
     expect(await root.text()).toContain('ProfitPilot web shell')
@@ -75,6 +82,7 @@ describe('API-hosted web app', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('content-type')).toContain(contentType)
       expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+      expect(response.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains; preload')
       expect(await response.text()).toContain(body)
     }
 

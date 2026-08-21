@@ -41,12 +41,12 @@ describe('Shopify domain and OAuth primitives', () => {
 describe('Shopify API client', () => {
   it('sends an authenticated request and returns typed JSON', async () => {
     const transport = async (url: string, init: RequestInit): Promise<Response> => {
-      expect(url).toContain('/admin/api/2025-10/products.json')
+      expect(url).toContain('/admin/api/2026-07/products.json')
       expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'shpat_test_secret_token_123' })
       return new Response(JSON.stringify({ products: [{ id: 1 }] }), { status: 200, headers: { 'x-request-id': 'req' } })
     }
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    const response = await new ShopifyClient('demo.myshopify.com', 'shpat_test_secret_token_123', transport, '2025-10', logger).request<{ products: { id: number }[] }>({ path: '/products.json' })
+    const response = await new ShopifyClient('demo.myshopify.com', 'shpat_test_secret_token_123', transport, '2026-07', logger).request<{ products: { id: number }[] }>({ path: '/products.json' })
     expect(response.data.products[0]?.id).toBe(1)
     expect(response.requestId).toBe('req')
     expect(logger.info).toHaveBeenCalledWith('Shopify Admin API outbound request', expect.objectContaining({

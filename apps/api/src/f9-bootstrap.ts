@@ -48,5 +48,5 @@ export function cachedAiCompletionHealth(provider: Pick<import('@profitpilot/ai'
 function shopifyHealth(env: Readonly<Record<string, string | undefined>>): () => Promise<boolean> {
   const shop = env.SHOPIFY_HEALTH_SHOP?.trim(); const token = env.SHOPIFY_HEALTH_ACCESS_TOKEN?.trim()
   if (!shop || !token) return async () => false
-  return async () => { const response = await fetch(`https://${shop}/admin/api/${env.SHOPIFY_API_VERSION?.trim() || '2025-10'}/shop.json`, { headers: { 'X-Shopify-Access-Token': token, accept: 'application/json' } }); return response.ok }
+  return async () => { const response = await fetch(`https://${shop}/admin/api/${env.SHOPIFY_API_VERSION?.trim() || '2026-07'}/shop.json`, { headers: { 'X-Shopify-Access-Token': token, accept: 'application/json' } }); return response.ok }
 }

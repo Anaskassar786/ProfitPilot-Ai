@@ -38,7 +38,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
     // Same reconnect path as /sync: an absent offline token is a 503 the
     // merchant can act on, not an opaque 500.
     if (!token) throw new AppError('DEPENDENCY_ERROR', 'Shopify access token is missing. Hard refresh the embedded app to reconnect this store, then retry.', 503, { storeId: shopId, reason: 'SHOPIFY_TOKEN_MISSING', action: 'HARD_REFRESH' })
-    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', testMode: billingTestMode(env), logger })
+    return new ShopifyBillingClient({ shop: connection.shopDomain, accessToken: token, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2026-07', testMode: billingTestMode(env), logger })
   }
 
   const ensureTrial = async (shopId: string): Promise<TrialRecord> => giftStore.ensureTrial(shopId)

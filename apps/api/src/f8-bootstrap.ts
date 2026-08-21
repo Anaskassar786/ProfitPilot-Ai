@@ -144,7 +144,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
         return createBrevoMailer(env).send({ to, from: config.merchantEmail, fromName: config.fromName, subject, html })
       },
     },
-    shopify: { directory: f7.storeDirectory, tokens: f7.tokenVault, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10' },
+    shopify: { directory: f7.storeDirectory, tokens: f7.tokenVault, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2026-07' },
     recommendations: f7.ai.recommendations,
     workflows: {
       trigger: async (tenant, workflowId) => {
