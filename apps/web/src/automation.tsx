@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import {
   AlertTriangle,
   ArrowRight,
@@ -301,14 +301,14 @@ function AutomationHub({
             </label>
             <div className="automation-status-tabs automation-filter-tabs">
               {(['ALL', 'ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED'] as const).map((value) => (
-                <Button key={value} className={`filter-tab ${status === value ? 'active' : ''}`} onClick={() => setStatus(value)}>
+                <RichButton key={value} className={`filter-tab ${status === value ? 'active' : ''}`} onClick={() => setStatus(value)}>
                   {value === 'ALL' ? 'All' : friendlyStatus(value)}
                   <span className="count-badge">
                     {value === 'ALL'
                       ? Object.values(summary?.workflows ?? {}).reduce((a, b) => a + b, 0)
                       : summary?.workflows[value.toLowerCase() as keyof NonNullable<typeof summary>['workflows']] ?? 0}
                   </span>
-                </Button>
+                </RichButton>
               ))}
             </div>
             <CustomSelect
@@ -478,7 +478,7 @@ function planBanner(
             </span>
           </div>
           <Button onClick={onCompleteDrafts}>Complete Drafts</Button>
-          <Button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
+          <RichButton className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</RichButton>
         </div>
       )
     }
@@ -491,7 +491,7 @@ function planBanner(
             <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use. Upgrade Plan to create more automations.
           </span>
         </div>
-        <Button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
+        <RichButton className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</RichButton>
       </div>
     )
   }
@@ -505,7 +505,7 @@ function planBanner(
             {usage.used} of {usage.limit} automations in use.
           </span>
         </div>
-        <Button className="upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
+        <RichButton className="upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</RichButton>
       </div>
     )
   }
@@ -544,14 +544,14 @@ function GettingStartedHero({
       <div className="gs-popular">
         <h3>💡 Popular automations</h3>
         {popular.map((template) => (
-          <Button key={template.id} className="gs-popular-item" onClick={onTemplates}>
+          <RichButton key={template.id} className="gs-popular-item" onClick={onTemplates}>
             <span className="gs-popular-name">{template.name}</span>
             <span className="gs-popular-impact">{template.impact}</span>
-          </Button>
+          </RichButton>
         ))}
-        <Button className="browse-all-link" onClick={onTemplates}>
+        <RichButton className="browse-all-link" onClick={onTemplates}>
           Browse all templates <ArrowRight size={15} />
-        </Button>
+        </RichButton>
       </div>
     </section>
   )
@@ -658,16 +658,16 @@ export function CreateAutomationModal({
 
         <span className="creation-label">How do you want to start?</span>
         <div className="creation-mode">
-          <Button className={mode === 'template' ? 'active' : ''} onClick={() => setMode('template')}>
+          <RichButton className={mode === 'template' ? 'active' : ''} onClick={() => setMode('template')}>
             <Sparkles size={20} />
             <strong>From Template</strong>
             <span>Recommended — start with a proven, pre-built automation</span>
-          </Button>
-          <Button className={mode === 'blank' ? 'active' : ''} onClick={() => setMode('blank')}>
+          </RichButton>
+          <RichButton className={mode === 'blank' ? 'active' : ''} onClick={() => setMode('blank')}>
             <WandSparkles size={20} />
             <strong>From Scratch</strong>
             <span>Advanced — build your own step by step</span>
-          </Button>
+          </RichButton>
         </div>
 
         {mode === 'template' ? (

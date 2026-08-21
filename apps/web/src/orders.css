@@ -41,14 +41,22 @@
 .commander-capability > div { min-width:0; display:flex; flex-direction:column; gap:3px; }
 .commander-capability strong { font-size: 12px; }
 .commander-capability small { overflow:hidden; color:var(--text-tertiary); font-size: 12px; text-overflow:ellipsis; white-space:nowrap; }
-.plan-locked-feature { position:relative; min-width:0; min-height:92px; overflow:hidden; padding:0; border:1px solid rgba(155,124,246,.16); border-radius:10px; background:rgba(8,13,24,.29); text-align:inherit; }
-.orders-commander-row .plan-locked-feature { min-height:52px; }
+.plan-locked-feature { position:relative; min-width:0; min-height:96px; overflow:hidden; padding:0; border:1px solid rgba(155,124,246,.16); border-radius:10px; background:rgba(8,13,24,.29); text-align:inherit; cursor:pointer; }
+.plan-locked-feature:focus-visible { outline:2px solid rgb(99,102,241); outline-offset:2px; }
 .plan-locked-feature:hover { border-color:rgba(155,124,246,.4); box-shadow:0 0 22px rgba(99,102,241,.1); }
-.plan-locked-blur { position:absolute; inset:0; display:block; padding:10px; opacity:.28; filter:blur(4px); transform:scale(1.03); }
-.plan-locked-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:linear-gradient(rgba(15,17,23,.54),rgba(15,17,23,.87)); }
-.plan-locked-overlay svg { color:rgb(196, 181, 253); }
-.plan-locked-overlay strong { font-size: 12px; }
-.plan-locked-overlay small { color:rgb(165, 180, 252); font-size: 12px; }
+.plan-locked-blur { position:absolute; inset:0; display:block; padding:12px; opacity:.22; filter:blur(4px); transform:scale(1.03); }
+.plan-locked-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px 12px; background:linear-gradient(rgba(15,17,23,.54),rgba(15,17,23,.87)); }
+.plan-locked-overlay > svg { flex:0 0 auto; color:rgb(196, 181, 253); }
+.plan-locked-text { display:flex; min-width:0; max-width:100%; flex-direction:column; align-items:center; gap:3px; }
+.plan-locked-overlay strong { max-width:100%; overflow:hidden; color:var(--text); font-size:13px; font-weight:650; line-height:1.3; text-overflow:ellipsis; text-align:center; }
+.plan-locked-overlay small { max-width:100%; overflow:hidden; color:rgb(165, 180, 252); font-size:12px; line-height:1.35; text-overflow:ellipsis; text-align:center; }
+.plan-locked-cta { display:inline-flex; flex:0 0 auto; align-items:center; margin-top:2px; padding:5px 12px; color:rgb(255,255,255); border-radius:99px; background:linear-gradient(135deg,rgb(37,99,235),rgb(124,58,237)); font-size:12px; font-weight:700; line-height:1; letter-spacing:.01em; }
+.orders-commander-row .plan-locked-feature { min-height:64px; }
+.orders-commander-row .plan-locked-overlay { flex-direction:row; justify-content:flex-start; gap:10px; padding:10px 14px; }
+.orders-commander-row .plan-locked-text { align-items:flex-start; }
+.orders-commander-row .plan-locked-text strong { text-align:left; }
+.orders-commander-row .plan-locked-text small { text-align:left; }
+.orders-commander-row .plan-locked-cta { margin:0 0 0 auto; padding:4px 10px; }
 .insight-mask { display:flex; flex-direction:column; gap:6px; }
 .insight-mask i { display:block; height:7px; border-radius:4px; background:var(--text-tertiary); }
 .insight-mask i:nth-child(2){ width:65%; }.insight-mask i:nth-child(3){ width:42%; }.insight-mask.compact i { height:5px; }
@@ -172,7 +180,7 @@
 .commander-capability { min-height: 60px !important; padding: 12px 14px !important; }
 .commander-capability strong { font-size: 13px !important; }
 .commander-capability small { font-size: 12px !important; }
-.plan-locked-feature { min-height: 100px !important; }
+.plan-locked-feature { min-height: 104px !important; }
 .plan-locked-overlay strong { font-size: 13px !important; }
 .plan-locked-overlay small { font-size: 12px !important; }
 .orders-toolbar { padding: 16px 20px !important; gap: 14px !important; }
@@ -234,6 +242,18 @@
 }
 .app-shell.light-mode .plan-locked-overlay {
   background: linear-gradient(rgba(248,250,252,.7),rgba(248,250,252,.9)) !important;
+}
+.app-shell.light-mode .plan-locked-overlay > svg,
+.light-mode .plan-locked-overlay > svg {
+  color: rgb(124, 58, 237) !important;
+}
+.app-shell.light-mode .plan-locked-overlay small,
+.light-mode .plan-locked-overlay small {
+  color: rgb(71, 85, 105) !important;
+}
+.app-shell.light-mode .plan-locked-cta,
+.light-mode .plan-locked-cta {
+  color: rgb(255, 255, 255) !important;
 }
 .app-shell.light-mode .orders-empty,
 .app-shell.light-mode .orders-error {

@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
@@ -169,7 +169,7 @@ function OrderTabs({ counts, active, onSelect }: { counts: OrdersPageResult['tab
     { id: 'pending', label: 'Pending', count: counts.pending },
   ]
   return <div className="orders-tabs" role="tablist" aria-label="Order status">
-    {tabs.map((tab) => <Button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}><span>{tab.label}</span><strong>{tab.count}</strong></Button>)}
+    {tabs.map((tab) => <RichButton key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}><span>{tab.label}</span><strong>{tab.count}</strong></RichButton>)}
   </div>
 }
 
@@ -232,7 +232,7 @@ export function PlanLockedFeature({
 }) {
   const tagline = description ?? (_requiredPlan === 'commander' ? 'Upgrade to Commander to unlock' : 'Upgrade to unlock')
   return (
-    <Button
+    <RichButton
       className="plan-locked-feature"
       onClick={onUpgrade}
       aria-label={`Upgrade to unlock ${featureName}`}
@@ -242,11 +242,14 @@ export function PlanLockedFeature({
         {children}
       </span>
       <span className="plan-locked-overlay">
-        <LockKeyhole size={17} />
-        <strong>{featureName}</strong>
-        <small>{tagline}</small>
+        <LockKeyhole size={18} />
+        <span className="plan-locked-text">
+          <strong>{featureName}</strong>
+          <small>{tagline}</small>
+        </span>
+        <span className="plan-locked-cta" aria-hidden="true">Upgrade</span>
       </span>
-    </Button>
+    </RichButton>
   )
 }
 

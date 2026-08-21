@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, Sparkles, WandSparkles, X } from './icons.js'
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
@@ -51,9 +51,9 @@ export function TemplateGallery({
       <header className="automation-section-header">
         <div>
           {onBack && (
-            <Button className="automation-back" onClick={onBack}>
+            <RichButton className="automation-back" onClick={onBack}>
               <ArrowLeft size={16} /> Automations
-            </Button>
+            </RichButton>
           )}
           <span className="automation-eyebrow">PROVEN STARTING POINTS</span>
           <h2>{full ? 'Automation templates' : 'Featured templates'}</h2>
@@ -64,9 +64,9 @@ export function TemplateGallery({
           </p>
         </div>
         {featured && onBrowseAll && (
-          <Button className="browse-all-link" onClick={onBrowseAll}>
+          <RichButton className="browse-all-link" onClick={onBrowseAll}>
             Browse all templates <ArrowRight size={15} />
-          </Button>
+          </RichButton>
         )}
       </header>
 
@@ -134,11 +134,11 @@ export function TemplateGallery({
                 {preview.locked ? 'This template needs a higher plan.' : 'Installs as a draft you can review.'}
               </span>
               {preview.locked ? (
-                <Button className="automation-primary upgrade-plan-btn" onClick={onUpgrade}>
+                <RichButton className="automation-primary upgrade-plan-btn" onClick={onUpgrade}>
                   <LockKeyhole size={15} /> Upgrade Plan
-                </Button>
+                </RichButton>
               ) : (
-                <Button
+                <RichButton
                   className="automation-primary"
                   disabled={installing}
                   onClick={async () => {
@@ -156,7 +156,7 @@ export function TemplateGallery({
                   }}
                 >
                   {installing ? 'Setting up…' : 'Set Up →'}
-                </Button>
+                </RichButton>
               )}
             </div>
           </div>
@@ -177,7 +177,7 @@ function TemplateCard({
 }): JSX.Element {
   return (
     <article className={`template-card template-card-pro ${templateToneClass(template.category)} ${template.locked ? 'locked' : ''}`}>
-      <Button className="template-card-main" onClick={onPreview} aria-label={`Preview template: ${template.name}`}>
+      <RichButton className="template-card-main" onClick={onPreview} aria-label={`Preview template: ${template.name}`}>
         <span className="template-card-top">
           <TemplateIcon template={template} />
           <span className={`plan-badge template-plan-badge ${planBadgeClass(template.minimumPlan)}`}>{planBadgeLabel(template.minimumPlan)}</span>
@@ -186,19 +186,19 @@ function TemplateCard({
         <h3 className="template-name">{template.name}</h3>
         <p className="template-description">{template.description}</p>
         <span className="template-impact-copy template-detail">{template.impact}</span>
-      </Button>
+      </RichButton>
       <footer>
         <span className="setup-time template-meta">
           <Clock3 size={12} className="template-meta-icon" /> {setupLabel(template.complexity)} · {template.nodes} step{template.nodes === 1 ? '' : 's'}
         </span>
         {template.locked ? (
-          <Button className="upgrade-mini template-upgrade-btn upgrade-plan-btn" onClick={onUpgrade} aria-label={`Upgrade Plan to use ${template.name}`}>
+          <RichButton className="upgrade-mini template-upgrade-btn upgrade-plan-btn" onClick={onUpgrade} aria-label={`Upgrade Plan to use ${template.name}`}>
             <LockKeyhole size={13} /> Upgrade Plan
-          </Button>
+          </RichButton>
         ) : (
-          <Button className="set-up-mini template-setup-btn" onClick={onPreview} aria-label={`Set up ${template.name}`}>
+          <RichButton className="set-up-mini template-setup-btn" onClick={onPreview} aria-label={`Set up ${template.name}`}>
             Set Up <ArrowRight size={13} />
-          </Button>
+          </RichButton>
         )}
       </footer>
     </article>

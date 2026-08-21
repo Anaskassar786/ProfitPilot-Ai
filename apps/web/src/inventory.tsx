@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
@@ -531,9 +531,9 @@ function InventoryTabs({ counts, active, onSelect }: { counts: InventoryPageResu
     { id: 'untracked', label: 'Not Tracked', count: counts.untracked },
   ]
   return <div className="inventory-tabs" role="tablist" aria-label="Stock status">
-    {tabs.map((tab) => <Button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}>
+    {tabs.map((tab) => <RichButton key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}>
       <span>{tab.label}</span><strong>{tab.count}</strong>
-    </Button>)}
+    </RichButton>)}
   </div>
 }
 
