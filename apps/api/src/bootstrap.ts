@@ -35,7 +35,7 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // The store directory is what registers the tenant (stores row) during OAuth
   // and resolves shop <-> storeId for the session context endpoint.
   const sessionToken = { apiKey: requiredEnv(env, 'SHOPIFY_API_KEY'), apiSecret: requiredEnv(env, 'SHOPIFY_API_SECRET') }
-  // parseShopifyScopes always includes the required registry (write_price_rules
+  // parseShopifyScopes always includes the required registry (write_discounts
   // included) so a stale SHOPIFY_SCOPES value cannot produce an install that
   // 403s the first time a discount action runs.
   const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseShopifyScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)

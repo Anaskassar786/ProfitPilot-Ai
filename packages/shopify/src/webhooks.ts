@@ -134,6 +134,16 @@ export class WebhookVerifier {
     const accepted = await this.receipts.claim(event.storeId, event.webhookId)
     return { accepted, payloadHash: sha256Hex(event.rawBody) }
   }
+
+  /**
+   * Verifies the HMAC signature alone, without claiming a tenant-scoped
+   * receipt. Used for `shop/redact` webhooks whose shop is unknown or already
+   * deleted (no storeId to claim against) so the request can still be
+   * acknowledged with 200 instead of failing Shopify's retry loop.
+   */
+  public verify(rawBody: string, signature: string): boolean {
+    return verifyWebhookHmac(rawBody, signature, this.secret)
+  }
 }
 
 export type WebhookProcessResult = Readonly<{ status: 'processed' | 'deduped' | 'retry' | 'failed'; payloadHash: string }>
@@ -147,6 +157,10 @@ export class WebhookProcessor {
     this.verifier = verifier
     this.ledger = ledger
     this.now = now
+  }
+
+  public verify(rawBody: string, signature: string): boolean {
+    return this.verifier.verify(rawBody, signature)
   }
 
   public async process(event: WebhookEvent, handler: (rawBody: string) => Promise<void>): Promise<WebhookProcessResult> {

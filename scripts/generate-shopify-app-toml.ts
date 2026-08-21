@@ -9,7 +9,7 @@ const output = process.env.SHOPIFY_APP_TOML_OUT?.trim() || 'shopify.app.toml'
 const config = shopifyAppConfigFromEnv(process.env)
 
 // Fail loudly instead of shipping a partition of the required scopes: an app
-// configuration missing write_price_rules installs fine and then 403s the first
+// configuration missing write_discounts installs fine and then 403s the first
 // time the AI Command Center or Automation Engine runs a discount action.
 const missing = missingShopifyScopes(config.scopes)
 if (missing.length > 0) {

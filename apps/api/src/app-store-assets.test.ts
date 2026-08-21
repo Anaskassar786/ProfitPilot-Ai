@@ -56,15 +56,19 @@ describe('Shopify scope registry', () => {
       'read_customers',
       'read_inventory',
       'read_locations',
-      'read_checkouts',
+      'read_discounts',
+      'write_discounts',
       'read_price_rules',
-      'write_price_rules',
     ])
     // discountCodeBasicCreate / discountCodeDeactivate are 403 without this one.
-    expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('write_price_rules')
+    expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('write_discounts')
+    // The GraphQL discount mutations no longer rely on the legacy REST scope.
+    expect(PROFITPILOT_SHOPIFY_SCOPES).not.toContain('write_price_rules')
+    // The REST discounts sync still reads legacy price rules.
+    expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('read_price_rules')
   })
 
-  it('generates the complete 8-scope TOML even when the environment is stale or empty', () => {
+  it('generates the complete scope TOML even when the environment is stale or empty', () => {
     const base = { SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example' }
     for (const env of [base, { ...base, SHOPIFY_SCOPES: '   ' }, { ...base, SHOPIFY_SCOPES: 'read_products,read_price_rules' }]) {
       const config = shopifyAppConfigFromEnv(env)
@@ -81,7 +85,7 @@ describe('Shopify scope registry', () => {
 
   it('reports the scopes an installation is missing', () => {
     expect(missingShopifyScopes(PROFITPILOT_SHOPIFY_SCOPES_CSV)).toEqual([])
-    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_checkouts,read_price_rules')).toEqual(['write_price_rules'])
+    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,read_price_rules')).toEqual(['write_discounts'])
     expect(missingShopifyScopes([])).toEqual([...PROFITPILOT_SHOPIFY_SCOPES])
   })
 

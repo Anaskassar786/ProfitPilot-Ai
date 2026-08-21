@@ -21,11 +21,12 @@ async function authorizationUrl(scopes: readonly string[]): Promise<URL> {
 }
 
 describe('Shopify OAuth install scopes', () => {
-  it('requests every registry scope, write_price_rules included', async () => {
+  it('requests every registry scope, write_discounts included', async () => {
     const url = await authorizationUrl(parseShopifyScopes(process.env.SHOPIFY_SCOPES))
     const requested = (url.searchParams.get('scope') ?? '').split(',')
     for (const scope of PROFITPILOT_SHOPIFY_SCOPES) expect(requested).toContain(scope)
-    expect(requested).toContain('write_price_rules')
+    expect(requested).toContain('write_discounts')
+    expect(requested).not.toContain('write_price_rules')
     expect(url.searchParams.get('scope')).toBe(PROFITPILOT_SHOPIFY_SCOPES_CSV)
   })
 

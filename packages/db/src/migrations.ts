@@ -117,7 +117,14 @@ export const QA_REGISTERED_MIGRATIONS: readonly Migration[] = [
   { id: '0029', filename: '0029_app_uninstalled_webhook.sql', sql: 'stores.status/uninstalled_at columns for app/uninstalled handling' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS, ...QA_REGISTERED_MIGRATIONS]
+// GDPR customers/data_request fulfillment: the compiled customer data export
+// is stored on the compliance request so a data_request is actually fulfilled
+// (not just acknowledged) and the export is purged on customers/redact.
+export const GDPR_DATA_REQUEST_MIGRATIONS: readonly Migration[] = [
+  { id: '0030', filename: '0030_gdpr_data_request_export.sql', sql: 'privacy_compliance_requests.export_data for compiled data_request exports' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS, ...QA_REGISTERED_MIGRATIONS, ...GDPR_DATA_REQUEST_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

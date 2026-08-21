@@ -120,7 +120,7 @@ async function registerTenant(
       requestId: requestIdFrom(response),
     })
     // A grant that predates a scope change (for example an install made before
-    // write_price_rules was requested) keeps working for reads and then fails
+    // write_discounts was requested) keeps working for reads and then fails
     // with 403 on discount actions. Surface it here instead of at execution.
     const missing = result.scopes.length > 0 ? missingShopifyScopes(result.scopes) : []
     if (missing.length > 0) {
