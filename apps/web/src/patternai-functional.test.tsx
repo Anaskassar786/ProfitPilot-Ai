@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 /**
  * PatternAI functional test sweep (PR #64).
  *
@@ -17,6 +18,9 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PatternAiWorkspace } from './patternai.js'
 import type { WorkspaceContext } from './model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
 
 const consoleErrors: string[] = []
 let root: Root | null = null
@@ -168,11 +172,11 @@ async function mount(theme: 'dark' | 'light' = 'dark'): Promise<HTMLElement> {
   document.body.appendChild(shell)
   root = createRoot(shell)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(PatternAiWorkspace, {
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(PatternAiWorkspace, {
       context: { shop: 'fn-test.myshopify.com', storeId: 'fn-test' } as WorkspaceContext,
       onToast: (message: string) => { toasts.push(message) },
       onNavigateBilling: () => { billingClicks += 1 },
-    })))
+    }))))
   })
   await settle()
   return shell

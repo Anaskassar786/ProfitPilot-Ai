@@ -102,6 +102,8 @@
 }
 .app-shell.light-mode .cc-kpi strong { color: var(--cc-l-text); }
 .app-shell.light-mode .cc-kpi strong small { color: var(--cc-l-text-muted); }
+.app-shell.light-mode .cc-kpi .Polaris-Text--sizeHeadingXl { color: var(--cc-l-text); }
+.app-shell.light-mode .cc-kpi .Polaris-Text--sizeHeadingXl .Polaris-Text--sizeBodySm { color: var(--cc-l-text-muted); }
 .app-shell.light-mode .cc-kpi > span { color: var(--cc-l-text-secondary); }
 .app-shell.light-mode .cc-kpi-empty { color: rgb(51, 65, 85); }
 

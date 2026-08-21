@@ -1,6 +1,14 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here. */
+function render(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 import { TrendingUp, Trophy } from './icons.js'
 import {
   BadgeRadar,
@@ -242,17 +250,17 @@ describe('Plan feature summary (FIX 12)', () => {
 
 describe('Store Coach components', () => {
   it('renders the milestone bars with accessible percent label', () => {
-    const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 64, tone: 'green' }))
+    const html = render(createElement(RadialGauge, { percent: 64, tone: 'green' }))
     expect(html).toContain('Goal progress 64%')
     expect(html).toContain('coach-milestone-bars')
     expect(html).toContain('64%')
   })
   it('clamps the milestone bars at 100', () => {
-    const html = renderToStaticMarkup(createElement(RadialGauge, { percent: 140, tone: 'amber' }))
+    const html = render(createElement(RadialGauge, { percent: 140, tone: 'amber' }))
     expect(html).toContain('100%')
   })
   it('renders the three priority category accents with Mark as done / Skip', () => {
-    const high = renderToStaticMarkup(createElement(PriorityCard, { priority: PRIORITY, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    const high = render(createElement(PriorityCard, { priority: PRIORITY, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(high).toContain('coach-priority-card red')
     expect(high).toContain('High Impact')
     expect(high).toContain('$1,281')
@@ -261,38 +269,38 @@ describe('Store Coach components', () => {
     expect(high).toContain('Mark as done')
     expect(high).not.toContain('Take Action')
     expect(high).toContain('Skip')
-    const quick = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'QUICK_WIN', id: 'p2' }, busy: true, onComplete: () => undefined, onDismiss: () => undefined }))
+    const quick = render(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'QUICK_WIN', id: 'p2' }, busy: true, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(quick).toContain('coach-priority-card green')
     expect(quick).toContain('Quick Win')
-    const opportunity = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'OPPORTUNITY', id: 'p3' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    const opportunity = render(createElement(PriorityCard, { priority: { ...PRIORITY, category: 'OPPORTUNITY', id: 'p3' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(opportunity).toContain('coach-priority-card amber')
     expect(opportunity).toContain('Opportunity')
   })
   it('falls back to a growth label when a priority has no dollar estimate', () => {
-    const html = renderToStaticMarkup(createElement(PriorityCard, { priority: { ...PRIORITY, impactValue: 0, impactLabel: '' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    const html = render(createElement(PriorityCard, { priority: { ...PRIORITY, impactValue: 0, impactLabel: '' }, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     expect(html).toContain('Growth')
     expect(html).not.toContain('$1,281')
   })
   it('renders the animated generation steps for the briefing', () => {
-    const html = renderToStaticMarkup(createElement(CoachGenerationSteps))
+    const html = render(createElement(CoachGenerationSteps))
     expect(html).toContain('coach-generating-steps')
     expect(html).toContain('Looking at your recent sales and customers')
     expect(html).toContain('Writing your personalized briefing')
   })
   it('renders big number cards with trend arrows', () => {
-    const html = renderToStaticMarkup(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: 12.4, series: [100, 120, 110, 140, 160], icon: TrendingUp }))
+    const html = render(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: 12.4, series: [100, 120, 110, 140, 160], icon: TrendingUp }))
     expect(html).toContain('12.4%')
     expect(html).toContain('coach-big-number')
-    const down = renderToStaticMarkup(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: -5.1, series: [], icon: TrendingUp }))
+    const down = render(createElement(BigNumberCard, { label: 'Revenue', value: '$3,631', trendPct: -5.1, series: [], icon: TrendingUp }))
     expect(down).toContain('coach-trend down')
   })
   it('renders momentum wave for inline metric cards', () => {
-    const html = renderToStaticMarkup(createElement(Sparkline, { values: [10, 20, 15, 30, 25] }))
+    const html = render(createElement(Sparkline, { values: [10, 20, 15, 30, 25] }))
     expect(html).toContain('coach-momentum-wave')
     expect(html).toContain('Weekly momentum wave')
   })
   it('renders the badge radar from real per-category counts, not the old empty-dot constellation', () => {
-    const html = renderToStaticMarkup(createElement(BadgeRadar, {
+    const html = render(createElement(BadgeRadar, {
       categories: [
         { category: 'STREAK', earned: 2, total: 10 },
         { category: 'REVENUE', earned: 1, total: 8 },
@@ -312,35 +320,35 @@ describe('Store Coach components', () => {
     expect(html).toContain('of 50 earned')
   })
   it('renders an honest fallback when the badge catalog has not loaded', () => {
-    const html = renderToStaticMarkup(createElement(BadgeRadar, { categories: [], earnedTotal: 3 }))
+    const html = render(createElement(BadgeRadar, { categories: [], earnedTotal: 3 }))
     expect(html).toContain('coach-badge-radar-empty')
     expect(html).toContain('The badge radar didn’t load this time')
     expect(html).toContain('3 earned badges are safe')
   })
   it('renders educational empty states with actions', () => {
-    const html = renderToStaticMarkup(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first weekly goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))
+    const html = render(createElement(CoachEmptyState, { icon: Trophy, title: 'Set your first weekly goal', description: 'Goals give the Coach a north star.', action: 'Get AI suggestions', onAction: () => undefined }))
     expect(html).toContain('Set your first weekly goal')
     expect(html).toContain('Get AI suggestions')
   })
   it('renders error states with retry and upgrade actions', () => {
-    const html = renderToStaticMarkup(createElement(CoachErrorState, { error: 'Store Coach is locked on your current plan. Upgrade to keep coaching.', onRetry: () => undefined, onNavigateBilling: () => undefined }))
+    const html = render(createElement(CoachErrorState, { error: 'Store Coach is locked on your current plan. Upgrade to keep coaching.', onRetry: () => undefined, onNavigateBilling: () => undefined }))
     expect(html).toContain('Retry')
     expect(html).toContain('Upgrade Plan')
   })
   it('renders skeleton loaders instead of blank screens', () => {
-    const html = renderToStaticMarkup(createElement(CoachSkeletonMain))
+    const html = render(createElement(CoachSkeletonMain))
     expect(html).toContain('Loading Store Coach')
     expect(html).toContain('coach-skeleton-card')
   })
   it('renders the health badge tones', () => {
-    const good = renderToStaticMarkup(createElement(CoachHealthBadge, { score: 84, label: 'Highly engaged', tone: 'good' }))
+    const good = render(createElement(CoachHealthBadge, { score: 84, label: 'Highly engaged', tone: 'good' }))
     expect(good).toContain('coach-health-badge good')
     expect(good).toContain('84')
-    const empty = renderToStaticMarkup(createElement(CoachHealthBadge, { score: null, label: 'No activity yet', tone: 'low' }))
+    const empty = render(createElement(CoachHealthBadge, { score: null, label: 'No activity yet', tone: 'low' }))
     expect(empty).toContain('—')
   })
   it('renders accessible toggles', () => {
-    const html = renderToStaticMarkup(createElement(Toggle, { value: true, onChange: () => undefined }))
+    const html = render(createElement(Toggle, { value: true, onChange: () => undefined }))
     expect(html).toContain('role="switch"')
     expect(html).toContain('aria-checked="true"')
   })

@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
 
 /**
  * Regression test for the reported bug: on the Store Coach home view, when the
@@ -82,7 +86,7 @@ async function mountApp(path: string, failMatches: readonly string[]): Promise<v
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(App)))
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(App))))
   })
   // Let every coach request (and any retry kicked off inside the act) settle.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })

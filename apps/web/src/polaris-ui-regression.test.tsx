@@ -81,7 +81,7 @@ describe('Polaris migration: composite controls keep their structure', () => {
   })
 
   it('template cards are never built from one concatenated text node', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/TemplateGallery.tsx'), 'utf8')
+    const source = readFileSync(resolve(process.cwd(), 'apps/web/src/TemplateGallery.tsx'), 'utf8')
     // The card body must be a rich-content button that keeps its children.
     expect(source).toContain('<RichButton className="template-card-main"')
     expect(source).toContain('<h3 className="template-name">')
@@ -92,10 +92,10 @@ describe('Polaris migration: composite controls keep their structure', () => {
   })
 
   it('all double-label filter tab renderers use the rich-content button', () => {
-    const inventory = readFileSync(resolve(process.cwd(), 'src/inventory.tsx'), 'utf8')
-    const orders = readFileSync(resolve(process.cwd(), 'src/orders.tsx'), 'utf8')
-    const automation = readFileSync(resolve(process.cwd(), 'src/automation.tsx'), 'utf8')
-    const recommendations = readFileSync(resolve(process.cwd(), 'src/recommendations.tsx'), 'utf8')
+    const inventory = readFileSync(resolve(process.cwd(), 'apps/web/src/inventory.tsx'), 'utf8')
+    const orders = readFileSync(resolve(process.cwd(), 'apps/web/src/orders.tsx'), 'utf8')
+    const automation = readFileSync(resolve(process.cwd(), 'apps/web/src/automation.tsx'), 'utf8')
+    const recommendations = readFileSync(resolve(process.cwd(), 'apps/web/src/recommendations.tsx'), 'utf8')
     expect(inventory).toContain('<RichButton key={tab.id} role="tab"')
     expect(orders).toContain('<RichButton key={tab.id} role="tab"')
     expect(automation).toContain('<RichButton key={value} className={`filter-tab')

@@ -1,3 +1,6 @@
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import './jsdom-polaris-setup.js'
 /**
  * Runtime (jsdom) integration tests for the Recommendations workspace —
  * complements the SSR markup tests by exercising the real mounted component:
@@ -67,6 +70,9 @@ async function click(element: Element): Promise<void> {
 
 beforeAll(() => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/dashboard?shop=demo.myshopify.com' })
+  // The fresh JSDOM window has no matchMedia; Polaris' breakpoints module
+  // reads it at import time, so stub it before anything imports Polaris.
+  Object.defineProperty(dom.window, 'matchMedia', { configurable: true, writable: true, value: (query: string) => ({ matches: false, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false }) })
   Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window })
   Object.defineProperty(globalThis, 'document', { configurable: true, value: dom.window.document })
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.window.navigator })
@@ -94,7 +100,7 @@ async function mountWorkspace(): Promise<void> {
   const { RecommendationsWorkspace } = await import('./recommendations.js')
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(StrictMode, null, createElement(RecommendationsWorkspace, { context: { shop: 'demo.myshopify.com', storeId: 's1' } as never, onToast, onNavigateBilling: vi.fn(), onNavigateSection: vi.fn() })))
+    root?.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(RecommendationsWorkspace, { context: { shop: 'demo.myshopify.com', storeId: 's1' } as never, onToast, onNavigateBilling: vi.fn(), onNavigateSection: vi.fn() }))))
   })
   await settle()
 }

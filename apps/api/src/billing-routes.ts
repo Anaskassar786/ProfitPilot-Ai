@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
 import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
-import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError } from '@profitpilot/billing'
+import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, expiredGiftRevert } from '@profitpilot/billing'
 
 /**
  * Trial / gift surface used by billing routes.
@@ -17,6 +17,8 @@ export type TrialGiftSurface = Readonly<{
   redemption: (shopId: string) => Promise<GiftRedemption | null> | GiftRedemption | null
   redeemGift: (shopId: string, code: string, now?: number) => Promise<GiftRedemption> | GiftRedemption
   startTrial?: (shopId: string, now?: number, days?: number) => TrialRecord
+  /** Ends an ACTIVE trial (used when the merchant upgrades during the trial). */
+  cancelTrial?: (shopId: string) => Promise<TrialRecord | null> | TrialRecord | null
 }>
 
 export type BillingRouteDependencies = Readonly<{
@@ -47,6 +49,16 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
         else if (dependencies.trials.startTrial) trial = dependencies.trials.startTrial(shopId)
       }
       const gift = await Promise.resolve(dependencies.trials.redemption(shopId))
+      // Gift expiry enforcement: once the gift window has passed the store
+      // must revert to its previous plan state (Trial if still valid, else
+      // locked) — Commander features are never granted past the redemption
+      // window. The reverted record is persisted so every later read agrees.
+      const reverted = expiredGiftRevert(record, trial)
+      if (reverted) {
+        await dependencies.repository.put(reverted)
+        response.status(200).json(success({ subscription: reverted, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
+        return
+      }
       response.status(200).json(success({ subscription: record, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
@@ -95,11 +107,15 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
           interval,
           chargeId: `dev-mock-${body.plan.toLowerCase()}-${Date.now()}`,
         })
-        // Cancel any active trial when a paid plan is chosen.
+        // Cancel any active trial when a paid plan is chosen — the trial
+        // never outlives an upgrade (GA 2026-08-21).
         try {
-          const trial = await Promise.resolve(dependencies.trials.trial(shopId))
-          if (trial && trial.state === 'ACTIVE' && dependencies.trials.ensureTrial) {
-            // Best-effort: mark trial cancelled via ensure path if store supports it.
+          if (dependencies.trials.cancelTrial) await Promise.resolve(dependencies.trials.cancelTrial(shopId))
+          else {
+            const trial = await Promise.resolve(dependencies.trials.trial(shopId))
+            if (trial && trial.state === 'ACTIVE' && dependencies.trials.ensureTrial) {
+              // Best-effort: mark trial cancelled via ensure path if store supports it.
+            }
           }
         } catch { /* non-fatal */ }
         dependencies.funnel.record(shopId, 'install')
@@ -125,6 +141,10 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
         interval: body.interval,
         chargeId: charge.id,
       })
+      // The merchant chose a paid plan — the 14-day trial ends here.
+      try {
+        if (dependencies.trials.cancelTrial) await Promise.resolve(dependencies.trials.cancelTrial(shopId))
+      } catch { /* non-fatal */ }
       dependencies.funnel.record(shopId, 'install')
       response.status(201).json(success(charge, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
@@ -135,6 +155,13 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       const shopId = queryShop(request)
       const body = request.body as unknown
       if (!isRecord(body) || typeof body.code !== 'string') throw new AppError('VALIDATION_ERROR', 'Gift code is required', 400)
+      // Gift codes override the free trial only. A store on a paid plan must
+      // not have Commander temporarily overlaid — when the gift window ends
+      // the store would otherwise fall back to Trial instead of its paid plan.
+      const before = await dependencies.repository.get(shopId)
+      if (before && (before.state === 'ACTIVE_MONTHLY' || before.state === 'ACTIVE_ANNUAL')) {
+        throw new AppError('CONFLICT', 'Your store already has an active paid plan — promo codes apply to stores on the free trial.', 409, { shopId, reason: 'PAID_PLAN_ACTIVE' })
+      }
       const redemption = await Promise.resolve(dependencies.trials.redeemGift(shopId, body.code))
       const existing = await dependencies.repository.get(shopId)
       await dependencies.repository.put({

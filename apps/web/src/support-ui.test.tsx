@@ -3,6 +3,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { HelpSupportPage, SupportPlanCard } from './support.js'
 import { SUPPORT_TIERS, commonFaqs, ticketQuota } from './support-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 /**
  * Static-render contracts for the Help & Support redesign. renderToStaticMarkup
@@ -12,7 +21,7 @@ import { SUPPORT_TIERS, commonFaqs, ticketQuota } from './support-model.js'
  */
 
 const context = { storeId: 'store-1', shop: 'demo.myshopify.com' }
-const renderPage = () => renderToStaticMarkup(createElement(HelpSupportPage, { context, onToast: () => {}, onNavigate: () => {}, onNavigateBilling: () => {} }))
+const renderPage = () => renderWithAppProvider(createElement(HelpSupportPage, { context, onToast: () => {}, onNavigate: () => {}, onNavigateBilling: () => {} }))
 
 describe('Help & Support rename and copy (FIX 1)', () => {
   it('uses merchant-friendly naming — no operator/jargon anywhere', () => {
@@ -107,7 +116,7 @@ describe('plan-based support (FIX 4)', () => {
   })
 
   it('hides the Upgrade CTA on Commander and congratulates instead', () => {
-    const html = renderToStaticMarkup(createElement(SupportPlanCard, { plan: 'commander', quota: ticketQuota([], 'commander'), onUpgrade: () => {} }))
+    const html = renderWithAppProvider(createElement(SupportPlanCard, { plan: 'commander', quota: ticketQuota([], 'commander'), onUpgrade: () => {} }))
     expect(html).not.toContain('Upgrade Plan')
     expect(html).toContain('You are on the top plan')
     expect(html).toContain('4h Priority response')
@@ -116,7 +125,7 @@ describe('plan-based support (FIX 4)', () => {
 
   it('shows the correct response badge for every plan card', () => {
     for (const plan of ['trial', 'start', 'growth', 'commander'] as const) {
-      const html = renderToStaticMarkup(createElement(SupportPlanCard, { plan, quota: ticketQuota([], plan), onUpgrade: () => {} }))
+      const html = renderWithAppProvider(createElement(SupportPlanCard, { plan, quota: ticketQuota([], plan), onUpgrade: () => {} }))
       expect(html).toContain(SUPPORT_TIERS[plan].responseBadge)
     }
   })

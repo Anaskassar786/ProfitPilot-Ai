@@ -1,3 +1,4 @@
+import './jsdom-polaris-setup.js'
 /**
  * Contracts for the rebuilt Analytics widgets: revenue pacing (momentum),
  * discount leakage, and stock-out risk. Every assertion checks that the widget

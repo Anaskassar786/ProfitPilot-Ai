@@ -1,3 +1,12 @@
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 /**
  * PatternAI value layer (PR #64) — model + visual unit tests.
  *
@@ -128,23 +137,23 @@ describe('hero stats and their six distinct micro-visualizations', () => {
     expect(patternAiStats(null).every((stat) => stat.count === null)).toBe(true)
   })
   it('renders a filled shape with data and an explicitly empty one without', () => {
-    const filled = renderToStaticMarkup(createElement(StatBubbleCluster, { count: 3, pending: 'waiting to populate', label: 'Discoveries' }))
-    const empty = renderToStaticMarkup(createElement(StatBubbleCluster, { count: 0, pending: 'waiting to populate', label: 'Discoveries' }))
+    const filled = renderWithAppProvider(createElement(StatBubbleCluster, { count: 3, pending: 'waiting to populate', label: 'Discoveries' }))
+    const empty = renderWithAppProvider(createElement(StatBubbleCluster, { count: 0, pending: 'waiting to populate', label: 'Discoveries' }))
     expect(filled).toContain('filled')
     expect(filled).not.toContain('waiting to populate')
     expect(empty).toContain('is-empty')
     expect(empty).toContain('waiting to populate')
   })
   it('draws each of the six shapes with its own primitives', () => {
-    expect(renderToStaticMarkup(createElement(StatNetworkSpark, { count: 4, pending: 'discovering…', label: 'Patterns' }))).toContain('pa-viz-edge live')
-    expect(renderToStaticMarkup(createElement(StatPersonaCohort, { count: 7, pending: 'analysing…', label: 'Personas' }))).toContain('+2')
-    expect(renderToStaticMarkup(createElement(StatAnswerMeter, { count: 2, pending: 'ask a question', label: 'Investigations' }))).toContain('pa-viz-check done')
-    expect(renderToStaticMarkup(createElement(StatArrowCluster, { count: 3, pending: 'monitoring…', label: 'Trends' }))).toContain('pa-viz-arrow live')
-    expect(renderToStaticMarkup(createElement(StatProbabilityWave, { count: 1, pending: 'learning…', label: 'Predictions' }))).toContain('pa-viz-band')
+    expect(renderWithAppProvider(createElement(StatNetworkSpark, { count: 4, pending: 'discovering…', label: 'Patterns' }))).toContain('pa-viz-edge live')
+    expect(renderWithAppProvider(createElement(StatPersonaCohort, { count: 7, pending: 'analysing…', label: 'Personas' }))).toContain('+2')
+    expect(renderWithAppProvider(createElement(StatAnswerMeter, { count: 2, pending: 'ask a question', label: 'Investigations' }))).toContain('pa-viz-check done')
+    expect(renderWithAppProvider(createElement(StatArrowCluster, { count: 3, pending: 'monitoring…', label: 'Trends' }))).toContain('pa-viz-arrow live')
+    expect(renderWithAppProvider(createElement(StatProbabilityWave, { count: 1, pending: 'learning…', label: 'Predictions' }))).toContain('pa-viz-band')
   })
   it('never renders a KPI sparkline polyline (that shape belongs to another module)', () => {
     for (const visual of ['bubbles', 'network', 'cohort', 'answers', 'arrows', 'wave'] as const) {
-      const html = renderToStaticMarkup(createElement(StatVisualization, { visual, count: 3, pending: 'x', label: 'L' }))
+      const html = renderWithAppProvider(createElement(StatVisualization, { visual, count: 3, pending: 'x', label: 'L' }))
       expect(html).not.toContain('<polyline')
     }
   })
@@ -158,15 +167,15 @@ describe('hero real-activity trend strip', () => {
     expect(trendDirection({ series: [0, 0, 0, 0, 0, 0, 0, 0], direction: 'none', windowLabel: 'Last 8 weeks' })).toBe('none')
   })
   it('draws rising bars and an ▲ caption from real counts', () => {
-    const html = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    const html = renderWithAppProvider(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
     expect(html).toContain('pa-trend')
     expect(html).toContain('pa-trend-bar live dir-up')
     expect(html).toContain('▲')
     expect(html).toContain('rising')
   })
   it('is never a polyline sparkline and says so honestly when empty', () => {
-    const rising = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
-    const empty = renderToStaticMarkup(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 0, 0, 0], direction: 'none', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    const rising = renderWithAppProvider(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 1, 2, 3], direction: 'up', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
+    const empty = renderWithAppProvider(createElement(StatTrendStrip, { trend: { series: [0, 0, 0, 0, 0, 0, 0, 0], direction: 'none', windowLabel: 'Last 8 weeks' }, label: 'Discoveries' }))
     expect(rising).not.toContain('<polyline')
     expect(empty).toContain('no activity yet')
     expect(empty).not.toContain('▲')
@@ -178,19 +187,19 @@ describe('hero real-activity trend strip', () => {
 describe('discovery pipeline funnel', () => {
   const funnel = discoveryFunnel([discovery(), discovery({ id: 'd2', status: 'REVIEWED' }), discovery({ id: 'd3', status: 'ACTED_ON' })])
   it('renders every stage with its real count and share', () => {
-    const html = renderToStaticMarkup(createElement(DiscoveryPipelineFunnel, { funnel }))
+    const html = renderWithAppProvider(createElement(DiscoveryPipelineFunnel, { funnel }))
     expect(html).toContain('Discovered')
     expect(html).toContain('Acted on')
     expect(html).toContain('Conversion')
     expect(html).toContain('33%')
   })
   it('shows an em dash rather than 0% conversion on an empty pipeline', () => {
-    const html = renderToStaticMarkup(createElement(DiscoveryPipelineFunnel, { funnel: discoveryFunnel([]) }))
+    const html = renderWithAppProvider(createElement(DiscoveryPipelineFunnel, { funnel: discoveryFunnel([]) }))
     expect(html).toContain('Conversion')
     expect(html).toContain('Run a discovery sweep')
   })
   it('is clickable when a select handler is supplied', () => {
-    const html = renderToStaticMarkup(createElement(DiscoveryPipelineFunnel, { funnel, onSelect: noop }))
+    const html = renderWithAppProvider(createElement(DiscoveryPipelineFunnel, { funnel, onSelect: noop }))
     expect(html).toContain('type="button"')
   })
 })
@@ -228,7 +237,7 @@ describe('human discovery card', () => {
     expect(labels).toContain('Sold in the last 14 days')
   })
   it('renders the headline, momentum bars and no product id in the card', () => {
-    const html = renderToStaticMarkup(createElement(DiscoveryCard, { discovery: discovery(), storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(DiscoveryCard, { discovery: discovery(), storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
     expect(html).toContain('Rising product spotted')
     expect(html).toContain('pa-momentum')
     expect(html).toContain('What this means for you')
@@ -238,7 +247,7 @@ describe('human discovery card', () => {
     expect(html).toContain('$1,800')
   })
   it('still labels samples loudly', () => {
-    const html = renderToStaticMarkup(createElement(DiscoveryCard, { discovery: discovery({ sample: true }), storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
+    const html = renderWithAppProvider(createElement(DiscoveryCard, { discovery: discovery({ sample: true }), storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))
     expect(html).toContain('SAMPLE')
   })
   it('survives a partial payload instead of crashing the detail view', () => {
@@ -247,10 +256,10 @@ describe('human discovery card', () => {
     const partial = { ...discovery(), dataEvidence: undefined as unknown as InsightDiscovery['dataEvidence'] }
     expect(humanEvidenceRows(partial.dataEvidence)).toEqual([])
     expect(discoveryMomentum(partial)).toBeNull()
-    expect(() => renderToStaticMarkup(createElement(DiscoveryCard, { discovery: partial, storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))).not.toThrow()
+    expect(() => renderWithAppProvider(createElement(DiscoveryCard, { discovery: partial, storeId: 's', onOpen: noop, onChanged: noop, onToast: noop, onNavigateBilling: noop }))).not.toThrow()
   })
   it('renders momentum bars for a measured pair', () => {
-    const html = renderToStaticMarkup(createElement(MomentumCompare, { momentum: discoveryMomentum(discovery())! }))
+    const html = renderWithAppProvider(createElement(MomentumCompare, { momentum: discoveryMomentum(discovery())! }))
     expect(html).toContain('Prior 14 days')
     expect(html).toContain('Last 14 days')
     expect(html).toContain('3 sold')
@@ -293,8 +302,8 @@ describe('decision window and factual signal outcomes', () => {
   })
 
   it('draws a unique balance only from supplied counts and an honest empty state', () => {
-    const filled = renderToStaticMarkup(createElement(FeedbackBalance, { kept: 2, dismissed: 1 }))
-    const empty = renderToStaticMarkup(createElement(FeedbackBalance, { kept: 0, dismissed: 0 }))
+    const filled = renderWithAppProvider(createElement(FeedbackBalance, { kept: 2, dismissed: 1 }))
+    const empty = renderWithAppProvider(createElement(FeedbackBalance, { kept: 0, dismissed: 0 }))
     expect(filled).toContain('2 kept and 1 dismissed signals')
     expect(filled).toContain('pa-feedback-pivot')
     expect(filled).not.toContain('learning score')
@@ -304,8 +313,8 @@ describe('decision window and factual signal outcomes', () => {
 
   it('keeps sample-only KPI cards visibly empty rather than fabricating value', () => {
     const sample = discovery({ sample: true, expiresAt: null, status: 'NEW' })
-    const deadline = renderToStaticMarkup(createElement(DecisionWindowKpi, { discoveries: [sample], onOpen: noop }))
-    const outcomes = renderToStaticMarkup(createElement(SignalFeedbackKpi, { discoveries: [sample] }))
+    const deadline = renderWithAppProvider(createElement(DecisionWindowKpi, { discoveries: [sample], onOpen: noop }))
+    const outcomes = renderWithAppProvider(createElement(SignalFeedbackKpi, { discoveries: [sample] }))
     expect(deadline).toContain('No deadline')
     expect(deadline).toContain('This sample is excluded')
     expect(outcomes).toContain('0')
@@ -330,7 +339,7 @@ describe('value panels', () => {
   it('reports no money in play when the engine attached no impact', () => {
     const summary = discoveryImpactSummary([discovery({ impactEstimate: null })])
     expect(summary.moneyInPlay).toBeNull()
-    expect(renderToStaticMarkup(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('')
+    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('')
   })
   it('builds the strength ladder from readiness have/need pairs only', () => {
     const rows = patternStrengthRows(readiness)
@@ -343,7 +352,7 @@ describe('value panels', () => {
     expect(patternStrengthState(5)).toBe('learning')
   })
   it('renders the strength ladder with counts, not adjectives alone', () => {
-    const html = renderToStaticMarkup(createElement(PatternStrengthMeter, { rows: patternStrengthRows(readiness), tip: 'More orders = stronger patterns' }))
+    const html = renderWithAppProvider(createElement(PatternStrengthMeter, { rows: patternStrengthRows(readiness), tip: 'More orders = stronger patterns' }))
     expect(html).toContain('Order evidence')
     expect(html).toContain('5 of 10 orders')
     expect(html).toContain('More orders = stronger patterns')
@@ -361,7 +370,7 @@ describe('value panels', () => {
     expect(monthlyDiscoveryProgress(null)).toBeNull()
   })
   it('renders the ring as dashed segments with an inner readout', () => {
-    const html = renderToStaticMarkup(createElement(MonthlyDiscoveryRing, { progress: monthlyDiscoveryProgress(overview())! }))
+    const html = renderWithAppProvider(createElement(MonthlyDiscoveryRing, { progress: monthlyDiscoveryProgress(overview())! }))
     expect(html).toContain('stroke-dasharray="3 6"')
     expect(html).toContain('of 1 limit')
   })
@@ -397,23 +406,23 @@ describe('explore-card mini visualizations', () => {
     expect(predictionWavePoints(predictions)).toHaveLength(2)
   })
   it('renders six different shapes, one per destination', () => {
-    expect(renderToStaticMarkup(createElement(MiniWordCloud, { words: lessonTopicCloud(lessons) }))).toContain('pa-mini-word')
-    expect(renderToStaticMarkup(createElement(MiniScatter, { points: [{ id: 'a', label: 'Weekly rhythm', x: 0.5, y: 0.6 }] }))).toContain('pa-mini-dot')
-    expect(renderToStaticMarkup(createElement(MiniRadar, { traits: personaRadarAverage(personas) }))).toContain('pa-mini-shape')
-    expect(renderToStaticMarkup(createElement(MiniCauseWeb, { causes: investigationCauseNodes(investigations) }))).toContain('pa-mini-root')
-    expect(renderToStaticMarkup(createElement(MiniDivergingBars, { rows: trendDivergingRows(trends) }))).toContain('pa-mini-diverge down')
-    expect(renderToStaticMarkup(createElement(MiniProbabilityWave, { points: predictionWavePoints(predictions) }))).toContain('pa-mini-band')
+    expect(renderWithAppProvider(createElement(MiniWordCloud, { words: lessonTopicCloud(lessons) }))).toContain('pa-mini-word')
+    expect(renderWithAppProvider(createElement(MiniScatter, { points: [{ id: 'a', label: 'Weekly rhythm', x: 0.5, y: 0.6 }] }))).toContain('pa-mini-dot')
+    expect(renderWithAppProvider(createElement(MiniRadar, { traits: personaRadarAverage(personas) }))).toContain('pa-mini-shape')
+    expect(renderWithAppProvider(createElement(MiniCauseWeb, { causes: investigationCauseNodes(investigations) }))).toContain('pa-mini-root')
+    expect(renderWithAppProvider(createElement(MiniDivergingBars, { rows: trendDivergingRows(trends) }))).toContain('pa-mini-diverge down')
+    expect(renderWithAppProvider(createElement(MiniProbabilityWave, { points: predictionWavePoints(predictions) }))).toContain('pa-mini-band')
   })
   it('falls back to an explicitly empty state instead of a fake shape', () => {
-    expect(renderToStaticMarkup(createElement(MiniWordCloud, { words: [] }))).toContain('Topics appear with your first lesson')
-    expect(renderToStaticMarkup(createElement(MiniScatter, { points: [] }))).toContain('is-empty')
-    expect(renderToStaticMarkup(createElement(MiniRadar, { traits: [] }))).not.toContain('pa-mini-shape')
-    expect(renderToStaticMarkup(createElement(MiniCauseWeb, { causes: [] }))).toContain('Ask a question')
-    expect(renderToStaticMarkup(createElement(MiniDivergingBars, { rows: [] }))).toContain('Rises and falls appear here')
-    expect(renderToStaticMarkup(createElement(MiniProbabilityWave, { points: [] }))).toContain('Forecast ranges appear here')
+    expect(renderWithAppProvider(createElement(MiniWordCloud, { words: [] }))).toContain('Topics appear with your first lesson')
+    expect(renderWithAppProvider(createElement(MiniScatter, { points: [] }))).toContain('is-empty')
+    expect(renderWithAppProvider(createElement(MiniRadar, { traits: [] }))).not.toContain('pa-mini-shape')
+    expect(renderWithAppProvider(createElement(MiniCauseWeb, { causes: [] }))).toContain('Ask a question')
+    expect(renderWithAppProvider(createElement(MiniDivergingBars, { rows: [] }))).toContain('Rises and falls appear here')
+    expect(renderWithAppProvider(createElement(MiniProbabilityWave, { points: [] }))).toContain('Forecast ranges appear here')
   })
   it('tells locked destinations apart with upgrade wording, never a plan name', () => {
-    const html = renderToStaticMarkup(createElement(ExploreFurther, { go: noop, storeId: 's', overview: overview(), plan: 'trial' }))
+    const html = renderWithAppProvider(createElement(ExploreFurther, { go: noop, storeId: 's', overview: overview(), plan: 'trial' }))
     expect(html).toContain('Keep exploring')
     expect(html).toContain('Opens with a plan upgrade')
     expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
@@ -433,19 +442,19 @@ describe('sidebar badges', () => {
 
 describe('Run discovery glyph', () => {
   it('draws a compass with a discovery spark, not a generic sparkle', () => {
-    const html = renderToStaticMarkup(createElement(PatternAiDiscoverGlyph, { size: 16 }))
+    const html = renderWithAppProvider(createElement(PatternAiDiscoverGlyph, { size: 16 }))
     expect(html).toContain('Run discovery')
     expect(html).toContain('linearGradient')
     expect(html).toContain('<path')
     expect(html).toContain('viewBox="0 0 24 24"')
   })
   it('is distinct from the PatternAI brand constellation', () => {
-    const glyph = renderToStaticMarkup(createElement(PatternAiDiscoverGlyph, { size: 24 }))
-    const mark = renderToStaticMarkup(createElement(PatternAiMark, { size: 24 }))
+    const glyph = renderWithAppProvider(createElement(PatternAiDiscoverGlyph, { size: 24 }))
+    const mark = renderWithAppProvider(createElement(PatternAiMark, { size: 24 }))
     expect(glyph).not.toBe(mark)
     expect((glyph.match(/<circle/g) ?? []).length).toBe(2)
   })
   it('accepts the Lucide icon call signature', () => {
-    expect(renderToStaticMarkup(createElement(PatternAiDiscoverIcon, { size: 14 }))).toContain('width="14"')
+    expect(renderWithAppProvider(createElement(PatternAiDiscoverIcon, { size: 14 }))).toContain('width="14"')
   })
 })

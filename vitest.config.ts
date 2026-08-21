@@ -7,6 +7,7 @@ export default defineConfig({
     globals: false,
     restoreMocks: true,
     clearMocks: true,
+    setupFiles: ['./vitest.setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],

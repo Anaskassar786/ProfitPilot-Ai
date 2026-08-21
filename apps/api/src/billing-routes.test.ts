@@ -7,8 +7,11 @@ import { Logger } from '@profitpilot/logger'
 import { createApi } from './app.js'
 
 async function withServer<T>(handler: (base: string) => Promise<T>): Promise<T> {
-  const repository = new InMemoryBillingRepository()
-  const trials = new TrialAndGiftLedger()
+  return withLedgerServer(new InMemoryBillingRepository(), new TrialAndGiftLedger(), handler)
+}
+
+/** Builds the billing API over a caller-provided repository + trial/gift store. */
+async function withLedgerServer<T>(repository: InMemoryBillingRepository, trials: TrialAndGiftLedger, handler: (base: string) => Promise<T>): Promise<T> {
   const funnel = new FunnelLedger()
   const roi: RoiMetrics = { attributedRevenue: 0, aiCostDollars: 0, netReturn: 0, multiple: null }
   const app = createApi({ logger: new Logger(), readinessChecks: [], billing: { repository, trials, funnel, createCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'pending', confirmationUrl: 'https://confirm', billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), verifyCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'active', confirmationUrl: null, billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), usage: async () => [], roi: async () => roi } })
@@ -49,6 +52,87 @@ describe('F5 billing API routes', () => {
     expect(response.status).toBe(201)
     expect((await response.json()).data.mock).toBe(true)
   }))
+})
+
+describe('F5 trial & gift lifecycle (GA 2026-08-21)', () => {
+  it('cancels the active trial when the merchant upgrades during it (mock path)', async () => {
+    const trials = new TrialAndGiftLedger()
+    trials.startTrial('s', Date.now())
+    await withLedgerServer(new InMemoryBillingRepository(), trials, async (base) => {
+      const response = await fetch(`${base}/billing/charge?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan: 'GROWTH', interval: 'MONTHLY', returnUrl: 'https://app.example/return', mock: true }) })
+      expect(response.status).toBe(201)
+    })
+    expect(trials.trial('s')?.state).toBe('CANCELLED')
+    expect(trials.trial('s')?.consumed).toBe(true)
+  })
+
+  it('reverts an expired gift to the still-running trial (Commander features lock)', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    // Day 10 of a 14-day trial (still active).
+    trials.startTrial('s', Date.now() - 10 * 86_400_000)
+    // 3-day gift redeemed 4 days ago → the window ended yesterday.
+    trials.redeemGift('s', 'KASSAR786', Date.now() - 4 * 86_400_000)
+    await repository.put({ storeId: 's', plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: Date.now() - 86_400_000, version: 1, interval: null, chargeId: null })
+    await withLedgerServer(repository, trials, async (base) => {
+      const data = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
+      expect(data.gift).toBeTruthy()
+      expect(data.subscription.state).toBe('TRIAL_LIMITED')
+      expect(data.subscription.plan).toBe('trial')
+    })
+    // The revert is persisted — a second read agrees.
+    expect((await repository.get('s'))?.state).toBe('TRIAL_LIMITED')
+  })
+
+  it('reverts an expired gift to locked when the trial has also expired', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    trials.startTrial('s', Date.now() - 20 * 86_400_000) // trial expired 6 days ago
+    trials.redeemGift('s', 'KASSAR786', Date.now() - 4 * 86_400_000) // gift ended yesterday
+    await repository.put({ storeId: 's', plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: Date.now() - 86_400_000, version: 1, interval: null, chargeId: null })
+    await withLedgerServer(repository, trials, async (base) => {
+      const data = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
+      expect(data.subscription.state).toBe('PENDING_CONFIRMATION')
+      expect(data.subscription.plan).toBe('trial')
+    })
+  })
+
+  it('keeps Commander while the gift window is open', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    trials.startTrial('s', Date.now() - 10 * 86_400_000)
+    trials.redeemGift('s', 'KASSAR786', Date.now() - 86_400_000) // expires in 2 days
+    await repository.put({ storeId: 's', plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: Date.now() + 2 * 86_400_000, version: 1, interval: null, chargeId: null })
+    await withLedgerServer(repository, trials, async (base) => {
+      const data = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
+      expect(data.subscription.state).toBe('GIFT_ACCESS_UNLIMITED')
+      expect(data.subscription.plan).toBe('commander')
+    })
+  })
+
+  it('rejects a gift code for a store already on a paid plan', async () => {
+    const repository = new InMemoryBillingRepository()
+    await repository.put({ storeId: 's', plan: 'start', state: 'ACTIVE_MONTHLY', currentPeriodEnd: Date.now() + 30 * 86_400_000, version: 1, interval: 'MONTHLY', chargeId: 'x' })
+    await withLedgerServer(repository, new TrialAndGiftLedger(), async (base) => {
+      const response = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'KASSAR786' }) })
+      expect(response.status).toBe(409)
+      expect((await response.json()).error.message.toLowerCase()).toContain('paid plan')
+    })
+  })
+
+  it('cannot redeem twice, and invalid codes stay 400s not 500s', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    await withLedgerServer(repository, trials, async (base) => {
+      const first = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'KASSAR786' }) })
+      expect(first.status).toBe(201)
+      const second = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'AFRIDI786' }) })
+      expect(second.status).toBe(409)
+      expect((await second.json()).error.message.toLowerCase()).toContain('already redeemed')
+      const expired = await fetch(`${base}/billing/gift?shopId=other`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT-A-CODE' }) })
+      expect(expired.status).toBe(400)
+    })
+  })
 })
 
 async function withCharge<T>(createCharge: BillingRouteDependencies['createCharge'], handler: (base: string) => Promise<T>): Promise<T> {

@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HelpSupportPage } from './support.js'
 import type { SupportToast } from './support.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
 
 /**
  * Functional test pass for the Help & Support redesign — the PR checklist
@@ -92,12 +96,12 @@ async function mountPage(context: Readonly<{ storeId: string | null; shop: strin
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(HelpSupportPage, {
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(HelpSupportPage, {
       context,
       onToast: () => {},
       onNavigate: (page) => backend.navigation.push(page),
       onNavigateBilling: () => { backend.billingNavigation += 1 },
-    })))
+    }))))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
 }

@@ -6,10 +6,13 @@
  * in both light and dark themes. Verifies zero console errors, zero fake data,
  * and complete compliance with all functional criteria.
  */
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { CommandCenterWorkspace } from './command-center.js'
 import type { WorkspaceContext } from './model.js'
 
@@ -190,11 +193,14 @@ describe('AI Command Center Complete Functional Testing', () => {
       root = createRoot(container)
       root.render(
         <StrictMode>
-          <CommandCenterWorkspace
-            context={context}
-            onToast={(msg) => toasts.push(msg)}
-            onNavigate={(page) => navigations.push(page)}
-          />
+          {/* main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here. */}
+          <AppProvider i18n={enTranslations as never}>
+            <CommandCenterWorkspace
+              context={context}
+              onToast={(msg) => toasts.push(msg)}
+              onNavigate={(page) => navigations.push(page)}
+            />
+          </AppProvider>
         </StrictMode>
       )
     })

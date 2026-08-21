@@ -2,6 +2,7 @@ import { AppError } from '@profitpilot/types'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import type { Subscription } from './billing.js'
 import type { PlanTier } from '@profitpilot/types'
+import type { BillingRecord } from './repository.js'
 
 export type TrialRecord = Readonly<{ shopId: string; startedAt: number; expiresAt: number; consumed: boolean; state: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' }>
 export type GiftCode = Readonly<{ code: string; maxUses: number; uses: number; active: boolean; durationDays: number; accessLevel: 'commander'; expiresAt: number | null }>
@@ -20,6 +21,30 @@ export function giftCodeError(gift: GiftCode | null, now: number): AppError | nu
   if (!gift.active) return new AppError('VALIDATION_ERROR', 'This gift code has expired', 400, { reason: 'GIFT_EXPIRED' })
   if (gift.expiresAt !== null && gift.expiresAt <= now) return new AppError('VALIDATION_ERROR', 'This gift code has expired', 400, { reason: 'GIFT_EXPIRED' })
   return null
+}
+
+/**
+ * Gift expiry enforcement (GA 2026-08-21).
+ *
+ * A redeemed gift grants Commander for `durationDays`. Once
+ * `currentPeriodEnd` passes, the store must NOT keep Commander entitlements:
+ * it reverts to its previous plan state — Trial (TRIAL_LIMITED) when the
+ * 14-day trial is still running, otherwise locked (PENDING_CONFIRMATION).
+ * Returns the corrected record to persist, or `null` when nothing changed.
+ */
+export function expiredGiftRevert(record: BillingRecord | null, trial: TrialRecord | null, now = Date.now()): BillingRecord | null {
+  if (!record || record.state !== 'GIFT_ACCESS_UNLIMITED') return null
+  if (record.currentPeriodEnd === null || record.currentPeriodEnd > now) return null
+  const trialActive = trial !== null && trial.state === 'ACTIVE' && trial.expiresAt > now
+  return {
+    ...record,
+    plan: 'trial',
+    state: trialActive ? 'TRIAL_LIMITED' : 'PENDING_CONFIRMATION',
+    currentPeriodEnd: trialActive ? trial.expiresAt : record.currentPeriodEnd,
+    version: record.version + 1,
+    interval: null,
+    chargeId: null,
+  }
 }
 
 /**
@@ -67,14 +92,25 @@ export class TrialAndGiftLedger {
     const invalid = giftCodeError(gift, now)
     if (invalid) throw invalid
     const activeGift = gift as GiftCode
-    const trial = this.trials.get(shopId)
+    const trial = this.trials.get(shopId) ?? null
     if (trial?.consumed) throw new AppError('CONFLICT', 'Trial or gift access was already consumed', 409)
-    if (trial) this.trials.set(shopId, { ...trial, consumed: true, state: 'CANCELLED' })
+    // The gift OVERRIDES the trial while its window is open, but the trial is
+    // left intact so the store reverts to it when the gift expires (Trial if
+    // still valid, else locked). Only an explicit upgrade cancels the trial.
     const nextGift = { ...activeGift, uses: activeGift.uses + 1, active: activeGift.uses + 1 < activeGift.maxUses }
     this.gifts.set(code, nextGift)
     const redemption: GiftRedemption = { shopId, code, redeemedAt: now, expiresAt: now + activeGift.durationDays * 86_400_000 }
     this.redemptions.set(shopId, redemption)
     return redemption
+  }
+
+  /** Ends an ACTIVE trial (used when a merchant upgrades during the trial). */
+  public cancelTrial(shopId: string): TrialRecord | null {
+    const current = this.trials.get(shopId) ?? null
+    if (!current || current.state === 'CANCELLED' || current.consumed) return current
+    const cancelled = { ...current, consumed: true, state: 'CANCELLED' as const }
+    this.trials.set(shopId, cancelled)
+    return cancelled
   }
 
   public expiringTrials(now = Date.now(), withinMs = 24 * 60 * 60 * 1000): readonly TrialRecord[] {
@@ -211,37 +247,41 @@ export class PostgresTrialGiftStore {
     const code = rawCode.trim().toUpperCase()
     if (!code) throw new AppError('VALIDATION_ERROR', 'Gift code is required', 400)
 
-    // gift_codes is global; read outside tenant RLS.
-    const giftResult = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
-      [code],
-    )
-    const giftRow = giftResult.rows[0]
-    if (!giftRow) {
-      // Fall back to seed defaults if the migration seed is missing (dev DBs).
-      const seeded = this.cache.gift(code)
-      if (!seeded || !seeded.active || seeded.uses >= seeded.maxUses) {
-        throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
-      }
-      await this.executor.query(
-        `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (code) DO NOTHING`,
-        [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel, seeded.expiresAt],
-      )
-    }
-
-    const freshGift = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
-      [code],
-    )
-    const gift = freshGift.rows[0] ? mapGift(freshGift.rows[0]) : null
-    const invalid = giftCodeError(gift, now)
-    if (invalid) throw invalid
-    const activeGift = gift as GiftCode
-
-    // Tenant-scoped redemption + trial cancel must share one transaction.
+    // Atomic redemption (GA 2026-08-21): the gift-code validity re-check, the
+    // `uses` increment, the redemption INSERT, and the trial cancel all run in
+    // ONE transaction with `FOR UPDATE` on the global gift_codes row. Two
+    // stores can no longer race for the last available use of a code, and a
+    // crash mid-way can never persist a redemption without consuming the code.
     const redemption = await this.withTenant(shopId, async (client) => {
+      // gift_codes is a global table (no tenant RLS); locking the row here
+      // serialises concurrent redemptions of the same code.
+      const lockResult = await client.query<GiftCodeRow>(
+        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
+        [code],
+      )
+      let giftRow = lockResult.rows[0]
+      if (!giftRow) {
+        // Fall back to seed defaults if the migration seed is missing (dev DBs).
+        const seeded = this.cache.gift(code)
+        if (!seeded || !seeded.active || seeded.uses >= seeded.maxUses) {
+          throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
+        }
+        await client.query(
+          `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (code) DO NOTHING`,
+          [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel, seeded.expiresAt],
+        )
+        giftRow = (await client.query<GiftCodeRow>(
+          'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
+          [code],
+        )).rows[0]
+      }
+      const gift = giftRow ? mapGift(giftRow) : null
+      const invalid = giftCodeError(gift, now)
+      if (invalid) throw invalid
+      const activeGift = gift as GiftCode
+
       const existing = await client.query<GiftRedemptionRow>(
         'SELECT shop_id, code, redeemed_at, expires_at FROM gift_redemptions WHERE shop_id = $1 LIMIT 1',
         [shopId],
@@ -269,25 +309,22 @@ export class PostgresTrialGiftStore {
       const row = inserted.rows[0]
       if (!row) throw new AppError('INTERNAL_ERROR', 'Failed to persist gift redemption', 500)
 
-      if (trialRow) {
-        await client.query(
-          `UPDATE trials SET consumed = true, state = 'CANCELLED' WHERE shop_id = $1`,
-          [shopId],
-        )
-        this.cache.hydrate({ ...mapTrial(trialRow), consumed: true, state: 'CANCELLED' })
-      }
+      // The gift overrides the trial while its window is open but does NOT
+      // cancel it — after the gift expires the store reverts to the trial
+      // (Trial if still valid, else locked). Only an explicit upgrade calls
+      // cancelTrial().
+
+      // Consume one use atomically (guarded by the FOR UPDATE lock above).
+      await client.query(
+        `UPDATE gift_codes
+         SET uses = uses + 1,
+             active = CASE WHEN uses + 1 >= max_uses THEN false ELSE active END
+         WHERE upper(code) = $1`,
+        [activeGift.code],
+      )
 
       return mapRedemption(row)
     })
-
-    // Increment global gift use counter (and auto-deactivate when exhausted).
-    await this.executor.query(
-      `UPDATE gift_codes
-       SET uses = uses + 1,
-           active = CASE WHEN uses + 1 >= max_uses THEN false ELSE active END
-       WHERE upper(code) = $1 AND active = true AND uses < max_uses`,
-      [code],
-    )
 
     this.cache.hydrateRedemption(redemption)
     const updatedGift = await this.executor.query<GiftCodeRow>(
@@ -297,6 +334,22 @@ export class PostgresTrialGiftStore {
     if (updatedGift.rows[0]) this.cache.hydrateGift(mapGift(updatedGift.rows[0]))
 
     return redemption
+  }
+
+  /** Ends an ACTIVE trial (e.g. the merchant upgraded during the trial). */
+  public async cancelTrial(shopId: string): Promise<TrialRecord | null> {
+    const cached = this.cache.trial(shopId)
+    if (!cached || cached.state === 'CANCELLED' || cached.consumed) return cached
+    const cancelled = await this.withTenant(shopId, async (client) => {
+      const result = await client.query<TrialRow>(
+        `UPDATE trials SET consumed = true, state = 'CANCELLED' WHERE shop_id = $1 AND state = 'ACTIVE' AND consumed = false
+         RETURNING shop_id, started_at, expires_at, consumed, state`,
+        [shopId],
+      )
+      return result.rows[0] ? mapTrial(result.rows[0]) : cached
+    })
+    this.cache.hydrate({ ...cancelled, consumed: true, state: 'CANCELLED' })
+    return cancelled
   }
 
   public async seedDefaultCodes(codes: readonly GiftCode[] = DEFAULT_GIFT_CODES): Promise<void> {

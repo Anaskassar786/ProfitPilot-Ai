@@ -1,3 +1,4 @@
+import './jsdom-polaris-setup.js'
 /**
  * Recommendations-only browser-flow coverage.
  *

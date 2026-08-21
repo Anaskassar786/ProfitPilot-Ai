@@ -38,6 +38,20 @@ export interface ReportDataProvider {
   get(storeId: string, frequency: ReportFrequency, period: ClosedPeriod): Promise<ReportData>
 }
 
+/** Minimal structured logger surface (see @profitpilot/logger). */
+export interface ReportLogger {
+  info(message: string, context?: Readonly<Record<string, unknown>>): void
+  warn(message: string, context?: Readonly<Record<string, unknown>>): void
+  error(message: string, context?: Readonly<Record<string, unknown>>): void
+}
+
+/**
+ * A `GENERATING` run older than this is treated as a crashed/orphaned
+ * generation (process died mid-write, request timed out, …) and flipped to
+ * FAILED so the merchant can retry instead of staring at a spinner forever.
+ */
+export const STALE_GENERATING_MS = 10 * 60 * 1000
+
 /**
  * The billing_usage feature key reports are metered against. `null` limit means
  * unlimited (Commander); `0` means the plan does not include the requested
@@ -127,8 +141,28 @@ export class ReportService {
   private readonly delivery: ReportEmailDelivery | null
   private readonly now: () => number
   private readonly quota: ReportQuota | null
-  public constructor(repository: ReportRepository, objectStore: ReportObjectStore | null, dataProvider: ReportDataProvider, delivery: ReportEmailDelivery | null = null, now: () => number = () => Date.now(), quota: ReportQuota | null = null) { this.repository = repository; this.objectStore = objectStore; this.dataProvider = dataProvider; this.delivery = delivery; this.now = now; this.quota = quota }
-  public async list(storeId: string): Promise<readonly ReportRun[]> { return this.repository.listRuns(storeId) }
+  private readonly logger: ReportLogger | null
+  public constructor(repository: ReportRepository, objectStore: ReportObjectStore | null, dataProvider: ReportDataProvider, delivery: ReportEmailDelivery | null = null, now: () => number = () => Date.now(), quota: ReportQuota | null = null, logger: ReportLogger | null = null) { this.repository = repository; this.objectStore = objectStore; this.dataProvider = dataProvider; this.delivery = delivery; this.now = now; this.quota = quota; this.logger = logger }
+
+  /**
+   * Marks runs that were left in `GENERATING` by a crashed/interrupted worker
+   * as `FAILED` so merchants always see a terminal state (Retry) instead of a
+   * permanent "Processing…". Runs newer than {@link STALE_GENERATING_MS} are
+   * left alone — they may genuinely still be generating.
+   */
+  public async recoverStaleRuns(storeId: string): Promise<readonly ReportRun[]> {
+    const now = this.now()
+    const runs = await this.repository.listRuns(storeId)
+    for (const run of runs) {
+      if (run.status !== 'GENERATING' || now - run.createdAt < STALE_GENERATING_MS) continue
+      const failed: ReportRun = { ...run, status: 'FAILED', emailStatus: 'NOT_REQUESTED', completedAt: now }
+      await this.repository.updateRun(failed).catch(() => undefined)
+      this.logger?.warn(`[REPORTS] Recovered stale GENERATING run ${run.id} (created ${run.createdAt}) as FAILED`, { storeId, reportId: run.id, frequency: run.frequency })
+    }
+    return runs.map((run) => (run.status === 'GENERATING' && now - run.createdAt >= STALE_GENERATING_MS ? { ...run, status: 'FAILED' as const, emailStatus: 'NOT_REQUESTED' as const, completedAt: now } : run))
+  }
+
+  public async list(storeId: string): Promise<readonly ReportRun[]> { await this.recoverStaleRuns(storeId); return this.repository.listRuns(storeId) }
   public async get(storeId: string, id: string): Promise<ReportRun> { const run = await this.repository.getRun(storeId, id); if (!run) throw new AppError('NOT_FOUND', 'Report run not found', 404); return run }
   public async generate(input: Readonly<{ storeId: string; frequency: ReportFrequency; period: ClosedPeriod; email: boolean }>): Promise<ReportGeneration> {
     try {
@@ -140,6 +174,14 @@ export class ReportService {
     }
     const idempotencyKey = `${input.frequency}:${input.period.start}:${input.period.end}`
     const existing = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
+    // A run that is still GENERATING but older than the staleness window is a
+    // crashed generation — recover it to FAILED and start fresh so the store
+    // is never stuck in "Processing…" forever.
+    if (existing?.status === 'GENERATING' && this.now() - existing.createdAt >= STALE_GENERATING_MS) {
+      const stale = { ...existing, status: 'FAILED' as const, emailStatus: 'NOT_REQUESTED' as const, completedAt: this.now() }
+      await this.repository.updateRun(stale).catch(() => undefined)
+      this.logger?.warn(`[REPORTS] Stale GENERATING run ${existing.id} recovered to FAILED before retry`, { storeId: input.storeId, reportId: existing.id, frequency: input.frequency })
+    }
     if (existing?.status === 'COMPLETED') {
       const stored = await this.readStoredBody(existing)
       const file = stored ? { filename: existing.filename, contentType: 'application/pdf', body: stored } : null
@@ -170,6 +212,8 @@ export class ReportService {
     }
     let run: ReportRun | null = null
     try {
+      const startedAt = this.now()
+      this.logger?.info(`[REPORTS] Started generating report`, { storeId: input.storeId, frequency: input.frequency, periodStart: input.period.start, periodEnd: input.period.end, idempotencyKey })
       const data = await this.dataProvider.get(input.storeId, input.frequency, input.period)
       const filename = reportFileName(input.storeId, input.frequency, input.period)
       const rows: readonly ExportRow[] = [{ section: 'Executive summary', metric: 'summary', value: data.summary, source: 'reporting' }, { section: 'Standard sections', metric: 'currency', value: data.currency, source: 'store configuration' }, ...data.rows]
@@ -178,6 +222,7 @@ export class ReportService {
       const hash = createHash('sha256').update(file.body).digest('hex')
       const now = this.now()
       run = { id: existing?.id ?? randomUUID(), storeId: input.storeId, frequency: input.frequency, period: input.period, idempotencyKey, filename, objectKey, contentSha256: hash, status: 'GENERATING', emailStatus: 'NOT_REQUESTED', createdAt: existing?.createdAt ?? now, completedAt: null }
+      this.logger?.info(`[REPORTS] Started generating report ${run.id}`, { storeId: input.storeId, reportId: run.id, frequency: input.frequency, bytes: file.body.byteLength })
       if (existing?.status === 'GENERATING' || existing?.status === 'FAILED') await this.repository.updateRun(run)
       else if (!(await this.repository.createRunIfAbsent(run))) {
         const concurrent = await this.repository.getByIdempotency(input.storeId, idempotencyKey)
@@ -196,12 +241,14 @@ export class ReportService {
       let completed: ReportRun = { ...run, status: 'COMPLETED', emailStatus: input.email ? 'EMAIL_UNAVAILABLE' : 'NOT_REQUESTED', completedAt: this.now() }
       if (input.email && this.delivery) completed = await this.sendEmail(completed, file.body)
       await this.repository.updateRun(completed)
+      this.logger?.info(`[REPORTS] Completed report ${run.id}`, { storeId: input.storeId, reportId: run.id, frequency: input.frequency, durationMs: this.now() - startedAt, bytes: file.body.byteLength, sha256: run.contentSha256 })
       return { run: completed, file }
     } catch (error: unknown) {
       if (reserved) await this.quota?.refund(input.storeId).catch(() => undefined)
       if (run) {
         const failed: ReportRun = { ...run, status: 'FAILED', emailStatus: 'NOT_REQUESTED', completedAt: this.now() }
         await this.repository.updateRun(failed).catch(() => undefined)
+        this.logger?.error(`[REPORTS] Failed report ${run.id}`, { storeId: input.storeId, reportId: run.id, frequency: input.frequency, error: error instanceof Error ? error.message : String(error) })
       }
       throw error
     }

@@ -21,6 +21,7 @@ import {
   X,
 } from './icons.js'
 import { downloadReport, fetchAnalytics, fetchBilling, fetchForecast, fetchReports, generateReport } from './api.js'
+import { cached, invalidateCache, loadCached } from './data-cache.js'
 import type { AnalyticsSnapshot, WorkspaceContext } from './model.js'
 import type { ForecastBundle, ReportRun } from './f8-model.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -78,6 +79,30 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
   const customGate = canGenerateReport(plan, 'CUSTOM', runs)
   const readiness = forecastReadiness(forecast)
 
+  const applyBundle = (bundle: Readonly<{ runs: readonly ReportRun[]; forecast: ForecastBundle | null; analytics: AnalyticsSnapshot | null; plan: ReportPlan; error: string | null }>) => {
+    setRuns(bundle.runs)
+    setForecast(bundle.forecast)
+    setAnalytics(bundle.analytics)
+    setPlan(bundle.plan)
+    if (bundle.error) setError(bundle.error)
+  }
+
+  const loadBundle = async (storeId: string): Promise<Readonly<{ runs: readonly ReportRun[]; forecast: ForecastBundle | null; analytics: AnalyticsSnapshot | null; plan: ReportPlan; error: string | null }>> => {
+    const [nextRuns, nextForecast, nextAnalytics, account] = await Promise.allSettled([
+      fetchReports(storeId),
+      fetchForecast(storeId),
+      fetchAnalytics(storeId),
+      fetchBilling(storeId),
+    ])
+    return {
+      runs: nextRuns.status === 'fulfilled' ? nextRuns.value : [],
+      forecast: nextForecast.status === 'fulfilled' ? nextForecast.value : null,
+      analytics: nextAnalytics.status === 'fulfilled' ? nextAnalytics.value : null,
+      plan: account.status === 'fulfilled' ? resolveReportPlan(account.value.subscription?.plan) : 'trial',
+      error: nextRuns.status === 'rejected' ? errorMessage(nextRuns.reason, 'Reports could not be loaded from your store.') : null,
+    }
+  }
+
   const refresh = async () => {
     if (!context.storeId) {
       setRuns([])
@@ -89,27 +114,40 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
     setLoading(true)
     setError(null)
     const storeId = context.storeId
-    const [nextRuns, nextForecast, nextAnalytics, account] = await Promise.allSettled([
-      fetchReports(storeId),
-      fetchForecast(storeId),
-      fetchAnalytics(storeId),
-      fetchBilling(storeId),
-    ])
-    setRuns(nextRuns.status === 'fulfilled' ? nextRuns.value : [])
-    setForecast(nextForecast.status === 'fulfilled' ? nextForecast.value : null)
-    setAnalytics(nextAnalytics.status === 'fulfilled' ? nextAnalytics.value : null)
-    if (account.status === 'fulfilled') setPlan(resolveReportPlan(account.value.subscription?.plan))
-    if (nextRuns.status === 'rejected') setError(errorMessage(nextRuns.reason, 'Reports could not be loaded from your store.'))
+    const bundle = await loadBundle(storeId)
+    applyBundle(bundle)
     setLoading(false)
   }
 
-  useEffect(() => { void refresh() }, [context.storeId])
+  // SPA tab-switch fast path: seed state from the cached bundle instantly (no
+  // spinner), then silently refresh in the background and swap in newer data.
+  // Switching away and back to Reports now renders immediately instead of
+  // re-fetching everything from scratch.
+  useEffect(() => {
+    if (!context.storeId) return
+    const storeId = context.storeId
+    const cacheKey = `reports:${storeId}`
+    const seed = cached<Readonly<{ runs: readonly ReportRun[]; forecast: ForecastBundle | null; analytics: AnalyticsSnapshot | null; plan: ReportPlan; error: string | null }>>(cacheKey)
+    if (seed) {
+      applyBundle(seed)
+      setLoading(false)
+    }
+    let cancelled = false
+    void loadCached(cacheKey, () => loadBundle(storeId)).then((bundle) => {
+      if (!cancelled) applyBundle(bundle)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [context.storeId])
 
+  // Poll every 5s while any report is still generating. The backend also
+  // recovers stale GENERATING runs (crashed workers) to FAILED on every list,
+  // so this loop always converges to a terminal state — never a spinner that
+  // runs forever.
   useEffect(() => {
     if (!context.storeId || !runs.some((run) => run.status === 'GENERATING')) return
     const timer = window.setInterval(() => {
       void fetchReports(context.storeId!).then(setRuns).catch(() => undefined)
-    }, 2500)
+    }, 5000)
     return () => window.clearInterval(timer)
   }, [context.storeId, runs])
 
@@ -146,6 +184,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
         downloadBase64(generated.file.bodyBase64, friendlyDownloadName(generated.run), generated.file.contentType)
       }
       setRuns((current) => [generated.run, ...current.filter((run) => run.id !== generated.run.id)])
+      if (context.storeId) invalidateCache(`reports:${context.storeId}`)
       notify(email ? 'Report generated from your real store data and queued for email.' : 'Report generated from your real store data.', 'success')
       setCustomOpen(false)
     } catch (failure: unknown) {
@@ -648,7 +687,14 @@ function ReportCard({
             )}
           </>
         )}
-        {run.status === 'GENERATING' && <Button type="button" className="button secondary" disabled><LoaderCircle className="spin" size={13} /> Processing…</Button>}
+        {run.status === 'GENERATING' && (
+          <>
+            <Button type="button" className="button secondary" loading><LoaderCircle className="spin" size={13} /> Processing…</Button>
+            {/* Stale-safe: re-requesting the same period re-drives generation,
+                and the backend recovers crashed GENERATING runs to FAILED. */}
+            <Button type="button" className="button secondary" onClick={onRetry} disabled={busy}><RotateCcw size={13} /> Retry</Button>
+          </>
+        )}
         {run.status === 'FAILED' && <Button type="button" className="button secondary" onClick={onRetry} disabled={busy}><RotateCcw size={13} /> Retry</Button>}
         <Button type="button" className="icon-button" onClick={onDelete} aria-label={`Remove ${name} from this view`}><Trash2 size={14} /></Button>
       </div>

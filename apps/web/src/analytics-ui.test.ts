@@ -5,6 +5,15 @@ import { JSDOM } from 'jsdom'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { analyticsKpis } from './analytics-model.js'
 import type { AnalyticsSnapshot } from './model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris Button shim render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 class RO {
   observe() {}
@@ -268,6 +277,6 @@ describe('analytics static empty markup smoke', () => {
       return `<div>${kpi.label}:${kpi.value === null ? '—' : kpi.value}:${changeText}</div>`
     }).join('')
     expect(html).not.toContain('NaN')
-    expect(renderToStaticMarkup(createElement('div', { dangerouslySetInnerHTML: { __html: html } }))).toContain('—')
+    expect(renderWithAppProvider(createElement('div', { dangerouslySetInnerHTML: { __html: html } }))).toContain('—')
   })
 })

@@ -52,7 +52,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   const jarvisTts = createJarvisTtsProvider(env)
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
   const forecasting: ForecastRouteDependencies = { forecast: (storeId) => computeForecast(storeId, { analytics: f7.dataPlane.analytics, customers: (tenant) => customerRfm(f7.database, tenant) }) }
-  const reports = createReports(f7, env)
+  const reports = createReports(f7, env, logger)
   const orderRepository = new PostgresOrderRepository(f7.database)
   const orderInsights = new OrderInsightsService(
     orderRepository,
@@ -203,12 +203,21 @@ async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logg
   }
 }
 
-function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | undefined>>): ReportService {
+function createReports(f7: F7Bootstrap, env: Readonly<Record<string, string | undefined>>, logger?: Logger): ReportService {
   const objectStore = r2FromEnv(env)
   const dataProvider: ReportDataProvider = { get: async (storeId, _frequency, period) => { const raw = await f7.dataPlane.analytics.read(storeId as import('@profitpilot/types').StoreId); const startDay = period.start.slice(0, 10); const endDay = period.end.slice(0, 10); const analytics = { revenue: raw.revenue.filter((row) => row.day >= startDay && row.day <= endDay), orders: raw.orders.filter((row) => row.day >= startDay && row.day <= endDay), productSales: raw.productSales.filter((row) => row.day >= startDay && row.day <= endDay), customerCohorts: raw.customerCohorts.filter((row) => row.activityDay >= startDay && row.activityDay <= endDay) }; const scopedAnalytics = { read: async () => analytics, readCatalog: (tenant: import('@profitpilot/types').StoreId) => f7.dataPlane.analytics.readCatalog(tenant) }; const forecast = await computeForecast(storeId, { analytics: scopedAnalytics, customers: (tenant) => customerRfm(f7.database, tenant) }); const rows = [{ metric: 'closed_period_revenue', value: analytics.revenue.length > 0 ? analytics.revenue.reduce((sum, row) => sum + row.grossRevenue, 0) : null, source: 'analytics_revenue_daily' }, { metric: 'closed_period_orders', value: analytics.orders.length > 0 ? analytics.orders.reduce((sum, row) => sum + row.orderCount, 0) : null, source: 'analytics_orders_daily' }, { metric: 'forecast_method', value: forecast.revenue?.method.method ?? 'unavailable', source: 'forecasting' }, { metric: 'forecast_value', value: forecast.revenue?.value ?? null, source: 'forecasting' }]; return { storeId, currency: null, rows, summary: 'Deterministic closed-period ProfitPilot report.' } } }
   const delivery = reportDelivery(f7, env)
   const quota = reportQuota(f7)
-  return new ReportService(new PostgresReportRepository(f7.database), objectStore, dataProvider, delivery, () => Date.now(), quota)
+  // Every generation stage is logged with `[REPORTS]` so stuck runs are
+  // traceable end-to-end (start → complete / fail / stale-recovery).
+  const reportLogger = logger
+    ? {
+        info: (message: string, context?: Readonly<Record<string, unknown>>) => logger.info(message, (context ?? {}) as import('@profitpilot/logger').JsonObject),
+        warn: (message: string, context?: Readonly<Record<string, unknown>>) => logger.warn(message, (context ?? {}) as import('@profitpilot/logger').JsonObject),
+        error: (message: string, context?: Readonly<Record<string, unknown>>) => logger.error(message, (context ?? {}) as import('@profitpilot/logger').JsonObject),
+      }
+    : null
+  return new ReportService(new PostgresReportRepository(f7.database), objectStore, dataProvider, delivery, () => Date.now(), quota, reportLogger)
 }
 
 /**
