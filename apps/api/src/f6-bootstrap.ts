@@ -41,7 +41,7 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
   const workflows = new PostgresWorkflowRepository(f5.database)
   const runs = new PostgresRunRepository(f5.database)
   const workflowAi = new OpenRouterClient({ keys: [env.OPENROUTER_API_KEY_1, env.OPENROUTER_API_KEY_2, env.OPENROUTER_API_KEY_3, env.OPENROUTER_API_KEY].filter((key): key is string => typeof key === 'string' && key.trim().length > 0), models: [env.AI_MODEL_PRIMARY, env.AI_MODEL_FALLBACK1, env.AI_MODEL_FALLBACK2].filter((model): model is string => typeof model === 'string' && model.trim().length > 0), maxTokens: 300 })
-  const actions = new ProductionWorkflowActions(f5.database, f5.storeDirectory, f5.tokenVault, targetedCampaigns, workflowAi.configured ? workflowAi : null, env.SHOPIFY_API_VERSION?.trim() || '2025-10')
+  const actions = new ProductionWorkflowActions(f5.database, f5.storeDirectory, f5.tokenVault, targetedCampaigns, workflowAi.configured ? workflowAi : null, env.SHOPIFY_API_VERSION?.trim() || '2026-07')
   const execution = new AutomationExecutionService(runs, actions)
   const triggers = new AutomationTriggerService(f5.database, workflows, execution)
   return { ...f5, automation: {

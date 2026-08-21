@@ -98,6 +98,7 @@ describe('F7 API security suite', () => {
     await withServer(app, async (base) => {
       const live = await fetch(`${base}/live`)
       expect(live.headers.get('content-security-policy')).toContain("default-src 'none'")
+      expect(live.headers.get('strict-transport-security')).toBeNull()
       expect(live.headers.get('x-content-type-options')).toBe('nosniff')
       expect(live.headers.get('permissions-policy')).toContain('microphone=()')
       expect(live.headers.get('permissions-policy')).not.toContain('camera=')
@@ -170,7 +171,7 @@ describe('F7 API security suite', () => {
     const app = createApi({ logger: new Logger(), readinessChecks: [], security, dataPlane: dataPlane() })
     await withServer(app, async (base) => {
       const productionHeaders = await fetch(`${base}/live`)
-      expect(productionHeaders.headers.get('strict-transport-security')).toContain('max-age=31536000')
+      expect(productionHeaders.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains; preload')
       const noAuth = await fetch(`${base}/analytics?storeId=store-1`)
       expect(noAuth.status).toBe(401)
       const wrongTenant = await fetch(`${base}/analytics?storeId=store-2`, { headers: { authorization: `Bearer ${pair.accessToken}` } })

@@ -7,7 +7,7 @@ import { PostgresSyncSink, ShopifyRestSyncSource } from './index.js'
 
 function source(data: Record<string, unknown>, link?: string): ShopifyRestSyncSource {
   const client = new ShopifyClient('demo.myshopify.com', 'token', async (url, init) => {
-    expect(url).toContain('/admin/api/2025-10/')
+    expect(url).toContain('/admin/api/2026-07/')
     expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'token' })
     const responseInit: ResponseInit = { status: 200 }
     if (link) responseInit.headers = { link }
@@ -30,7 +30,7 @@ function routingSource(routes: Readonly<Record<string, Record<string, unknown>>>
 
 describe('Shopify REST sync source', () => {
   it('fetches products and extracts a next cursor', async () => {
-    const result = await source({ products: [{ id: 1, title: 'Product' }] }, '<https://demo.myshopify.com/admin/api/2025-10/products.json?page_info=next-token>; rel="next"').fetchPage(storeId('s'), 'products', null)
+    const result = await source({ products: [{ id: 1, title: 'Product' }] }, '<https://demo.myshopify.com/admin/api/2026-07/products.json?page_info=next-token>; rel="next"').fetchPage(storeId('s'), 'products', null)
     expect(result.records).toEqual([{ id: '1', title: 'Product' }])
     expect(result.records[0]?.title).toBe('Product')
     expect(result.nextCursor).toBe('next-token')

@@ -74,7 +74,7 @@ export class ShopifyBillingClient {
   private resolvedTestMode: boolean | null
 
   public constructor(config: BillingClientConfig) {
-    this.config = { shop: config.shop, accessToken: config.accessToken, apiVersion: config.apiVersion ?? '2025-10', testMode: config.testMode ?? 'auto', transport: config.transport ?? fetch, logger: config.logger ?? null }
+    this.config = { shop: config.shop, accessToken: config.accessToken, apiVersion: config.apiVersion ?? '2026-07', testMode: config.testMode ?? 'auto', transport: config.transport ?? fetch, logger: config.logger ?? null }
     if (!this.config.shop.endsWith('.myshopify.com') || !this.config.accessToken.trim()) throw new TypeError('Shopify billing credentials are incomplete')
     this.resolvedTestMode = typeof this.config.testMode === 'boolean' ? this.config.testMode : null
   }

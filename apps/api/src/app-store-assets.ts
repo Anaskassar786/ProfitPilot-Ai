@@ -97,7 +97,7 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
   // set of scopes the app actually calls.
   const scopes = parseShopifyScopes(env.SHOPIFY_SCOPES)
   const privacyWebhookUrl = env.SHOPIFY_PRIVACY_WEBHOOK_URL?.trim() || `${applicationUrl.replace(/\/$/, '')}/shopify/webhooks`
-  return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2025-10', privacyWebhookUrl }
+  return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2026-07', privacyWebhookUrl }
 }
 
 export function renderShopifyAppToml(config: ShopifyAppTomlConfig): string {

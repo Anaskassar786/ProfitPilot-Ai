@@ -158,6 +158,7 @@ export function requestIdMiddleware(): RequestHandler {
  * `X-Frame-Options: DENY` would override the allowlist in some browsers.
  */
 export const SHOPIFY_FRAME_ANCESTORS = 'https://admin.shopify.com https://*.myshopify.com'
+export const PRODUCTION_HSTS_POLICY = 'max-age=31536000; includeSubDomains; preload'
 
 /** Paths that never render in a frame and keep the strict deny-everything policy. */
 const NON_EMBEDDED_PREFIXES = ['/live', '/ready', '/health'] as const
@@ -182,7 +183,10 @@ export function securityHeadersMiddleware(environment = 'development'): RequestH
     else response.setHeader('X-Frame-Options', 'DENY')
     const microphonePolicy = embeddable ? '(self *)' : '()'
     response.setHeader('Permissions-Policy', `microphone=${microphonePolicy}, geolocation=(), payment=()`)
-    if (environment === 'production') response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    // This middleware is mounted before every API route, static asset, and SPA
+    // fallback. Production therefore applies HSTS uniformly; development does
+    // not advertise it and can continue to use plain HTTP on localhost.
+    if (environment === 'production') response.setHeader('Strict-Transport-Security', PRODUCTION_HSTS_POLICY)
     next()
   }
 }
