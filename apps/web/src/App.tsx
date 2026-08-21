@@ -1,6 +1,5 @@
 import { Button, AppNavigationMenu, AppTitleBar, showAppBridgeToast, PolarisEmpty, SimpleModal } from './polaris-ui.js'
-import { Banner, Navigation, Page, TextField } from '@shopify/polaris'
-import { isEmbeddedShopifyApp } from './shopify-app-bridge.js'
+import { Page } from '@shopify/polaris'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { LucideIcon } from './icons.js'
@@ -234,7 +233,6 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
 type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; devOnly?: boolean }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
-type ToastState = Readonly<{ message: string; kind: ToastKind }>
 const syncModules = ['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'] as const
 type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; status: 'syncing' | 'succeeded' | 'failed'; detail: string }>
 
@@ -295,7 +293,6 @@ export default function App() {
       return false
     }
   })
-  const [toast, setToast] = useState<ToastState | null>(null)
   const [syncProgress, setSyncProgress] = useState<readonly SyncModuleProgress[]>([])
   const [syncAllRunning, setSyncAllRunning] = useState(false)
   const [data, setData] = useState<WorkspaceData>({ analytics: null, catalog: [], agents: [], recommendations: [], inventory: null, loadState: 'idle', error: null })
@@ -324,27 +321,29 @@ export default function App() {
       .catch(() => setResolvedContext({ storeId: null, shop: null }))
   }, [urlContext.storeId, urlContext.shop])
 
-  useEffect(() => {
-    // Unsafe requests (sync, billing, tickets, ...) must echo a signed CSRF
-    // token once the session cookie is present, or the API rejects them.
-    void initializeCsrf().catch(() => {})
-  }, [])
-
   const showToast = (message: string, kind: ToastKind = 'success') => {
+    // Single toast surface: App Bridge toast when embedded, otherwise the
+    // Polaris ToastHost inside Frame. Never also paint the custom `.toast`
+    // node — that was the duplicate session-expired banner.
     showAppBridgeToast(message, kind)
-    setToast({ message, kind })
-    window.setTimeout(() => setToast(null), 3600)
   }
 
   useEffect(() => {
     // Embedded App Bridge session tokens (P0 App Store fix): when the Shopify
     // admin cannot mint a fresh token, tell the merchant once instead of
-    // letting every API call fail silently. The handler fires at most once
-    // per registration; page error states still carry per-request detail.
+    // letting every API call fail silently. Register BEFORE CSRF / data
+    // loads so the first failed token request can surface. The API client
+    // still de-dupes to one notification per page lifetime.
     setEmbeddedAuthFailureHandler(() => {
       showToast('Your Shopify session expired — reload the app to reconnect.', 'error')
     })
     return () => setEmbeddedAuthFailureHandler(null)
+  }, [])
+
+  useEffect(() => {
+    // Unsafe requests (sync, billing, tickets, ...) must echo a signed CSRF
+    // token once the session cookie is present, or the API rejects them.
+    void initializeCsrf().catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -636,7 +635,6 @@ export default function App() {
       {onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
-      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
       {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} />}
     </div>
   )
@@ -1541,7 +1539,6 @@ function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: b
 function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><Button className="button secondary" onClick={onClose}>Cancel</Button><Button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></Button></div></div></div> }
 function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><Button className="button primary full-width" onClick={onClose}>Done</Button></div></div> }
 function Shortcut({ keys, label }: { keys: string; label: string }) { return <div className="shortcut-row"><kbd>{keys}</kbd><span>{label}</span><Check size={14} /></div> }
-function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) { const Icon = toast.kind === 'success' ? CheckCircle2 : toast.kind === 'error' ? AlertCircle : Info; return <div className={`toast ${toast.kind}`}><span className="toast-icon"><Icon size={16} /></span><span>{toast.message}</span><Button onClick={onClose} aria-label="Close notification"><X size={15} /></Button></div> }
 function readStoredStringArray(key: string): readonly string[] { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] } catch { return [] } }
 function readStoredNumberRecord(key: string): Readonly<Record<string, number>> { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '{}'); if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}; return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))) } catch { return {} } }
 function storeStringArray(key: string, value: readonly string[]): void { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* Storage may be disabled in a hardened embedded browser. */ } }

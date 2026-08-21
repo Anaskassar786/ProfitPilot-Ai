@@ -17,8 +17,8 @@ import {
   Toast as PolarisToast,
 } from '@shopify/polaris'
 import type { BannerProps, ButtonProps as PolarisButtonProps } from '@shopify/polaris'
-import { NavMenu, SaveBar, TitleBar } from '@shopify/app-bridge-react'
-import { isEmbeddedShopifyApp } from './shopify-app-bridge.js'
+import { SaveBar, TitleBar } from '@shopify/app-bridge-react'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, isEmbeddedShopifyApp } from './shopify-app-bridge.js'
 
 export const EMPTY_STATE_IMAGE = 'https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png'
 
@@ -189,6 +189,23 @@ export function AppFrame({ children }: Readonly<{ children: ReactNode }>) {
   )
 }
 
+/**
+ * App Bridge v4 has no React Provider; the CDN script + meta tag boot the
+ * global. This wrapper still accepts `forceRedirect` / `host` so the embedded
+ * app bounces into Shopify admin when it is opened as a standalone page.
+ */
+export function AppBridgeProvider({
+  children,
+  forceRedirect = true,
+  host,
+}: Readonly<{ children: ReactNode; forceRedirect?: boolean; host?: string | null }>) {
+  const resolvedHost = useMemo(() => host ?? (typeof window === 'undefined' ? null : embeddedHost(window.location.search)), [host])
+  useEffect(() => {
+    if (forceRedirect && resolvedHost) ensureEmbeddedAppBridgeRedirect()
+  }, [forceRedirect, resolvedHost])
+  return <>{children}</>
+}
+
 export const NAV_DESTINATIONS: readonly Readonly<{ label: string; destination: string; section: string }>[] = [
   { label: 'Dashboard', destination: '/', section: 'dashboard' },
   { label: 'AI Command Center', destination: '/command', section: 'command-center' },
@@ -211,13 +228,17 @@ export const NAV_DESTINATIONS: readonly Readonly<{ label: string; destination: s
 ]
 
 export function AppNavigationMenu() {
+  // App Bridge v4 reads `<ui-nav-menu>` and paints the links in the Shopify
+  // admin sidebar. The element must stay in the DOM but never paint inside
+  // the iframe — unknown custom elements otherwise render as raw inline
+  // `<a>` text ("DashboardAI Command CenterRecommendations…").
   return (
-    <NavMenu>
+    <ui-nav-menu data-pp-app-bridge-nav="true" aria-hidden="true">
       <a href="/" rel="home">Dashboard</a>
       {NAV_DESTINATIONS.filter((item) => item.destination !== '/').map((item) => (
         <a key={item.destination} href={item.destination}>{item.label}</a>
       ))}
-    </NavMenu>
+    </ui-nav-menu>
   )
 }
 

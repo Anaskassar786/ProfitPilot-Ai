@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFile } from 'node:fs'
 import { extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
@@ -80,7 +80,7 @@ export function mountWebApp(app: Express, distPath = defaultWebDistPath()): bool
   app.use(express.static(absoluteDistPath, {
     cacheControl: false,
     fallthrough: true,
-    index: 'index.html',
+    index: false,
     redirect: false,
     setHeaders: (response, filePath) => setWebHeaders(response, filePath),
   }))
@@ -94,11 +94,33 @@ function spaFallback(indexPath: string): RequestHandler {
       next()
       return
     }
-    setWebHeaders(response, indexPath)
-    response.sendFile(indexPath, { cacheControl: false }, (error) => {
-      if (error) next(error)
-    })
+    sendShopifyIndex(response, indexPath, next)
   }
+}
+
+function sendShopifyIndex(response: Response, indexPath: string, next: (error?: unknown) => void): void {
+  setWebHeaders(response, indexPath)
+  readFile(indexPath, 'utf8', (error, html) => {
+    if (error) {
+      next(error)
+      return
+    }
+    response.type('html').send(injectShopifyAppBridgeApiKey(html))
+  })
+}
+
+/**
+ * The Docker build often runs without `VITE_SHOPIFY_API_KEY`, so the meta tag
+ * in the Vite bundle is empty. Runtime injection from `SHOPIFY_API_KEY` (the
+ * public client id already on the API process) lets App Bridge v4 boot and
+ * mint session tokens. Never inject the API secret.
+ */
+export function injectShopifyAppBridgeApiKey(html: string, apiKey = process.env.SHOPIFY_API_KEY ?? process.env.VITE_SHOPIFY_API_KEY ?? ''): string {
+  if (!html.includes('shopify-api-key') && !html.includes('%VITE_SHOPIFY_API_KEY%')) return html
+  const safe = apiKey.trim().replace(/[<>"'&]/g, '')
+  return html
+    .replaceAll('%VITE_SHOPIFY_API_KEY%', safe)
+    .replace(/<meta\s+name="shopify-api-key"\s+content="[^"]*"\s*\/?>/i, `<meta name="shopify-api-key" content="${safe}" />`)
 }
 
 export function isApiPath(requestPath: string): boolean {

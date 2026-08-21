@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchAnalytics, requestJson, setEmbeddedAuthFailureHandler } from './api.js'
+import { fetchAnalytics, requestJson, resetApiClientStateForTests, setEmbeddedAuthFailureHandler } from './api.js'
 import type { Fetcher } from './api.js'
 import { getShopifySessionToken } from './shopify-app-bridge.js'
 import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'

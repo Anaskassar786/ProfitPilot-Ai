@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, getShopifySessionToken, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, getShopifySessionToken, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -41,7 +41,7 @@ describe('getShopifySessionToken', () => {
     ;(window as unknown as { shopify: unknown }).shopify = { default: createApp }
     const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
     expect(result).toEqual({ status: 'ok', token: 'signed-shopify-session-token' })
-    expect(createApp).toHaveBeenCalledWith({ apiKey: 'test-api-key', host: 'abc123' })
+    expect(createApp).toHaveBeenCalledWith({ apiKey: 'test-api-key', host: 'abc123', forceRedirect: true })
     expect(idToken).toHaveBeenCalledTimes(1)
   })
 
@@ -83,5 +83,37 @@ describe('getShopifySessionToken', () => {
     overrideShopifyAppBridgeForTests({ idToken: async () => 'injected-token' })
     const result = await getShopifySessionToken('?host=abc123', 'test-api-key')
     expect(result).toEqual({ status: 'ok', token: 'injected-token' })
+  })
+
+  it('uses window.shopify.idToken() without a build-time API key (App Bridge v4)', async () => {
+    const idToken = vi.fn(async () => 'cdn-session-token')
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken }
+    const result = await getShopifySessionToken('?host=abc123', null)
+    expect(result).toEqual({ status: 'ok', token: 'cdn-session-token' })
+    expect(idToken).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ensureEmbeddedAppBridgeRedirect', () => {
+  it('is a no-op when the app is already nested in an iframe', () => {
+    const replace = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'top', { configurable: true, value: {} })
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, pathname: '/', search: '?host=abc&shop=demo.myshopify.com', replace } })
+    expect(ensureEmbeddedAppBridgeRedirect('?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==', 'client-id')).toBe(false)
+    expect(replace).not.toHaveBeenCalled()
+    Object.defineProperty(window, 'top', { configurable: true, value: window.self })
+    Object.defineProperty(window, 'location', { configurable: true, value: original })
+  })
+
+  it('redirects a standalone host load into Shopify admin', () => {
+    const replace = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'top', { configurable: true, value: window.self })
+    Object.defineProperty(window, 'location', { configurable: true, value: { pathname: '/recommendations', search: '?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==', replace } })
+    const redirected = ensureEmbeddedAppBridgeRedirect('?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==', 'client-id')
+    expect(redirected).toBe(true)
+    expect(replace).toHaveBeenCalledWith('https://admin.shopify.com/store/demo/apps/client-id/recommendations?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==')
+    Object.defineProperty(window, 'location', { configurable: true, value: original })
   })
 })

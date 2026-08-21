@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import App from './App.js'
 
 /**
@@ -72,7 +75,7 @@ async function mountApp(): Promise<void> {
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(createElement(StrictMode, null, createElement(App)))
+    root!.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(App))))
   })
   // Let the coach data hooks settle against the mocked backend.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
@@ -84,11 +87,11 @@ describe('Store Coach app mount (PR #48)', () => {
   })
   it('shows Store Coach, GrowthIQ, and PatternAI as separate sidebar entries', async () => {
     await mountApp()
-    const nav = document.querySelector('.side-nav')
+    const nav = document.querySelector('ui-nav-menu')
     expect(nav?.textContent ?? '').toContain('Store Coach')
     expect(nav?.textContent ?? '').toContain('GrowthIQ')
     expect(nav?.textContent ?? '').toContain('PatternAI')
-    const labels = [...(nav?.querySelectorAll('.nav-item') ?? [])].map((item) => item.textContent ?? '')
+    const labels = [...(nav?.querySelectorAll('a') ?? [])].map((item) => item.textContent ?? '')
     expect(labels.some((text) => text.includes('Store Coach'))).toBe(true)
     expect(labels.some((text) => text.includes('GrowthIQ'))).toBe(true)
     expect(labels.some((text) => text.includes('PatternAI'))).toBe(true)
@@ -145,9 +148,13 @@ describe('Store Coach app mount (PR #48)', () => {
   })
   it('opens GrowthIQ from its own sidebar entry', async () => {
     await mountApp()
-    const executiveNav = [...document.querySelectorAll('.nav-item')].find((item) => item.textContent?.includes('GrowthIQ'))
+    const executiveNav = [...document.querySelectorAll('ui-nav-menu a')].find((item) => item.textContent?.includes('GrowthIQ'))
     expect(executiveNav).toBeTruthy()
-    await act(async () => { executiveNav?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(executiveNav?.getAttribute('href')).toBe('/ai-growth-command/growthiq')
+    await act(async () => {
+      window.history.pushState({}, '', `/ai-growth-command/growthiq${window.location.search}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
     expect(document.querySelector('.exec-page') ?? document.querySelector('.coach-workspace')).toBeTruthy()
   })
   it('produces no console errors during the Store Coach mount', async () => {
