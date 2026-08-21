@@ -5,6 +5,7 @@ import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json
 import '@shopify/polaris/build/esm/styles.css'
 import App from './App.js'
 import './styles.css'
+import './header-navigation.css'
 import './f4.css'
 import './f5.css'
 import './billing.css'
