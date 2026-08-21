@@ -4,14 +4,23 @@ import type { Subscription } from './billing.js'
 import type { PlanTier } from '@profitpilot/types'
 
 export type TrialRecord = Readonly<{ shopId: string; startedAt: number; expiresAt: number; consumed: boolean; state: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' }>
-export type GiftCode = Readonly<{ code: string; maxUses: number; uses: number; active: boolean; durationDays: number; accessLevel: 'commander' }>
+export type GiftCode = Readonly<{ code: string; maxUses: number; uses: number; active: boolean; durationDays: number; accessLevel: 'commander'; expiresAt: number | null }>
 export type GiftRedemption = Readonly<{ shopId: string; code: string; redeemedAt: number; expiresAt: number }>
 
 export const DEFAULT_TRIAL_DAYS = 14
 export const DEFAULT_GIFT_CODES: readonly GiftCode[] = [
-  { code: 'KASSAR786', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander' },
-  { code: 'AFRIDI786', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander' },
+  { code: 'KASSAR786', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null },
+  { code: 'AFRIDI786', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null },
 ]
+
+/** QA (2026-08-20): distinct "expired" errors instead of lumping expired and
+ *  unknown codes into one message. */
+export function giftCodeError(gift: GiftCode | null, now: number): AppError | null {
+  if (!gift || gift.uses >= gift.maxUses) return new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
+  if (!gift.active) return new AppError('VALIDATION_ERROR', 'This gift code has expired', 400, { reason: 'GIFT_EXPIRED' })
+  if (gift.expiresAt !== null && gift.expiresAt <= now) return new AppError('VALIDATION_ERROR', 'This gift code has expired', 400, { reason: 'GIFT_EXPIRED' })
+  return null
+}
 
 /**
  * In-memory ledger used by unit tests and as a process cache on top of
@@ -54,14 +63,16 @@ export class TrialAndGiftLedger {
     if (this.giftKillSwitch) throw new AppError('FORBIDDEN', 'Gift code redemption is disabled', 403)
     if (this.redemptions.has(shopId)) throw new AppError('CONFLICT', 'This store has already redeemed a gift code', 409, { shopId })
     const code = rawCode.trim().toUpperCase()
-    const gift = this.gifts.get(code)
-    if (!gift || !gift.active || gift.uses >= gift.maxUses) throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
+    const gift = this.gifts.get(code) ?? null
+    const invalid = giftCodeError(gift, now)
+    if (invalid) throw invalid
+    const activeGift = gift as GiftCode
     const trial = this.trials.get(shopId)
     if (trial?.consumed) throw new AppError('CONFLICT', 'Trial or gift access was already consumed', 409)
     if (trial) this.trials.set(shopId, { ...trial, consumed: true, state: 'CANCELLED' })
-    const nextGift = { ...gift, uses: gift.uses + 1, active: gift.uses + 1 < gift.maxUses }
+    const nextGift = { ...activeGift, uses: activeGift.uses + 1, active: activeGift.uses + 1 < activeGift.maxUses }
     this.gifts.set(code, nextGift)
-    const redemption: GiftRedemption = { shopId, code, redeemedAt: now, expiresAt: now + gift.durationDays * 86_400_000 }
+    const redemption: GiftRedemption = { shopId, code, redeemedAt: now, expiresAt: now + activeGift.durationDays * 86_400_000 }
     this.redemptions.set(shopId, redemption)
     return redemption
   }
@@ -76,7 +87,7 @@ export class TrialAndGiftLedger {
 }
 
 type TrialRow = QueryResultRow & { shop_id: string; started_at: Date | string | number; expires_at: Date | string | number; consumed: boolean; state: TrialRecord['state'] }
-type GiftCodeRow = QueryResultRow & { code: string; max_uses: number; uses: number; active: boolean; duration_days: number; access_level: string }
+type GiftCodeRow = QueryResultRow & { code: string; max_uses: number; uses: number; active: boolean; duration_days: number; access_level: string; expires_at: Date | string | number | null }
 type GiftRedemptionRow = QueryResultRow & { shop_id: string; code: string; redeemed_at: Date | string | number; expires_at: Date | string | number }
 
 function toMillis(value: Date | string | number): number {
@@ -104,6 +115,7 @@ function mapGift(row: GiftCodeRow): GiftCode {
     active: Boolean(row.active),
     durationDays: Number(row.duration_days) || 3,
     accessLevel: 'commander',
+    expiresAt: row.expires_at == null ? null : toMillis(row.expires_at),
   }
 }
 
@@ -201,7 +213,7 @@ export class PostgresTrialGiftStore {
 
     // gift_codes is global; read outside tenant RLS.
     const giftResult = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
+      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
       [code],
     )
     const giftRow = giftResult.rows[0]
@@ -212,21 +224,21 @@ export class PostgresTrialGiftStore {
         throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
       }
       await this.executor.query(
-        `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (code) DO NOTHING`,
-        [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel],
+        [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel, seeded.expiresAt],
       )
     }
 
     const freshGift = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
+      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
       [code],
     )
     const gift = freshGift.rows[0] ? mapGift(freshGift.rows[0]) : null
-    if (!gift || !gift.active || gift.uses >= gift.maxUses) {
-      throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
-    }
+    const invalid = giftCodeError(gift, now)
+    if (invalid) throw invalid
+    const activeGift = gift as GiftCode
 
     // Tenant-scoped redemption + trial cancel must share one transaction.
     const redemption = await this.withTenant(shopId, async (client) => {
@@ -247,12 +259,12 @@ export class PostgresTrialGiftStore {
         throw new AppError('CONFLICT', 'Trial or gift access was already consumed', 409)
       }
 
-      const expiresAt = now + gift.durationDays * 86_400_000
+      const expiresAt = now + activeGift.durationDays * 86_400_000
       const inserted = await client.query<GiftRedemptionRow>(
         `INSERT INTO gift_redemptions (shop_id, code, redeemed_at, expires_at)
          VALUES ($1, $2, to_timestamp($3 / 1000.0), to_timestamp($4 / 1000.0))
          RETURNING shop_id, code, redeemed_at, expires_at`,
-        [shopId, gift.code, now, expiresAt],
+        [shopId, activeGift.code, now, expiresAt],
       )
       const row = inserted.rows[0]
       if (!row) throw new AppError('INTERNAL_ERROR', 'Failed to persist gift redemption', 500)
@@ -279,7 +291,7 @@ export class PostgresTrialGiftStore {
 
     this.cache.hydrateRedemption(redemption)
     const updatedGift = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
+      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
       [code],
     )
     if (updatedGift.rows[0]) this.cache.hydrateGift(mapGift(updatedGift.rows[0]))

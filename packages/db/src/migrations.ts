@@ -101,7 +101,23 @@ export const DATA_EXPORT_MIGRATIONS: readonly Migration[] = [
   { id: '0026', filename: '0026_data_exports.sql', sql: 'Export history for plan metering, last-exported timestamps, and the merchant-facing export history list' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS]
+// QA (2026-08-20): two migrations shipped as files but were never registered
+// in ALL_MIGRATIONS because their ids collided with siblings (0018 and 0021
+// were both taken). Fresh databases therefore never ran them, which caused:
+//   * "column charge_id does not exist" — every billing read 500'd, and
+//   * "column status does not exist" — the app/uninstalled webhook handler
+//     could not mark the store UNINSTALLED.
+// They are renumbered to unique ids (0028/0029) so the migration runner and
+// the registry integrity test both pass. Content is idempotent, so existing
+// production databases are unaffected.
+// 0027 adds gift_codes.expires_at for a distinct "code expired" message.
+export const QA_REGISTERED_MIGRATIONS: readonly Migration[] = [
+  { id: '0027', filename: '0027_gift_code_expiry.sql', sql: 'optional gift_codes.expires_at for distinct expired-code messaging' },
+  { id: '0028', filename: '0028_billing_charge_id.sql', sql: 'idempotent charge_id column for billing_subscriptions' },
+  { id: '0029', filename: '0029_app_uninstalled_webhook.sql', sql: 'stores.status/uninstalled_at columns for app/uninstalled handling' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS, ...QA_REGISTERED_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

@@ -20,10 +20,27 @@ export class PostgresDatabase implements SqlExecutor {
       statement_timeout: config.statementTimeoutMs,
       ssl: config.ssl ? { rejectUnauthorized: true } : undefined,
     })
+    // P0 reliability (QA 2026-08-20): without a listener, a protocol error on
+    // an idle pooled client (e.g. "could not determine data type of parameter
+    // $n" from a query passing `undefined`) fires the pool 'error' event,
+    // which Node treats as an uncaught exception and the whole API process
+    // dies. Log the failure instead; the connection is re-established on the
+    // next use.
+    this.pool.on('error', (error) => {
+      console.error(JSON.stringify({ level: 'error', message: 'Postgres pool connection error (recovering)', error: error instanceof Error ? error.message : String(error) }))
+    })
   }
 
   public async query<Row extends QueryResultRow>(text: string, values: readonly unknown[] = []): Promise<DatabaseResult<Row>> {
-    const result = await this.pool.query<Row>(text, [...values])
+    // Guard: `undefined` parameters make Postgres answer "could not determine
+    // data type of parameter $n" and (before the pool error handler) killed
+    // the process. Log the query text so the call site can be fixed, and pass
+    // a typed NULL instead so the statement still succeeds.
+    const safeValues = values.map((value) => (value === undefined ? null : value))
+    if (safeValues.some((value, index) => values[index] === undefined)) {
+      console.error(JSON.stringify({ level: 'error', message: 'SQL query passed an undefined parameter (converted to NULL)', query: text.slice(0, 300) }))
+    }
+    const result = await this.pool.query<Row>(text, [...safeValues])
     return { rows: result.rows, rowCount: result.rowCount ?? 0 }
   }
 
@@ -55,7 +72,7 @@ class TransactionClient implements SqlExecutor {
   }
 
   public async query<Row extends QueryResultRow>(text: string, values: readonly unknown[] = []): Promise<DatabaseResult<Row>> {
-    const result = await this.client.query<Row>(text, [...values])
+    const result = await this.client.query<Row>(text, values.map((value) => (value === undefined ? null : value)))
     return { rows: result.rows, rowCount: result.rowCount ?? 0 }
   }
 }

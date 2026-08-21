@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "ProfitPilot — your AI employee for Shopify",
+  "description": "ProfitPilot \u2014 your AI employee for Shopify",
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "build": "corepack pnpm -r --workspace-concurrency=1 run build",
@@ -24,6 +24,9 @@
     "@vitest/coverage-v8": "^3.2.4",
     "jsdom": "^26.1.0",
     "typescript": "~5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@electric-sql/pglite": "^0.5.5",
+    "@electric-sql/pglite-socket": "^0.2.8",
+    "pg": "^8.23.0"
   }
 }

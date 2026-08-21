@@ -24,6 +24,7 @@ import './support.css'
 import './exports.css'
 import './upgrade-overrides.css'
 import './final-polish.css'
+import './qa-board.css'
 // Loaded last: AI Command Center light-theme surfaces only (dark theme untouched).
 import './command-center-light.css'
 import './settings.css'
