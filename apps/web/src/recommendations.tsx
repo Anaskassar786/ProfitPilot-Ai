@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -502,10 +502,10 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
           <div className="recs-toolbar">
             <div className="recs-tabs" role="tablist" aria-label="Recommendation status">
               {STATUS_TABS.map((tab) => (
-                <Button key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab recs-tip-anchor ${statusTab === tab ? 'active' : ''}`} data-tip={STATUS_TAB_TOOLTIPS[tab]} data-tip-align={tab === 'ALL' ? 'left' : tab === 'EXECUTED' ? 'right' : 'center'} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
+                <RichButton key={tab} role="tab" aria-selected={statusTab === tab} className={`recs-tab recs-tip-anchor ${statusTab === tab ? 'active' : ''}`} data-tip={STATUS_TAB_TOOLTIPS[tab]} data-tip-align={tab === 'ALL' ? 'left' : tab === 'EXECUTED' ? 'right' : 'center'} onClick={() => { setStatusTab(tab); setSelected(new Set()) }}>
                   {statusTabLabel(tab)}
                   <span className="recs-tab-count">{statusTabCount(tab, counts)}</span>
-                </Button>
+                </RichButton>
               ))}
             </div>
             <div className="recs-toolbar-row">

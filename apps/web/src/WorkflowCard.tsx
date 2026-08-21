@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { Archive, ArrowRight, BarChart3, Copy, History, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Zap } from './icons.js'
 import type { JSX } from 'react'
 import { useState } from 'react'
@@ -54,9 +54,9 @@ export function WorkflowCard({
   return (
     <article className={`automation-workflow-card workflow-card category-${workflow.category.toLowerCase()} status-${workflow.status.toLowerCase()} ${workflow.status.toLowerCase()}`}>
       <div className="workflow-card-topline">
-        <Button className="workflow-card-icon-btn" onClick={onOpen} aria-label={`Open ${workflow.name}`}>
+        <RichButton className="workflow-card-icon-btn" onClick={onOpen} aria-label={`Open ${workflow.name}`}>
           <span className="automation-category-icon workflow-icon-wrap"><Icon size={18} className="workflow-icon" /></span>
-        </Button>
+        </RichButton>
         <div className="workflow-card-heading">
           <span className={`automation-status workflow-status-badge ${workflow.status.toLowerCase()}`}>{friendlyStatus(workflow.status)}</span>
           {renaming ? (
@@ -78,15 +78,15 @@ export function WorkflowCard({
               onBlur={() => void commitRename()}
             />
           ) : (
-            <Button className="workflow-name-button" onClick={startRename} title="Rename automation">
+            <RichButton className="workflow-name-button" onClick={startRename} title="Rename automation">
               <h3 className="workflow-name">{workflow.name}</h3>
               <Pencil size={12} className="workflow-name-edit-icon" aria-hidden="true" />
-            </Button>
+            </RichButton>
           )}
           {workflow.description && <p>{workflow.description}</p>}
         </div>
       </div>
-      <Button className="workflow-card-body" onClick={onOpen}>
+      <RichButton className="workflow-card-body" onClick={onOpen}>
         <div className="workflow-trigger">
           <Zap size={15} className="workflow-trigger-icon" />
           <span>Starts when {friendlyStartsWhen(workflow.triggerSummary)}</span>
@@ -109,7 +109,7 @@ export function WorkflowCard({
             <ArrowRight size={14} className="workflow-empty-hint-arrow" aria-hidden="true" />
           </div>
         )}
-      </Button>
+      </RichButton>
       <div className="workflow-card-actions workflow-actions">
         <Button className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</Button>
         <Button className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</Button>

@@ -15,8 +15,9 @@ import {
   Spinner,
   Text,
   Toast as PolarisToast,
+  UnstyledButton,
 } from '@shopify/polaris'
-import type { BannerProps, ButtonProps as PolarisButtonProps } from '@shopify/polaris'
+import type { BannerProps, ButtonProps as PolarisButtonProps, UnstyledButtonProps } from '@shopify/polaris'
 import { SaveBar, TitleBar } from '@shopify/app-bridge-react'
 import { embeddedHost, ensureEmbeddedAppBridgeRedirect, isEmbeddedShopifyApp } from './shopify-app-bridge.js'
 
@@ -108,6 +109,55 @@ export const UiButton = forwardRef<HTMLElement, UiButtonProps>(function UiButton
 
 /** Drop-in name used after the native button → Polaris Button migration. */
 export const Button = UiButton
+
+export type RichButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type'> & Readonly<{
+  type?: 'button' | 'submit'
+  onClick?: ((event: MouseEvent<HTMLElement>) => void) | undefined
+}>
+
+/**
+ * Rich-content button for composite controls (filter tabs with counts,
+ * locked-feature cards, template card bodies, sidebar composites). The regular
+ * `Button` shim flattens children into an icon + string label, which destroys
+ * multi-part content (e.g. `All Items` + count renders as `All Items All
+ * Items27`). RichButton renders Polaris' `UnstyledButton` — a real, keyboard
+ * accessible `<button>` — and passes `children` and `className` straight
+ * through, so the page CSS keeps full control of the layout. Use the regular
+ * `Button` for simple icon + short-label buttons.
+ */
+export const RichButton = forwardRef<HTMLButtonElement, RichButtonProps>(function RichButton({
+  children,
+  className,
+  disabled,
+  onClick,
+  type,
+  title,
+  id,
+  ...rest
+}, ref) {
+  const checked: 'true' | 'false' | undefined = rest['aria-checked'] === true || rest['aria-checked'] === 'true' ? 'true' : rest['aria-checked'] === false || rest['aria-checked'] === 'false' ? 'false' : undefined
+  const buttonProps: Record<string, unknown> = {
+    ref,
+    id,
+    className,
+    submit: type === 'submit',
+    disabled: Boolean(disabled),
+    accessibilityLabel: rest['aria-label'] ?? title,
+    role: rest['role'],
+    ariaControls: rest['aria-controls'],
+    ariaExpanded: rest['aria-expanded'] === true || rest['aria-expanded'] === 'true',
+    ariaDescribedBy: rest['aria-describedby'],
+    ariaChecked: checked,
+    pressed: rest['aria-pressed'] === true || rest['aria-pressed'] === 'true',
+    onClick,
+    ...(rest as Record<string, unknown>),
+  }
+  return (
+    <UnstyledButton {...(buttonProps as unknown as UnstyledButtonProps)}>
+      {children}
+    </UnstyledButton>
+  )
+})
 
 export function PolarisEmpty({
   heading,

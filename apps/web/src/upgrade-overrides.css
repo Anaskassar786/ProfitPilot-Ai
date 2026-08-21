@@ -36,6 +36,20 @@
   transform: translateY(-1px);
 }
 
+/* The shared header CTA is wrapped in a classed span so header action rows
+   that style small icon buttons with `> button { width: 28px }` can never
+   shrink the labeled "Upgrade Plan" control into a cramped icon-only pill. */
+.upgrade-plan-button-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 0 0 auto !important;
+  min-width: 0;
+}
+
+.upgrade-plan-button-wrap > button {
+  min-height: 32px !important;
+}
+
 /* Every header that can host the shared CTA stays on one line. The title is
    the flexible item; the CTA and collapse control always retain their size. */
 .orders-insights-header,
