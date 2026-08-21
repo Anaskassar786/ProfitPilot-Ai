@@ -24,3 +24,7 @@ if (config.scopes.length > PROFITPILOT_SHOPIFY_SCOPES.length) {
   process.stdout.write(`Note: SHOPIFY_SCOPES added extra scopes beyond the ${PROFITPILOT_SHOPIFY_SCOPES.length} required by ProfitPilot.\n`)
 }
 process.stdout.write(`Privacy webhooks: ${config.privacyWebhookUrl}\n`)
+process.stdout.write(`App Store listing URLs (paste into the Partner Dashboard listing editor):\n`)
+process.stdout.write(`  Privacy policy: ${config.listing.privacyPolicyUrl}\n`)
+process.stdout.write(`  Terms of service: ${config.listing.termsOfServiceUrl}\n`)
+process.stdout.write(`  Support: ${config.listing.supportUrl}\n`)
