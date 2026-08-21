@@ -95,9 +95,16 @@ export function createStoreCoachRouter(dependencies: StoreCoachRouteDependencies
   // Accepts an AI suggestion by its catalog position: the body echoes the
   // suggestion JSON returned by GET /store-coach/goals/suggestions so the
   // created goal is always grounded in the same validated payload.
-  router.post('/store-coach/goals/:id/accept-suggestion', async (request, response, next) => {
+  //
+  // The web client posts to the STATIC path below — no goal id exists yet,
+  // because the goal is CREATED from the suggestion. Before this change the
+  // request only matched `/store-coach/goals/:id/accept-suggestion` by
+  // coincidence (`:id` captured the literal segment "suggestion"), which
+  // would silently break the moment anyone started validating `:id` as a
+  // real goal id. The static route is registered first so the client
+  // contract is explicit and safe.
+  const acceptSuggestion = async (request: Request, response: Response, next: NextFunction): Promise<void> => {
     try {
-      void param(request, 'id')
       const body = asRecord(request.body)
       const suggestion = asRecord(body.suggestion)
       const title = String(suggestion.title ?? '').trim()
@@ -113,7 +120,11 @@ export function createStoreCoachRouter(dependencies: StoreCoachRouteDependencies
       }, typeof body.startDate === 'string' && body.startDate ? body.startDate : new Date().toISOString().slice(0, 10))
       response.status(201).json(success(goal, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
-  })
+  }
+  router.post('/store-coach/goals/suggestion/accept-suggestion', acceptSuggestion)
+  // Legacy alias — any `:id` value is accepted and ignored; the suggestion
+  // payload is the single source of truth. Kept for existing API callers.
+  router.post('/store-coach/goals/:id/accept-suggestion', acceptSuggestion)
   router.get('/store-coach/goals/:id/progress', async (request, response, next) => {
     try {
       response.status(200).json(success(await service.goalProgress(queryStoreId(request), param(request, 'id')), requestIdFrom(request)))
