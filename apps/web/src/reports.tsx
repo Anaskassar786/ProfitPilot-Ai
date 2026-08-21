@@ -249,7 +249,15 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
               <option value="CUSTOM">Custom</option>
             </select>
           </label>
-          <Button type="button" className="button primary" onClick={() => void generate(headerKind)} disabled={generating !== null || !context.storeId}>
+          {/* Disabled (no store yet / generating): native Polaris secondary
+              disabled styling — the old forced-primary disabled state painted
+              a translucent-black box that was unreadable on the report cards. */}
+          <Button
+            type="button"
+            variant={context.storeId && generating === null ? 'primary' : 'secondary'}
+            onClick={() => void generate(headerKind)}
+            disabled={generating !== null || !context.storeId}
+          >
             {generating ? <LoaderCircle className="spin" size={15} /> : <FileBarChart size={15} />}
             Generate Report
           </Button>
@@ -449,7 +457,12 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
                 </div>
                 <div className="reports-modal-actions">
                   <Button type="button" className="button secondary" onClick={() => setCustomOpen(false)}>Cancel</Button>
-                  <Button type="button" className="button primary" onClick={submitCustom} disabled={!customStart || !customEnd || generating === 'CUSTOM'}>
+                  <Button
+                    type="button"
+                    variant={customStart && customEnd && generating !== 'CUSTOM' ? 'primary' : 'secondary'}
+                    onClick={submitCustom}
+                    disabled={!customStart || !customEnd || generating === 'CUSTOM'}
+                  >
                     {generating === 'CUSTOM' ? <LoaderCircle className="spin" size={14} /> : <CalendarRange size={14} />}
                     Generate
                   </Button>
@@ -516,7 +529,12 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
             </div>
             <div className="reports-modal-actions">
               <Button type="button" className="button secondary" onClick={() => setPreview(null)}>Close</Button>
-              <Button type="button" className="button primary" onClick={() => void download(preview.run)} disabled={preview.run.status !== 'COMPLETED'}>
+              <Button
+                type="button"
+                variant={preview.run.status === 'COMPLETED' ? 'primary' : 'secondary'}
+                onClick={() => void download(preview.run)}
+                disabled={preview.run.status !== 'COMPLETED'}
+              >
                 <Download size={14} /> Download PDF
               </Button>
             </div>
@@ -559,7 +577,16 @@ function GenerateCard({
           <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />
         </div>
       ) : (
-        <Button type="button" className="button primary" onClick={onGenerate} disabled={generating || !gate.allowed} title={gate.reason ?? undefined}>
+        /* Gated or mid-run: native Polaris disabled button (variant secondary)
+           instead of a disabled primary, which rendered as a solid black box
+           with unreadable text on the locked report cards. */
+        <Button
+          type="button"
+          variant={gate.allowed ? 'primary' : 'secondary'}
+          onClick={onGenerate}
+          disabled={generating || !gate.allowed}
+          title={gate.reason ?? undefined}
+        >
           {generating ? <LoaderCircle className="spin" size={14} /> : <FileBarChart size={14} />}
           Generate
         </Button>

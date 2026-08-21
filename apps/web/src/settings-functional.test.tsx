@@ -4,10 +4,13 @@
  * Every tab, button, toggle, and confirmation is exercised against mocked
  * real APIs. No fake store metrics are introduced.
  */
+import './jsdom-polaris-setup.js'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { SettingsPage } from './settings.js'
 import { DEFAULT_WORKSPACE_SETTINGS, settingsStorageKey } from './settings-model.js'
 import type { WorkspaceContext } from './model.js'
@@ -126,13 +129,19 @@ describe('Settings complete functional testing', () => {
       root = createRoot(container)
       root.render(
         <StrictMode>
-          <SettingsPage
-            context={context}
-            lightMode={lightMode}
-            onTheme={() => undefined}
-            onToast={(message) => toasts.push(message)}
-            onNavigateBilling={() => billingNavigations.push('billing')}
-          />
+          {/* main.tsx wraps every page in Polaris AppProvider (i18n); the page
+              mounts the same way here so Polaris Page/Button render natively.
+              No App Bridge script exists in jsdom — AppSaveBar must fall back
+              to its Polaris save bar instead of crashing the page. */}
+          <AppProvider i18n={enTranslations as never}>
+            <SettingsPage
+              context={context}
+              lightMode={lightMode}
+              onTheme={() => undefined}
+              onToast={(message) => toasts.push(message)}
+              onNavigateBilling={() => billingNavigations.push('billing')}
+            />
+          </AppProvider>
         </StrictMode>,
       )
     })
@@ -150,6 +159,13 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
     const button = Array.from(container.querySelectorAll('.settings-nav-item')).find((item) => item.textContent?.includes(label)) as HTMLButtonElement | undefined
     if (!button) throw new Error(`Missing tab ${label}`)
     return button
+  }
+
+  /** Polaris v13 buttons expose disabled state via aria-disabled/class, not
+   *  the native `disabled` attribute (UnstyledButton only sets aria-disabled
+   *  and tabIndex). */
+  function isDisabledState(button: HTMLElement): boolean {
+    return button.disabled || button.getAttribute('aria-disabled') === 'true' || button.className.includes('Polaris-Button--disabled')
   }
 
   describe('1. Page load and sidebar', () => {
@@ -291,7 +307,8 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
       const container = await mount(true)
       await act(async () => { tabButton(container, 'Team Members').click() })
       expect(container.textContent).toContain('Commander Pilot (Owner)')
-      expect(container.textContent).toContain('Coming soon')
+      expect(container.textContent).toContain('commander-pilot.myshopify.com')
+      expect(container.textContent).toContain('Role: Owner · Access: Full')
       const upgrade = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Upgrade Plan'))
       expect(upgrade).toBeTruthy()
       await act(async () => { upgrade?.click() })
@@ -335,10 +352,10 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
       const disconnect = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Disconnect') as HTMLButtonElement
       await act(async () => { disconnect.click() })
       const confirm = Array.from(document.querySelectorAll('.settings-modal button')).find((button) => button.textContent === 'Disconnect') as HTMLButtonElement
-      expect(confirm.disabled).toBe(true)
+      expect(isDisabledState(confirm)).toBe(true)
       const input = document.querySelector('.settings-modal input') as HTMLInputElement
       await act(async () => { fillInput(input, 'commander-pilot.myshopify.com') })
-      expect(confirm.disabled).toBe(false)
+      expect(isDisabledState(confirm)).toBe(false)
     })
   })
 })

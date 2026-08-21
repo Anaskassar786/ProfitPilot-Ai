@@ -138,7 +138,11 @@ export class PostgresReportRepository implements ReportRepository {
   }
   public async updateRun(run: ReportRun): Promise<void> {
     await this.scoped(run.storeId, async (client) => {
-      await client.query('UPDATE report_runs SET content_sha256 = $3, status = $4, email_status = $5, completed_at = CASE WHEN $6 IS NULL THEN NULL ELSE to_timestamp($6 / 1000.0) END WHERE store_id = $1 AND id = $2', [run.storeId, run.id, run.contentSha256, run.status, run.emailStatus, run.completedAt])
+      // $6 is a nullable epoch (completedAt). Postgres cannot infer a type for a
+      // parameter that only appears inside `CASE WHEN $n IS NULL`, so the query
+      // dies with "could not determine data type of parameter $6" — the exact
+      // same regression jarvis_preferences/jarvis_sessions hit. Cast it.
+      await client.query('UPDATE report_runs SET content_sha256 = $3, status = $4, email_status = $5, completed_at = CASE WHEN $6::bigint IS NULL THEN NULL ELSE to_timestamp($6::bigint / 1000.0) END WHERE store_id = $1 AND id = $2', [run.storeId, run.id, run.contentSha256, run.status, run.emailStatus, run.completedAt])
     })
   }
   public async listSchedules(storeId: string): Promise<readonly ReportSchedule[]> {

@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { ReportsWorkspace } from './reports.js'
 
 describe('Reports page professional copy', () => {
@@ -24,11 +26,17 @@ describe('Reports page professional copy', () => {
   })
 
   it('renders the professional header, type cards, and plan status', () => {
-    const html = renderToStaticMarkup(createElement(ReportsWorkspace, {
-      context: { storeId: null, shop: null },
-      onNavigateBilling: vi.fn(),
-      onToast: vi.fn(),
-    }))
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — render the
+    // same way so Polaris Buttons render natively.
+    const html = renderToStaticMarkup(createElement(
+      AppProvider,
+      { i18n: enTranslations as never },
+      createElement(ReportsWorkspace, {
+        context: { storeId: null, shop: null },
+        onNavigateBilling: vi.fn(),
+        onToast: vi.fn(),
+      }),
+    ))
     expect(html).toContain('Business Reports')
     expect(html).toContain('Monthly Report')
     expect(html).toContain('Quarterly Report')
