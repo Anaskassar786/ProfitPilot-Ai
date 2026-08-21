@@ -31,7 +31,12 @@ describe('Shopify OAuth install scopes', () => {
   })
 
   it('repairs a stale SHOPIFY_SCOPES value that predates discount actions', async () => {
-    const url = await authorizationUrl(parseShopifyScopes('read_products,read_orders,read_price_rules'))
+    const url = await authorizationUrl(parseShopifyScopes('read_products,read_orders'))
     expect(url.searchParams.get('scope')).toBe(PROFITPILOT_SHOPIFY_SCOPES_CSV)
+  })
+
+  it('preserves an operator-supplied scope after the required ones', async () => {
+    const url = await authorizationUrl(parseShopifyScopes('read_products,read_orders,read_price_rules'))
+    expect(url.searchParams.get('scope')).toBe([...PROFITPILOT_SHOPIFY_SCOPES, 'read_price_rules'].join(','))
   })
 })

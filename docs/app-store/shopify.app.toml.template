@@ -16,9 +16,9 @@ redirect_urls = [
 # Must stay identical to PROFITPILOT_SHOPIFY_SCOPES in apps/api/src/app-store-assets.ts.
 # write_discounts powers the discount actions run by the AI Command Center and
 # the Automation Engine (discountCodeBasicCreate / discountCodeDeactivate);
-# read_price_rules still authorizes the legacy REST /price_rules.json sync.
+# read_discounts authorizes the GraphQL discountNodes discounts sync.
 [access_scopes]
-scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,write_discounts,read_price_rules"
+scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,write_discounts"
 
 [webhooks]
 api_version = "2025-10"
@@ -31,3 +31,12 @@ shop_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled"]
 uri = "/shopify/webhooks"
+
+# App Store listing URLs — paste into Partner Dashboard → App listing.
+# Shopify requires absolute https:// URLs (mailto: allowed for support).
+# privacy_policy_url = "https://REPLACE_WITH_APP_HOST/legal/privacy"
+# terms_of_service_url = "https://REPLACE_WITH_APP_HOST/legal/terms"
+# security_url = "https://REPLACE_WITH_APP_HOST/legal/security"
+# cookie_policy_url = "https://REPLACE_WITH_APP_HOST/legal/cookies"
+# data_processing_addendum_url = "https://REPLACE_WITH_APP_HOST/legal/dpa"
+# support_url = "mailto:support@example.com (or https://REPLACE_WITH_APP_HOST/help)"

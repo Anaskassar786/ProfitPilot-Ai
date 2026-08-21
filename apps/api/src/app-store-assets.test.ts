@@ -39,12 +39,38 @@ describe('F7 Shopify App Store assets', () => {
     expect(renderShopifyAppToml(pinned)).toContain('customer_deletion_url = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
   })
 
-  it('publishes screenshot specs and an honest listing template', () => {
+  it('publishes screenshot specs and an honest listing template with absolute URLs', () => {
     expect(APP_STORE_SCREENSHOT_SPECS).toHaveLength(4)
     expect(APP_STORE_SCREENSHOT_SPECS.every((spec) => spec.width === 1600 && spec.height === 1000 && spec.format === 'PNG')).toBe(true)
-    const listing = appListingMetadata()
+    const listing = appListingMetadata({ SHOPIFY_APP_URL: 'https://profitpilot-ai-production.up.railway.app', SUPPORT_EMAIL: 'support@profitpilot.example' })
     expect(listing.description).toContain('does not invent store numbers')
-    expect(listing.complianceLinks).toContain('/legal/dpa')
+    expect(listing.privacyPolicyUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/privacy')
+    expect(listing.termsOfServiceUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/terms')
+    expect(listing.dataProcessingAgreementUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/dpa')
+    // App Store review rejects relative legal links; every URL must be absolute.
+    for (const url of [listing.privacyPolicyUrl, listing.termsOfServiceUrl, listing.securityUrl, listing.cookiePolicyUrl, listing.dataProcessingAgreementUrl]) {
+      expect(url).toMatch(/^https:\/\//)
+    }
+    expect(listing.supportUrl).toBe('mailto:support@profitpilot.example')
+  })
+
+  it('derives listing URLs from APP_URL as a fallback and prefers an explicit support page', () => {
+    const fallback = appListingMetadata({ APP_URL: 'https://app.example/' })
+    expect(fallback.privacyPolicyUrl).toBe('https://app.example/legal/privacy')
+    expect(fallback.supportUrl).toBe('https://app.example/help')
+
+    const pinned = appListingMetadata({ SHOPIFY_APP_URL: 'https://app.example', SHOPIFY_SUPPORT_URL: 'https://help.example.com/profitpilot' })
+    expect(pinned.supportUrl).toBe('https://help.example.com/profitpilot')
+
+    expect(() => appListingMetadata({ SHOPIFY_APP_URL: 'https://app.example', SHOPIFY_SUPPORT_URL: '/help' })).toThrow('absolute https://')
+  })
+
+  it('renders the listing URLs into the generated TOML as Partner Dashboard paste values', () => {
+    const config = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example', SUPPORT_EMAIL: 'support@profitpilot.example' })
+    const toml = renderShopifyAppToml(config)
+    expect(toml).toContain('# privacy_policy_url = "https://app.example/legal/privacy"')
+    expect(toml).toContain('# terms_of_service_url = "https://app.example/legal/terms"')
+    expect(toml).toContain('# support_url = "mailto:support@profitpilot.example"')
   })
 })
 
@@ -58,21 +84,21 @@ describe('Shopify scope registry', () => {
       'read_locations',
       'read_discounts',
       'write_discounts',
-      'read_price_rules',
     ])
     // discountCodeBasicCreate / discountCodeDeactivate are 403 without this one.
     expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('write_discounts')
     // The GraphQL discount mutations no longer rely on the legacy REST scope.
     expect(PROFITPILOT_SHOPIFY_SCOPES).not.toContain('write_price_rules')
-    // The REST discounts sync still reads legacy price rules.
-    expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('read_price_rules')
+    // The discounts sync reads the GraphQL discountNodes connection with
+    // read_discounts; the retired REST /price_rules.json sync was its only user.
+    expect(PROFITPILOT_SHOPIFY_SCOPES).not.toContain('read_price_rules')
   })
 
   it('generates the complete scope TOML even when the environment is stale or empty', () => {
     const base = { SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example' }
-    for (const env of [base, { ...base, SHOPIFY_SCOPES: '   ' }, { ...base, SHOPIFY_SCOPES: 'read_products,read_price_rules' }]) {
+    for (const env of [base, { ...base, SHOPIFY_SCOPES: '   ' }, { ...base, SHOPIFY_SCOPES: 'read_products,read_orders' }]) {
       const config = shopifyAppConfigFromEnv(env)
-      expect(config.scopes).toHaveLength(8)
+      expect(config.scopes).toHaveLength(7)
       expect(missingShopifyScopes(config.scopes)).toEqual([])
       expect(renderShopifyAppToml(config)).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
     }
@@ -85,7 +111,7 @@ describe('Shopify scope registry', () => {
 
   it('reports the scopes an installation is missing', () => {
     expect(missingShopifyScopes(PROFITPILOT_SHOPIFY_SCOPES_CSV)).toEqual([])
-    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,read_price_rules')).toEqual(['write_discounts'])
+    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts')).toEqual(['write_discounts'])
     expect(missingShopifyScopes([])).toEqual([...PROFITPILOT_SHOPIFY_SCOPES])
   })
 

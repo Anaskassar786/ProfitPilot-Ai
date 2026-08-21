@@ -10,11 +10,14 @@ Use `pnpm generate:shopify` after the Railway secret variables are loaded. The g
 - **Secondary category:** Marketing and merchandising (select only if the current Shopify review scope permits it)
 - **Pricing:** Start, Growth, and Commander plans are shown by the live billing service. Do not publish a price that differs from the billing configuration.
 - **Support email:** Read from `SUPPORT_EMAIL` in the deployment environment.
-- **Privacy policy:** `/legal/privacy`
-- **Terms:** `/legal/terms`
-- **Security:** `/legal/security`
-- **Cookie policy:** `/legal/cookies`
-- **Data processing addendum:** `/legal/dpa`
+- **Privacy policy:** `https://<SHOPIFY_APP_URL>/legal/privacy`
+- **Terms:** `https://<SHOPIFY_APP_URL>/legal/terms`
+- **Security:** `https://<SHOPIFY_APP_URL>/legal/security`
+- **Cookie policy:** `https://<SHOPIFY_APP_URL>/legal/cookies`
+- **Data processing addendum:** `https://<SHOPIFY_APP_URL>/legal/dpa`
+- **Support URL:** `SHOPIFY_SUPPORT_URL` when set (absolute `https://` help page), otherwise `mailto:<SUPPORT_EMAIL>`, otherwise `https://<SHOPIFY_APP_URL>/help`
+
+App Store review requires every listing link to be an **absolute URL**; relative paths such as `/legal/privacy` are rejected. `apps/api/src/app-store-assets.ts` (`listingUrlsFromEnv` / `appListingMetadata`) generates these URLs from `SHOPIFY_APP_URL` (falling back to `APP_URL`), and `pnpm generate:shopify` prints them alongside the generated `shopify.app.toml` as commented Partner Dashboard paste values.
 
 ## Description template
 
@@ -40,7 +43,8 @@ Avoid browser chrome, placeholder data, unsupported badges, competitor logos, or
 ## Review checklist
 
 - Verify OAuth scopes match the generated TOML and Shopify Partner configuration.
-- Verify all listing links resolve over HTTPS in the deployed environment.
+- Verify all listing links are absolute URLs and resolve over HTTPS in the deployed environment (including the Support URL).
+- Verify the Support URL is set in the Partner Dashboard: `SHOPIFY_SUPPORT_URL` (https page) or `mailto:SUPPORT_EMAIL`.
 - Test install, uninstall, data request, and redaction flows in a test store.
 - Confirm legal entity, physical address, support email, and jurisdiction come from the production environment.
 - Confirm merchant email footers include the configured physical address and unsubscribe link.
