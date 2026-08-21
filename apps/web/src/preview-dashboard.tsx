@@ -4,6 +4,7 @@
  * excluded from the production build. Run: pnpm --filter @profitpilot/web dev
  * then open /preview.html
  */
+import { Button } from './polaris-ui.js'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { DashboardLayout } from './dashboard.js'
@@ -74,14 +75,14 @@ function Harness() {
     <div className="app-shell" style={{ padding: 24 }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {(['sparse', 'rich', 'empty'] as Scenario[]).map((s) => (
-          <button
+          <Button
             key={s}
             onClick={() => setScenario(s)}
             className={`period-toggle-btn ${scenario === s ? 'active' : ''}`}
             style={{ border: '1px solid var(--border)', padding: '6px 12px' }}
           >
             {s}
-          </button>
+          </Button>
         ))}
       </div>
       <DashboardLayout

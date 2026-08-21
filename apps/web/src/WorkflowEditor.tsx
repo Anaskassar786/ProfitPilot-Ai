@@ -1,8 +1,9 @@
+import { Button } from './polaris-ui.js'
 import '@xyflow/react/dist/style.css'
 import { addEdge, Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState } from '@xyflow/react'
 import type { Connection, Edge, Node, NodeProps } from '@xyflow/react'
-import { ArrowLeft, Bell, BookOpen, Bot, Boxes, Check, Clock3, GitBranch, LayoutTemplate, Lightbulb, ListChecks, Mail, PackagePlus, Pencil, Play, Plus, Save, Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Tag, Target, Trash2, UserRoundPlus, WandSparkles, X, XCircle } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { ArrowLeft, Bell, BookOpen, Bot, Boxes, Check, Clock3, GitBranch, LayoutTemplate, Lightbulb, ListChecks, Mail, PackagePlus, Pencil, Play, Plus, Save, Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Sparkles, Tag, Target, Trash2, UserRoundPlus, WandSparkles, X, XCircle } from './icons.js'
+import type { LucideIcon } from './icons.js'
 import { useCallback, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { updateAutomationWorkflow, workflowCommand } from './automation-api.js'
@@ -318,9 +319,9 @@ function EditorInner({
   return (
     <div className="workflow-editor">
       <header className="editor-topbar">
-        <button onClick={onBack}>
+        <Button onClick={onBack}>
           <ArrowLeft size={16} /> Automations
-        </button>
+        </Button>
         <div className="editor-title">
           {renaming ? (
             <input
@@ -341,7 +342,7 @@ function EditorInner({
               onBlur={() => void commitRename()}
             />
           ) : (
-            <button
+            <Button
               className="editor-name-button"
               title="Rename automation"
               onClick={() => {
@@ -351,7 +352,7 @@ function EditorInner({
             >
               <strong>{workflow.name}</strong>
               <Pencil size={13} aria-hidden="true" />
-            </button>
+            </Button>
           )}
           <span>
             {friendlyStatus(workflow.status)}
@@ -359,7 +360,7 @@ function EditorInner({
           </span>
         </div>
         <div className="editor-top-actions">
-          <button className="mode-toggle" onClick={() => {
+          <Button className="mode-toggle" onClick={() => {
             // Going from advanced (free-form graph) to simple (linear recipe) can
             // silently drop YES/NO branches the merchant drew. Ask before
             // throwing that work away — going the other way is always safe.
@@ -375,16 +376,16 @@ function EditorInner({
           }} title="Toggle guided or full editor">
             {mode === 'simple' ? <SlidersHorizontal size={15} /> : <Sparkles size={15} />}
             {mode === 'simple' ? 'Switch to Advanced' : 'Back to Simple'}
-          </button>
-          <button disabled={saving} onClick={() => void save(false)}>
+          </Button>
+          <Button disabled={saving} onClick={() => void save(false)}>
             <Save size={15} /> {saving ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button disabled={testing} onClick={() => void test()}>
+          </Button>
+          <Button disabled={testing} onClick={() => void test()}>
             <Play size={15} /> {testing ? 'Starting…' : 'Test Run'}
-          </button>
-          <button className="publish" disabled={saving} onClick={() => void save(true)}>
+          </Button>
+          <Button className="publish" disabled={saving} onClick={() => void save(true)}>
             <Check size={15} /> {workflow.status === 'ACTIVE' ? 'Save Changes' : 'Save & Activate'}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -442,9 +443,9 @@ function EditorInner({
               selected={selected}
             />
 
-            <button className="simple-add-step" onClick={() => setPicker({ group: null, replaceId: null })}>
+            <Button className="simple-add-step" onClick={() => setPicker({ group: null, replaceId: null })}>
               <Plus size={17} /> Add Step
-            </button>
+            </Button>
 
             {errors.length > 0 && (
               <div className="simple-validation">
@@ -459,12 +460,12 @@ function EditorInner({
             )}
 
             <div className="simple-footer-actions">
-              <button className="automation-secondary" disabled={saving} onClick={() => void save(false)}>
+              <Button className="automation-secondary" disabled={saving} onClick={() => void save(false)}>
                 <Save size={15} /> {saving ? 'Saving…' : 'Save Draft'}
-              </button>
-              <button className="automation-primary" disabled={saving} onClick={() => void save(true)}>
+              </Button>
+              <Button className="automation-primary" disabled={saving} onClick={() => void save(true)}>
                 <Check size={15} /> {workflow.status === 'ACTIVE' ? 'Save Changes' : 'Save & Activate'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -502,7 +503,7 @@ function EditorInner({
                   const Icon = item.icon
                   const locked = item.kind === 'ai' && !commander
                   return (
-                    <button
+                    <Button
                       draggable={!locked}
                       title={item.summary}
                       onDragStart={(event) => event.dataTransfer.setData('application/profitpilot-node', JSON.stringify(item))}
@@ -513,7 +514,7 @@ function EditorInner({
                       <Icon size={16} />
                       <span>{item.label}</span>
                       {locked && <ShieldCheck size={13} />}
-                    </button>
+                    </Button>
                   )
                 })}
               </section>
@@ -570,7 +571,7 @@ function EditorInner({
                 pannable
                 zoomable
                 nodeColor={(node) =>
-                  node.data.kind === 'trigger' ? '#22c55e' : node.data.kind === 'condition' ? '#f59e0b' : node.data.kind === 'ai' ? '#a855f7' : '#3b82f6'
+                  node.data.kind === 'trigger' ? 'rgb(34, 197, 94)' : node.data.kind === 'condition' ? 'rgb(245, 158, 11)' : node.data.kind === 'ai' ? 'rgb(168, 85, 247)' : 'rgb(59, 130, 246)'
                 }
               />
             </ReactFlow>
@@ -667,18 +668,18 @@ function SimpleGroup({
             </div>
             <div className="simple-step-actions" onClick={(event) => event.stopPropagation()}>
               {onChange && node.data.kind === 'trigger' ? (
-                <button onClick={() => onChange(node.id)}>
+                <Button onClick={() => onChange(node.id)}>
                   <Pencil size={13} /> Change
-                </button>
+                </Button>
               ) : (
-                <button onClick={() => onSelect(node.id)}>
+                <Button onClick={() => onSelect(node.id)}>
                   <SlidersHorizontal size={13} /> Configure
-                </button>
+                </Button>
               )}
               {node.data.kind !== 'trigger' && (
-                <button className="danger" aria-label="Remove step" onClick={() => onRemove(node.id)}>
+                <Button className="danger" aria-label="Remove step" onClick={() => onRemove(node.id)}>
                   <Trash2 size={13} />
-                </button>
+                </Button>
               )}
             </div>
           </article>
@@ -735,8 +736,8 @@ function EditorPanel({
           <li><span>4</span> Click “Save &amp; Activate” to turn it on</li>
         </ol>
         <div className="getting-started-actions">
-          <button onClick={onHow}><BookOpen size={14} /> View Tutorial</button>
-          {onTemplates && <button onClick={onTemplates}><LayoutTemplate size={14} /> Browse Templates</button>}
+          <Button onClick={onHow}><BookOpen size={14} /> View Tutorial</Button>
+          {onTemplates && <Button onClick={onTemplates}><LayoutTemplate size={14} /> Browse Templates</Button>}
         </div>
       </div>
     )
@@ -750,12 +751,12 @@ function EditorPanel({
       </div>
       <PropertyFields node={selectedNode} update={update} replace={replace} />
       <div className="property-actions">
-        <button className="danger" onClick={onRemove}>
+        <Button className="danger" onClick={onRemove}>
           <Trash2 size={15} /> Remove step
-        </button>
-        <button className="done" onClick={onClear}>
+        </Button>
+        <Button className="done" onClick={onClear}>
           <Check size={15} /> Done
-        </button>
+        </Button>
       </div>
     </>
   )
@@ -776,7 +777,7 @@ function LibraryModal({
   return (
     <div className="automation-modal-backdrop">
       <div className="automation-modal library-modal">
-        <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <Button className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></Button>
         <span className="automation-eyebrow">STEP LIBRARY</span>
         <h2>{group ? `Change “${group}”` : 'Add a step'}</h2>
         <p>Pick what this step does — you can fine-tune the details next.</p>
@@ -789,14 +790,14 @@ function LibraryModal({
                   const Icon = entry.icon
                   const locked = entry.kind === 'ai' && !commander
                   return (
-                    <button key={entry.subtype} className={locked ? 'locked' : ''} onClick={() => onPick(entry)} disabled={locked}>
+                    <Button key={entry.subtype} className={locked ? 'locked' : ''} onClick={() => onPick(entry)} disabled={locked}>
                       <Icon size={17} />
                       <span>
                         <strong>{entry.label}</strong>
                         <small>{entry.summary}</small>
                       </span>
                       {locked && <em>Commander only</em>}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>

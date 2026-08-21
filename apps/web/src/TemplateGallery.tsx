@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, Sparkles, WandSparkles, X } from 'lucide-react'
+import { Button } from './polaris-ui.js'
+import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, Sparkles, WandSparkles, X } from './icons.js'
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 import type { WorkflowTemplate } from './automation-model.js'
@@ -50,9 +51,9 @@ export function TemplateGallery({
       <header className="automation-section-header">
         <div>
           {onBack && (
-            <button className="automation-back" onClick={onBack}>
+            <Button className="automation-back" onClick={onBack}>
               <ArrowLeft size={16} /> Automations
-            </button>
+            </Button>
           )}
           <span className="automation-eyebrow">PROVEN STARTING POINTS</span>
           <h2>{full ? 'Automation templates' : 'Featured templates'}</h2>
@@ -63,18 +64,18 @@ export function TemplateGallery({
           </p>
         </div>
         {featured && onBrowseAll && (
-          <button className="browse-all-link" onClick={onBrowseAll}>
+          <Button className="browse-all-link" onClick={onBrowseAll}>
             Browse all templates <ArrowRight size={15} />
-          </button>
+          </Button>
         )}
       </header>
 
       {full && (
         <div className="template-tabs">
           {TABS.map(({ key }) => (
-            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+            <Button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
               {key}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -101,9 +102,9 @@ export function TemplateGallery({
       {preview && (
         <div className="automation-modal-backdrop">
           <div className="automation-modal template-preview">
-            <button className="modal-close" onClick={() => setPreview(null)} aria-label="Close">
+            <Button className="modal-close" onClick={() => setPreview(null)} aria-label="Close">
               <X size={18} />
-            </button>
+            </Button>
             <TemplateIcon template={preview} />
             <span className="template-category">{friendlyCategory(preview.category)}</span>
             <h2>{preview.name}</h2>
@@ -133,11 +134,11 @@ export function TemplateGallery({
                 {preview.locked ? 'This template needs a higher plan.' : 'Installs as a draft you can review.'}
               </span>
               {preview.locked ? (
-                <button className="automation-primary upgrade-plan-btn" onClick={onUpgrade}>
+                <Button className="automation-primary upgrade-plan-btn" onClick={onUpgrade}>
                   <LockKeyhole size={15} /> Upgrade Plan
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   className="automation-primary"
                   disabled={installing}
                   onClick={async () => {
@@ -155,7 +156,7 @@ export function TemplateGallery({
                   }}
                 >
                   {installing ? 'Setting up…' : 'Set Up →'}
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -176,7 +177,7 @@ function TemplateCard({
 }): JSX.Element {
   return (
     <article className={`template-card template-card-pro ${templateToneClass(template.category)} ${template.locked ? 'locked' : ''}`}>
-      <button className="template-card-main" onClick={onPreview} aria-label={`Preview template: ${template.name}`}>
+      <Button className="template-card-main" onClick={onPreview} aria-label={`Preview template: ${template.name}`}>
         <span className="template-card-top">
           <TemplateIcon template={template} />
           <span className={`plan-badge template-plan-badge ${planBadgeClass(template.minimumPlan)}`}>{planBadgeLabel(template.minimumPlan)}</span>
@@ -185,19 +186,19 @@ function TemplateCard({
         <h3 className="template-name">{template.name}</h3>
         <p className="template-description">{template.description}</p>
         <span className="template-impact-copy template-detail">{template.impact}</span>
-      </button>
+      </Button>
       <footer>
         <span className="setup-time template-meta">
           <Clock3 size={12} className="template-meta-icon" /> {setupLabel(template.complexity)} · {template.nodes} step{template.nodes === 1 ? '' : 's'}
         </span>
         {template.locked ? (
-          <button className="upgrade-mini template-upgrade-btn upgrade-plan-btn" onClick={onUpgrade} aria-label={`Upgrade Plan to use ${template.name}`}>
+          <Button className="upgrade-mini template-upgrade-btn upgrade-plan-btn" onClick={onUpgrade} aria-label={`Upgrade Plan to use ${template.name}`}>
             <LockKeyhole size={13} /> Upgrade Plan
-          </button>
+          </Button>
         ) : (
-          <button className="set-up-mini template-setup-btn" onClick={onPreview} aria-label={`Set up ${template.name}`}>
+          <Button className="set-up-mini template-setup-btn" onClick={onPreview} aria-label={`Set up ${template.name}`}>
             Set Up <ArrowRight size={13} />
-          </button>
+          </Button>
         )}
       </footer>
     </article>

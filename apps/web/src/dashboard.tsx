@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useState, useMemo, useEffect } from 'react'
 import type { CSSProperties, ComponentType } from 'react'
 import {
@@ -31,7 +32,7 @@ import {
   DollarSign,
   Award,
   Calendar,
-} from 'lucide-react'
+} from './icons.js'
 import type { AnalyticsSnapshot, StoreHealthView } from './model.js'
 import { formatMoney, formatNumber, storeHealthView, latestSyncLabel } from './model.js'
 import {
@@ -73,11 +74,11 @@ type CategoryBreakdown = Readonly<{
   aov: number | null
 }>
 
-const BAR_COLOR = '#3B82F6'
-const BAR_CURRENT_COLOR = '#72A7FF'
-const BAR_EMPTY_COLOR = '#6B7280'
+const BAR_COLOR = 'rgb(59, 130, 246)'
+const BAR_CURRENT_COLOR = 'rgb(114, 167, 255)'
+const BAR_EMPTY_COLOR = 'rgb(107, 114, 128)'
 const GRID_COLOR = 'rgba(107,114,128,.12)'
-const TEXT_COLOR = '#9CA3AF'
+const TEXT_COLOR = 'rgb(156, 163, 175)'
 
 interface DashboardLayoutProps {
   data: DashboardData
@@ -267,10 +268,10 @@ export function DashboardLayout(props: DashboardLayoutProps) {
               <h3>Revenue Overview</h3>
             </div>
             <div className="period-toggle-group">
-              <button className={`period-toggle-btn ${periodView === 'weekly' ? 'active' : ''}`} onClick={() => setPeriodView('weekly')}>Weekly</button>
-              <button className={`period-toggle-btn ${periodView === 'monthly' ? 'active' : ''}`} onClick={() => setPeriodView('monthly')}>Monthly</button>
-              <button className={`period-toggle-btn ${periodView === 'yearly' ? 'active' : ''}`} onClick={() => setPeriodView('yearly')}>Yearly</button>
-              <button className={`period-toggle-btn ${periodView === 'range' ? 'active' : ''}`} onClick={() => setPeriodView('range')}>Range</button>
+              <Button className={`period-toggle-btn ${periodView === 'weekly' ? 'active' : ''}`} onClick={() => setPeriodView('weekly')}>Weekly</Button>
+              <Button className={`period-toggle-btn ${periodView === 'monthly' ? 'active' : ''}`} onClick={() => setPeriodView('monthly')}>Monthly</Button>
+              <Button className={`period-toggle-btn ${periodView === 'yearly' ? 'active' : ''}`} onClick={() => setPeriodView('yearly')}>Yearly</Button>
+              <Button className={`period-toggle-btn ${periodView === 'range' ? 'active' : ''}`} onClick={() => setPeriodView('range')}>Range</Button>
             </div>
           </div>
           {periodView === 'range' && (
@@ -289,9 +290,9 @@ export function DashboardLayout(props: DashboardLayoutProps) {
         <div className="dash-card calendar-card-compact">
           <div className="dash-kicker"><span className="kicker-dot green" />Daily Revenue</div>
           <div className="cal-compact-header">
-            <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="Previous month"><ChevronLeft size={14} /></button>
-            <button className="cal-month-label" onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth() + 1) }} title="Jump to current month">{new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</button>
-            <button className="cal-nav-btn" onClick={goNextMonth} aria-label="Next month"><ChevronRight size={14} /></button>
+            <Button className="cal-nav-btn" onClick={goPrevMonth} aria-label="Previous month"><ChevronLeft size={14} /></Button>
+            <Button className="cal-month-label" onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth() + 1) }} title="Jump to current month">{new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Button>
+            <Button className="cal-nav-btn" onClick={goNextMonth} aria-label="Next month"><ChevronRight size={14} /></Button>
           </div>
           <CompactCalendar month={calendarMonth} loading={loading} />
           <div className="cal-total-block">
@@ -322,7 +323,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
             <HealthRow label="Catalog" value={catalogCount ? `${catalogCount} products` : 'Not synced'} healthy={!!catalogCount} />
             <HealthRow label="Customers" value={data.analytics?.customerCohorts.length ? 'Cohort data present' : 'No data'} healthy={!!data.analytics?.customerCohorts.length} />
           </div>
-          <button className="dash-text-link" onClick={() => onNavigate('analytics')}>View details →</button>
+          <Button className="dash-text-link" onClick={() => onNavigate('analytics')}>View details →</Button>
         </div>
       </div>
 
@@ -364,8 +365,8 @@ export function DashboardLayout(props: DashboardLayoutProps) {
                           <RechartsBarChart data={weeklyComparison} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
                             <XAxis dataKey="label" tick={{ fill: 'var(--text-tertiary)', fontSize: 9 }} axisLine={false} tickLine={false} interval={0} />
                             <Tooltip content={<WeeklyTooltip />} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
-                            <Bar dataKey="current" name="This week" fill="#3B82F6" radius={[2, 2, 0, 0]} maxBarSize={10} />
-                            <Bar dataKey="previous" name="Last week" fill="#9CA3AF" fillOpacity={0.5} radius={[2, 2, 0, 0]} maxBarSize={10} />
+                            <Bar dataKey="current" name="This week" fill="rgb(59, 130, 246)" radius={[2, 2, 0, 0]} maxBarSize={10} />
+                            <Bar dataKey="previous" name="Last week" fill="rgb(156, 163, 175)" fillOpacity={0.5} radius={[2, 2, 0, 0]} maxBarSize={10} />
                           </RechartsBarChart>
                         </ResponsiveContainer>
                       </div>
@@ -386,9 +387,9 @@ export function DashboardLayout(props: DashboardLayoutProps) {
                     </div>
                   )}
                   <div className="ai-summary-actions">
-                    <button type="button" onClick={() => onNavigate('analytics')}>View Full Report</button>
-                    <button type="button" onClick={() => onNavigate('products')}>See Product Analytics</button>
-                    <button type="button" onClick={() => onNavigate('analytics')}>Explore Trends</button>
+                    <Button type="button" onClick={() => onNavigate('analytics')}>View Full Report</Button>
+                    <Button type="button" onClick={() => onNavigate('products')}>See Product Analytics</Button>
+                    <Button type="button" onClick={() => onNavigate('analytics')}>Explore Trends</Button>
                   </div>
                 </div>
               </div>
@@ -419,7 +420,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
               <div className="dash-kicker"><span className="kicker-dot blue" />Orders</div>
               <h3>Recent Activity</h3>
             </div>
-            <button className="dash-text-link" onClick={() => onNavigate('orders')}>View all →</button>
+            <Button className="dash-text-link" onClick={() => onNavigate('orders')}>View all →</Button>
           </div>
           {loading || realOrdersLoading ? (
             <div className="orders-loading">{[1, 2, 3, 4].map((i) => <div key={i} className="order-row-skeleton"><span /><span /><span /></div>)}</div>
@@ -432,7 +433,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
           ) : recentOrders.length > 0 ? (
             <div className={`orders-list ${recentOrders.length <= 3 ? 'sparse' : ''}`}>
               {recentOrders.map((order) => <OrderRow key={order.id} order={order} detailed={recentOrders.length <= 3} />)}
-              {recentOrders.length <= 3 && <button className="orders-cta" onClick={() => void onSync('orders')}><RefreshCw size={12} /> Sync more orders</button>}
+              {recentOrders.length <= 3 && <Button className="orders-cta" onClick={() => void onSync('orders')}><RefreshCw size={12} /> Sync more orders</Button>}
             </div>
           ) : (
             <EmptyChart onSync={() => void onSync('orders')} message="Sync orders to see recent activity." />
@@ -612,7 +613,7 @@ function CategoryPieChart({ data, breakdown, onNavigate }: { data: CategorySales
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
-                  stroke={activeIndex === index ? '#fff' : 'transparent'}
+                  stroke={activeIndex === index ? 'rgb(255, 255, 255)' : 'transparent'}
                   strokeWidth={activeIndex === index ? 2 : 0}
                   style={{ filter: activeIndex === index ? 'brightness(1.18)' : undefined, cursor: 'pointer', transition: 'all 150ms ease' } as CSSProperties}
                 />
@@ -666,8 +667,8 @@ function CategoryPieChart({ data, breakdown, onNavigate }: { data: CategorySales
             </div>
           </section>
           <div className="category-actions">
-            <button type="button" onClick={() => onNavigate?.('analytics')}>View Category Report</button>
-            <button type="button" onClick={() => onNavigate?.('products')}>Explore Products by Category</button>
+            <Button type="button" onClick={() => onNavigate?.('analytics')}>View Category Report</Button>
+            <Button type="button" onClick={() => onNavigate?.('products')}>Explore Products by Category</Button>
           </div>
         </div>
       )}
@@ -797,6 +798,6 @@ function ChartSkeleton() {
   return <div className="chart-skeleton-wrap"><div className="chart-skeleton"><span /><span /><span /><span /><span /></div></div>
 }
 function EmptyChart({ onSync, message }: { onSync?: () => void; message: string }) {
-  return <div className="empty-chart"><LineChart size={28} /><strong>No data yet</strong><span>{message}</span>{onSync && <button className="dash-text-link" onClick={onSync}><RefreshCw size={13} /> Sync data</button>}</div>
+  return <div className="empty-chart"><LineChart size={28} /><strong>No data yet</strong><span>{message}</span>{onSync && <Button className="dash-text-link" onClick={onSync}><RefreshCw size={13} /> Sync data</Button>}</div>
 }
 export type { DashboardData }

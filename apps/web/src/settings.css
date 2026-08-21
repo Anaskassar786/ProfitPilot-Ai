@@ -64,14 +64,14 @@
 
 .settings-nav-item.danger {
   margin-top: 8px;
-  color: #FCA5A5;
+  color: rgb(252, 165, 165);
   border-top: 1px solid var(--border-soft);
   border-radius: 0 0 10px 10px;
   padding-top: 10px;
 }
 
 .settings-nav-item.danger.active {
-  color: #F87171;
+  color: rgb(248, 113, 113);
   border-color: rgba(239, 68, 68, .28);
   background: rgba(239, 68, 68, .1);
 }
@@ -123,7 +123,7 @@
 }
 
 .settings-panel-icon.red {
-  color: #F87171;
+  color: rgb(248, 113, 113);
   border-color: rgba(239, 68, 68, .22);
   background: rgba(239, 68, 68, .1);
 }
@@ -301,7 +301,7 @@
   padding: 3px;
   border: 0;
   border-radius: 99px;
-  background: #465167;
+  background: rgb(70, 81, 103);
   transition: background 140ms ease;
 }
 
@@ -309,7 +309,7 @@
   width: 20px;
   height: 20px;
   border-radius: 99px;
-  background: #C5CEDD;
+  background: rgb(197, 206, 221);
   transition: transform 140ms ease;
 }
 
@@ -457,9 +457,9 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #DBEAFE;
+  color: rgb(219, 234, 254);
   border-radius: 12px;
-  background: linear-gradient(145deg, #1C3568, #34558F);
+  background: linear-gradient(145deg, rgb(28, 53, 104), rgb(52, 85, 143));
   font-size: 13px;
   font-weight: 800;
 }
@@ -558,13 +558,13 @@
 
 .settings-danger-card .button.danger,
 .button.danger {
-  color: #fff;
+  color: rgb(255, 255, 255);
   border-color: rgba(220, 38, 38, .5);
-  background: #DC2626;
+  background: rgb(220, 38, 38);
 }
 
 .settings-danger-card .button.danger:hover:not(:disabled) {
-  background: #EF4444;
+  background: rgb(239, 68, 68);
 }
 
 .settings-modal-overlay {
@@ -647,36 +647,36 @@
 .app-shell.light-mode .settings-nav,
 .app-shell.light-mode .settings-panel,
 .app-shell.light-mode .settings-modal {
-  color: #111827;
-  border-color: #E2E8F0;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(226, 232, 240);
+  background: rgb(255, 255, 255);
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
 }
 
 .app-shell.light-mode .settings-nav-item {
-  color: #374151;
+  color: rgb(55, 65, 81);
 }
 
 .app-shell.light-mode .settings-nav-item:hover {
-  color: #111827;
-  background: #F1F5F9;
+  color: rgb(17, 24, 39);
+  background: rgb(241, 245, 249);
 }
 
 .app-shell.light-mode .settings-nav-item.active {
-  color: #1D4ED8;
-  border-color: #BFDBFE;
-  background: #EFF6FF;
+  color: rgb(29, 78, 216);
+  border-color: rgb(191, 219, 254);
+  background: rgb(239, 246, 255);
 }
 
 .app-shell.light-mode .settings-nav-item.danger {
-  color: #B91C1C;
-  border-top-color: #E2E8F0;
+  color: rgb(185, 28, 28);
+  border-top-color: rgb(226, 232, 240);
 }
 
 .app-shell.light-mode .settings-nav-item.danger.active {
-  color: #B91C1C;
-  border-color: #FECACA;
-  background: #FEF2F2;
+  color: rgb(185, 28, 28);
+  border-color: rgb(254, 202, 202);
+  background: rgb(254, 242, 242);
 }
 
 .app-shell.light-mode .settings-panel-head h3,
@@ -688,7 +688,7 @@
 .app-shell.light-mode .settings-danger-copy strong,
 .app-shell.light-mode .settings-empty strong,
 .app-shell.light-mode .settings-modal h2 {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .settings-panel-head p,
@@ -703,65 +703,65 @@
 .app-shell.light-mode .settings-empty p,
 .app-shell.light-mode .settings-modal p,
 .app-shell.light-mode .settings-note {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .setting-input,
 .app-shell.light-mode .theme-choice,
 .app-shell.light-mode .settings-modal input {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
 }
 
 .app-shell.light-mode .theme-choice button.selected {
-  color: #1D4ED8;
-  background: #DBEAFE;
+  color: rgb(29, 78, 216);
+  background: rgb(219, 234, 254);
 }
 
 .app-shell.light-mode .settings-toggle {
-  background: #CBD5E1;
+  background: rgb(203, 213, 225);
 }
 
 .app-shell.light-mode .settings-toggle.on {
-  background: #2563EB;
+  background: rgb(37, 99, 235);
 }
 
 .app-shell.light-mode .settings-toggle span {
-  background: #FFFFFF;
+  background: rgb(255, 255, 255);
 }
 
 .app-shell.light-mode .settings-choice,
 .app-shell.light-mode .settings-personality button,
 .app-shell.light-mode .settings-note {
-  border-color: #E2E8F0;
-  background: #F8FAFC;
+  border-color: rgb(226, 232, 240);
+  background: rgb(248, 250, 252);
 }
 
 .app-shell.light-mode .settings-choice.selected,
 .app-shell.light-mode .settings-personality button.selected {
-  border-color: #93C5FD;
-  background: #EFF6FF;
+  border-color: rgb(147, 197, 253);
+  background: rgb(239, 246, 255);
 }
 
 .app-shell.light-mode .settings-note.amber {
-  border-color: #FCD34D;
-  background: #FFFBEB;
+  border-color: rgb(252, 211, 77);
+  background: rgb(255, 251, 235);
 }
 
 .app-shell.light-mode .settings-note.red {
-  border-color: #FECACA;
-  background: #FEF2F2;
+  border-color: rgb(254, 202, 202);
+  background: rgb(254, 242, 242);
 }
 
 .app-shell.light-mode .setting-store-link {
-  color: #2563EB;
+  color: rgb(37, 99, 235);
 }
 
 .app-shell.light-mode .settings-panel-icon {
-  color: #2563EB;
-  border-color: #BFDBFE;
-  background: #EFF6FF;
+  color: rgb(37, 99, 235);
+  border-color: rgb(191, 219, 254);
+  background: rgb(239, 246, 255);
 }
 
 @media (max-width: 900px) {

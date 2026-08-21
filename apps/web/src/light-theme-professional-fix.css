@@ -12,39 +12,39 @@
 
 /* ── Core tokens — deeper contrast ── */
 .app-shell.light-mode {
-  --background: #F1F5F9;
-  --card: #FFFFFF;
-  --card-hover: #F8FAFC;
-  --border: #CBD5E1;
-  --border-soft: #E2E8F0;
-  --text: #0F172A;
-  --text-secondary: #334155;
-  --text-tertiary: #475569;
-  --bg-primary: #F1F5F9;
-  --bg-secondary: #E8EEF6;
-  --bg-surface: #FFFFFF;
-  --bg-surface-soft: #FFFFFF;
-  --bg-hover: #F1F5F9;
-  --border-default: #CBD5E1;
-  --text-primary: #0F172A;
-  background: #F1F5F9 !important;
+  --background: rgb(241, 245, 249);
+  --card: rgb(255, 255, 255);
+  --card-hover: rgb(248, 250, 252);
+  --border: rgb(203, 213, 225);
+  --border-soft: rgb(226, 232, 240);
+  --text: rgb(15, 23, 42);
+  --text-secondary: rgb(51, 65, 85);
+  --text-tertiary: rgb(71, 85, 105);
+  --bg-primary: rgb(241, 245, 249);
+  --bg-secondary: rgb(232, 238, 246);
+  --bg-surface: rgb(255, 255, 255);
+  --bg-surface-soft: rgb(255, 255, 255);
+  --bg-hover: rgb(241, 245, 249);
+  --border-default: rgb(203, 213, 225);
+  --text-primary: rgb(15, 23, 42);
+  background: rgb(241, 245, 249) !important;
 }
 
 /* ── Page chrome ── */
 .app-shell.light-mode .sidebar {
-  background: #FFFFFF !important;
-  border-right: 1px solid #E2E8F0 !important;
+  background: rgb(255, 255, 255) !important;
+  border-right: 1px solid rgb(226, 232, 240) !important;
   box-shadow: 2px 0 12px rgba(15,23,42,.04) !important;
 }
 .app-shell.light-mode .topbar {
   background: rgba(255,255,255,.92) !important;
-  border-bottom: 1px solid #E2E8F0 !important;
+  border-bottom: 1px solid rgb(226, 232, 240) !important;
   box-shadow: 0 1px 3px rgba(15,23,42,.05) !important;
   backdrop-filter: blur(12px) !important;
 }
-.app-shell.light-mode .page-header h1 { color: #0F172A !important; font-weight: 800 !important; }
-.app-shell.light-mode .page-header p { color: #334155 !important; }
-.app-shell.light-mode .page-eyebrow { color: #7C3AED !important; font-weight: 700 !important; }
+.app-shell.light-mode .page-header h1 { color: rgb(15, 23, 42) !important; font-weight: 800 !important; }
+.app-shell.light-mode .page-header p { color: rgb(51, 65, 85) !important; }
+.app-shell.light-mode .page-eyebrow { color: rgb(124, 58, 237) !important; font-weight: 700 !important; }
 
 /* ── Cards — solid white + visible border + shadow ── */
 .app-shell.light-mode .card,
@@ -67,116 +67,116 @@
 .app-shell.light-mode .analytics-main-card,
 .app-shell.light-mode .channel-card,
 .app-shell.light-mode .insight-row-card {
-  background: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
+  background: rgb(255, 255, 255) !important;
+  border: 1px solid rgb(226, 232, 240) !important;
   box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.04) !important;
 }
 .app-shell.light-mode .card-heading h3,
-.app-shell.light-mode .section-kicker { color: #0F172A !important; }
-.app-shell.light-mode .card:hover { border-color: #CBD5E1 !important; box-shadow: 0 4px 16px rgba(15,23,42,.08) !important; }
+.app-shell.light-mode .section-kicker { color: rgb(15, 23, 42) !important; }
+.app-shell.light-mode .card:hover { border-color: rgb(203, 213, 225) !important; box-shadow: 0 4px 16px rgba(15,23,42,.08) !important; }
 
 /* ── Navigation ── */
-.app-shell.light-mode .nav-item { color: #475569 !important; }
-.app-shell.light-mode .nav-item:hover { color: #0F172A !important; background: #F1F5F9 !important; }
-.app-shell.light-mode .nav-item.active { color: #0F172A !important; background: linear-gradient(90deg, rgba(124,58,237,.12), rgba(124,58,237,.04)) !important; }
-.app-shell.light-mode .nav-group-label { color: #64748B !important; }
+.app-shell.light-mode .nav-item { color: rgb(71, 85, 105) !important; }
+.app-shell.light-mode .nav-item:hover { color: rgb(15, 23, 42) !important; background: rgb(241, 245, 249) !important; }
+.app-shell.light-mode .nav-item.active { color: rgb(15, 23, 42) !important; background: linear-gradient(90deg, rgba(124,58,237,.12), rgba(124,58,237,.04)) !important; }
+.app-shell.light-mode .nav-group-label { color: rgb(100, 116, 139) !important; }
 .app-shell.light-mode .command-trigger,
-.app-shell.light-mode .workspace-switcher { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
-.app-shell.light-mode .command-trigger { color: #475569 !important; }
-.app-shell.light-mode .version-card { background: #FFFFFF !important; border-color: #E2E8F0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
-.app-shell.light-mode .version-card strong { color: #0F172A !important; }
-.app-shell.light-mode .version-card small { color: #475569 !important; }
+.app-shell.light-mode .workspace-switcher { background: rgb(255, 255, 255) !important; border-color: rgb(226, 232, 240) !important; }
+.app-shell.light-mode .command-trigger { color: rgb(71, 85, 105) !important; }
+.app-shell.light-mode .version-card { background: rgb(255, 255, 255) !important; border-color: rgb(226, 232, 240) !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
+.app-shell.light-mode .version-card strong { color: rgb(15, 23, 42) !important; }
+.app-shell.light-mode .version-card small { color: rgb(71, 85, 105) !important; }
 
 /* ── Buttons — ensure visibility ── */
-.app-shell.light-mode .button { border-color: #CBD5E1 !important; }
-.app-shell.light-mode .button.secondary { background: #FFFFFF !important; color: #334155 !important; border-color: #CBD5E1 !important; }
-.app-shell.light-mode .button.secondary:hover { background: #F8FAFC !important; color: #0F172A !important; border-color: #94A3B8 !important; }
-.app-shell.light-mode .button.primary { color: #FFFFFF !important; border-color: transparent !important; }
-.app-shell.light-mode .button.ghost { color: #475569 !important; }
+.app-shell.light-mode .button { border-color: rgb(203, 213, 225) !important; }
+.app-shell.light-mode .button.secondary { background: rgb(255, 255, 255) !important; color: rgb(51, 65, 85) !important; border-color: rgb(203, 213, 225) !important; }
+.app-shell.light-mode .button.secondary:hover { background: rgb(248, 250, 252) !important; color: rgb(15, 23, 42) !important; border-color: rgb(148, 163, 184) !important; }
+.app-shell.light-mode .button.primary { color: rgb(255, 255, 255) !important; border-color: transparent !important; }
+.app-shell.light-mode .button.ghost { color: rgb(71, 85, 105) !important; }
 
 /* ── Tables ── */
-.app-shell.light-mode .table-search { background: #FFFFFF !important; border-color: #CBD5E1 !important; }
-.app-shell.light-mode th { background: #F8FAFC !important; color: #475569 !important; font-weight: 700 !important; }
-.app-shell.light-mode td { color: #334155 !important; border-color: #F1F5F9 !important; }
-.app-shell.light-mode td strong { color: #0F172A !important; }
-.app-shell.light-mode tbody tr:hover { background: #F8FAFC !important; }
+.app-shell.light-mode .table-search { background: rgb(255, 255, 255) !important; border-color: rgb(203, 213, 225) !important; }
+.app-shell.light-mode th { background: rgb(248, 250, 252) !important; color: rgb(71, 85, 105) !important; font-weight: 700 !important; }
+.app-shell.light-mode td { color: rgb(51, 65, 85) !important; border-color: rgb(241, 245, 249) !important; }
+.app-shell.light-mode td strong { color: rgb(15, 23, 42) !important; }
+.app-shell.light-mode tbody tr:hover { background: rgb(248, 250, 252) !important; }
 
 /* ── Forms ── */
 .app-shell.light-mode input,
 .app-shell.light-mode textarea,
 .app-shell.light-mode select {
-  background: #FFFFFF !important;
-  border-color: #CBD5E1 !important;
-  color: #0F172A !important;
+  background: rgb(255, 255, 255) !important;
+  border-color: rgb(203, 213, 225) !important;
+  color: rgb(15, 23, 42) !important;
 }
 .app-shell.light-mode input::placeholder,
-.app-shell.light-mode textarea::placeholder { color: #94A3B8 !important; }
-.app-shell.light-mode .custom-select-menu { background: #FFFFFF !important; border-color: #CBD5E1 !important; box-shadow: 0 10px 24px rgba(15,23,42,.12) !important; }
+.app-shell.light-mode textarea::placeholder { color: rgb(148, 163, 184) !important; }
+.app-shell.light-mode .custom-select-menu { background: rgb(255, 255, 255) !important; border-color: rgb(203, 213, 225) !important; box-shadow: 0 10px 24px rgba(15,23,42,.12) !important; }
 
 /* ── Sync / banners ── */
-.app-shell.light-mode .sync-banner { background: #ECFDF5 !important; border-color: #A7F3D0 !important; }
-.app-shell.light-mode .sync-banner strong { color: #065F46 !important; }
-.app-shell.light-mode .context-banner { background: #FFFBEB !important; border-color: #FDE68A !important; }
-.app-shell.light-mode .context-banner strong { color: #92400E !important; }
-.app-shell.light-mode .offline-banner { background: #FEF2F2 !important; border-color: #FECACA !important; }
+.app-shell.light-mode .sync-banner { background: rgb(236, 253, 245) !important; border-color: rgb(167, 243, 208) !important; }
+.app-shell.light-mode .sync-banner strong { color: rgb(6, 95, 70) !important; }
+.app-shell.light-mode .context-banner { background: rgb(255, 251, 235) !important; border-color: rgb(253, 230, 138) !important; }
+.app-shell.light-mode .context-banner strong { color: rgb(146, 64, 14) !important; }
+.app-shell.light-mode .offline-banner { background: rgb(254, 242, 242) !important; border-color: rgb(254, 202, 202) !important; }
 
 /* ── Dashboard / Calendar / AI Summary specific ── */
-.app-shell.light-mode .ai-summary-card { background: #FFFFFF !important; }
+.app-shell.light-mode .ai-summary-card { background: rgb(255, 255, 255) !important; }
 .app-shell.light-mode .metric-value,
 .app-shell.light-mode .stat-value,
-.app-shell.light-mode .cal-total-value { color: #0F172A !important; }
+.app-shell.light-mode .cal-total-value { color: rgb(15, 23, 42) !important; }
 .app-shell.light-mode .metric-label,
 .app-shell.light-mode .metric-label-row small,
 .app-shell.light-mode .health-label,
-.app-shell.light-mode .cal-day-name { color: #475569 !important; }
-.app-shell.light-mode .order-row { border-color: #F1F5F9 !important; }
-.app-shell.light-mode .order-row:hover { background: #F8FAFC !important; }
+.app-shell.light-mode .cal-day-name { color: rgb(71, 85, 105) !important; }
+.app-shell.light-mode .order-row { border-color: rgb(241, 245, 249) !important; }
+.app-shell.light-mode .order-row:hover { background: rgb(248, 250, 252) !important; }
 
 /* ── Inventory / Products hero gauges ── */
-.app-shell.light-mode .health-gauge::before { background: #FFFFFF !important; }
-.app-shell.light-mode .inventory-hero > .health-gauge::before { background: #FFFFFF !important; }
+.app-shell.light-mode .health-gauge::before { background: rgb(255, 255, 255) !important; }
+.app-shell.light-mode .inventory-hero > .health-gauge::before { background: rgb(255, 255, 255) !important; }
 
 /* ── Automation / Reports / Billing ── */
 .app-shell.light-mode .automation-mode,
 .app-shell.light-mode .report-banner,
-.app-shell.light-mode .billing-current { background: #FFFFFF !important; }
+.app-shell.light-mode .billing-current { background: rgb(255, 255, 255) !important; }
 .app-shell.light-mode .automation-mode strong,
 .app-shell.light-mode .report-banner h2,
-.app-shell.light-mode .billing-current h2 { color: #0F172A !important; }
+.app-shell.light-mode .billing-current h2 { color: rgb(15, 23, 42) !important; }
 
 /* ── PatternAI — hero + stats already decent, but boost snapshot & allowance ── */
-.app-shell.light-mode .pa-root .pa-hero { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06) !important; }
-.app-shell.light-mode .pa-root .pa-hero-title { color: #0F172A !important; }
+.app-shell.light-mode .pa-root .pa-hero { background: rgb(255, 255, 255) !important; border: 1px solid rgb(226, 232, 240) !important; box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06) !important; }
+.app-shell.light-mode .pa-root .pa-hero-title { color: rgb(15, 23, 42) !important; }
 .app-shell.light-mode .pa-root .pa-hero-tagline,
-.app-shell.light-mode .pa-root .pa-hero-body { color: #334155 !important; }
-.app-shell.light-mode .pa-root .pa-stat { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
-.app-shell.light-mode .pa-root .pa-stat-value { color: #0F172A !important; }
-.app-shell.light-mode .pa-root .pa-stat-label { color: #64748B !important; font-weight: 700 !important; }
+.app-shell.light-mode .pa-root .pa-hero-body { color: rgb(51, 65, 85) !important; }
+.app-shell.light-mode .pa-root .pa-stat { background: rgb(255, 255, 255) !important; border: 1px solid rgb(226, 232, 240) !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
+.app-shell.light-mode .pa-root .pa-stat-value { color: rgb(15, 23, 42) !important; }
+.app-shell.light-mode .pa-root .pa-stat-label { color: rgb(100, 116, 139) !important; font-weight: 700 !important; }
 .app-shell.light-mode .pa-root .pa-snapshot,
-.app-shell.light-mode .pa-root .pa-allowance { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.05) !important; }
-.app-shell.light-mode .pa-root .pa-snapshot-measures > span { background: #F8FAFC !important; border-color: #E2E8F0 !important; }
-.app-shell.light-mode .pa-root .pa-snapshot-measures strong { color: #0F172A !important; }
-.app-shell.light-mode .pa-root .pa-allowance-caption { color: #334155 !important; font-weight: 600 !important; }
+.app-shell.light-mode .pa-root .pa-allowance { background: rgb(255, 255, 255) !important; border: 1px solid rgb(226, 232, 240) !important; box-shadow: 0 1px 3px rgba(15,23,42,.05) !important; }
+.app-shell.light-mode .pa-root .pa-snapshot-measures > span { background: rgb(248, 250, 252) !important; border-color: rgb(226, 232, 240) !important; }
+.app-shell.light-mode .pa-root .pa-snapshot-measures strong { color: rgb(15, 23, 42) !important; }
+.app-shell.light-mode .pa-root .pa-allowance-caption { color: rgb(51, 65, 85) !important; font-weight: 600 !important; }
 .app-shell.light-mode .pa-root .pa-statviz-pending,
-.app-shell.light-mode .pa-root .pa-trend-dir { color: #475569 !important; }
-.app-shell.light-mode .pa-root .pa-banner.trial { background: #FEF3C7 !important; border: 1px solid #FDE68A !important; color: #92400E !important; }
-.app-shell.light-mode .pa-root .pa-banner.trial strong { color: #92400E !important; }
-.app-shell.light-mode .pa-root .pa-nav { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
-.app-shell.light-mode .pa-root .pa-discovery-card { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
-.app-shell.light-mode .pa-root .pa-discovery-card:hover { border-color: #C4B5FD !important; }
-.app-shell.light-mode .pa-root .pa-discovery-body { color: #334155 !important; }
+.app-shell.light-mode .pa-root .pa-trend-dir { color: rgb(71, 85, 105) !important; }
+.app-shell.light-mode .pa-root .pa-banner.trial { background: rgb(254, 243, 199) !important; border: 1px solid rgb(253, 230, 138) !important; color: rgb(146, 64, 14) !important; }
+.app-shell.light-mode .pa-root .pa-banner.trial strong { color: rgb(146, 64, 14) !important; }
+.app-shell.light-mode .pa-root .pa-nav { background: rgb(255, 255, 255) !important; border-color: rgb(226, 232, 240) !important; }
+.app-shell.light-mode .pa-root .pa-discovery-card { background: rgb(255, 255, 255) !important; border-color: rgb(226, 232, 240) !important; }
+.app-shell.light-mode .pa-root .pa-discovery-card:hover { border-color: rgb(196, 181, 253) !important; }
+.app-shell.light-mode .pa-root .pa-discovery-body { color: rgb(51, 65, 85) !important; }
 
 /* ── GrowthIQ / Executive ── */
-.app-shell.light-mode .exec-page { color: #334155 !important; }
+.app-shell.light-mode .exec-page { color: rgb(51, 65, 85) !important; }
 .app-shell.light-mode .exec-page .exec-card,
 .app-shell.light-mode .exec-page .gq-card,
-.app-shell.light-mode .exec-page .exec-panel { background: #FFFFFF !important; border-color: #E2E8F0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
+.app-shell.light-mode .exec-page .exec-panel { background: rgb(255, 255, 255) !important; border-color: rgb(226, 232, 240) !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; }
 
 /* ── General text contrast boost ── */
 .app-shell.light-mode small, 
-.app-shell.light-mode .muted-icon { color: #475569 !important; }
-.app-shell.light-mode .text-button { color: #7C3AED !important; font-weight: 700 !important; }
-.app-shell.light-mode .text-button:hover { color: #6D28D9 !important; }
+.app-shell.light-mode .muted-icon { color: rgb(71, 85, 105) !important; }
+.app-shell.light-mode .text-button { color: rgb(124, 58, 237) !important; font-weight: 700 !important; }
+.app-shell.light-mode .text-button:hover { color: rgb(109, 40, 217) !important; }
 
 /* ── Shadows for depth ── */
 .app-shell.light-mode .page-content { background: transparent !important; }

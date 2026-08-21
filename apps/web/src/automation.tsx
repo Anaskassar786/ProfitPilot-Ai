@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import {
   AlertTriangle,
   ArrowRight,
@@ -19,7 +20,7 @@ import {
   Trash2,
   WandSparkles,
   X,
-} from 'lucide-react'
+} from './icons.js'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import type { WorkspaceContext } from './model.js'
@@ -190,9 +191,9 @@ function AutomationHub({
           <AlertTriangle size={28} />
           <h2>Automation could not be loaded</h2>
           <p>{error}</p>
-          <button onClick={() => void refresh()}>
+          <Button onClick={() => void refresh()}>
             <RefreshCw size={15} /> Retry
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -230,20 +231,20 @@ function AutomationHub({
           <p className="page-subtitle">Save time and grow your business with automated workflows.</p>
         </div>
         <div className="automation-header-actions header-actions">
-          <button className="automation-secondary how-it-works-btn" onClick={() => setHowOpen(true)}>
+          <Button className="automation-secondary how-it-works-btn" onClick={() => setHowOpen(true)}>
             <BookOpen size={16} /> How it works
-          </button>
-          <button className="automation-secondary browse-templates-btn" onClick={() => onNavigate({ view: 'templates' })}>
+          </Button>
+          <Button className="automation-secondary browse-templates-btn" onClick={() => onNavigate({ view: 'templates' })}>
             <LayoutTemplate size={16} /> Browse Templates
-          </button>
-          <button
+          </Button>
+          <Button
             className="automation-primary create-automation-btn"
             disabled={usage?.limitReached ?? false}
             title={usage?.limitReached ? 'Complete your drafts or upgrade for more space' : ''}
             onClick={() => openCreate('template')}
           >
             <Plus size={16} /> Create Automation
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -300,14 +301,14 @@ function AutomationHub({
             </label>
             <div className="automation-status-tabs automation-filter-tabs">
               {(['ALL', 'ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED'] as const).map((value) => (
-                <button key={value} className={`filter-tab ${status === value ? 'active' : ''}`} onClick={() => setStatus(value)}>
+                <Button key={value} className={`filter-tab ${status === value ? 'active' : ''}`} onClick={() => setStatus(value)}>
                   {value === 'ALL' ? 'All' : friendlyStatus(value)}
                   <span className="count-badge">
                     {value === 'ALL'
                       ? Object.values(summary?.workflows ?? {}).reduce((a, b) => a + b, 0)
                       : summary?.workflows[value.toLowerCase() as keyof NonNullable<typeof summary>['workflows']] ?? 0}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
             <CustomSelect
@@ -331,12 +332,12 @@ function AutomationHub({
               ariaLabel="Sort automations"
             />
             <div className="view-toggle">
-              <button className={`view-toggle-btn ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')} aria-label="Grid view">
+              <Button className={`view-toggle-btn ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')} aria-label="Grid view">
                 <Grid2X2 size={16} />
-              </button>
-              <button className={`view-toggle-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} aria-label="List view">
+              </Button>
+              <Button className={`view-toggle-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} aria-label="List view">
                 <List size={16} />
-              </button>
+              </Button>
             </div>
           </div>
           {gridItems.length === 0 ? (
@@ -344,7 +345,7 @@ function AutomationHub({
               <Search size={30} />
               <h2>No automations match these filters</h2>
               <p>Try a broader status, category, or search term.</p>
-              <button
+              <Button
                 className="automation-secondary"
                 onClick={() => {
                   setSearch('')
@@ -353,7 +354,7 @@ function AutomationHub({
                 }}
               >
                 Clear filters
-              </button>
+              </Button>
             </div>
           ) : (
             <div className={`automation-workflow-grid ${view}`}>
@@ -380,7 +381,7 @@ function AutomationHub({
             </strong>
             <span>Review the exact result before allowing customer communication or pricing changes.</span>
           </div>
-          <button onClick={() => onNavigate({ view: 'approvals' })}>Review approvals</button>
+          <Button onClick={() => onNavigate({ view: 'approvals' })}>Review approvals</Button>
         </section>
       )}
 
@@ -412,12 +413,12 @@ function AutomationHub({
                   </span>
                 </div>
                 <div className="draft-row-actions">
-                  <button className="automation-secondary" onClick={() => onNavigate({ view: 'editor', id: workflow.id })}>
+                  <Button className="automation-secondary" onClick={() => onNavigate({ view: 'editor', id: workflow.id })}>
                     <Pencil size={14} /> Continue Setup
-                  </button>
-                  <button className="draft-delete" onClick={() => void runAction(workflow, 'archive')}>
+                  </Button>
+                  <Button className="draft-delete" onClick={() => void runAction(workflow, 'archive')}>
                     <Trash2 size={14} /> Remove
-                  </button>
+                  </Button>
                 </div>
               </article>
             ))}
@@ -476,8 +477,8 @@ function planBanner(
               <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use · {drafts} draft{drafts === 1 ? '' : 's'} still need{drafts === 1 ? 's' : ''} finishing
             </span>
           </div>
-          <button onClick={onCompleteDrafts}>Complete Drafts</button>
-          <button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
+          <Button onClick={onCompleteDrafts}>Complete Drafts</Button>
+          <Button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
         </div>
       )
     }
@@ -490,7 +491,7 @@ function planBanner(
             <span className="limit-warning-count">{usage.used} of {usage.limit}</span> automations in use. Upgrade Plan to create more automations.
           </span>
         </div>
-        <button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
+        <Button className="warning-upgrade-btn upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
       </div>
     )
   }
@@ -504,7 +505,7 @@ function planBanner(
             {usage.used} of {usage.limit} automations in use.
           </span>
         </div>
-        <button className="upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</button>
+        <Button className="upgrade-plan-btn" onClick={onUpgrade}>Upgrade Plan</Button>
       </div>
     )
   }
@@ -529,28 +530,28 @@ function GettingStartedHero({
         <h2>Welcome to Automations!</h2>
         <p>Automations do the repetitive work for you — so you can focus on growing your store.</p>
         <div className="gs-actions">
-          <button className="automation-primary" onClick={onTemplates}>
+          <Button className="automation-primary" onClick={onTemplates}>
             <LayoutTemplate size={16} /> Browse Templates
-          </button>
-          <button className="automation-secondary" onClick={onHow}>
+          </Button>
+          <Button className="automation-secondary" onClick={onHow}>
             <BookOpen size={16} /> How it works
-          </button>
+          </Button>
         </div>
-        <button className="gs-scratch" onClick={onScratch}>
+        <Button className="gs-scratch" onClick={onScratch}>
           Or build from scratch <ArrowRight size={14} />
-        </button>
+        </Button>
       </div>
       <div className="gs-popular">
         <h3>💡 Popular automations</h3>
         {popular.map((template) => (
-          <button key={template.id} className="gs-popular-item" onClick={onTemplates}>
+          <Button key={template.id} className="gs-popular-item" onClick={onTemplates}>
             <span className="gs-popular-name">{template.name}</span>
             <span className="gs-popular-impact">{template.impact}</span>
-          </button>
+          </Button>
         ))}
-        <button className="browse-all-link" onClick={onTemplates}>
+        <Button className="browse-all-link" onClick={onTemplates}>
           Browse all templates <ArrowRight size={15} />
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -573,14 +574,14 @@ function ActivityFeed({
       </header>
       <div className="activity-timeline">
         {summary.recentActivity.map((item) => (
-          <button key={item.runId} onClick={() => onOpenRun(item.runId)}>
+          <Button key={item.runId} onClick={() => onOpenRun(item.runId)}>
             <i className={item.status.toLowerCase()} />
             <span>
               <strong>{item.workflowName}</strong>
               <small>{item.description}</small>
             </span>
             <time>{relativeTime(item.at)}</time>
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -632,9 +633,9 @@ export function CreateAutomationModal({
   return (
     <div className="automation-modal-backdrop">
       <div className="automation-modal create-workflow-modal">
-        <button className="modal-close" onClick={onClose} aria-label="Close">
+        <Button className="modal-close" onClick={onClose} aria-label="Close">
           <X size={18} />
-        </button>
+        </Button>
         <span className="automation-eyebrow">NEW AUTOMATION</span>
         <h2>Create New Automation</h2>
         <p>Give it a name and choose a starting point. You can change everything later.</p>
@@ -657,16 +658,16 @@ export function CreateAutomationModal({
 
         <span className="creation-label">How do you want to start?</span>
         <div className="creation-mode">
-          <button className={mode === 'template' ? 'active' : ''} onClick={() => setMode('template')}>
+          <Button className={mode === 'template' ? 'active' : ''} onClick={() => setMode('template')}>
             <Sparkles size={20} />
             <strong>From Template</strong>
             <span>Recommended — start with a proven, pre-built automation</span>
-          </button>
-          <button className={mode === 'blank' ? 'active' : ''} onClick={() => setMode('blank')}>
+          </Button>
+          <Button className={mode === 'blank' ? 'active' : ''} onClick={() => setMode('blank')}>
             <WandSparkles size={20} />
             <strong>From Scratch</strong>
             <span>Advanced — build your own step by step</span>
-          </button>
+          </Button>
         </div>
 
         {mode === 'template' ? (
@@ -690,16 +691,16 @@ export function CreateAutomationModal({
         )}
 
         <footer>
-          <button className="automation-secondary" onClick={onClose}>
+          <Button className="automation-secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             className="automation-primary"
             disabled={busy || !name.trim() || (mode === 'template' && !templateId)}
             onClick={() => void submit()}
           >
             {busy ? 'Setting up…' : 'Continue →'}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -785,7 +786,7 @@ function WorkflowRoute({
         <AlertTriangle size={25} />
         <h2>Automation unavailable</h2>
         <p>{error}</p>
-        <button onClick={onBack}>Back to automations</button>
+        <Button onClick={onBack}>Back to automations</Button>
       </div>
     )
   if (!workflow || !usage) return <AutomationLoading />

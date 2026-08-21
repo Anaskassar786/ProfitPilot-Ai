@@ -12,10 +12,10 @@
   min-height: 40px !important;
   height: 40px !important;
   padding: 0 16px !important;
-  color: #FFFFFF !important;
+  color: rgb(255, 255, 255) !important;
   border: 1px solid rgba(99, 102, 241, .46) !important;
   border-radius: 10px !important;
-  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 52%, #7C3AED 100%) !important;
+  background: linear-gradient(135deg, rgb(37, 99, 235) 0%, rgb(79, 70, 229) 52%, rgb(124, 58, 237) 100%) !important;
   box-shadow: 0 6px 18px rgba(37, 99, 235, .24), inset 0 1px 0 rgba(255, 255, 255, .18) !important;
   font-size: 14px !important;
   font-weight: 700 !important;
@@ -31,7 +31,7 @@
 }
 
 .upgrade-plan-cta:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1D4ED8 0%, #4338CA 50%, #6D28D9 100%) !important;
+  background: linear-gradient(135deg, rgb(29, 78, 216) 0%, rgb(67, 56, 202) 50%, rgb(109, 40, 217) 100%) !important;
   box-shadow: 0 9px 24px rgba(37, 99, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .22) !important;
   transform: translateY(-1px);
 }

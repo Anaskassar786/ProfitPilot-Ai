@@ -1,7 +1,8 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Mic, MicOff, Pause, Play, X } from 'lucide-react'
+import { Mic, MicOff, Pause, Play, X } from './icons.js'
 import { JarvisOrb } from './JarvisOrb.js'
 import type { JarvisOrbState } from './JarvisOrb.js'
 import { useJarvisVoiceSnapshot } from './jarvis-voice.js'
@@ -163,13 +164,13 @@ export function FloatingVoiceWidget({ visible, address, page, caption, paused, m
         <span>{detail}</span>
       </div>
       <div className="jarvis-floating-controls">
-        <button type="button" className={`icon-button ${micOn && !paused ? 'voice-active' : ''}`} onClick={onMic} aria-label={micOn ? 'Turn microphone off' : 'Turn microphone on'} title={micOn ? 'Mic off' : 'Mic on'}>
+        <Button type="button" className={`icon-button ${micOn && !paused ? 'voice-active' : ''}`} onClick={onMic} aria-label={micOn ? 'Turn microphone off' : 'Turn microphone on'} title={micOn ? 'Mic off' : 'Mic on'}>
           {micOn && !paused ? <Mic size={15} /> : <MicOff size={15} />}
-        </button>
-        <button type="button" className="icon-button" onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume Jarvis' : 'Pause Jarvis'} title={paused ? 'Resume' : 'Pause'}>
+        </Button>
+        <Button type="button" className="icon-button" onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume Jarvis' : 'Pause Jarvis'} title={paused ? 'Resume' : 'Pause'}>
           {paused ? <Play size={15} /> : <Pause size={15} />}
-        </button>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Close Jarvis" title="Close"><X size={15} /></button>
+        </Button>
+        <Button type="button" className="icon-button" onClick={onClose} aria-label="Close Jarvis" title="Close"><X size={15} /></Button>
       </div>
     </div>
   )

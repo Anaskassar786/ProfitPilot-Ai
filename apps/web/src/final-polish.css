@@ -237,7 +237,7 @@
 }
 
 .performance-gauge span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -246,7 +246,7 @@
 }
 
 .product-thumb.fallback em {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 /* ── Dashboard performance score and light chart contrast ───────── */
@@ -281,7 +281,7 @@
   width: 112px;
   height: 112px;
   padding: 1px;
-  background: conic-gradient(from 220deg, var(--health-color) 0deg, color-mix(in srgb, var(--health-color) 58%, #3B82F6) var(--health-sweep), rgba(107, 114, 128, .14) var(--health-sweep) 360deg);
+  background: conic-gradient(from 220deg, var(--health-color) 0deg, color-mix(in srgb, var(--health-color) 58%, rgb(59, 130, 246)) var(--health-sweep), rgba(107, 114, 128, .14) var(--health-sweep) 360deg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--health-color) 24%, transparent), 0 14px 32px color-mix(in srgb, var(--health-color) 16%, transparent);
   animation: score-gauge-enter 600ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -305,13 +305,13 @@
 }
 
 .health-card-compact .performance-gauge-premium .gauge-inner strong small {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .health-card-compact .performance-gauge-premium .gauge-inner span {
   max-width: 78px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 1.35;
   letter-spacing: .055em;
@@ -340,49 +340,49 @@
 }
 
 .app-shell.light-mode .revenue-chart-card .recharts-cartesian-grid line {
-  stroke: #E5E7EB !important;
+  stroke: rgb(229, 231, 235) !important;
   opacity: 1 !important;
 }
 
 .app-shell.light-mode .revenue-chart-card .recharts-cartesian-axis-tick-value {
-  fill: #4B5563 !important;
+  fill: rgb(75, 85, 99) !important;
   font-weight: 600;
 }
 
 .app-shell.light-mode .revenue-chart-card .recharts-bar-rectangle,
 .app-shell.light-mode .revenue-chart-card .recharts-bar-rectangle path {
-  fill: #2563EB !important;
+  fill: rgb(37, 99, 235) !important;
 }
 
 .app-shell.light-mode .revenue-chart-card .dash-chart-legend,
 .app-shell.light-mode .revenue-chart-card .dash-chart-legend span,
 .app-shell.light-mode .revenue-chart-card .chart-updated {
-  color: #374151 !important;
+  color: rgb(55, 65, 81) !important;
 }
 
 .app-shell.light-mode .revenue-chart-card .legend-line.blue,
 .app-shell.light-mode .revenue-chart-card .empty-bar-swatch {
-  background: #2563EB !important;
+  background: rgb(37, 99, 235) !important;
 }
 
 .app-shell.light-mode .calendar-card-compact .cal-cell:not(.has-data) {
-  background: #F3F4F6 !important;
+  background: rgb(243, 244, 246) !important;
 }
 
 .app-shell.light-mode .calendar-card-compact .cal-cell.has-data.intensity-1 { background: rgba(5, 150, 105, .34) !important; }
 .app-shell.light-mode .calendar-card-compact .cal-cell.has-data.intensity-2 { background: rgba(5, 150, 105, .52) !important; }
 .app-shell.light-mode .calendar-card-compact .cal-cell.has-data.intensity-3 { background: rgba(5, 150, 105, .72) !important; }
-.app-shell.light-mode .calendar-card-compact .cal-cell.has-data.intensity-4 { background: #059669 !important; }
+.app-shell.light-mode .calendar-card-compact .cal-cell.has-data.intensity-4 { background: rgb(5, 150, 105) !important; }
 
 .app-shell.light-mode .calendar-card-compact .cal-cell.has-data .cal-day-number {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
   font-weight: 800;
   text-shadow: 0 1px 0 rgba(255, 255, 255, .24);
 }
 
 .app-shell.light-mode .calendar-card-compact .cal-cell.today,
 .app-shell.light-mode .calendar-card-compact .cal-cell.hovered {
-  border: 2px solid #047857 !important;
+  border: 2px solid rgb(4, 120, 87) !important;
   outline: 2px solid rgba(5, 150, 105, .18);
   outline-offset: 1px;
 }
@@ -390,8 +390,8 @@
 .app-shell.light-mode .calendar-card-compact .cal-legend-bar span:nth-child(1) { background: rgba(5, 150, 105, .30); }
 .app-shell.light-mode .calendar-card-compact .cal-legend-bar span:nth-child(2) { background: rgba(5, 150, 105, .50); }
 .app-shell.light-mode .calendar-card-compact .cal-legend-bar span:nth-child(3) { background: rgba(5, 150, 105, .72); }
-.app-shell.light-mode .calendar-card-compact .cal-legend-bar span:nth-child(4) { background: #059669; }
-.app-shell.light-mode .calendar-card-compact .cal-legend > span:last-child { color: #047857; font-weight: 750; }
+.app-shell.light-mode .calendar-card-compact .cal-legend-bar span:nth-child(4) { background: rgb(5, 150, 105); }
+.app-shell.light-mode .calendar-card-compact .cal-legend > span:last-child { color: rgb(4, 120, 87); font-weight: 750; }
 
 @media (max-width: 640px) {
   .product-stat-card,
@@ -407,98 +407,98 @@
 /* ── Search workspace and command palette light surfaces ────────── */
 .app-shell.light-mode .search-workspace,
 .app-shell.light-mode .command-trigger {
-  color: #6B7280 !important;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(107, 114, 128) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 
 .app-shell.light-mode .search-workspace:hover,
 .app-shell.light-mode .command-trigger:hover {
-  color: #111827 !important;
-  border-color: #CBD5E1 !important;
-  background: #F9FAFB !important;
+  color: rgb(17, 24, 39) !important;
+  border-color: rgb(203, 213, 225) !important;
+  background: rgb(249, 250, 251) !important;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .08);
 }
 
 .app-shell.light-mode .search-workspace > span,
 .app-shell.light-mode .command-trigger > span {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
 }
 
 .app-shell.light-mode .search-workspace kbd,
 .app-shell.light-mode .command-trigger kbd,
 .app-shell.light-mode .command-palette kbd {
-  color: #4B5563 !important;
-  border-color: #D1D5DB !important;
-  background: #F3F4F6 !important;
+  color: rgb(75, 85, 99) !important;
+  border-color: rgb(209, 213, 219) !important;
+  background: rgb(243, 244, 246) !important;
   box-shadow: inset 0 -1px 0 rgba(15, 23, 42, .06);
 }
 
 .app-shell.light-mode .command-palette,
 .app-shell.light-mode .command-panel {
-  color: #111827 !important;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 24px 70px rgba(15, 23, 42, .18), 0 0 0 1px rgba(255, 255, 255, .8) !important;
 }
 
 .app-shell.light-mode .command-input-wrap {
-  color: #111827 !important;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .command-input-wrap input {
-  color: #111827 !important;
-  background: #FFFFFF !important;
-  caret-color: #2563EB;
+  color: rgb(17, 24, 39) !important;
+  background: rgb(255, 255, 255) !important;
+  caret-color: rgb(37, 99, 235);
 }
 
 .app-shell.light-mode .command-input-wrap input::placeholder {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
   opacity: 1;
 }
 
 .app-shell.light-mode .command-results,
 .app-shell.light-mode .command-footer {
-  color: #4B5563 !important;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(75, 85, 99) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .command-section-label {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
 }
 
 .app-shell.light-mode .command-result {
-  color: #374151 !important;
+  color: rgb(55, 65, 81) !important;
   background: transparent !important;
 }
 
 .app-shell.light-mode .command-result:hover,
 .app-shell.light-mode .command-result:focus-visible {
-  color: #111827 !important;
-  background: #F3F4F6 !important;
+  color: rgb(17, 24, 39) !important;
+  background: rgb(243, 244, 246) !important;
 }
 
 .app-shell.light-mode .command-result-icon {
-  color: #2563EB !important;
-  background: #DBEAFE !important;
+  color: rgb(37, 99, 235) !important;
+  background: rgb(219, 234, 254) !important;
 }
 
 .app-shell.light-mode .command-result > small {
-  color: #7C3AED !important;
+  color: rgb(124, 58, 237) !important;
 }
 
 .app-shell.light-mode .command-result > svg,
 .app-shell.light-mode .command-empty,
 .app-shell.light-mode .command-footer {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
 }
 
 .app-shell.light-mode .command-empty strong {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 /* ── Orders table and readable detail drawer ────────────────────── */
@@ -730,37 +730,37 @@
 }
 
 .app-shell.light-mode .orders-table thead th {
-  color: #6B7280 !important;
-  background: #F9FAFB !important;
+  color: rgb(107, 114, 128) !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .orders-table td {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .orders-table tbody tr:hover,
 .app-shell.light-mode .orders-table tbody tr:focus {
-  background: #F9FAFB !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .order-id {
-  color: #2563EB !important;
+  color: rgb(37, 99, 235) !important;
 }
 
 .app-shell.light-mode .orders-table td > small,
 .app-shell.light-mode .order-customer small,
 .app-shell.light-mode .order-product-summary small {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
 }
 
 .app-shell.light-mode .order-details-drawer {
-  color: #111827;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .order-detail-lines > div {
-  border-color: #E5E7EB;
-  background: #F9FAFB;
+  border-color: rgb(229, 231, 235);
+  background: rgb(249, 250, 251);
 }
 
 @media (max-width: 640px) {
@@ -836,87 +836,87 @@
 .app-shell.light-mode .customers-table-card,
 .app-shell.light-mode .customers-toolbar,
 .app-shell.light-mode .customer-segment-filter {
-  background: #FFFFFF !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .customers-table th {
-  color: #6B7280 !important;
-  background: #F9FAFB !important;
+  color: rgb(107, 114, 128) !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .customers-table td {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .customers-table tbody tr:hover,
 .app-shell.light-mode .customers-table tbody tr:focus {
-  background: #F9FAFB !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .customer-identity strong,
 .app-shell.light-mode .customers-table td > strong {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .customer-identity small,
 .app-shell.light-mode .customers-table td > small {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
 }
 
 .app-shell.light-mode .customer-avatar {
-  color: #FFFFFF !important;
+  color: rgb(255, 255, 255) !important;
   border-color: rgba(255, 255, 255, .82) !important;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, .10), 0 3px 8px rgba(15, 23, 42, .10);
 }
 
-.app-shell.light-mode .customer-avatar.blue { background: #2563EB !important; }
-.app-shell.light-mode .customer-avatar.purple { background: #7C3AED !important; }
-.app-shell.light-mode .customer-avatar.green { background: #059669 !important; }
-.app-shell.light-mode .customer-avatar.amber { background: #D97706 !important; }
-.app-shell.light-mode .customer-avatar.cyan { background: #0891B2 !important; }
+.app-shell.light-mode .customer-avatar.blue { background: rgb(37, 99, 235) !important; }
+.app-shell.light-mode .customer-avatar.purple { background: rgb(124, 58, 237) !important; }
+.app-shell.light-mode .customer-avatar.green { background: rgb(5, 150, 105) !important; }
+.app-shell.light-mode .customer-avatar.amber { background: rgb(217, 119, 6) !important; }
+.app-shell.light-mode .customer-avatar.cyan { background: rgb(8, 145, 178) !important; }
 
 .app-shell.light-mode .customer-activity.active {
-  color: #FFFFFF !important;
-  border-color: #047857 !important;
-  background: #059669 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(4, 120, 87) !important;
+  background: rgb(5, 150, 105) !important;
   box-shadow: 0 2px 7px rgba(5, 150, 105, .18);
 }
 
 .app-shell.light-mode .customer-activity.unknown {
-  color: #FFFFFF !important;
-  border-color: #B45309 !important;
-  background: #D97706 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(180, 83, 9) !important;
+  background: rgb(217, 119, 6) !important;
   box-shadow: 0 2px 7px rgba(217, 119, 6, .16);
 }
 
 .app-shell.light-mode .customer-activity.inactive {
-  color: #FFFFFF !important;
-  border-color: #B91C1C !important;
-  background: #DC2626 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(185, 28, 28) !important;
+  background: rgb(220, 38, 38) !important;
 }
 
 .app-shell.light-mode .customer-behavior.vip {
-  color: #92400E !important;
-  border-color: #F59E0B !important;
-  background: #FEF3C7 !important;
+  color: rgb(146, 64, 14) !important;
+  border-color: rgb(245, 158, 11) !important;
+  background: rgb(254, 243, 199) !important;
 }
 
 .app-shell.light-mode .customer-behavior.churn_risk {
-  color: #991B1B !important;
-  border-color: #FCA5A5 !important;
-  background: #FEE2E2 !important;
+  color: rgb(153, 27, 27) !important;
+  border-color: rgb(252, 165, 165) !important;
+  background: rgb(254, 226, 226) !important;
 }
 
 .app-shell.light-mode .customer-behavior.new_buyer {
-  color: #1E40AF !important;
-  border-color: #93C5FD !important;
-  background: #DBEAFE !important;
+  color: rgb(30, 64, 175) !important;
+  border-color: rgb(147, 197, 253) !important;
+  background: rgb(219, 234, 254) !important;
 }
 
 .app-shell.light-mode .customer-behavior.none {
-  color: #4B5563 !important;
-  border-color: #D1D5DB !important;
-  background: #F3F4F6 !important;
+  color: rgb(75, 85, 99) !important;
+  border-color: rgb(209, 213, 219) !important;
+  background: rgb(243, 244, 246) !important;
 }
 
 @media (max-width: 800px) {
@@ -926,7 +926,7 @@
   }
 
   .app-shell.light-mode .customers-table tr {
-    background: #FFFFFF !important;
+    background: rgb(255, 255, 255) !important;
   }
 }
 
@@ -971,10 +971,10 @@
   box-shadow: 0 0 18px currentColor;
 }
 
-.inventory-health-card.modern .grade-badge.green { color: #34D399; border-color: rgba(16, 185, 129, .48); background: rgba(5, 150, 105, .20); }
-.inventory-health-card.modern .grade-badge.blue { color: #60A5FA; border-color: rgba(37, 99, 235, .46); background: rgba(37, 99, 235, .20); }
-.inventory-health-card.modern .grade-badge.amber { color: #FBBF24; border-color: rgba(217, 119, 6, .46); background: rgba(217, 119, 6, .19); }
-.inventory-health-card.modern .grade-badge.red { color: #F87171; border-color: rgba(220, 38, 38, .44); background: rgba(220, 38, 38, .18); }
+.inventory-health-card.modern .grade-badge.green { color: rgb(52, 211, 153); border-color: rgba(16, 185, 129, .48); background: rgba(5, 150, 105, .20); }
+.inventory-health-card.modern .grade-badge.blue { color: rgb(96, 165, 250); border-color: rgba(37, 99, 235, .46); background: rgba(37, 99, 235, .20); }
+.inventory-health-card.modern .grade-badge.amber { color: rgb(251, 191, 36); border-color: rgba(217, 119, 6, .46); background: rgba(217, 119, 6, .19); }
+.inventory-health-card.modern .grade-badge.red { color: rgb(248, 113, 113); border-color: rgba(220, 38, 38, .44); background: rgba(220, 38, 38, .18); }
 
 .inventory-health-gauge-wrap.large {
   position: relative;
@@ -999,7 +999,7 @@
   height: 160px;
   background:
     conic-gradient(from 220deg, transparent 0 var(--inventory-health-sweep), rgba(107, 114, 128, .18) var(--inventory-health-sweep) 360deg),
-    conic-gradient(from 220deg, #2563EB 0deg, #7C3AED 105deg, #059669 235deg, #0891B2 360deg) !important;
+    conic-gradient(from 220deg, rgb(37, 99, 235) 0deg, rgb(124, 58, 237) 105deg, rgb(5, 150, 105) 235deg, rgb(8, 145, 178) 360deg) !important;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, .24), 0 18px 42px rgba(37, 99, 235, .16), 0 0 34px rgba(124, 58, 237, .14);
   animation: inventory-gauge-enter 700ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -1063,15 +1063,15 @@
 .inventory-health-components.modern .metric-row-icon {
   width: 28px;
   height: 28px;
-  color: #60A5FA;
+  color: rgb(96, 165, 250);
   border: 1px solid rgba(59, 130, 246, .18);
   border-radius: 8px;
   background: rgba(59, 130, 246, .11);
 }
 
-.inventory-health-components.modern li:nth-child(2) .metric-row-icon { color: #A78BFA; border-color: rgba(124, 58, 237, .20); background: rgba(124, 58, 237, .11); }
-.inventory-health-components.modern li:nth-child(3) .metric-row-icon { color: #34D399; border-color: rgba(5, 150, 105, .20); background: rgba(5, 150, 105, .11); }
-.inventory-health-components.modern li:nth-child(4) .metric-row-icon { color: #FBBF24; border-color: rgba(217, 119, 6, .20); background: rgba(217, 119, 6, .11); }
+.inventory-health-components.modern li:nth-child(2) .metric-row-icon { color: rgb(167, 139, 250); border-color: rgba(124, 58, 237, .20); background: rgba(124, 58, 237, .11); }
+.inventory-health-components.modern li:nth-child(3) .metric-row-icon { color: rgb(52, 211, 153); border-color: rgba(5, 150, 105, .20); background: rgba(5, 150, 105, .11); }
+.inventory-health-components.modern li:nth-child(4) .metric-row-icon { color: rgb(251, 191, 36); border-color: rgba(217, 119, 6, .20); background: rgba(217, 119, 6, .11); }
 
 .inventory-health-bar {
   height: 8px;
@@ -1083,7 +1083,7 @@
 .inventory-health-bar .animated {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(90deg, #2563EB, #7C3AED, #0891B2);
+  background: linear-gradient(90deg, rgb(37, 99, 235), rgb(124, 58, 237), rgb(8, 145, 178));
   box-shadow: 0 0 12px rgba(59, 130, 246, .30);
   transform-origin: left;
   animation: inventory-bar-grow 750ms cubic-bezier(.22, 1, .36, 1) both;
@@ -1130,7 +1130,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: linear-gradient(180deg, #2563EB, #7C3AED);
+  background: linear-gradient(180deg, rgb(37, 99, 235), rgb(124, 58, 237));
   opacity: .72;
   content: "";
 }
@@ -1177,13 +1177,13 @@
 
 .value-distribution-bar i {
   min-width: 4px;
-  background: linear-gradient(90deg, #2563EB, #0891B2);
+  background: linear-gradient(90deg, rgb(37, 99, 235), rgb(8, 145, 178));
   box-shadow: 0 0 8px rgba(37, 99, 235, .24);
 }
 
-.inventory-top-value.modern li:nth-child(2) .value-distribution-bar i { background: linear-gradient(90deg, #7C3AED, #DB2777); }
-.inventory-top-value.modern li:nth-child(3) .value-distribution-bar i { background: linear-gradient(90deg, #059669, #0891B2); }
-.inventory-top-value.modern li:nth-child(4) .value-distribution-bar i { background: linear-gradient(90deg, #D97706, #DC2626); }
+.inventory-top-value.modern li:nth-child(2) .value-distribution-bar i { background: linear-gradient(90deg, rgb(124, 58, 237), rgb(219, 39, 119)); }
+.inventory-top-value.modern li:nth-child(3) .value-distribution-bar i { background: linear-gradient(90deg, rgb(5, 150, 105), rgb(8, 145, 178)); }
+.inventory-top-value.modern li:nth-child(4) .value-distribution-bar i { background: linear-gradient(90deg, rgb(217, 119, 6), rgb(220, 38, 38)); }
 
 .inventory-donut .recharts-pie-sector path {
   filter: drop-shadow(0 3px 5px rgba(15, 23, 42, .16));
@@ -1270,83 +1270,83 @@
 .app-shell.light-mode .inventory-insights,
 .app-shell.light-mode .inventory-ai-card,
 .app-shell.light-mode .inventory-table-card {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 10px 28px rgba(15, 23, 42, .045) !important;
 }
 
 .app-shell.light-mode .inventory-card-label,
 .app-shell.light-mode .inventory-health-components.modern li > div:first-child span,
 .app-shell.light-mode .inventory-distribution-legend.modern .legend-status {
-  color: #374151 !important;
+  color: rgb(55, 65, 81) !important;
 }
 
-.app-shell.light-mode .inventory-health-card.modern .grade-badge.green { color: #FFFFFF; border-color: #047857; background: #059669; box-shadow: 0 0 18px rgba(5, 150, 105, .28); }
-.app-shell.light-mode .inventory-health-card.modern .grade-badge.blue { color: #FFFFFF; border-color: #1D4ED8; background: #2563EB; box-shadow: 0 0 18px rgba(37, 99, 235, .25); }
-.app-shell.light-mode .inventory-health-card.modern .grade-badge.amber { color: #FFFFFF; border-color: #B45309; background: #D97706; box-shadow: 0 0 18px rgba(217, 119, 6, .23); }
-.app-shell.light-mode .inventory-health-card.modern .grade-badge.red { color: #FFFFFF; border-color: #B91C1C; background: #DC2626; box-shadow: 0 0 18px rgba(220, 38, 38, .22); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.green { color: rgb(255, 255, 255); border-color: rgb(4, 120, 87); background: rgb(5, 150, 105); box-shadow: 0 0 18px rgba(5, 150, 105, .28); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.blue { color: rgb(255, 255, 255); border-color: rgb(29, 78, 216); background: rgb(37, 99, 235); box-shadow: 0 0 18px rgba(37, 99, 235, .25); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.amber { color: rgb(255, 255, 255); border-color: rgb(180, 83, 9); background: rgb(217, 119, 6); box-shadow: 0 0 18px rgba(217, 119, 6, .23); }
+.app-shell.light-mode .inventory-health-card.modern .grade-badge.red { color: rgb(255, 255, 255); border-color: rgb(185, 28, 28); background: rgb(220, 38, 38); box-shadow: 0 0 18px rgba(220, 38, 38, .22); }
 
 .app-shell.light-mode .inventory-health-gauge-wrap.large .inventory-health-gauge::before {
-  background: radial-gradient(circle at 50% 35%, #F8FAFC, #FFFFFF 68%);
+  background: radial-gradient(circle at 50% 35%, rgb(248, 250, 252), rgb(255, 255, 255) 68%);
 }
 
 .app-shell.light-mode .inventory-health-bar,
 .app-shell.light-mode .value-distribution-bar {
-  border-color: #E5E7EB;
-  background: #E5E7EB;
+  border-color: rgb(229, 231, 235);
+  background: rgb(229, 231, 235);
 }
 
 .app-shell.light-mode .inventory-value-card.modern .inventory-top-value.modern li,
 .app-shell.light-mode .inventory-distribution-legend.modern li {
-  border-color: #E5E7EB;
-  background: #F9FAFB;
+  border-color: rgb(229, 231, 235);
+  background: rgb(249, 250, 251);
 }
 
 .app-shell.light-mode .inventory-value-card.modern .inventory-top-value.modern li:hover,
 .app-shell.light-mode .inventory-distribution-legend.modern li:hover {
-  border-color: #93C5FD;
-  background: #FFFFFF;
+  border-color: rgb(147, 197, 253);
+  background: rgb(255, 255, 255);
 }
 
 .app-shell.light-mode .inventory-table th {
-  color: #6B7280 !important;
-  background: #F9FAFB !important;
+  color: rgb(107, 114, 128) !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .inventory-table td,
 .app-shell.light-mode .inventory-item-cell strong,
 .app-shell.light-mode .stock-quantity {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .inventory-table tbody tr:hover,
 .app-shell.light-mode .inventory-table tbody tr:focus {
-  background: #F9FAFB !important;
+  background: rgb(249, 250, 251) !important;
 }
 
 .app-shell.light-mode .inventory-badge.status-in_stock {
-  color: #FFFFFF !important;
-  border-color: #047857 !important;
-  background: #059669 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(4, 120, 87) !important;
+  background: rgb(5, 150, 105) !important;
 }
 
 .app-shell.light-mode .inventory-badge.status-low {
-  color: #FFFFFF !important;
-  border-color: #B45309 !important;
-  background: #D97706 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(180, 83, 9) !important;
+  background: rgb(217, 119, 6) !important;
 }
 
 .app-shell.light-mode .inventory-badge.status-out {
-  color: #FFFFFF !important;
-  border-color: #B91C1C !important;
-  background: #DC2626 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(185, 28, 28) !important;
+  background: rgb(220, 38, 38) !important;
 }
 
 .app-shell.light-mode .inventory-badge.status-untracked {
-  color: #374151 !important;
-  border-color: #D1D5DB !important;
-  background: #E5E7EB !important;
+  color: rgb(55, 65, 81) !important;
+  border-color: rgb(209, 213, 219) !important;
+  background: rgb(229, 231, 235) !important;
 }
 
 @media (max-width: 1180px) {
@@ -1454,7 +1454,7 @@
 
 .kpi-trend-badge small {
   color: currentColor;
-  font-size: 9px !important;
+  font-size: 12px !important;
   font-weight: 700;
   opacity: .76;
 }
@@ -1588,7 +1588,7 @@
 .locked-hero > span {
   width: 58px;
   height: 58px;
-  color: #C4B5FD;
+  color: rgb(196, 181, 253);
   border-color: rgba(167, 139, 250, .32);
   border-radius: 17px;
   background: radial-gradient(circle at 35% 25%, rgba(167, 139, 250, .28), rgba(76, 29, 149, .14));
@@ -1622,10 +1622,10 @@
   min-height: 38px;
   margin: 0;
   padding: 0 14px;
-  color: #FFFFFF;
+  color: rgb(255, 255, 255);
   border: 1px solid rgba(99, 102, 241, .46);
   border-radius: 9px;
-  background: linear-gradient(135deg, #2563EB, #7C3AED);
+  background: linear-gradient(135deg, rgb(37, 99, 235), rgb(124, 58, 237));
   box-shadow: 0 5px 14px rgba(37, 99, 235, .20);
   font-size: 13px;
   font-weight: 750;
@@ -1665,103 +1665,103 @@
 }
 
 .app-shell.light-mode .analytics-kpi {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .07), 0 10px 28px rgba(15, 23, 42, .05) !important;
 }
 
-.app-shell.light-mode .analytics-kpi.tone-0 { --accent: #0891B2; }
-.app-shell.light-mode .analytics-kpi.tone-1 { --accent: #4F46E5; }
-.app-shell.light-mode .analytics-kpi.tone-2 { --accent: #059669; }
-.app-shell.light-mode .analytics-kpi.tone-3 { --accent: #D97706; }
-.app-shell.light-mode .analytics-kpi.tone-4 { --accent: #7C3AED; }
-.app-shell.light-mode .analytics-kpi.tone-5 { --accent: #DB2777; }
+.app-shell.light-mode .analytics-kpi.tone-0 { --accent: rgb(8, 145, 178); }
+.app-shell.light-mode .analytics-kpi.tone-1 { --accent: rgb(79, 70, 229); }
+.app-shell.light-mode .analytics-kpi.tone-2 { --accent: rgb(5, 150, 105); }
+.app-shell.light-mode .analytics-kpi.tone-3 { --accent: rgb(217, 119, 6); }
+.app-shell.light-mode .analytics-kpi.tone-4 { --accent: rgb(124, 58, 237); }
+.app-shell.light-mode .analytics-kpi.tone-5 { --accent: rgb(219, 39, 119); }
 
 .app-shell.light-mode .analytics-kpi > strong {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .analytics-kpi > p,
 .app-shell.light-mode .analytics-kpi header > small {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .kpi-trend-badge.positive {
-  color: #047857 !important;
-  border-color: #A7F3D0;
-  background: #D1FAE5;
+  color: rgb(4, 120, 87) !important;
+  border-color: rgb(167, 243, 208);
+  background: rgb(209, 250, 229);
 }
 
 .app-shell.light-mode .kpi-trend-badge.negative {
-  color: #B91C1C !important;
-  border-color: #FECACA;
-  background: #FEE2E2;
+  color: rgb(185, 28, 28) !important;
+  border-color: rgb(254, 202, 202);
+  background: rgb(254, 226, 226);
 }
 
 .app-shell.light-mode .kpi-trend-badge.neutral {
-  color: #4B5563;
-  border-color: #D1D5DB;
-  background: #F3F4F6;
+  color: rgb(75, 85, 99);
+  border-color: rgb(209, 213, 219);
+  background: rgb(243, 244, 246);
 }
 
 .app-shell.light-mode .analytics-kpi .sparkline {
-  border-color: color-mix(in srgb, var(--accent) 18%, #E5E7EB);
+  border-color: color-mix(in srgb, var(--accent) 18%, rgb(229, 231, 235));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 78%),
     repeating-linear-gradient(90deg, transparent 0 22px, color-mix(in srgb, var(--accent) 8%, transparent) 22px 23px);
 }
 
 .app-shell.light-mode .revenue-tooltip {
-  color: #111827 !important;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .tooltip-primary-value {
-  background: linear-gradient(135deg, #E0F2FE, #EDE9FE);
+  background: linear-gradient(135deg, rgb(224, 242, 254), rgb(237, 233, 254));
 }
 
 .app-shell.light-mode .tooltip-primary-value > span,
 .app-shell.light-mode .tooltip-date {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .tooltip-primary-value > strong,
 .app-shell.light-mode .revenue-tooltip .tooltip-row > strong {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .locked-widget,
 .app-shell.light-mode .locked-hero,
 .app-shell.light-mode .locked-inline {
-  color: #111827;
-  border-color: #DDD6FE !important;
-  background: linear-gradient(135deg, #FFFFFF, #FAF5FF) !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(221, 214, 254) !important;
+  background: linear-gradient(135deg, rgb(255, 255, 255), rgb(250, 245, 255)) !important;
 }
 
 .app-shell.light-mode .locked-hero > span,
 .app-shell.light-mode .locked-inline > span {
-  color: #7C3AED;
-  border-color: #C4B5FD;
-  background: #EDE9FE;
+  color: rgb(124, 58, 237);
+  border-color: rgb(196, 181, 253);
+  background: rgb(237, 233, 254);
 }
 
 .app-shell.light-mode .locked-hero b,
 .app-shell.light-mode .locked-inline strong {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .locked-hero p,
 .app-shell.light-mode .locked-inline p {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .ai-intelligence,
 .app-shell.light-mode .ai-intelligence .ai-card,
 .app-shell.light-mode .product-performance .analytics-widget {
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06) !important;
 }
 
@@ -1836,8 +1836,8 @@
 }
 
 .app-shell.light-mode .locked-product-preview > div {
-  border-color: #E5E7EB;
-  background: #F9FAFB;
+  border-color: rgb(229, 231, 235);
+  background: rgb(249, 250, 251);
 }
 
 .app-shell.light-mode .locked-products-overlay {
@@ -1850,142 +1850,142 @@
 .app-shell.light-mode .products-toolbar,
 .app-shell.light-mode .product-metric,
 .app-shell.light-mode .products-empty-state {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 9px 24px rgba(15, 23, 42, .045) !important;
 }
 
 .app-shell.light-mode .product-row:hover {
-  background: #F9FAFB;
+  background: rgb(249, 250, 251);
 }
 
 .app-shell.light-mode .product-title-block h3,
 .app-shell.light-mode .product-metric strong,
 .app-shell.light-mode .winning-product-main strong {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .product-title-block p,
 .app-shell.light-mode .product-metric small,
 .app-shell.light-mode .product-stat-card > small,
 .app-shell.light-mode .winning-product-main small {
-  color: #4B5563 !important;
+  color: rgb(75, 85, 99) !important;
 }
 
 .app-shell.light-mode .product-thumb,
 .app-shell.light-mode .product-thumb.fallback {
-  border-color: #E5E7EB !important;
-  background: radial-gradient(circle at 50% 0%, #DBEAFE, #FFFFFF 70%) !important;
+  border-color: rgb(229, 231, 235) !important;
+  background: radial-gradient(circle at 50% 0%, rgb(219, 234, 254), rgb(255, 255, 255) 70%) !important;
   box-shadow: 0 2px 8px rgba(15, 23, 42, .08);
 }
 
 .app-shell.light-mode .performance-badge.excellent {
-  color: #FFFFFF !important;
-  border-color: #047857 !important;
-  background: #059669 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(4, 120, 87) !important;
+  background: rgb(5, 150, 105) !important;
 }
 
 .app-shell.light-mode .performance-badge.good {
-  color: #FFFFFF !important;
-  border-color: #1D4ED8 !important;
-  background: #2563EB !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(29, 78, 216) !important;
+  background: rgb(37, 99, 235) !important;
 }
 
 .app-shell.light-mode .performance-badge.bad {
-  color: #FFFFFF !important;
-  border-color: #B91C1C !important;
-  background: #DC2626 !important;
+  color: rgb(255, 255, 255) !important;
+  border-color: rgb(185, 28, 28) !important;
+  background: rgb(220, 38, 38) !important;
 }
 
 .app-shell.light-mode .product-status.active {
-  color: #065F46;
-  border-color: #6EE7B7;
-  background: #D1FAE5;
+  color: rgb(6, 95, 70);
+  border-color: rgb(110, 231, 183);
+  background: rgb(209, 250, 229);
 }
 
 .app-shell.light-mode .product-status.draft {
-  color: #92400E;
-  border-color: #FCD34D;
-  background: #FEF3C7;
+  color: rgb(146, 64, 14);
+  border-color: rgb(252, 211, 77);
+  background: rgb(254, 243, 199);
 }
 
 /* AI Command Center */
 .app-shell.light-mode .command-health,
 .app-shell.light-mode .agent-card {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 8px 22px rgba(15, 23, 42, .045);
 }
 
 .app-shell.light-mode .command-health h2,
 .app-shell.light-mode .agent-card h3 {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .command-health p,
 .app-shell.light-mode .agent-card p,
 .app-shell.light-mode .agent-card-footer {
-  color: #4B5563 !important;
+  color: rgb(75, 85, 99) !important;
 }
 
 .app-shell.light-mode .agent-big-icon.green {
-  color: #FFFFFF;
-  border: 1px solid #047857;
-  background: #059669;
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(4, 120, 87);
+  background: rgb(5, 150, 105);
   box-shadow: 0 4px 12px rgba(5, 150, 105, .20);
 }
 
 .app-shell.light-mode .agent-big-icon.purple {
-  color: #FFFFFF;
-  border: 1px solid #6D28D9;
-  background: #7C3AED;
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(109, 40, 217);
+  background: rgb(124, 58, 237);
 }
 
 .app-shell.light-mode .agent-status.ready {
   padding: 4px 8px;
-  color: #FFFFFF;
-  border: 1px solid #047857;
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(4, 120, 87);
   border-radius: 999px;
-  background: #059669;
+  background: rgb(5, 150, 105);
   font-weight: 800;
 }
 
 /* Shared status saturation */
 .app-shell.light-mode .status-badge.green {
-  color: #065F46 !important;
-  border-color: #6EE7B7 !important;
-  background: #D1FAE5 !important;
+  color: rgb(6, 95, 70) !important;
+  border-color: rgb(110, 231, 183) !important;
+  background: rgb(209, 250, 229) !important;
   font-weight: 750;
 }
 
 .app-shell.light-mode .status-badge.amber {
-  color: #92400E !important;
-  border-color: #FCD34D !important;
-  background: #FEF3C7 !important;
+  color: rgb(146, 64, 14) !important;
+  border-color: rgb(252, 211, 77) !important;
+  background: rgb(254, 243, 199) !important;
   font-weight: 750;
 }
 
 .app-shell.light-mode .status-badge.red {
-  color: #991B1B !important;
-  border-color: #FCA5A5 !important;
-  background: #FEE2E2 !important;
+  color: rgb(153, 27, 27) !important;
+  border-color: rgb(252, 165, 165) !important;
+  background: rgb(254, 226, 226) !important;
   font-weight: 750;
 }
 
 .app-shell.light-mode .status-badge.blue {
-  color: #1E40AF !important;
-  border-color: #93C5FD !important;
-  background: #DBEAFE !important;
+  color: rgb(30, 64, 175) !important;
+  border-color: rgb(147, 197, 253) !important;
+  background: rgb(219, 234, 254) !important;
   font-weight: 750;
 }
 
 .app-shell.light-mode .status-badge.purple,
 .app-shell.light-mode .phase-tag {
-  color: #5B21B6 !important;
-  border-color: #C4B5FD !important;
-  background: #EDE9FE !important;
+  color: rgb(91, 33, 182) !important;
+  border-color: rgb(196, 181, 253) !important;
+  background: rgb(237, 233, 254) !important;
   font-weight: 750;
 }
 
@@ -1994,9 +1994,9 @@
 .app-shell.light-mode .recommendation-card,
 .app-shell.light-mode .evidence-stack,
 .app-shell.light-mode .evidence-line {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .recommendation-card {
@@ -2004,31 +2004,31 @@
 }
 
 .app-shell.light-mode .recommendation-card:hover {
-  border-color: #93C5FD !important;
+  border-color: rgb(147, 197, 253) !important;
   box-shadow: 0 10px 24px rgba(15, 23, 42, .07);
 }
 
 .app-shell.light-mode .recommendation-card h3,
 .app-shell.light-mode .evidence-line strong {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .recommendation-card p,
 .app-shell.light-mode .evidence-snippets span,
 .app-shell.light-mode .evidence-line > span {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .button.approve {
-  color: #FFFFFF;
-  border-color: #047857;
-  background: #059669;
+  color: rgb(255, 255, 255);
+  border-color: rgb(4, 120, 87);
+  background: rgb(5, 150, 105);
 }
 
 .app-shell.light-mode .button.reject {
-  color: #FFFFFF;
-  border-color: #B91C1C;
-  background: #DC2626;
+  color: rgb(255, 255, 255);
+  border-color: rgb(185, 28, 28);
+  background: rgb(220, 38, 38);
 }
 
 /* Automation, campaigns, support, exports, and billing */
@@ -2047,20 +2047,20 @@
 .app-shell.light-mode .roi-panel,
 .app-shell.light-mode .plan-card,
 .app-shell.light-mode .gift-panel {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06) !important;
 }
 
 .app-shell.light-mode .campaign-hero {
-  background: radial-gradient(circle at 88% 45%, rgba(124, 58, 237, .13), transparent 34%), #FFFFFF !important;
+  background: radial-gradient(circle at 88% 45%, rgba(124, 58, 237, .13), transparent 34%), rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .campaign-hero-art {
-  color: #7C3AED;
-  border-color: #C4B5FD;
-  background: #F5F3FF;
+  color: rgb(124, 58, 237);
+  border-color: rgb(196, 181, 253);
+  background: rgb(245, 243, 255);
   box-shadow: 0 8px 24px rgba(124, 58, 237, .10);
 }
 
@@ -2071,22 +2071,22 @@
 .app-shell.light-mode .export-icon,
 .app-shell.light-mode .workflow-icon,
 .app-shell.light-mode .ticket-icon {
-  color: #FFFFFF;
+  color: rgb(255, 255, 255);
   border: 1px solid rgba(255, 255, 255, .7);
-  background: #2563EB;
+  background: rgb(37, 99, 235);
   box-shadow: 0 3px 10px rgba(37, 99, 235, .18);
 }
 
 .app-shell.light-mode .automation-mode-icon,
-.app-shell.light-mode .plan-icon { background: #7C3AED; }
-.app-shell.light-mode .ticket-icon { background: #0891B2; }
+.app-shell.light-mode .plan-icon { background: rgb(124, 58, 237); }
+.app-shell.light-mode .ticket-icon { background: rgb(8, 145, 178); }
 
 .app-shell.light-mode .workflow-copy strong,
 .app-shell.light-mode .ticket-row strong,
 .app-shell.light-mode .template-card h3,
 .app-shell.light-mode .export-card h3,
 .app-shell.light-mode .plan-card h3 {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .workflow-copy small,
@@ -2094,37 +2094,37 @@
 .app-shell.light-mode .template-card p,
 .app-shell.light-mode .export-card p,
 .app-shell.light-mode .plan-card p {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .ticket-form input,
 .app-shell.light-mode .ticket-form textarea,
 .app-shell.light-mode .ticket-form select,
 .app-shell.light-mode .gift-input input {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
 }
 
 /* Copilot: explicitly white chat and evidence surfaces. */
 .app-shell.light-mode .f8-copilot-layout .copilot-main,
 .app-shell.light-mode .f8-copilot-layout .copilot-sidebar,
 .app-shell.light-mode .f8-answer {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
 }
 
 .app-shell.light-mode .f8-answer {
-  background: #F8FAFC !important;
+  background: rgb(248, 250, 252) !important;
 }
 
 .app-shell.light-mode .f8-answer p,
 .app-shell.light-mode .f8-evidence-table strong,
 .app-shell.light-mode .copilot-welcome h2,
 .app-shell.light-mode .copilot-empty strong {
-  color: #111827 !important;
+  color: rgb(17, 24, 39) !important;
 }
 
 .app-shell.light-mode .f8-answer-head,
@@ -2133,35 +2133,35 @@
 .app-shell.light-mode .copilot-welcome p,
 .app-shell.light-mode .copilot-empty span,
 .app-shell.light-mode .f8-thread small {
-  color: #4B5563 !important;
+  color: rgb(75, 85, 99) !important;
 }
 
 .app-shell.light-mode .f8-copilot-form textarea,
 .app-shell.light-mode .copilot-composer textarea {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
-  caret-color: #2563EB;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
+  caret-color: rgb(37, 99, 235);
 }
 
 .app-shell.light-mode .f8-copilot-form textarea::placeholder,
 .app-shell.light-mode .copilot-composer textarea::placeholder {
-  color: #6B7280;
+  color: rgb(107, 114, 128);
   opacity: 1;
 }
 
 .app-shell.light-mode .suggested-prompts button,
 .app-shell.light-mode .f8-thread {
-  color: #374151;
-  border-color: #E5E7EB;
-  background: #FFFFFF;
+  color: rgb(55, 65, 81);
+  border-color: rgb(229, 231, 235);
+  background: rgb(255, 255, 255);
 }
 
 .app-shell.light-mode .suggested-prompts button:hover,
 .app-shell.light-mode .f8-thread:hover,
 .app-shell.light-mode .f8-thread.active {
-  color: #111827;
-  background: #F3F4F6;
+  color: rgb(17, 24, 39);
+  background: rgb(243, 244, 246);
 }
 
 /* Reports */
@@ -2169,28 +2169,28 @@
 .app-shell.light-mode .f8-report-grid > .card,
 .app-shell.light-mode .forecast-card,
 .app-shell.light-mode .report-run {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
 }
 
 .app-shell.light-mode .forecast-card {
-  border-color: #A7F3D0 !important;
-  background: #ECFDF5 !important;
+  border-color: rgb(167, 243, 208) !important;
+  background: rgb(236, 253, 245) !important;
 }
 
-.app-shell.light-mode .forecast-card strong { color: #059669; }
+.app-shell.light-mode .forecast-card strong { color: rgb(5, 150, 105); }
 .app-shell.light-mode .forecast-card span,
-.app-shell.light-mode .report-run strong { color: #111827; }
+.app-shell.light-mode .report-run strong { color: rgb(17, 24, 39); }
 .app-shell.light-mode .forecast-card small,
 .app-shell.light-mode .report-run small,
-.app-shell.light-mode .method-row { color: #4B5563; }
+.app-shell.light-mode .method-row { color: rgb(75, 85, 99); }
 
 .app-shell.light-mode .report-generate-controls select {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
 }
 
 /* Settings */
@@ -2198,43 +2198,43 @@
 .app-shell.light-mode .settings-panel,
 .app-shell.light-mode .setting-row,
 .app-shell.light-mode .settings-save {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .settings-nav-item {
-  color: #374151;
+  color: rgb(55, 65, 81);
 }
 
 .app-shell.light-mode .settings-nav-item:hover,
 .app-shell.light-mode .settings-nav-item.active {
-  color: #1D4ED8;
-  background: #EFF6FF;
+  color: rgb(29, 78, 216);
+  background: rgb(239, 246, 255);
 }
 
 .app-shell.light-mode .settings-panel-head h3,
 .app-shell.light-mode .setting-row strong,
 .app-shell.light-mode .setting-readonly {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .settings-panel-head p,
 .app-shell.light-mode .setting-row small,
 .app-shell.light-mode .settings-save {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .setting-input,
 .app-shell.light-mode .theme-choice {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
 }
 
 .app-shell.light-mode .theme-choice button.selected {
-  color: #1D4ED8;
-  background: #DBEAFE;
+  color: rgb(29, 78, 216);
+  background: rgb(219, 234, 254);
 }
 
 /* Admin operations */
@@ -2243,9 +2243,9 @@
 .app-shell.light-mode .f9-metric,
 .app-shell.light-mode .f9-job-card,
 .app-shell.light-mode .f9-message {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
 }
 
@@ -2254,19 +2254,19 @@
 .app-shell.light-mode .f9-maintenance p,
 .app-shell.light-mode .f9-flag,
 .app-shell.light-mode .f9-job-row small {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .f9-card-title,
 .app-shell.light-mode .f9-job-row strong,
 .app-shell.light-mode .f9-metric strong {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 .app-shell.light-mode .f9-admin-login input {
-  color: #111827;
-  border-color: #D1D5DB;
-  background: #FFFFFF;
+  color: rgb(17, 24, 39);
+  border-color: rgb(209, 213, 219);
+  background: rgb(255, 255, 255);
 }
 
 /* Global light inputs, popovers, and utility surfaces */
@@ -2281,9 +2281,9 @@
 .app-shell.light-mode .notification-drawer,
 .app-shell.light-mode .evidence-drawer,
 .app-shell.light-mode .toast {
-  color: #111827;
-  border-color: #E5E7EB !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39);
+  border-color: rgb(229, 231, 235) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode .table-search input,
@@ -2293,13 +2293,13 @@
 .app-shell.light-mode .inventory-search input,
 .app-shell.light-mode .modal-card input,
 .app-shell.light-mode .modal-card textarea {
-  color: #111827 !important;
-  background: #FFFFFF !important;
+  color: rgb(17, 24, 39) !important;
+  background: rgb(255, 255, 255) !important;
 }
 
 .app-shell.light-mode :is(.table-search, .products-search, .orders-search, .customers-search, .inventory-search, .modal-card) input::placeholder,
 .app-shell.light-mode .modal-card textarea::placeholder {
-  color: #6B7280 !important;
+  color: rgb(107, 114, 128) !important;
   opacity: 1;
 }
 
@@ -2307,20 +2307,20 @@
 .app-shell.light-mode .profile-menu small,
 .app-shell.light-mode .notification-empty,
 .app-shell.light-mode .drawer-kicker {
-  color: #4B5563;
+  color: rgb(75, 85, 99);
 }
 
 .app-shell.light-mode .modal-card h2,
 .app-shell.light-mode .profile-menu strong,
 .app-shell.light-mode .notification-drawer h2,
 .app-shell.light-mode .evidence-drawer h2 {
-  color: #111827;
+  color: rgb(17, 24, 39);
 }
 
 
 /* ─── PR #42 Commit 5: Stock Distribution — insight fill ─── */
 .inventory-distribution-legend.modern { margin-bottom: 2px; }
-.distribution-trend { font-size: 11px; font-style: normal; font-weight: 700; flex: none; }
+.distribution-trend { font-size: 12px; font-style: normal; font-weight: 700; flex: none; }
 .distribution-trend.stable { color: var(--green); }
 .distribution-trend.watch { color: var(--amber); }
 .distribution-trend.action { color: var(--red); }
@@ -2333,23 +2333,23 @@
 .distribution-callouts p:nth-child(3) svg { color: var(--blue-bright); }
 .distribution-callouts span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .distribution-callouts b { color: var(--text); font-size: 13px; line-height: 1.4; }
-.distribution-callouts small { color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
+.distribution-callouts small { color: var(--text-tertiary); font-size: 12px; line-height: 1.4; }
 .distribution-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .distribution-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 11px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
 .distribution-stats strong { font-size: 16px; letter-spacing: -.02em; color: var(--text); }
-.distribution-stats span { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.distribution-stats span { color: var(--text-tertiary); font-size: 12px; line-height: 1.4; }
 .distribution-actions { display: flex; flex-wrap: wrap; gap: 7px; }
-.distribution-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.distribution-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .distribution-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
 .distribution-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .app-shell.light-mode .distribution-callouts p,
 .app-shell.light-mode .distribution-stats > div {
-  background: #F8FAFC !important;
-  border-color: #E5E7EB !important;
+  background: rgb(248, 250, 252) !important;
+  border-color: rgb(229, 231, 235) !important;
 }
-.app-shell.light-mode .distribution-trend.stable { color: #059669 !important; }
-.app-shell.light-mode .distribution-trend.watch { color: #D97706 !important; }
-.app-shell.light-mode .distribution-trend.action { color: #DC2626 !important; }
+.app-shell.light-mode .distribution-trend.stable { color: rgb(5, 150, 105) !important; }
+.app-shell.light-mode .distribution-trend.watch { color: rgb(217, 119, 6) !important; }
+.app-shell.light-mode .distribution-trend.action { color: rgb(220, 38, 38) !important; }
 @media (max-width: 640px) {
   .distribution-stats { grid-template-columns: 1fr; }
   .distribution-actions button { flex: 1; }
@@ -2360,7 +2360,7 @@
 .value-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
 .value-metrics > div { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-surface-soft); }
 .value-metrics strong { font-size: 14px; letter-spacing: -.02em; color: var(--text); font-family: var(--font-mono); }
-.value-metrics span { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.value-metrics span { color: var(--text-tertiary); font-size: 12px; line-height: 1.4; }
 .value-insight-strip { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid rgba(251, 191, 36, .18); border-radius: 10px; background: rgba(251, 191, 36, .05); }
 .value-insight-strip svg { flex: none; color: var(--profit); margin-top: 1px; }
 .value-insight-strip span { color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
@@ -2369,14 +2369,14 @@
 .inventory-top-value.modern li:hover { background: var(--bg-hover); border-color: var(--border-default); }
 .value-distribution-bar { display: flex; align-items: center; gap: 6px; height: 6px; margin-top: 5px; border-radius: 99px; }
 .value-distribution-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--profit), var(--accent-amber)); }
-.value-distribution-bar b { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 9px; font-weight: 700; line-height: 1; }
+.value-distribution-bar b { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; font-weight: 700; line-height: 1; }
 .value-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
-.value-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.value-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .value-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
 .value-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .app-shell.light-mode .value-metrics > div {
-  background: #F8FAFC !important;
-  border-color: #E5E7EB !important;
+  background: rgb(248, 250, 252) !important;
+  border-color: rgb(229, 231, 235) !important;
 }
 .app-shell.light-mode .value-insight-strip {
   background: rgba(217, 119, 6, .07) !important;
@@ -2392,7 +2392,7 @@
 .orders-basic-card.top-product { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
 .top-product-layout { display: flex; flex-direction: column; gap: 12px; }
 .top-product-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.top-product-thumb { display: grid; width: 52px; height: 52px; flex: none; place-items: center; color: #7dd3fc; border: 1px solid rgba(56, 189, 248, .2); border-radius: 13px; background: radial-gradient(circle at 30% 20%, rgba(56, 189, 248, .16), rgba(30, 64, 175, .06)); font-size: 22px; font-weight: 800; }
+.top-product-thumb { display: grid; width: 52px; height: 52px; flex: none; place-items: center; color: rgb(125, 211, 252); border: 1px solid rgba(56, 189, 248, .2); border-radius: 13px; background: radial-gradient(circle at 30% 20%, rgba(56, 189, 248, .16), rgba(30, 64, 175, .06)); font-size: 22px; font-weight: 800; }
 .top-product-head > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .top-product-head strong { overflow: hidden; color: var(--text); font-size: 15px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .top-product-head p { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
@@ -2407,13 +2407,13 @@
 .top-product-insights p:nth-child(3) svg { color: var(--purple); }
 .top-product-insights span { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
 .top-product-insights b { color: var(--text); font-size: 12px; }
-.top-product-insights small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.top-product-insights small { color: var(--text-tertiary); font-size: 12px; line-height: 1.4; }
 .top-product-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
-.top-product-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.top-product-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .top-product-actions button:hover { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
 .app-shell.light-mode .top-product-stats > div,
-.app-shell.light-mode .top-product-insights p { background: #F8FAFC !important; border-color: #E5E7EB !important; }
-.app-shell.light-mode .top-product-thumb { color: #2563EB !important; border-color: rgba(37, 99, 235, .25) !important; background: radial-gradient(circle at 30% 20%, rgba(37, 99, 235, .12), rgba(37, 99, 235, .03)) !important; }
+.app-shell.light-mode .top-product-insights p { background: rgb(248, 250, 252) !important; border-color: rgb(229, 231, 235) !important; }
+.app-shell.light-mode .top-product-thumb { color: rgb(37, 99, 235) !important; border-color: rgba(37, 99, 235, .25) !important; background: radial-gradient(circle at 30% 20%, rgba(37, 99, 235, .12), rgba(37, 99, 235, .03)) !important; }
 @media (max-width: 1180px) {
   .top-product-stats { grid-template-columns: 1fr; }
 }
@@ -2432,8 +2432,8 @@
 .rate-donut { display: grid; width: 92px; height: 92px; flex: none; place-items: center; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .08), 0 8px 18px rgba(2, 6, 23, .26); }
 .rate-donut > div { display: flex; width: 70px; height: 70px; align-items: center; justify-content: center; flex-direction: column; gap: 2px; border-radius: 50%; background: var(--bg-surface); }
 .rate-donut strong { color: var(--text); font-family: var(--font-mono); font-size: 21px; letter-spacing: -.03em; line-height: 1; }
-.rate-donut span { color: var(--text-tertiary); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
-.rate-subtitle { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.45; text-align: center; }
+.rate-donut span { color: var(--text-tertiary); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.rate-subtitle { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; text-align: center; }
 /* PR #43: below-donut content — divider, real mini metrics, status message bar */
 .rate-divider { height: 1px; background: var(--border); }
 .rate-metrics { display: flex; flex-direction: column; padding: 0 2px; }
@@ -2445,23 +2445,23 @@
 .rate-detail-row strong.cmp-good { color: var(--green); }
 .rate-detail-row strong.cmp-worse { color: var(--red); }
 .rate-detail-row strong.cmp-neutral { color: var(--text-secondary); }
-.rate-status-bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; font-size: 11px; line-height: 1.45; }
+.rate-status-bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; font-size: 12px; line-height: 1.45; }
 .rate-status-bar svg { flex: none; }
-.rate-status-bar.good { color: #34D399; background: rgba(16, 185, 129, .1); }
-.rate-status-bar.watch { color: #FBBF24; background: rgba(245, 158, 11, .1); }
-.rate-status-bar.attention { color: #F87171; background: rgba(239, 68, 68, .1); }
+.rate-status-bar.good { color: rgb(52, 211, 153); background: rgba(16, 185, 129, .1); }
+.rate-status-bar.watch { color: rgb(251, 191, 36); background: rgba(245, 158, 11, .1); }
+.rate-status-bar.attention { color: rgb(248, 113, 113); background: rgba(239, 68, 68, .1); }
 .rate-status-bar.neutral { color: var(--text-secondary); background: rgba(148, 163, 184, .09); }
-.app-shell.light-mode .rate-detail-row + .rate-detail-row { border-color: #E5E7EB; }
-.app-shell.light-mode .rate-status-bar.good { color: #059669; background: rgba(16, 185, 129, .12); }
-.app-shell.light-mode .rate-status-bar.watch { color: #B45309; background: rgba(245, 158, 11, .12); }
-.app-shell.light-mode .rate-status-bar.attention { color: #DC2626; background: rgba(239, 68, 68, .12); }
-.app-shell.light-mode .rate-status-bar.neutral { color: #4B5563; background: rgba(148, 163, 184, .12); }
+.app-shell.light-mode .rate-detail-row + .rate-detail-row { border-color: rgb(229, 231, 235); }
+.app-shell.light-mode .rate-status-bar.good { color: rgb(5, 150, 105); background: rgba(16, 185, 129, .12); }
+.app-shell.light-mode .rate-status-bar.watch { color: rgb(180, 83, 9); background: rgba(245, 158, 11, .12); }
+.app-shell.light-mode .rate-status-bar.attention { color: rgb(220, 38, 38); background: rgba(239, 68, 68, .12); }
+.app-shell.light-mode .rate-status-bar.neutral { color: rgb(75, 85, 99); background: rgba(148, 163, 184, .12); }
 .orders-basic-card.rate-card.cancellation.excellent { --rate-color: var(--green); }
 .orders-basic-card.rate-card.cancellation.good { --rate-color: var(--blue); }
 .orders-basic-card.rate-card.cancellation.watch { --rate-color: var(--amber); }
 .orders-basic-card.rate-card.cancellation.attention { --rate-color: var(--red); }
 .orders-basic-card.rate-card.cancellation.muted { --rate-color: var(--text-tertiary); }
-.app-shell.light-mode .rate-donut > div { background: #FFFFFF !important; }
+.app-shell.light-mode .rate-donut > div { background: rgb(255, 255, 255) !important; }
 .app-shell.light-mode .rate-donut { box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14), 0 8px 16px rgba(15, 23, 42, .08); }
 @media (max-width: 1180px) {
   .rate-donut { margin: 0 auto; }
@@ -2478,26 +2478,26 @@
 .ai-growth-metric.flat .ai-growth-icon { color: var(--blue-bright); background: rgba(59, 130, 246, .1); }
 .ai-growth-metric > span:last-child { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
 .ai-growth-metric b { color: var(--text); font-size: 14px; letter-spacing: -.01em; }
-.ai-growth-metric small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.ai-growth-metric small { color: var(--text-tertiary); font-size: 12px; line-height: 1.4; }
 .ai-weekly-block { display: flex; flex-direction: column; gap: 6px; }
 .ai-weekly-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .ai-weekly-head span { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
-.ai-weekly-head small { color: var(--text-tertiary); font-size: 10px; }
+.ai-weekly-head small { color: var(--text-tertiary); font-size: 12px; }
 .ai-weekly-chart { height: 86px; }
 .ai-summary-insights-list { display: flex; flex-direction: column; gap: 7px; }
-.ai-summary-insights-list p { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 8px 10px; color: var(--text-secondary); border: 1px solid var(--border-soft); border-radius: 9px; background: rgba(155, 124, 246, .05); font-size: 11px; line-height: 1.5; }
+.ai-summary-insights-list p { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 8px 10px; color: var(--text-secondary); border: 1px solid var(--border-soft); border-radius: 9px; background: rgba(155, 124, 246, .05); font-size: 12px; line-height: 1.5; }
 .ai-summary-insights-list svg { flex: none; color: var(--purple); margin-top: 2px; }
 .ai-summary-insights-list p:nth-child(2) svg { color: var(--blue-bright); }
 .ai-summary-insights-list p:nth-child(3) svg { color: var(--green); }
 .ai-summary-insights-list span { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
 .ai-summary-insights-list b { color: var(--text); font-size: 12px; margin-right: 4px; }
 .ai-summary-recs { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px; border: 1px solid rgba(139, 92, 246, .18); border-radius: 10px; background: rgba(139, 92, 246, .05); }
-.ai-summary-recs > strong { color: var(--purple); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
+.ai-summary-recs > strong { color: var(--purple); font-size: 12px; letter-spacing: .07em; text-transform: uppercase; }
 .ai-summary-recs ul { display: flex; flex-direction: column; gap: 5px; margin: 0; padding-left: 16px; }
 .ai-summary-recs li { color: var(--text-secondary); font-size: 11.5px; line-height: 1.55; }
 .ai-summary-recs b { color: var(--text); }
 .ai-summary-actions { display: flex; flex-wrap: wrap; gap: 7px; }
-.ai-summary-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.ai-summary-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .ai-summary-actions button:hover { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
 
 .pie-extras { display: flex; flex-direction: column; gap: 12px; width: 100%; }
@@ -2513,7 +2513,7 @@
 .category-action-note b { color: var(--text); }
 .category-breakdown { border-top: 1px solid var(--border-soft); }
 .category-breakdown-heading { padding: 11px 2px 7px; }
-.category-breakdown-heading span { color: var(--text-tertiary); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.category-breakdown-heading span { color: var(--text-tertiary); font-size: 12px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .category-breakdown-rows { display: flex; flex-direction: column; }
 .category-breakdown-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 46px; padding: 8px 9px; border-radius: 8px; transition: background 150ms ease; }
 .category-breakdown-row + .category-breakdown-row { border-top: 1px solid var(--border-soft); border-top-left-radius: 0; border-top-right-radius: 0; }
@@ -2521,17 +2521,17 @@
 .category-breakdown-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 10%, transparent); }
 .category-breakdown-row > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .category-breakdown-row strong { overflow: hidden; color: var(--text); font-size: 11.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.category-breakdown-row p { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0; color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+.category-breakdown-row p { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
 .category-breakdown-row p i { color: var(--text-tertiary); font-style: normal; }
 .category-actions { display: flex; flex-wrap: wrap; gap: 7px; }
-.category-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 11px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
+.category-actions button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; white-space: nowrap; transition: 150ms ease; }
 .category-actions button:hover { color: var(--text); border-color: var(--accent-blue); background: rgba(59, 130, 246, .07); }
 .app-shell.light-mode .ai-growth-metric,
-.app-shell.light-mode .category-insights p { background: #F8FAFC !important; border-color: #E5E7EB !important; }
+.app-shell.light-mode .category-insights p { background: rgb(248, 250, 252) !important; border-color: rgb(229, 231, 235) !important; }
 .app-shell.light-mode .ai-summary-insights-list p { background: rgba(124, 58, 237, .06) !important; border-color: rgba(124, 58, 237, .14) !important; }
 .app-shell.light-mode .category-action-note { background: rgba(217, 119, 6, .07) !important; border-color: rgba(217, 119, 6, .22) !important; }
-.app-shell.light-mode .category-breakdown-row:hover { background: #F8FAFC; }
-.app-shell.light-mode .category-breakdown-row + .category-breakdown-row { border-color: #E5E7EB; }
+.app-shell.light-mode .category-breakdown-row:hover { background: rgb(248, 250, 252); }
+.app-shell.light-mode .category-breakdown-row + .category-breakdown-row { border-color: rgb(229, 231, 235); }
 @media (max-width: 640px) {
   .ai-summary-growth-row { grid-template-columns: 1fr; }
   .ai-summary-actions button, .category-actions button { flex: 1; }
@@ -2540,11 +2540,11 @@
 .app-shell.light-mode .aic-main,
 .app-shell.light-mode .aic-side-block,
 .app-shell.light-mode .aic-usage {
-  background: #FFFFFF !important;
-  color: #111827 !important;
-  border-color: #E2E8F0 !important;
+  background: rgb(255, 255, 255) !important;
+  color: rgb(17, 24, 39) !important;
+  border-color: rgb(226, 232, 240) !important;
 }
-.nav-tag.new { color: #0F1117; background: linear-gradient(120deg, #F5C044, #F59E0B); }
+.nav-tag.new { color: rgb(15, 17, 23); background: linear-gradient(120deg, rgb(245, 192, 68), rgb(245, 158, 11)); }
 
 /* Analytics metric strip — readable type that stays inside the card. */
 .page-content .chart-summary {
@@ -2552,7 +2552,7 @@
   min-width: 0;
 }
 .page-content .chart-summary small {
-  font-size: 11px !important;
+  font-size: 12px !important;
   font-weight: 750;
   line-height: 1.3 !important;
 }

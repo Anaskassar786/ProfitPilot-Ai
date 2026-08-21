@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
@@ -18,7 +19,7 @@ import {
   Sparkles,
   TicketCheck,
   X,
-} from 'lucide-react'
+} from './icons.js'
 import { createTicket, fetchBilling, fetchTickets } from './api.js'
 import type { TicketRecord } from './api.js'
 import type { BillingAccount, WorkspaceContext } from './model.js'
@@ -107,12 +108,12 @@ export function HelpSupportPage({
           <p>Get help from our team. We track every question and respond quickly.</p>
         </div>
         <div className="support-header-actions">
-          <button type="button" className="support-button secondary" onClick={() => onNavigate('ai-command')}>
+          <Button type="button" className="support-button secondary" onClick={() => onNavigate('ai-command')}>
             <Sparkles size={15} /> Ask AI Command
-          </button>
-          <button type="button" className="support-button primary" onClick={() => setFormOpen(true)}>
+          </Button>
+          <Button type="button" className="support-button primary" onClick={() => setFormOpen(true)}>
             <Plus size={15} /> New ticket
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -220,9 +221,9 @@ function FaqSection({ showAll, onToggleAll, onShowAll, onAskAi }: { showAll: boo
           <div className="support-section-kicker"><BookOpen size={13} /> QUICK ANSWERS</div>
           <h2>Find help instantly without waiting</h2>
         </div>
-        <button type="button" className="support-text-button" onClick={onToggleAll} aria-expanded={showAll}>
+        <Button type="button" className="support-text-button" onClick={onToggleAll} aria-expanded={showAll}>
           {showAll ? 'Show common questions' : 'View all FAQs'} <ChevronDown size={14} className={showAll ? 'flipped' : ''} />
-        </button>
+        </Button>
       </div>
 
       <div className="support-faq-category-grid">
@@ -231,9 +232,9 @@ function FaqSection({ showAll, onToggleAll, onShowAll, onAskAi }: { showAll: boo
             <div className="support-faq-category-pin" aria-hidden="true">📌</div>
             <h3>{category.title}</h3>
             <p>{category.blurb}</p>
-            <button type="button" className="support-text-button" onClick={() => { onShowAll(); openQuestion(category.questions[0]?.id ?? '') }}>
+            <Button type="button" className="support-text-button" onClick={() => { onShowAll(); openQuestion(category.questions[0]?.id ?? '') }}>
               Read <ArrowRight size={14} />
-            </button>
+            </Button>
           </div>
         ))}
       </div>
@@ -261,7 +262,7 @@ function FaqSection({ showAll, onToggleAll, onShowAll, onAskAi }: { showAll: boo
       </div>
 
       <p className="support-faq-footnote">
-        💡 Tip: <button type="button" className="support-text-button inline" onClick={onAskAi}>Ask AI Command</button> can answer 80% of questions instantly!
+        💡 Tip: <Button type="button" className="support-text-button inline" onClick={onAskAi}>Ask AI Command</Button> can answer 80% of questions instantly!
       </p>
     </section>
   )
@@ -270,10 +271,10 @@ function FaqSection({ showAll, onToggleAll, onShowAll, onAskAi }: { showAll: boo
 function FaqItem({ entry, categoryTitle, open, onToggle }: { entry: Readonly<{ id: string; question: string; answer: string }>; categoryTitle: string; open: boolean; onToggle: () => void }) {
   return (
     <div className={`support-faq-item ${open ? 'open' : ''}`}>
-      <button type="button" className="support-faq-question" onClick={onToggle} aria-expanded={open}>
+      <Button type="button" className="support-faq-question" onClick={onToggle} aria-expanded={open}>
         <span>{entry.question}</span>
         <ChevronDown size={15} className={open ? 'flipped' : ''} />
-      </button>
+      </Button>
       {open && <p className="support-faq-answer">{entry.answer}</p>}
       {!open && <small className="support-faq-category-tag">{categoryTitle}</small>}
     </div>
@@ -312,9 +313,9 @@ function SupportLoadError({ onRetry, loading }: { onRetry: () => void; loading: 
         </div>
       </div>
       <div className="support-load-error-actions">
-        <button type="button" className="support-button primary" onClick={onRetry} disabled={loading}>
+        <Button type="button" className="support-button primary" onClick={onRetry} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'spinning' : ''} /> {loading ? 'Checking…' : 'Try again'}
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -331,31 +332,31 @@ function SupportEmptyState({ onAskAi, onBrowseFaqs, onNewTicket, onRefresh, stor
           <p>{storeConnected ? 'No open support tickets. Your store is running smoothly!' : 'Connect your Shopify store to open tickets — until then, the FAQ and AI Command below work right away.'}</p>
         </div>
         {storeConnected && (
-          <button type="button" className="support-empty-refresh" onClick={onRefresh} title="Re-check your tickets">
+          <Button type="button" className="support-empty-refresh" onClick={onRefresh} title="Re-check your tickets">
             <RefreshCw size={13} /> Check again
-          </button>
+          </Button>
         )}
       </div>
       <p className="support-empty-lead">Need help with something? Choose the fastest option:</p>
       <div className="support-empty-options">
-        <button type="button" className="support-option-card" onClick={onAskAi}>
+        <Button type="button" className="support-option-card" onClick={onAskAi}>
           <span className="support-option-icon ai"><Bot size={20} /></span>
           <strong>Ask AI Command</strong>
           <small>Instant answers about your store</small>
           <span className="support-option-cta">Open <ArrowRight size={13} /></span>
-        </button>
-        <button type="button" className="support-option-card" onClick={onBrowseFaqs}>
+        </Button>
+        <Button type="button" className="support-option-card" onClick={onBrowseFaqs}>
           <span className="support-option-icon book"><BookOpen size={20} /></span>
           <strong>Browse FAQs</strong>
           <small>Common questions answered instantly</small>
           <span className="support-option-cta">Browse <ArrowRight size={13} /></span>
-        </button>
-        <button type="button" className="support-option-card" onClick={onNewTicket}>
+        </Button>
+        <Button type="button" className="support-option-card" onClick={onNewTicket}>
           <span className="support-option-icon mail"><Mail size={20} /></span>
           <strong>New Ticket</strong>
           <small>Complex issues need human support</small>
           <span className="support-option-cta">Create <ArrowRight size={13} /></span>
-        </button>
+        </Button>
       </div>
       <p className="support-faq-footnote">💡 Tip: AI Command can answer 80% of questions instantly!</p>
     </section>
@@ -421,8 +422,8 @@ function NewTicketForm({
           <h3>Monthly ticket limit reached</h3>
           <p>You have used all {tier.ticketLimit} tickets included with {tier.label} this month. Upgrade for more tickets and faster responses — your open tickets stay tracked either way.</p>
           <div className="support-form-blocked-actions">
-            <button type="button" className="support-button secondary" onClick={onCancel}>Back to support</button>
-            <button type="button" className="support-button primary" onClick={onUpgrade}><Gem size={14} /> Upgrade Plan</button>
+            <Button type="button" className="support-button secondary" onClick={onCancel}>Back to support</Button>
+            <Button type="button" className="support-button primary" onClick={onUpgrade}><Gem size={14} /> Upgrade Plan</Button>
           </div>
         </div>
       </section>
@@ -438,7 +439,7 @@ function NewTicketForm({
           <h3>Tell us what happened</h3>
           <small className="support-form-sla">{tier.responseBadge} · every ticket is tracked</small>
         </div>
-        <button type="button" className="support-close-button" onClick={onCancel} aria-label="Close ticket form"><X size={16} /></button>
+        <Button type="button" className="support-close-button" onClick={onCancel} aria-label="Close ticket form"><X size={16} /></Button>
       </div>
       <div className="support-form-grid">
         <div className="support-field">
@@ -454,7 +455,7 @@ function NewTicketForm({
           <span>Priority</span>
           <div className="support-priority-options" role="radiogroup" aria-label="Ticket priority">
             {PRIORITY_CHOICES.map((choice) => (
-              <button
+              <Button
                 type="button"
                 key={choice.value}
                 role="radio"
@@ -464,7 +465,7 @@ function NewTicketForm({
               >
                 <span className="support-radio" aria-hidden="true">{priority === choice.value ? '●' : '○'}</span>
                 <span className="support-priority-copy"><strong>{choice.label}</strong><small>{choice.hint}</small></span>
-              </button>
+              </Button>
             ))}
           </div>
         </fieldset>
@@ -492,21 +493,21 @@ function NewTicketForm({
           {attachment ? (
             <span className="support-attachment-chip">
               <Paperclip size={13} /> {attachment.name} · {formatAttachmentSize(attachment.size)}
-              <button type="button" onClick={() => setAttachment(null)} aria-label="Remove screenshot"><X size={13} /></button>
+              <Button type="button" onClick={() => setAttachment(null)} aria-label="Remove screenshot"><X size={13} /></Button>
             </span>
           ) : (
-            <button type="button" className="support-attach-button" onClick={() => fileInputRef.current?.click()}>
+            <Button type="button" className="support-attach-button" onClick={() => fileInputRef.current?.click()}>
               <Paperclip size={14} /> Attach Screenshot
-            </button>
+            </Button>
           )}
           <small className="support-field-hint">The file name and size are added to your ticket so support can find it. Full file uploads ship with the next release.</small>
         </div>
       </div>
       <div className="support-form-actions">
-        <button type="button" className="support-button secondary" onClick={onCancel}>Cancel</button>
-        <button type="button" className="support-button primary" disabled={submitting} onClick={() => void submit()}>
+        <Button type="button" className="support-button secondary" onClick={onCancel}>Cancel</Button>
+        <Button type="button" className="support-button primary" disabled={submitting} onClick={() => void submit()}>
           {submitting ? 'Submitting…' : 'Submit Ticket'} <ArrowRight size={14} />
-        </button>
+        </Button>
       </div>
       <p className="support-field-hint form-footnote">We reply to {tier.label} tickets within {tier.responseTargetHours === 4 ? '4 hours (priority)' : `${tier.responseTargetHours} hours`}.</p>
     </section>
@@ -523,9 +524,9 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
           <div className="support-section-kicker"><TicketCheck size={13} /> YOUR TICKETS</div>
           <h2>{open.length > 0 ? `${open.length} open ticket${open.length === 1 ? '' : 's'}` : 'All Clear! No open tickets.'}</h2>
         </div>
-        <button type="button" className="support-button secondary" onClick={onRefresh} disabled={loading}>
+        <Button type="button" className="support-button secondary" onClick={onRefresh} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'spinning' : ''} /> {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        </Button>
       </div>
       {open.length > 0 ? (
         <div className="support-ticket-list">
@@ -534,7 +535,7 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
             const expanded = expandedId === ticket.id
             return (
               <article className={`support-ticket-card ${expanded ? 'expanded' : ''}`} key={ticket.id}>
-                <button type="button" className="support-ticket-main" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
+                <Button type="button" className="support-ticket-main" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
                   <span className={`support-ticket-status-dot ${status.tone}`} aria-hidden="true" />
                   <span className="support-ticket-copy">
                     <strong>{ticket.subject}</strong>
@@ -544,7 +545,7 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
                     <span className={`support-status-badge ${status.tone}`}>{ticket.status === 'OPEN' ? 'OPEN' : 'IN PROGRESS'} · {status.label}</span>
                     <span className="support-ticket-chevron"><ChevronDown size={15} className={expanded ? 'flipped' : ''} /></span>
                   </span>
-                </button>
+                </Button>
                 {expanded && (
                   <div className="support-ticket-details">
                     <TicketDetailsBody ticket={ticket} responseBadge={responseBadge} />
@@ -569,13 +570,13 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
               const expanded = expandedId === ticket.id
               return (
                 <div className={`support-past-item ${expanded ? 'expanded' : ''}`} key={ticket.id}>
-                  <button type="button" className="support-past-row" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
+                  <Button type="button" className="support-past-row" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
                     <span className={`support-ticket-status-dot ${status.tone}`} aria-hidden="true" />
                     <strong>{ticket.subject}</strong>
                     <small>Resolved {formatTicketDate(ticket.updatedAt)} · {ticketPriorityLabel(ticket.priority)} priority</small>
                     <span className={`support-status-badge ${status.tone}`}>{status.label}</span>
                     <span className="support-ticket-chevron" aria-hidden="true"><ChevronDown size={15} className={expanded ? 'flipped' : ''} /></span>
-                  </button>
+                  </Button>
                   {expanded && (
                     <div className="support-past-details">
                       <TicketDetailsBody ticket={ticket} />

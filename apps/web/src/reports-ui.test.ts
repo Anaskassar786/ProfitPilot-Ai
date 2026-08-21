@@ -50,9 +50,9 @@ describe('Reports page professional copy', () => {
 
   it('styles both themes with readable light surfaces', () => {
     expect(css).toContain('.reports-page')
-    expect(css).toContain('#F8FAFC')
-    expect(css).toContain('#0F172A')
-    expect(css).toContain('#FFFFFF')
+    expect(css).toContain('rgb(248, 250, 252)')
+    expect(css).toContain('rgb(15, 23, 42)')
+    expect(css).toContain('rgb(255, 255, 255)')
     expect(css).toContain('.app-shell.light-mode .reports-page')
     expect(css).toContain('.reports-status.ready')
     expect(css).toContain('.reports-status.generating')

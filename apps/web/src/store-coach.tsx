@@ -1,6 +1,7 @@
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from './icons.js'
 import {
   AlertCircle,
   ArrowDownRight,
@@ -38,7 +39,7 @@ import {
   Users,
   Waves,
   Zap,
-} from 'lucide-react'
+} from './icons.js'
 import { ApiClientError, completeCoachPriority, dismissCoachPriority, fetchCoachActivityHeatmap, fetchCoachAchievements, fetchCoachAvailableAchievements, fetchCoachGoals, fetchCoachHealthScore, fetchCoachHuddle, fetchCoachPreferences, fetchCoachPriorities, fetchCoachProgressSummary, fetchCoachProgressTrends, fetchCoachReview, fetchCoachStreak, fetchCoachUsage, markCoachHuddleViewed, regenerateCoachHuddle, regenerateCoachPriorities } from './api.js'
 import type { WorkspaceContext } from './model.js'
 import { formatMoney, formatNumber } from './model.js'
@@ -401,9 +402,9 @@ function CoachHero({ shop, plan, health, streak, onSettings, onOnboarding, onHud
         </div>
       </div>
       <div className="coach-hero-actions">
-        <button className="button primary" onClick={onHuddle}><Sun size={15} /> {huddleActionLabelForDaypart(part)}</button>
-        <button className="icon-button coach-hero-icon" onClick={onOnboarding} aria-label="Take the two-minute tour" title="Take the two-minute tour"><Sparkles size={16} /></button>
-        <button className="icon-button coach-hero-icon" onClick={onSettings} aria-label="Store Coach settings" title="Store Coach settings"><Settings size={16} /></button>
+        <Button className="button primary" onClick={onHuddle}><Sun size={15} /> {huddleActionLabelForDaypart(part)}</Button>
+        <Button className="icon-button coach-hero-icon" onClick={onOnboarding} aria-label="Take the two-minute tour" title="Take the two-minute tour"><Sparkles size={16} /></Button>
+        <Button className="icon-button coach-hero-icon" onClick={onSettings} aria-label="Store Coach settings" title="Store Coach settings"><Settings size={16} /></Button>
       </div>
     </header>
   )
@@ -467,11 +468,11 @@ function CoachMain({ view, context, data, loadState, failedCards, plan, onToast,
           <div>
             <strong>💬 Need to ask your coach a question?</strong>
             <p>Head over to AI Command where you can have detailed conversations about your store and get instant answers.</p>
-            <button className="button primary" onClick={openAiCommand}>Open AI Command →</button>
+            <Button className="button primary" onClick={openAiCommand}>Open AI Command →</Button>
           </div>
         </section>
       </section>
-      <div className="coach-onboarding-nudge"><Smile size={15} /><span>New here? Take a quick 2-minute tour to see how your Store Coach can help you grow.</span><button className="text-button" onClick={onOpenOnboarding}>Start Interactive Tour <ChevronRight size={14} /></button></div>
+      <div className="coach-onboarding-nudge"><Smile size={15} /><span>New here? Take a quick 2-minute tour to see how your Store Coach can help you grow.</span><Button className="text-button" onClick={onOpenOnboarding}>Start Interactive Tour <ChevronRight size={14} /></Button></div>
     </div>
   )
 }
@@ -519,8 +520,8 @@ function TodayBriefingCard({ storeId, huddle, onToast, onReload, onOpenTour }: {
             <p>I’m here to help you grow every day. Here’s what I do for you: morning briefings with real insights, personal priorities for the day, weekly goal tracking, and celebrating your wins.</p>
             <ul className="coach-briefing-bullets"><li>🌅 Morning briefings with real insights</li><li>🎯 Personal priorities for the day</li><li>📊 Track your weekly goals</li><li>🏆 Celebrate your wins</li></ul>
             <div className="coach-briefing-welcome-actions">
-              <button className="button primary" onClick={generate}><Sparkles size={15} /> Show Me Today’s Insights</button>
-              <button className="button secondary" onClick={onOpenTour}><BookOpenCheck size={15} /> Learn how it works</button>
+              <Button className="button primary" onClick={generate}><Sparkles size={15} /> Show Me Today’s Insights</Button>
+              <Button className="button secondary" onClick={onOpenTour}><BookOpenCheck size={15} /> Learn how it works</Button>
             </div>
           </div>
         </div>
@@ -595,7 +596,7 @@ function BriefingReadyCard({ storeId, huddle, onToast, onReload }: { storeId: st
         </div>
         <div className="coach-briefing-actions">
           <span className="coach-review-time"><Clock3 size={13} /> {minutes} min</span>
-          <button className="button secondary coach-briefing-refresh" onClick={() => { void onHuddleClick(storeId, onToast, onReload) }}><RefreshCw size={14} /> Refresh</button>
+          <Button className="button secondary coach-briefing-refresh" onClick={() => { void onHuddleClick(storeId, onToast, onReload) }}><RefreshCw size={14} /> Refresh</Button>
         </div>
       </div>
       <div className="coach-briefing-grid">
@@ -607,7 +608,7 @@ function BriefingReadyCard({ storeId, huddle, onToast, onReload }: { storeId: st
         {huddle.viewed ? (
           <span className="coach-viewed-note"><CheckCircle2 size={13} /> Checked in — your streak is safe for today</span>
         ) : (
-          <button className="button primary" onClick={() => { void markCoachHuddleViewed(storeId, huddle.id).then(() => onReload()).catch((error: unknown) => onToast(errorMessage(error), 'error')) }}><Check size={14} /> I’ve read this — keep my streak going</button>
+          <Button className="button primary" onClick={() => { void markCoachHuddleViewed(storeId, huddle.id).then(() => onReload()).catch((error: unknown) => onToast(errorMessage(error), 'error')) }}><Check size={14} /> I’ve read this — keep my streak going</Button>
         )}
         <div className="coach-briefing-footer-side">
           <span className="coach-data-note"><Sparkles size={12} /> Based on your actual store performance.</span>
@@ -652,8 +653,8 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
         <CoachCardHeading kicker="TODAY'S TOP PRIORITIES" dot="red" title={priorities === null ? 'Building your priorities…' : visible.length === 0 ? 'Everything is handled' : `${remaining} action${remaining === 1 ? '' : 's'} worth your time today`} />
         <div className="coach-section-head-actions">
           <span className="coach-plan-chip">{planLimit >= 999 ? 'You get unlimited personalized priorities each day' : `You get ${planLimit} personalized ${planLimit === 1 ? 'priority' : 'priorities'} each day`}</span>
-          {plan !== 'commander' && <button className="text-button" onClick={onNavigateBilling}>Upgrade Plan for more priorities →</button>}
-          <button className="text-button" onClick={regenerate}><RefreshCw size={13} /> Refresh</button>
+          {plan !== 'commander' && <Button className="text-button" onClick={onNavigateBilling}>Upgrade Plan for more priorities →</Button>}
+          <Button className="text-button" onClick={regenerate}><RefreshCw size={13} /> Refresh</Button>
         </div>
       </div>
       {priorities === null ? (
@@ -670,8 +671,8 @@ function PrioritiesSection({ storeId, priorities, plan, onToast, onReload, onNav
             <strong>All caught up — great news!</strong>
             <p>No urgent actions for today. Your store looks steady, or there isn’t enough recent activity to suggest a move. Come back tomorrow, or set a weekly goal below while things are calm.</p>
             <div className="coach-all-clear-actions">
-              <button className="button primary" onClick={onNavigate}><Target size={14} /> Set a weekly goal</button>
-              <button className="button secondary" onClick={regenerate}><RefreshCw size={14} /> Refresh analysis</button>
+              <Button className="button primary" onClick={onNavigate}><Target size={14} /> Set a weekly goal</Button>
+              <Button className="button secondary" onClick={regenerate}><RefreshCw size={14} /> Refresh analysis</Button>
             </div>
           </div>
         </div>
@@ -702,8 +703,8 @@ export function PriorityCard({ priority, busy, onComplete, onDismiss }: { priori
         <span>{priority.impactValue > 0 && priority.impactLabel ? `Impact: ${priority.impactLabel}` : 'Impact: long-term momentum'}</span>
       </div>
       <div className="coach-priority-actions">
-        <button className="button primary" disabled={busy} onClick={onComplete}><Check size={14} /> {busy ? 'Saving…' : 'Mark as done'}</button>
-        <button className="text-button" disabled={busy} onClick={onDismiss}>Skip</button>
+        <Button className="button primary" disabled={busy} onClick={onComplete}><Check size={14} /> {busy ? 'Saving…' : 'Mark as done'}</Button>
+        <Button className="text-button" disabled={busy} onClick={onDismiss}>Skip</Button>
       </div>
     </article>
   )
@@ -750,7 +751,7 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
     <section className="coach-card coach-goal-card">
       <div className="coach-section-head">
         <CoachCardHeading kicker="THIS WEEK'S GOAL" dot="gold" title={active ? active.title : 'Let’s set your first weekly goal'} />
-        {active && <button className="text-button" onClick={onNavigate}>View details <ChevronRight size={14} /></button>}
+        {active && <Button className="text-button" onClick={onNavigate}>View details <ChevronRight size={14} /></Button>}
       </div>
       {!active ? (
         <div className="coach-goal-empty">
@@ -767,7 +768,7 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
             {!suggestionsLoading && suggestions !== null && suggestions.length === 0 && (
               <div className="coach-goal-suggestions-empty">
                 <p>No suggestions yet — I’ll propose goals from what your store is already doing. Sync a few more days of sales and I’ll have something realistic to aim for. You can always create your own.</p>
-                <button className="button secondary" onClick={onNavigate}><Goal size={14} /> Create Your Own Goal</button>
+                <Button className="button secondary" onClick={onNavigate}><Goal size={14} /> Create Your Own Goal</Button>
               </div>
             )}
             {!suggestionsLoading && suggestions !== null && suggestions.length > 0 && (
@@ -783,10 +784,10 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
                       <span><Target size={12} /> Aim for {formatMoney(suggestion.targetValue, suggestion.currency)}</span>
                     </div>
                     {suggestion.rationale && <small className="coach-suggestion-rationale">Why it’s achievable: {suggestion.rationale}</small>}
-                    <button className="button secondary" disabled={accepting === index} onClick={() => acceptSuggestion(suggestion, index)}>{accepting === index ? 'Setting…' : 'Set This Goal'}</button>
+                    <Button className="button secondary" disabled={accepting === index} onClick={() => acceptSuggestion(suggestion, index)}>{accepting === index ? 'Setting…' : 'Set This Goal'}</Button>
                   </div>
                 ))}
-                <button className="text-button coach-goal-custom" onClick={onNavigate}>Or create a custom goal <ChevronRight size={13} /></button>
+                <Button className="text-button coach-goal-custom" onClick={onNavigate}>Or create a custom goal <ChevronRight size={13} /></Button>
               </div>
             )}
             {plan === 'trial' && <LockedFeatureNote feature="Want to track multiple goals?" onUpgrade={onNavigateBilling} />}
@@ -810,8 +811,8 @@ function GoalSection({ storeId, goals, plan, onToast, onNavigate, onNavigateBill
             <GoalPaceNote goal={active} progress={progress[active.id] ?? null} />
             <p className="coach-goal-description">{active.description || 'Tracked automatically from your synced orders.'}</p>
             <div className="coach-goal-actions">
-              <button className="button secondary" onClick={onNavigate}>View Details</button>
-              <button className="text-button" onClick={() => onToast('Adjust the goal from the Goals view — targets and end dates are editable there.', 'info')}>Adjust Goal</button>
+              <Button className="button secondary" onClick={onNavigate}>View Details</Button>
+              <Button className="text-button" onClick={() => onToast('Adjust the goal from the Goals view — targets and end dates are editable there.', 'info')}>Adjust Goal</Button>
             </div>
             {plan === 'trial' && <LockedFeatureNote feature="Want to track multiple goals?" onUpgrade={onNavigateBilling} />}
           </div>
@@ -1031,7 +1032,7 @@ export function LockedFeatureNote({ feature, onUpgrade }: { feature: string; pla
     <div className="coach-locked-note">
       <LockKeyhole size={13} />
       <span><strong>{feature}</strong></span>
-      <button className="text-button" onClick={onUpgrade}>Upgrade Plan</button>
+      <Button className="text-button" onClick={onUpgrade}>Upgrade Plan</Button>
     </div>
   )
 }
@@ -1050,7 +1051,7 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling, onRet
       <section className="coach-card coach-progress-dashboard">
         <div className="coach-section-head">
           <CoachCardHeading kicker={`${planHistoryDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
-          <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+          <Button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></Button>
         </div>
         <div className="coach-section-unavailable">
           <span className="coach-section-unavailable-icon blue"><BarChart3 size={22} /></span>
@@ -1058,8 +1059,8 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling, onRet
             <strong>I couldn’t pull your progress numbers this time</strong>
             <p>Every other card on this page is live — only your revenue trend failed to arrive. Retry re-reads your synced orders from scratch; nothing here is ever a placeholder line.</p>
             <div className="coach-section-unavailable-actions">
-              <button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry loading progress</button>
-              <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+              <Button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry loading progress</Button>
+              <Button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></Button>
             </div>
           </div>
         </div>
@@ -1075,7 +1076,7 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling, onRet
       <section className="coach-card coach-progress-dashboard">
         <div className="coach-section-head">
           <CoachCardHeading kicker={`${historyDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
-          <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+          <Button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></Button>
         </div>
         <CoachEmptyState icon={BarChart3} title="No trend to chart yet" description="This chart fills in from your real daily sales. Sync orders and I’ll show how your store is moving — never a placeholder line." action="Go to progress view" onAction={onNavigate} />
       </section>
@@ -1085,7 +1086,7 @@ function ProgressDashboard({ summary, plan, onNavigate, onNavigateBilling, onRet
     <section className="coach-card coach-progress-dashboard">
       <div className="coach-section-head">
         <CoachCardHeading kicker={`${historyDays}-DAY LOOK BACK`} dot="blue" title="How your store is moving" />
-        <button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+        <Button className="text-button" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></Button>
       </div>
       <div className="coach-metric-grid">
         <BigNumberCard label="Revenue" value={formatMoney(revenue)} trendPct={revenueTrendPct} icon={TrendingUp} />
@@ -1138,12 +1139,12 @@ function HeatmapSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatma
       <section className="coach-card coach-heatmap-section">
         <div className="coach-section-head">
           <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
-          <button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></button>
+          <Button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></Button>
         </div>
         <div className="coach-tempo-unavailable">
           <span className="coach-tempo-unavailable-icon"><CalendarDays size={16} /></span>
           <p><strong>Your weekly heatmap didn’t load this time.</strong> Reload patterns rebuilds the grid from your real synced order days — every cell stays a true day of orders.</p>
-          <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Reload patterns</button>
+          <Button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Reload patterns</Button>
         </div>
       </section>
     )
@@ -1154,7 +1155,7 @@ function HeatmapSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatma
     <section className="coach-card coach-heatmap-section">
       <div className="coach-section-head">
         <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
-        <button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></button>
+        <Button className="text-button" onClick={onNavigate}>Explore detailed patterns <ChevronRight size={14} /></Button>
       </div>
       {cells.length === 0 ? (
         <div className="coach-heatmap-empty">
@@ -1166,7 +1167,7 @@ function HeatmapSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatma
               <span>Patterns strengthen with more synced order days</span>
               <span>Orders synced so far: {formatNumber(patterns.totalOrders)}</span>
             </div>
-            <button className="button secondary" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></button>
+            <Button className="button secondary" onClick={onNavigate}>Open progress view <ChevronRight size={14} /></Button>
           </div>
         </div>
       ) : (
@@ -1255,7 +1256,7 @@ function AchievementsSection({ achievements, badgeCatalog, badgeCategoryStats, s
     <section className="coach-card coach-achievements-section">
       <div className="coach-section-head">
         <CoachCardHeading kicker="YOUR JOURNEY" dot="gold" title={achievements.length > 0 ? `You’ve earned ${achievements.length} badge${achievements.length === 1 ? '' : 's'} so far` : 'Your journey is just beginning'} />
-        <button className="text-button" onClick={onNavigate}>View all badges <ChevronRight size={14} /></button>
+        <Button className="text-button" onClick={onNavigate}>View all badges <ChevronRight size={14} /></Button>
       </div>
       <div className="coach-streak-strip">
         <span className="coach-streak-flame"><Flame size={16} /></span>
@@ -1270,14 +1271,14 @@ function AchievementsSection({ achievements, badgeCatalog, badgeCategoryStats, s
             <small>{streakStatusCopy(streakDays, streak?.todayViewed ?? false).detail}</small>
           )}
         </div>
-        {!streak?.todayViewed && <button className="button secondary coach-streak-cta" onClick={onViewHuddle}>{streakStatusCopy(streakDays, false).cta ?? 'Check in today'}</button>}
+        {!streak?.todayViewed && <Button className="button secondary coach-streak-cta" onClick={onViewHuddle}>{streakStatusCopy(streakDays, false).cta ?? 'Check in today'}</Button>}
       </div>
       {recent.length === 0 ? (
         <div className="coach-empty-state slim">
           <span className="coach-empty-icon"><Trophy size={20} /></span>
           <strong>Complete your first huddle to earn your first badge!</strong>
           <p>Badges celebrate real milestones: first huddle, 7-day streaks, revenue records, goal wins. Nothing is awarded for fake activity — only for what actually happened in your store.</p>
-          <button className="button secondary" onClick={onNavigate}>View badge catalog <ArrowUpRight size={14} /></button>
+          <Button className="button secondary" onClick={onNavigate}>View badge catalog <ArrowUpRight size={14} /></Button>
         </div>
       ) : (
         <div className="coach-achievements-timeline">
@@ -1343,7 +1344,7 @@ function CoachValueStrip({ data, onFocusGoals, onFocusDays }: { data: CoachData;
       <section className="coach-card coach-tip-card">
         <CoachCardHeading kicker="TODAY’S COACHING TIP" dot="purple" title={tip.title} />
         <p>{tip.body}</p>
-        {tipAction && <button className="text-button" onClick={tipAction}>{tip.action} <ChevronRight size={13} /></button>}
+        {tipAction && <Button className="text-button" onClick={tipAction}>{tip.action} <ChevronRight size={13} /></Button>}
       </section>
       <section className="coach-card coach-wins-card">
         <CoachCardHeading kicker="THIS WEEK’S WINS" dot="gold" title={celebration ? 'Look at what you already did' : 'Wins will show up here'} />
@@ -1376,12 +1377,12 @@ function BestDaysSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatm
       <section className="coach-card coach-bestdays-section">
         <div className="coach-section-head">
           <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
-          <button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></button>
+          <Button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></Button>
         </div>
         <div className="coach-tempo-unavailable">
           <span className="coach-tempo-unavailable-icon"><CalendarDays size={16} /></span>
           <p><strong>Your day-by-day rhythm didn’t arrive with the rest of the page.</strong> Once it loads, this card names your strongest weekday and your peak week — measured from real orders only, never guessed.</p>
-          <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Check again</button>
+          <Button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Check again</Button>
         </div>
       </section>
     )
@@ -1391,7 +1392,7 @@ function BestDaysSection({ heatmap, onNavigate, onRetry }: { heatmap: CoachHeatm
     <section className="coach-card coach-bestdays-section">
       <div className="coach-section-head">
         <CoachCardHeading kicker="YOUR STORE’S BEST DAYS" dot="green" title="When your store is busiest" />
-        <button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></button>
+        <Button className="text-button" onClick={onNavigate}>See detailed patterns <ChevronRight size={14} /></Button>
       </div>
       {heatmap.cells.length === 0 ? (
         <div className="coach-heatmap-empty">
@@ -1443,11 +1444,11 @@ function CoachStyleSection({ storeId, preferences, plan, onToast, onReload, onNa
           const unlocked = allowed.includes(id)
           const active = preferences?.personality === id
           return (
-            <button key={id} className={`coach-personality-card ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`} disabled={!unlocked || saving} onClick={() => save(id)}>
+            <Button key={id} className={`coach-personality-card ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`} disabled={!unlocked || saving} onClick={() => save(id)}>
               <div className="coach-personality-head"><strong>{meta.emoji} {meta.label}</strong>{!unlocked && <LockKeyhole size={12} />}</div>
               <small>{meta.tagline}{active ? ' · Current' : ''}</small>
               <p>“{meta.sample}”</p>
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -1465,7 +1466,7 @@ function CoachAskRedirect({ onBack }: { onBack: () => void }) {
         <div>
           <strong>Have a specific question?</strong>
           <p>AI Command is the place for detailed answers about your store.</p>
-          <button className="button primary" onClick={openAiCommand}>Open AI Command <ChevronRight size={14} /></button>
+          <Button className="button primary" onClick={openAiCommand}>Open AI Command <ChevronRight size={14} /></Button>
         </div>
       </section>
     </div>
@@ -1604,7 +1605,7 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
           <div className="coach-review-block-label"><Sparkles size={13} /> Suggested goal for next week</div>
           <strong>{String(suggestedGoal.title ?? 'New weekly goal')}</strong>
           <p>{String(suggestedGoal.description ?? '')}</p>
-          <button className="button secondary" onClick={onSetGoal}>Set this goal <ChevronRight size={14} /></button>
+          <Button className="button secondary" onClick={onSetGoal}>Set this goal <ChevronRight size={14} /></Button>
         </div>
       )}
       <div className="coach-review-actions">
@@ -1612,11 +1613,11 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
             PDF writer is not configured these endpoints return 503, so showing
             the button would guarantee an error toast. */}
         {review.emailAvailable !== false && (
-          <button className="button secondary" disabled={emailing} onClick={emailReview}><Mail size={14} /> {emailing ? 'Sending…' : 'Email me this review'}</button>
+          <Button className="button secondary" disabled={emailing} onClick={emailReview}><Mail size={14} /> {emailing ? 'Sending…' : 'Email me this review'}</Button>
         )}
         {plan === 'commander' ? (
           review.pdfAvailable !== false
-            ? <button className="button secondary" onClick={downloadPdf}><ArrowUpRight size={14} /> Download PDF report</button>
+            ? <Button className="button secondary" onClick={downloadPdf}><ArrowUpRight size={14} /> Download PDF report</Button>
             : <span className="coach-data-note"><AlertCircle size={12} /> PDF export is not enabled on this deployment yet.</span>
         ) : (
           <LockedFeatureNote feature="Downloadable PDF reports" planName="Commander" onUpgrade={onNavigateBilling} />
@@ -1642,17 +1643,17 @@ function CoachPlanCard({ plan, onNavigateBilling }: { plan: CoachPlan; onNavigat
           <h3>Right now on {PLAN_LABEL[plan]}</h3>
           <p>Clear coaching — no mystery tiers, no hidden limits.</p>
         </div>
-        {plan !== 'commander' && <button className="button primary coach-plan-upgrade" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</button>}
+        {plan !== 'commander' && <Button className="button primary coach-plan-upgrade" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</Button>}
       </div>
       <ul className="coach-plan-included">
         {summary.included.slice(0, expanded ? undefined : 4).map((feature) => <li key={feature}><Check size={14} />{feature}</li>)}
       </ul>
-      <button className="text-button" onClick={()=>setExpanded(!expanded)}>{expanded ? 'Hide details ▲' : 'Show more features ▼'}</button>
+      <Button className="text-button" onClick={()=>setExpanded(!expanded)}>{expanded ? 'Hide details ▲' : 'Show more features ▼'}</Button>
       {expanded && plan !== 'commander' && (
         <div className="coach-plan-teaser">
           <strong>Unlock more coaching</strong>
           <p>Get more priorities, more goals, longer history, and every coach style.</p>
-          <button className="button secondary" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</button>
+          <Button className="button secondary" onClick={onNavigateBilling}><Rocket size={14} /> Upgrade Plan</Button>
         </div>
       )}
     </section>
@@ -1694,7 +1695,7 @@ export function CoachGoalsView({ context, goals, plan, onToast, onNavigate, onNa
         <section className="coach-card">
           <div className="coach-section-head">
             <CoachCardHeading kicker={`ACTIVE GOALS · ${all.filter((goal) => goal.status === 'ACTIVE').length} OF ${goalLimit} ON ${PLAN_LABEL[plan].toUpperCase()}`} dot="gold" title="Your goals" />
-            <button className="button secondary" onClick={loadSuggestions} disabled={suggesting}><Sparkles size={14} /> {suggesting ? 'Thinking…' : 'Get AI suggestions'}</button>
+            <Button className="button secondary" onClick={loadSuggestions} disabled={suggesting}><Sparkles size={14} /> {suggesting ? 'Thinking…' : 'Get AI suggestions'}</Button>
           </div>
           {all.length === 0 ? (
             <CoachEmptyState icon={Target} title="Set your first weekly goal" description="Goals give the Coach a north star. AI suggestions are built from your real trend — never a random number." action="Get AI suggestions" onAction={loadSuggestions} />
@@ -1709,7 +1710,7 @@ export function CoachGoalsView({ context, goals, plan, onToast, onNavigate, onNa
             <div className="coach-goal-draft-row">
               <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Goal title, e.g. Beat last week" />
               <input value={draft.target} onChange={(event) => setDraft((current) => ({ ...current, target: event.target.value }))} placeholder="Revenue target ($)" inputMode="decimal" />
-              <button className="button primary" onClick={createDraft}><Goal size={14} /> Create goal</button>
+              <Button className="button primary" onClick={createDraft}><Goal size={14} /> Create goal</Button>
             </div>
           </div>
         </section>
@@ -1725,7 +1726,7 @@ export function CoachGoalsView({ context, goals, plan, onToast, onNavigate, onNa
                   <strong>{suggestion.title}</strong>
                   <p>{suggestion.description}</p>
                   <span className="coach-suggestion-target">{formatMoney(suggestion.targetValue, suggestion.currency)} · {suggestion.metric.toLowerCase()}</span>
-                  <button className="button secondary" onClick={() => accept(suggestion)}>Accept goal</button>
+                  <Button className="button secondary" onClick={() => accept(suggestion)}>Accept goal</Button>
                 </div>
               ))}
             </div>
@@ -1762,8 +1763,8 @@ function CoachGoalRow({ goal, storeId, onChanged, onToast }: { goal: CoachGoal; 
       </div>
       <div className="coach-goal-row-side">
         <strong>{formatMoney(current, goal.targetCurrency)} <small>/ {formatMoney(goal.targetValue, goal.targetCurrency)}</small></strong>
-        {goal.status === 'ACTIVE' && <button className="button secondary" onClick={complete}>Mark achieved</button>}
-        <button className="text-button" onClick={remove}>Delete</button>
+        {goal.status === 'ACTIVE' && <Button className="button secondary" onClick={complete}>Mark achieved</Button>}
+        <Button className="text-button" onClick={remove}>Delete</Button>
       </div>
     </div>
   )
@@ -1851,7 +1852,7 @@ function WeeklyPatternBars({ storeId, onToast }: { storeId: string | null; onToa
       <CoachCardHeading kicker="YOUR STORE'S WEEKLY BEAT" dot="green" title="Weekly order rhythm" />
       <WeeklyRhythmBeat beats={beats} />
       <p className="coach-chart-note">Beat bars are real synced orders by weekday · music-themed rhythm, not a bar chart.</p>
-      <button className="text-button" onClick={() => onToast('Charts are drawn from synced analytics rows only.', 'info')}><Sparkles size={12} /> How this is computed</button>
+      <Button className="text-button" onClick={() => onToast('Charts are drawn from synced analytics rows only.', 'info')}><Sparkles size={12} /> How this is computed</Button>
     </section>
   )
 }
@@ -1904,7 +1905,7 @@ export function CoachAchievementsView({ context, achievements, plan, onToast, on
               <strong>The badge catalog didn’t load</strong>
               <p>Your earned badges are safe — only the list of what’s still unlockable failed to arrive. Retry pulls the live catalog again.</p>
               <div className="coach-section-unavailable-actions">
-                <button className="button secondary" onClick={() => setCatalogRetryTick((tick) => tick + 1)}><RefreshCw size={14} /> Retry loading badges</button>
+                <Button className="button secondary" onClick={() => setCatalogRetryTick((tick) => tick + 1)}><RefreshCw size={14} /> Retry loading badges</Button>
               </div>
             </div>
           </div>
@@ -1948,12 +1949,12 @@ export function CoachSettingsView({ context, preferences, plan, onToast, onNavig
               const meta = PERSONALITY_META[id]
               const active = preferences?.personality === id
               return (
-                <button key={id} className={`coach-personality-card ${active ? 'active' : ''} ${allowed ? '' : 'locked'}`} disabled={!allowed || saving} onClick={() => save({ personality: id })}>
+                <Button key={id} className={`coach-personality-card ${active ? 'active' : ''} ${allowed ? '' : 'locked'}`} disabled={!allowed || saving} onClick={() => save({ personality: id })}>
                   <div className="coach-personality-head"><strong>{meta.label}</strong>{!allowed && <LockKeyhole size={12} />}</div>
                   <small>{meta.tagline}</small>
                   <p>“{meta.sample}”</p>
                   {active && <span className="coach-personality-active"><Check size={12} /> Selected</span>}
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -2001,7 +2002,7 @@ function CoachSettingRow({ label, description, children }: { label: string; desc
 }
 
 export function Toggle({ value, onChange, disabled }: { value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
-  return <button className={`toggle ${value ? 'on' : ''}`} role="switch" aria-checked={value} disabled={disabled} onClick={() => onChange(!value)}><span /></button>
+  return <Button className={`toggle ${value ? 'on' : ''}`} role="switch" aria-checked={value} disabled={disabled} onClick={() => onChange(!value)}><span /></Button>
 }
 
 function minutesToTimeInput(minutes: number): string {
@@ -2017,7 +2018,7 @@ function minutesToTimeInput(minutes: number): string {
 function CoachSubHeader({ eyebrow, title, description, onBack }: { eyebrow: string; title: string; description: string; onBack: () => void }) {
   return (
     <div className="coach-subheader">
-      <button className="text-button" onClick={onBack}><ChevronRight size={14} className="flip" /> Store Coach</button>
+      <Button className="text-button" onClick={onBack}><ChevronRight size={14} className="flip" /> Store Coach</Button>
       <div>
         <div className="page-eyebrow">{eyebrow}</div>
         <h2>{title}</h2>
@@ -2037,7 +2038,7 @@ export function CoachEmptyState({ icon: Icon, title, description, action, onActi
       <span className="coach-empty-icon"><Icon size={22} /></span>
       <h4>{title}</h4>
       <p>{description}</p>
-      <button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></button>
+      <Button className="button secondary" onClick={onAction}>{action} <ArrowUpRight size={14} /></Button>
     </div>
   )
 }
@@ -2049,8 +2050,8 @@ export function CoachErrorState({ error, onRetry, onNavigateBilling }: { error: 
       <h3>Store Coach hit a snag</h3>
       <p>{error}</p>
       <div className="coach-error-actions">
-        <button className="button primary" onClick={onRetry}><RefreshCw size={14} /> Retry</button>
-        {/upgrade|locked|plan/i.test(error) && <button className="button secondary" onClick={onNavigateBilling}><ArrowUpRight size={14} /> Upgrade Plan</button>}
+        <Button className="button primary" onClick={onRetry}><RefreshCw size={14} /> Retry</Button>
+        {/upgrade|locked|plan/i.test(error) && <Button className="button secondary" onClick={onNavigateBilling}><ArrowUpRight size={14} /> Upgrade Plan</Button>}
       </div>
     </div>
   )
@@ -2070,7 +2071,7 @@ export function CoachPartialBanner({ failed, onRetry }: { failed: readonly strin
         <strong>A few cards couldn’t load this time</strong> — everything else on this page is live from your real store.
         {failed.length > 0 && <span className="coach-partial-banner-failed">Didn’t load: {failed.join(' · ')}</span>}
       </span>
-      <button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Retry</button>
+      <Button className="text-button" onClick={onRetry}><RefreshCw size={13} /> Retry</Button>
     </div>
   )
 }

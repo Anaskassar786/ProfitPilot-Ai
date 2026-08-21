@@ -5,6 +5,7 @@
  * RecommendationsWorkspace renders empty, populated, and plan-limit states in
  * both themes without a backend: run the dev server and open /recs-verify.html.
  */
+import { Button } from './polaris-ui.js'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
@@ -136,15 +137,15 @@ function Harness() {
         .harness-inline .modal-overlay { position: static; padding: 0; background: transparent; backdrop-filter: none; }
         .harness-inline .recs-tip-bubble { opacity: 1; transform: none; }
       `}</style>
-      <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--bg-secondary, #14161c)', flexWrap: 'wrap', color: 'var(--text)', fontSize: 12 }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--bg-secondary, rgb(20, 22, 28))', flexWrap: 'wrap', color: 'var(--text)', fontSize: 12 }}>
         <strong style={{ marginRight: 6 }}>Recs UX verification</strong>
         {(['empty', 'populated', 'limit'] as Scenario[]).map((id) => (
-          <button key={id} onClick={() => switchScenario(id)} className={`button secondary compact ${scenario === id ? 'primary' : ''}`}>{id}</button>
+          <Button key={id} onClick={() => switchScenario(id)} className={`button secondary compact ${scenario === id ? 'primary' : ''}`}>{id}</Button>
         ))}
-        <button onClick={() => setRuleModal(true)} className="button secondary compact">rule modal</button>
+        <Button onClick={() => setRuleModal(true)} className="button secondary compact">rule modal</Button>
         <span style={{ color: 'var(--text-tertiary)' }}>nav → {nav}</span>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setLight((v) => !v)} className="button secondary compact">{light ? 'Dark' : 'Light'} mode</button>
+        <Button onClick={() => setLight((v) => !v)} className="button secondary compact">{light ? 'Dark' : 'Light'} mode</Button>
       </div>
       <div className="page-content" style={{ padding: 22, maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 26 }}>
         <section>

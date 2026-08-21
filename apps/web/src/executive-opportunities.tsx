@@ -5,8 +5,9 @@
  * confidence bars, effort/timeline indicators, status lifecycle, and the
  * regenerate flow. Trial gets one preview slot; higher plans track more.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
-import { Lightbulb, RefreshCw, Sparkles } from 'lucide-react'
+import { Lightbulb, RefreshCw, Sparkles } from './icons.js'
 import type { ExecutiveOpportunity, OpportunityCategory, OpportunityStatus } from './executive-model.js'
 import { executiveTimelineLabel, formatExecutiveMoney } from './executive-model.js'
 import { fetchExecutiveOpportunities, generateExecutiveOpportunities, updateExecutiveOpportunityStatus } from './executive-api.js'
@@ -71,7 +72,7 @@ export function ExecutiveOpportunitiesPage({ context, plan, gates, onToast, onUp
         kicker="Growth identification"
         title="Strategic Opportunities"
         description="Opportunities detected from your catalog, sales velocity, margins, co-purchase patterns, and customer base — each with a computed annual impact estimate."
-        actions={<button type="button" className="button primary" onClick={() => void generate()} disabled={generating || !storeId}><Sparkles size={14} /> {generating ? 'Analyzing your business…' : 'Analyze Opportunities'}</button>}
+        actions={<Button type="button" className="button primary" onClick={() => void generate()} disabled={generating || !storeId}><Sparkles size={14} /> {generating ? 'Analyzing your business…' : 'Analyze Opportunities'}</Button>}
       />
       {loading && <ExecutiveSkeleton rows={4} label="Opportunities" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}
@@ -79,7 +80,7 @@ export function ExecutiveOpportunitiesPage({ context, plan, gates, onToast, onUp
         <>
           <div className="exec-category-chips" role="tablist" aria-label="Opportunity status filter">
             {(['ALL', ...STATUSES] as const).map((status) => (
-              <button key={status} type="button" className={`exec-category-chip ${filter === status ? 'active' : ''}`} onClick={() => setFilter(status)}>{status === 'ALL' ? 'All' : status.toLowerCase()}</button>
+              <Button key={status} type="button" className={`exec-category-chip ${filter === status ? 'active' : ''}`} onClick={() => setFilter(status)}>{status === 'ALL' ? 'All' : status.toLowerCase()}</Button>
             ))}
           </div>
           {opportunities.length === 0 ? (
@@ -119,7 +120,7 @@ export function ExecutiveOpportunitiesPage({ context, plan, gates, onToast, onUp
                     )}
                     <div className="exec-opportunity-actions">
                       {STATUSES.filter((status) => status !== opportunity.status).map((status) => (
-                        <button key={status} type="button" onClick={() => void changeStatus(opportunity, status)}>Mark {status.toLowerCase()}</button>
+                        <Button key={status} type="button" onClick={() => void changeStatus(opportunity, status)}>Mark {status.toLowerCase()}</Button>
                       ))}
                     </div>
                   </article>

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { Landmark } from 'lucide-react'
+import { Landmark } from './icons.js'
 import { ExecutiveAreaChart, ExecutiveBubbleMap, ExecutiveBullet, ExecutiveConfidenceBar, ExecutiveHeatmap, ExecutiveHorizontalBars, ExecutivePercentileBar, ExecutiveRadialGauge, ExecutiveSparkline, ExecutiveStackedBars, ExecutiveWaterfall } from './executive-charts.js'
 import { ComingSoonPanel, ExecutiveEmptyState, ExecutiveGateOverlay, ExecutiveSkeleton, ExecutiveStatusPill, GrowthCommandTabs, GrowthIqBaselineState, GrowthIqPlanPanel, GrowthIqWelcomeState } from './executive-ui.js'
 import type { ExecutiveGate } from './executive-model.js'
@@ -90,9 +90,9 @@ describe('GrowthIQ brand mark', () => {
     expect(html).toContain('role="img"')
     expect(html).toContain('aria-label="GrowthIQ"')
     // The signature is the purple gradient, not the old navy/gold.
-    expect(html).toContain('#8B5CF6')
-    expect(html).toContain('#6366F1')
-    expect(html).not.toContain('#C9A227')
+    expect(html).toContain('rgb(139, 92, 246)')
+    expect(html).toContain('rgb(99, 102, 241)')
+    expect(html).not.toContain('rgb(201, 162, 39)')
   })
   it('provides a nav icon adapter and a wordmark lockup', () => {
     const nav = renderToStaticMarkup(<GrowthIqNavIcon size={17} strokeWidth={2.25} />)

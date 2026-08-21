@@ -16,14 +16,14 @@ describe('Automation light theme contracts', () => {
 
   it('renders the "You\u2019ve reached your limit" banner amber in light mode', () => {
     expect(css).toContain('.light-mode .automation-page .limit-warning')
-    expect(css).toContain('background: linear-gradient(135deg, #fef3c7, #fde68a)')
-    expect(css).toContain('border-color: #fcd34d')
+    expect(css).toContain('background: linear-gradient(135deg, rgb(254, 243, 199), rgb(253, 230, 138))')
+    expect(css).toContain('border-color: rgb(252, 211, 77)')
     expect(css).toContain('.light-mode .automation-page .limit-warning-title')
-    expect(css).toContain('color: #92400e')
+    expect(css).toContain('color: rgb(146, 64, 14)')
     // The light "reached" banner must be amber, never the old pink wash.
     const reached = css.slice(css.indexOf('.light-mode .automation-page .automation-plan-banner.reached'), css.indexOf('.light-mode .automation-page .automation-plan-banner.drafts'))
-    expect(reached).toContain('#fde68a')
-    expect(reached).not.toContain('#fecaca')
+    expect(reached).toContain('rgb(253, 230, 138)')
+    expect(reached).not.toContain('rgb(254, 202, 202)')
   })
 
   it('keeps the dark "reached" banner red (dark theme untouched)', () => {
@@ -38,37 +38,37 @@ describe('Automation light theme contracts', () => {
       css.indexOf('.light-mode .automation-page .template-card-pro,'),
       css.indexOf('.light-mode .automation-page .template-name'),
     )
-    expect(block).toContain('background: #ffffff')
-    expect(block).toContain('border: 1px solid #e2e8f0')
+    expect(block).toContain('background: rgb(255, 255, 255)')
+    expect(block).toContain('border: 1px solid rgb(226, 232, 240)')
     expect(block).toContain('box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06)')
-    expect(block).toContain('border-color: #a78bfa')
+    expect(block).toContain('border-color: rgb(167, 139, 250)')
   })
 
   it('renders ACTIVE and PAUSED workflow badges with the specified fills', () => {
-    expect(css).toContain('color: #166534')
-    expect(css).toContain('background: #dcfce7')
-    expect(css).toContain('border-color: #86efac')
-    expect(css).toContain('color: #92400e')
-    expect(css).toContain('background: #fef3c7')
-    expect(css).toContain('border-color: #fcd34d')
+    expect(css).toContain('color: rgb(22, 101, 52)')
+    expect(css).toContain('background: rgb(220, 252, 231)')
+    expect(css).toContain('border-color: rgb(134, 239, 172)')
+    expect(css).toContain('color: rgb(146, 64, 14)')
+    expect(css).toContain('background: rgb(254, 243, 199)')
+    expect(css).toContain('border-color: rgb(252, 211, 77)')
   })
 
   it('ships readable workflow-card typography in light mode', () => {
     expect(css).toContain('.light-mode .automation-page .workflow-name')
     expect(css).toContain('.light-mode .automation-page .workflow-trigger')
     expect(css).toContain('.light-mode .automation-page .workflow-stat-value')
-    expect(css).toContain('color: #0f172a')
-    expect(css).toContain('color: #475569')
+    expect(css).toContain('color: rgb(15, 23, 42)')
+    expect(css).toContain('color: rgb(71, 85, 105)')
     expect(css).toContain('.light-mode .automation-page .workflow-card-stats')
-    expect(css).toContain('color: #64748b')
+    expect(css).toContain('color: rgb(100, 116, 139)')
   })
 
   it('styles filter tabs, search, and the grid/list toggle per spec', () => {
     expect(css).toContain('.light-mode .automation-page .automation-filter-tabs')
-    expect(css).toContain('background: #f1f5f9')
+    expect(css).toContain('background: rgb(241, 245, 249)')
     expect(css).toContain('.light-mode .automation-page .filter-tab.active')
     expect(css).toContain('.light-mode .automation-page .automation-search:focus-within')
-    expect(css).toContain('border-color: #7c3aed')
+    expect(css).toContain('border-color: rgb(124, 58, 237)')
     expect(css).toContain('.light-mode .automation-page .view-toggle button.active')
   })
 
@@ -76,10 +76,10 @@ describe('Automation light theme contracts', () => {
     expect(css).toContain('.light-mode .automation-page .kpi-card')
     expect(css).toContain('.light-mode .automation-page .kpi-value')
     expect(css).toContain('.light-mode .automation-page .kpi-label')
-    expect(css).toContain('color: #0f172a')
-    expect(css).toContain('color: #64748b')
-    expect(css).toContain('background: #ffffff')
-    expect(css).toContain('border: 1px solid #e2e8f0')
+    expect(css).toContain('color: rgb(15, 23, 42)')
+    expect(css).toContain('color: rgb(100, 116, 139)')
+    expect(css).toContain('background: rgb(255, 255, 255)')
+    expect(css).toContain('border: 1px solid rgb(226, 232, 240)')
   })
 
   it('renders section headers with the purple eyebrow and dark title', () => {
@@ -87,13 +87,13 @@ describe('Automation light theme contracts', () => {
     expect(css).toContain('.light-mode .automation-page .page-title')
     expect(css).toContain('.light-mode .automation-page .page-subtitle')
     expect(css).toContain('.light-mode .automation-page .section-title')
-    expect(css).toContain('color: #7c3aed')
-    expect(css).toContain('color: #0f172a')
-    expect(css).toContain('color: #475569')
+    expect(css).toContain('color: rgb(124, 58, 237)')
+    expect(css).toContain('color: rgb(15, 23, 42)')
+    expect(css).toContain('color: rgb(71, 85, 105)')
   })
 
   it('adds a purple focus ring and 200ms transitions to interactive states', () => {
-    expect(css).toContain('outline: 2px solid #7c3aed')
+    expect(css).toContain('outline: 2px solid rgb(124, 58, 237)')
     expect(css).toContain('outline-offset: 2px')
     expect(css).toContain('transform 200ms ease')
   })

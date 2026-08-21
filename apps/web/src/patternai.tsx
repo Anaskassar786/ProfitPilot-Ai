@@ -13,6 +13,7 @@
  * "Upgrade Plan" CTA; trial explores through clearly labelled samples.
  */
 
+import { Button } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -53,8 +54,8 @@ import {
   Waypoints,
   X,
   Zap,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from './icons.js'
+import type { LucideIcon } from './icons.js'
 import { ApiClientError } from './api.js'
 import * as api from './api.js'
 import type { CatalogProduct, WorkspaceContext } from './model.js'
@@ -218,7 +219,7 @@ function useResource<T>(load: (() => Promise<T>) | null, deps: readonly unknown[
 /* ── Shared presentation atoms ─────────────────────────────────────────── */
 
 export function InsightsUpgradeCta({ onNavigateBilling, compact = false }: { onNavigateBilling: () => void; compact?: boolean }) {
-  return <button className={`button primary ${compact ? 'compact' : ''}`} onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA} <ArrowRight size={12} /></button>
+  return <Button className={`button primary ${compact ? 'compact' : ''}`} onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA} <ArrowRight size={12} /></Button>
 }
 
 const LOCKED_FEATURE_PREVIEWS: Partial<Record<InsightsFeature, readonly string[]>> = {
@@ -295,7 +296,7 @@ export function InsightsErrorPanel({ message, onRetry }: { message: string; onRe
         <strong>This section could not load</strong>
         <p>{message}</p>
       </div>
-      <button className="pa-button ghost compact" onClick={onRetry}><RefreshCw size={12} /> Try again</button>
+      <Button className="pa-button ghost compact" onClick={onRetry}><RefreshCw size={12} /> Try again</Button>
     </div>
   )
 }
@@ -356,7 +357,7 @@ export function PatternAiWelcome({ readiness, plan, onRunDiscovery, onNavigateBi
       )}
       <footer className="pa-welcome-actions">
         {canRun
-          ? <button className="pa-button primary" onClick={onRunDiscovery}><Sparkles size={13} /> Run your first discovery</button>
+          ? <Button className="pa-button primary" onClick={onRunDiscovery}><Sparkles size={13} /> Run your first discovery</Button>
           : <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} />}
         {plan === 'trial' && <span className="pa-muted">Trial stores explore labelled samples; paid plans compute discoveries from your own data.</span>}
       </footer>
@@ -380,9 +381,9 @@ export function RatingStars({ value, onRate, disabled = false }: { value: number
   return (
     <span className="pa-stars" role={onRate ? 'radiogroup' : undefined} aria-label="Rate this insight">
       {[1, 2, 3, 4, 5].map((star) => (
-        <button key={star} className={`pa-star ${value !== null && star <= value ? 'lit' : ''}`} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
+        <Button key={star} className={`pa-star ${value !== null && star <= value ? 'lit' : ''}`} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
           <Star size={13} fill={value !== null && star <= value ? 'currentColor' : 'none'} />
-        </button>
+        </Button>
       ))}
     </span>
   )
@@ -423,8 +424,8 @@ function inline(text: string): ReactNode {
 }
 
 function ChartExportButton({ targetRef, filename, enabled, onLocked }: { targetRef: React.RefObject<HTMLDivElement | null>; filename: string; enabled: boolean; onLocked: () => void }) {
-  if (!enabled) return <button className="button ghost compact pa-export-locked" onClick={onLocked} title="Export unlocks with a plan upgrade"><Lock size={11} /> Export</button>
-  return <button className="button ghost compact" onClick={() => void downloadChartSvg(targetRef.current, filename)} title="Download this chart as an SVG"><Download size={11} /> Export</button>
+  if (!enabled) return <Button className="button ghost compact pa-export-locked" onClick={onLocked} title="Export unlocks with a plan upgrade"><Lock size={11} /> Export</Button>
+  return <Button className="button ghost compact" onClick={() => void downloadChartSvg(targetRef.current, filename)} title="Download this chart as an SVG"><Download size={11} /> Export</Button>
 }
 
 /* ── Section navigation ────────────────────────────────────────────────── */
@@ -610,14 +611,14 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
           </div>
           <p className="pa-hero-body">PatternAI reads your synced Shopify history and surfaces the structures underneath it — the rhythms, the segments, the correlations you would never spot by eye. Every number below is computed from your store; nothing here is invented or borrowed from another shop.</p>
           <div className="pa-hero-actions">
-            <button className="pa-button primary" onClick={() => void runDiscovery()} disabled={runningDiscovery} aria-busy={runningDiscovery}>
+            <Button className="pa-button primary" onClick={() => void runDiscovery()} disabled={runningDiscovery} aria-busy={runningDiscovery}>
               {runningDiscovery ? <RefreshCw size={15} className="pa-spin" /> : <PatternAiDiscoverGlyph size={15} />} {runningDiscovery ? 'Examining your data…' : 'Run discovery'}
-            </button>
-            <button className="pa-button ghost" onClick={() => go('settings')}><Settings2 size={14} /> Settings</button>
-            <button className="pa-plan-chip" onClick={() => setPlanPanelOpen((open) => !open)} aria-expanded={planPanelOpen}>
+            </Button>
+            <Button className="pa-button ghost" onClick={() => go('settings')}><Settings2 size={14} /> Settings</Button>
+            <Button className="pa-plan-chip" onClick={() => setPlanPanelOpen((open) => !open)} aria-expanded={planPanelOpen}>
               <ShieldCheck size={13} /> {PLAN_LABELS[plan]} plan
               <ChevronRight size={13} className={planPanelOpen ? 'pa-chip-caret open' : 'pa-chip-caret'} />
-            </button>
+            </Button>
           </div>
           <PatternAiSnapshot overview={overview} />
         </div>
@@ -643,7 +644,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
             <p className="pa-allowance-next">{(overview?.counts.newDiscoveries ?? 0) > 0 ? `${formatInsightNumber(overview?.counts.newDiscoveries ?? 0)} unread signal${overview?.counts.newDiscoveries === 1 ? '' : 's'} ready to review` : 'Your discovery feed is caught up'}</p>
             {monthly.unlimited
               ? <span className="pa-allowance-note">Your plan runs discovery on demand.</span>
-              : <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button>}
+              : <Button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</Button>}
           </aside>
         )}
       </header>
@@ -667,7 +668,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
                 const active = route.tab === tab || (route.tab === 'discoveries' && tab === 'overview')
                 const badge = navBadgeCount(tab, overview)
                 return (
-                  <button
+                  <Button
                     key={tab}
                     className={`pa-nav-item ${active ? 'active' : ''} ${locked ? 'locked' : ''}`}
                     onClick={() => go(tab)}
@@ -678,7 +679,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
                     <span>{insightsTabLabel(tab)}</span>
                     {badge !== null && badge > 0 && <span className="pa-nav-badge">{formatInsightNumber(badge)}</span>}
                     {locked && <Lock size={11} className="pa-nav-lock" />}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -729,7 +730,7 @@ export function PlanPanel({ plan, overview, onNavigateBilling, onClose }: { plan
           <span className="pa-eyebrow">Your plan</span>
           <strong>{summary.planLabel}</strong>
         </div>
-        {onClose && <button className="pa-icon-button" onClick={onClose} aria-label="Close plan details"><X size={14} /></button>}
+        {onClose && <Button className="pa-icon-button" onClick={onClose} aria-label="Close plan details"><X size={14} /></Button>}
       </header>
       <div className="pa-plan-columns">
         <div className="pa-plan-column">
@@ -793,7 +794,7 @@ export function CategorySignalBreakdown({ impact, activeCategory = 'ALL', onSele
         const count = counts.get(category) ?? 0
         const share = impact.total > 0 ? Math.round((count / impact.total) * 100) : 0
         return (
-          <button
+          <Button
             key={category}
             type="button"
             className={`pa-category-signal tone-${category.toLowerCase()} ${activeCategory === category ? 'active' : ''} ${count === 0 ? 'empty' : ''}`}
@@ -805,7 +806,7 @@ export function CategorySignalBreakdown({ impact, activeCategory = 'ALL', onSele
             <span className="pa-category-signal-count">{formatInsightNumber(count)} signal{count === 1 ? '' : 's'}</span>
             <span className="pa-category-signal-meter"><span style={{ width: `${share}%` }} /></span>
             <span className="pa-category-signal-share">{share}%</span>
-          </button>
+          </Button>
         )
       })}
     </div>
@@ -901,7 +902,7 @@ function ActionBacklogKpi({ discoveries, funnel, onReview }: { discoveries: read
           </div>
           <p className="pa-kpi-foot">{summary.hint}</p>
           {summary.newCount > 0 && (
-            <button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</button>
+            <Button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</Button>
           )}
           {summary.newCount === 0 && summary.total > 0 && (
             <p className="pa-muted" style={{ fontSize: '11px' }}>Saved discoveries remain available from the Saved status filter.</p>
@@ -964,7 +965,7 @@ export function DecisionWindowKpi({ discoveries, onOpen }: { discoveries: readon
       )}
       <footer className="pa-merchant-kpi-footer">
         <p>Missing or invalid dates are never guessed. Different currencies are never combined.</p>
-        {summary.next && <button className="pa-button secondary compact" onClick={() => onOpen(summary.next!.id)}><Search size={12} /> Review this signal</button>}
+        {summary.next && <Button className="pa-button secondary compact" onClick={() => onOpen(summary.next!.id)}><Search size={12} /> Review this signal</Button>}
       </footer>
     </article>
   )
@@ -1059,11 +1060,11 @@ function DiscoveriesTab(props: TabProps & { detailId: string | null }) {
           </select>
         </div>
         <div className="pa-toolbar-actions">
-          {filtered && <button className="pa-button ghost compact subtle" onClick={() => { setStatusFilter('ALL'); setCategoryFilter('ALL') }}><X size={11} /> Clear filters</button>}
+          {filtered && <Button className="pa-button ghost compact subtle" onClick={() => { setStatusFilter('ALL'); setCategoryFilter('ALL') }}><X size={11} /> Clear filters</Button>}
           <ChartExportButton targetRef={chartRef} filename="patternai-discovery-charts" enabled={exportEnabled} onLocked={onExportLocked} />
           {generationLocked
-            ? <button className="button primary" onClick={onNavigateBilling} title="On-demand discovery generation unlocks with a plan upgrade"><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void generate()} disabled={generating}><PatternAiDiscoverGlyph size={14} /> {generating ? 'Examining your data…' : 'Run discovery'}</button>}
+            ? <Button className="button primary" onClick={onNavigateBilling} title="On-demand discovery generation unlocks with a plan upgrade"><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</Button>
+            : <Button className="button primary" onClick={() => void generate()} disabled={generating}><PatternAiDiscoverGlyph size={14} /> {generating ? 'Examining your data…' : 'Run discovery'}</Button>}
         </div>
       </div>
 
@@ -1260,7 +1261,7 @@ export function ExploreFurther({ go, storeId, overview, plan }: {
         {destinations.map(({ tab, icon: Icon, feature, blurb, viz }) => {
           const locked = !unlocked(feature)
           return (
-            <button key={tab} className={`pa-explore-card ${locked ? 'locked' : ''}`} onClick={() => go(tab)} title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}>
+            <Button key={tab} className={`pa-explore-card ${locked ? 'locked' : ''}`} onClick={() => go(tab)} title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}>
               <span className="pa-explore-head">
                 <span className="pa-explore-icon"><Icon size={15} /></span>
                 <strong>{insightsTabLabel(tab)}</strong>
@@ -1270,7 +1271,7 @@ export function ExploreFurther({ go, storeId, overview, plan }: {
               <p>{blurb}</p>
               {locked && <span className="pa-explore-locked-note"><Lock size={10} /> Opens with a plan upgrade</span>}
               <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -1402,10 +1403,10 @@ export function DiscoveryCard({ discovery, storeId, onOpen, onChanged, onToast, 
       </div>
 
       <footer className="pa-discovery-actions">
-        <button className="pa-button secondary compact" onClick={onOpen}><Search size={12} /> Explore</button>
-        <button className="pa-button ghost compact" disabled={busy || discovery.status === 'SAVED'} onClick={() => void setStatus('SAVED')}><Star size={12} /> Save</button>
-        <button className="pa-button ghost compact" disabled={busy || discovery.status === 'ACTED_ON'} onClick={() => void setStatus('ACTED_ON')}><CheckCircle2 size={12} /> Acted on it</button>
-        <button className="pa-button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')} title="Dismiss this discovery"><X size={12} /> Dismiss</button>
+        <Button className="pa-button secondary compact" onClick={onOpen}><Search size={12} /> Explore</Button>
+        <Button className="pa-button ghost compact" disabled={busy || discovery.status === 'SAVED'} onClick={() => void setStatus('SAVED')}><Star size={12} /> Save</Button>
+        <Button className="pa-button ghost compact" disabled={busy || discovery.status === 'ACTED_ON'} onClick={() => void setStatus('ACTED_ON')}><CheckCircle2 size={12} /> Acted on it</Button>
+        <Button className="pa-button ghost compact subtle" disabled={busy || discovery.status === 'DISMISSED'} onClick={() => void setStatus('DISMISSED')} title="Dismiss this discovery"><X size={12} /> Dismiss</Button>
       </footer>
     </article>
   )
@@ -1419,7 +1420,7 @@ function DiscoveryDetail({ storeId, id, plan, onBack, onToast, onNavigateBilling
   const rows = evidenceRows(discovery.dataEvidence, 8)
   return (
     <section className="pa-detail">
-      <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to discoveries</button>
+      <Button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to discoveries</Button>
       <article className="pa-card pa-detail-card">
         <header className="pa-detail-head">
           <span className={`pa-type-badge type-${discovery.discoveryType.toLowerCase()}`}>{DISCOVERY_TYPE_LABELS[discovery.discoveryType]}</span>
@@ -1430,7 +1431,7 @@ function DiscoveryDetail({ storeId, id, plan, onBack, onToast, onNavigateBilling
         <h2>{discovery.title}</h2>
         <p className="pa-detail-description">{discovery.description}</p>
         {discovery.explanation && <blockquote className="pa-narration"><Waypoints size={13} /> {discovery.explanation}</blockquote>}
-        {plan === 'trial' && <div className="pa-banner sample"><Compass size={13} /> This is a labeled sample. Paid plans compute discoveries entirely from your synced store data. <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button></div>}
+        {plan === 'trial' && <div className="pa-banner sample"><Compass size={13} /> This is a labeled sample. Paid plans compute discoveries entirely from your synced store data. <Button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</Button></div>}
         <div className="pa-evidence">
           <h4><Network size={13} /> The evidence — pulled from your real data</h4>
           {rows.length === 0 ? <p className="pa-muted">Evidence bundle is empty for this discovery.</p> : (
@@ -1458,7 +1459,7 @@ function DiscoveryStatusActions({ storeId, discovery, onChanged, onToast, onNavi
   }
   return (
     <div className="pa-action-row">
-      {(['REVIEWED', 'SAVED', 'ACTED_ON', 'DISMISSED'] as const).map((status) => <button key={status} className={`button compact ${discovery.status === status ? 'primary' : 'secondary'}`} disabled={busy} onClick={() => void act(status)}>{DISCOVERY_STATUS_LABELS[status]}</button>)}
+      {(['REVIEWED', 'SAVED', 'ACTED_ON', 'DISMISSED'] as const).map((status) => <Button key={status} className={`button compact ${discovery.status === status ? 'primary' : 'secondary'}`} disabled={busy} onClick={() => void act(status)}>{DISCOVERY_STATUS_LABELS[status]}</Button>)}
     </div>
   )
 }
@@ -1496,15 +1497,15 @@ function LessonsTab(props: TabProps & { detailId: string | null }) {
         <div className="pa-toolbar-filters"><span className="pa-muted">{items.length} lesson{items.length === 1 ? '' : 's'} · {items.filter((lesson) => lesson.readAt).length} read</span></div>
         <div className="pa-toolbar-actions">
           {generationLocked
-            ? <button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void generate()} disabled={generating}><BookOpen size={13} /> {generating ? 'Writing lessons…' : 'Generate lessons'}</button>}
+            ? <Button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</Button>
+            : <Button className="button primary" onClick={() => void generate()} disabled={generating}><BookOpen size={13} /> {generating ? 'Writing lessons…' : 'Generate lessons'}</Button>}
         </div>
       </div>
 
       {lessons.status === 'loading' && <InsightsSkeleton rows={4} />}
       {lessons.status === 'error' && <InsightsErrorPanel message={lessons.message ?? 'Lessons failed to load.'} onRetry={lessons.reload} />}
       {lessons.status === 'ready' && items.length === 0 && (
-        <InsightsEmptyState icon={BookOpen} title="Your learning library is empty" body="Lessons are short, data-grounded briefings compiled from your store's own patterns. Generate your first batch — nothing here is generic blog filler." action={!generationLocked ? <button className="button primary compact" onClick={() => void generate()}>Generate lessons</button> : <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} compact />} />
+        <InsightsEmptyState icon={BookOpen} title="Your learning library is empty" body="Lessons are short, data-grounded briefings compiled from your store's own patterns. Generate your first batch — nothing here is generic blog filler." action={!generationLocked ? <Button className="button primary compact" onClick={() => void generate()}>Generate lessons</Button> : <InsightsUpgradeCta onNavigateBilling={onNavigateBilling} compact />} />
       )}
 
       {recommended.data && recommended.data.length > 0 && (
@@ -1512,7 +1513,7 @@ function LessonsTab(props: TabProps & { detailId: string | null }) {
           <span className="section-kicker"><Lightbulb size={11} /> RECOMMENDED FOR YOU — FROM YOUR PATTERNS</span>
           <div className="pa-recommended-row">
             {recommended.data.slice(0, 3).map((lesson) => (
-              <button key={lesson.id} className="pa-recommended-chip" onClick={() => go('lessons', lesson.id)}>{lesson.sample && <SampleBadge />} {lesson.title} <ChevronRight size={12} /></button>
+              <Button key={lesson.id} className="pa-recommended-chip" onClick={() => go('lessons', lesson.id)}>{lesson.sample && <SampleBadge />} {lesson.title} <ChevronRight size={12} /></Button>
             ))}
           </div>
         </div>
@@ -1520,12 +1521,12 @@ function LessonsTab(props: TabProps & { detailId: string | null }) {
 
       <div className="pa-lesson-grid">
         {items.map((lesson) => (
-          <button key={lesson.id} className={`pa-lesson-card ${lesson.readAt ? 'read' : ''}`} onClick={() => go('lessons', lesson.id)}>
+          <Button key={lesson.id} className={`pa-lesson-card ${lesson.readAt ? 'read' : ''}`} onClick={() => go('lessons', lesson.id)}>
             <header><span className="pa-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="pa-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}{lesson.bookmarked && <Star size={11} className="pa-bookmarked" />}</header>
             <h3>{lesson.title}</h3>
             <p>{lesson.summary}</p>
             <footer><span><Clock3 size={11} /> {lesson.readingTimeMinutes} min read</span>{lesson.rating !== null && <span className="pa-muted">Rated {lesson.rating}/5</span>}{lesson.readAt ? <span className="pa-read-flag"><CheckCircle2 size={11} /> Read</span> : <span className="pa-unread-flag">Unread</span>}</footer>
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -1542,7 +1543,7 @@ function LessonReader({ storeId, id, onBack, onToast }: { storeId: string; id: s
   if (!lesson) return <InsightsErrorPanel message={state.message ?? 'Lesson not found.'} onRetry={state.reload} />
   return (
     <section className="pa-detail">
-      <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to the library</button>
+      <Button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to the library</Button>
       <article className="pa-card pa-detail-card pa-reader">
         <header className="pa-detail-head"><span className="pa-type-badge lesson">{LESSON_TYPE_LABELS[lesson.lessonType]}</span><span className="pa-category">{DISCOVERY_CATEGORY_LABELS[lesson.category]}</span>{lesson.sample && <SampleBadge />}<span className="pa-muted"><Clock3 size={11} /> {lesson.readingTimeMinutes} min</span></header>
         <h2>{lesson.title}</h2>
@@ -1556,7 +1557,7 @@ function LessonReader({ storeId, id, onBack, onToast }: { storeId: string; id: s
         )}
         <footer className="pa-detail-actions">
           <RatingStars value={lesson.rating} onRate={async (rating) => { try { await api.rateInsightLesson(storeId, id, rating); onToast('Thanks — your lesson rating was recorded.', 'success'); state.reload() } catch (error: unknown) { onToast(error instanceof Error ? error.message : 'Rating failed.', 'error') } }} />
-          <button className="button ghost compact" onClick={async () => { try { await api.bookmarkInsightLesson(storeId, id, !lesson.bookmarked); state.reload() } catch { onToast('Bookmark failed.', 'error') } }}><Star size={12} fill={lesson.bookmarked ? 'currentColor' : 'none'} /> {lesson.bookmarked ? 'Bookmarked' : 'Bookmark'}</button>
+          <Button className="button ghost compact" onClick={async () => { try { await api.bookmarkInsightLesson(storeId, id, !lesson.bookmarked); state.reload() } catch { onToast('Bookmark failed.', 'error') } }}><Star size={12} fill={lesson.bookmarked ? 'currentColor' : 'none'} /> {lesson.bookmarked ? 'Bookmarked' : 'Bookmark'}</Button>
         </footer>
       </article>
     </section>
@@ -1595,8 +1596,8 @@ function PatternsTab({ storeId, overview, plan, onToast, onNavigateBilling, expo
         <div className="pa-toolbar-actions">
           <ChartExportButton targetRef={chartRef} filename="insights-pattern-bubbles" enabled={exportEnabled} onLocked={onExportLocked} />
           {detectionLocked
-            ? <button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</button>
-            : <button className="button primary" onClick={() => void detect()} disabled={detecting}><Network size={13} /> {detecting ? 'Watching for patterns…' : 'Detect patterns'}</button>}
+            ? <Button className="button primary" onClick={onNavigateBilling}><Lock size={12} /> {INSIGHTS_UPGRADE_CTA}</Button>
+            : <Button className="button primary" onClick={() => void detect()} disabled={detecting}><Network size={13} /> {detecting ? 'Watching for patterns…' : 'Detect patterns'}</Button>}
         </div>
       </div>
 
@@ -1624,8 +1625,8 @@ function PatternsTab({ storeId, overview, plan, onToast, onNavigateBilling, expo
             </div>
             <ConfidencePill score={pattern.confidenceScore} />
             <div className="pa-pattern-actions">
-              <button className={`icon-button ${pattern.alertsEnabled ? 'armed' : ''}`} title={pattern.alertsEnabled ? 'Alerting when this pattern breaks' : 'Enable break alerts'} onClick={async () => { try { await api.setInsightPatternAlerts(storeId, pattern.id, !pattern.alertsEnabled); patterns.reload() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Pattern alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{pattern.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</button>
-              {pattern.status === 'ACTIVE' && <button className="icon-button" title="Invalidate pattern" onClick={async () => { try { await api.invalidateInsightPattern(storeId, pattern.id); onToast('Pattern invalidated — it will need fresh evidence to return.', 'info'); patterns.reload() } catch { onToast('Could not invalidate the pattern.', 'error') } }}><Trash2 size={14} /></button>}
+              <Button className={`icon-button ${pattern.alertsEnabled ? 'armed' : ''}`} title={pattern.alertsEnabled ? 'Alerting when this pattern breaks' : 'Enable break alerts'} onClick={async () => { try { await api.setInsightPatternAlerts(storeId, pattern.id, !pattern.alertsEnabled); patterns.reload() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Pattern alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{pattern.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</Button>
+              {pattern.status === 'ACTIVE' && <Button className="icon-button" title="Invalidate pattern" onClick={async () => { try { await api.invalidateInsightPattern(storeId, pattern.id); onToast('Pattern invalidated — it will need fresh evidence to return.', 'info'); patterns.reload() } catch { onToast('Could not invalidate the pattern.', 'error') } }}><Trash2 size={14} /></Button>}
             </div>
           </article>
         ))}
@@ -1667,7 +1668,7 @@ function PersonasTab(props: TabProps & { detailId: string | null }) {
     <section>
       <div className="pa-toolbar">
         <div className="pa-toolbar-filters"><span className="pa-muted">{items.length} persona{items.length === 1 ? '' : 's'} identified</span></div>
-        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Users size={13} /> {generating ? 'Studying your customers…' : items.length > 0 ? 'Rebuild personas' : 'Identify personas'}</button></div>
+        <div className="pa-toolbar-actions"><Button className="button primary" onClick={() => void generate()} disabled={generating}><Users size={13} /> {generating ? 'Studying your customers…' : items.length > 0 ? 'Rebuild personas' : 'Identify personas'}</Button></div>
       </div>
       {personas.status === 'loading' && <InsightsSkeleton rows={3} />}
       {personas.status === 'error' && <InsightsErrorPanel message={personas.message ?? 'Customer personas failed to load.'} onRetry={personas.reload} />}
@@ -1681,13 +1682,13 @@ function PersonasTab(props: TabProps & { detailId: string | null }) {
       )}
       <div className="pa-persona-grid">
         {items.map((persona) => (
-          <button key={persona.id} className="pa-persona-card" onClick={() => go('personas', persona.id)}>
+          <Button key={persona.id} className="pa-persona-card" onClick={() => go('personas', persona.id)}>
             <span className="pa-persona-emoji" aria-hidden="true">{persona.personaEmoji}</span>
             <h3>{persona.personaName}</h3>
             <span className="pa-persona-share">{personaShare(persona)} · {formatInsightNumber(persona.customerCount)} people</span>
             <span className="pa-persona-impact">{formatInsightMoney(persona.estimatedRevenueImpact, persona.revenueCurrency)} lifetime value</span>
             <ConfidencePill score={persona.confidenceScore} />
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -1702,7 +1703,7 @@ function PersonaDetail({ storeId, id, onBack, onToast }: { storeId: string; id: 
   const data = persona.data
   return (
     <section className="pa-detail">
-      <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to personas</button>
+      <Button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to personas</Button>
       <article className="pa-card pa-detail-card">
         <header className="pa-detail-head"><span className="pa-persona-emoji large">{data.personaEmoji}</span><div><h2>{data.personaName}</h2><p className="pa-detail-description">{personaShare(data)} — {formatInsightMoney(data.estimatedRevenueImpact, data.revenueCurrency)} lifetime value across {formatInsightNumber(data.customerCount)} customers.</p></div><ConfidencePill score={data.confidenceScore} /></header>
         <div className="pa-persona-detail-grid">
@@ -1723,7 +1724,7 @@ function PersonaDetail({ storeId, id, onBack, onToast }: { storeId: string; id: 
             <div className="pa-anon-chips">{customers.data.anonymizedSample.map((label) => <span key={label}>{label}</span>)}</div>
           </div>
         )}
-        <footer className="pa-detail-actions"><button className="button secondary compact" onClick={() => { navigator.clipboard?.writeText(`${data.personaName} — ${personaShare(data)}`).then(() => onToast('Persona summary copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy summary</button></footer>
+        <footer className="pa-detail-actions"><Button className="button secondary compact" onClick={() => { navigator.clipboard?.writeText(`${data.personaName} — ${personaShare(data)}`).then(() => onToast('Persona summary copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy summary</Button></footer>
       </article>
     </section>
   )
@@ -1765,10 +1766,10 @@ function WhyTab(props: TabProps & { detailId: string | null }) {
         <p>The explorer decomposes your real metrics — revenue into orders and basket size, products into mix shifts — and ranks root causes by measured impact.</p>
         <form className="pa-why-form" onSubmit={(event) => { event.preventDefault(); void ask(question) }}>
           <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Why did revenue drop last week?" maxLength={400} aria-label="Ask a why question" />
-          <button className="button primary" type="submit" disabled={asking || !question.trim()}>{asking ? 'Investigating…' : 'Investigate'}</button>
+          <Button className="button primary" type="submit" disabled={asking || !question.trim()}>{asking ? 'Investigating…' : 'Investigate'}</Button>
         </form>
         <div className="pa-why-suggestions">
-          {SUGGESTED_WHY_QUESTIONS.map((suggestion) => <button key={suggestion} className="pa-suggestion" onClick={() => void ask(suggestion)} disabled={asking}>{suggestion}</button>)}
+          {SUGGESTED_WHY_QUESTIONS.map((suggestion) => <Button key={suggestion} className="pa-suggestion" onClick={() => void ask(suggestion)} disabled={asking}>{suggestion}</Button>)}
         </div>
         {quota && quota.limit !== null && <UsageMeterBar label="Investigations this month" used={quota.used} limit={quota.limit} />}
       </div>
@@ -1780,12 +1781,12 @@ function WhyTab(props: TabProps & { detailId: string | null }) {
       )}
       <div className="pa-investigation-list">
         {(investigations.data ?? []).map((investigation) => (
-          <button key={investigation.id} className="pa-investigation-row" onClick={() => go('why', investigation.id)}>
+          <Button key={investigation.id} className="pa-investigation-row" onClick={() => go('why', investigation.id)}>
             <HelpCircle size={15} />
             <div><strong>{investigation.question}</strong><small>{investigation.rootCauses.length} root cause{investigation.rootCauses.length === 1 ? '' : 's'} · {formatRelativeTime(investigation.createdAt)}</small></div>
             <ConfidencePill score={investigation.confidenceScore} />
             <ChevronRight size={14} />
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -1799,7 +1800,7 @@ function InvestigationDetail({ storeId, id, onBack, onToast }: { storeId: string
   const item = state.data
   return (
     <section className="pa-detail">
-      <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to Why?</button>
+      <Button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to Why?</Button>
       <article className="pa-card pa-detail-card">
         <header className="pa-detail-head"><span className={`pa-type-badge status-${item.status.toLowerCase()}`}>{item.status === 'COMPLETED' ? 'Solved' : 'In progress'}</span><ConfidencePill score={item.confidenceScore} /></header>
         <h2>{item.question}</h2>
@@ -1897,7 +1898,7 @@ function TrendRow({ trend, storeId, onChanged, onToast, onNavigateBilling }: { t
       <span className="pa-trend-arrow">{trend.direction === 'UP' ? <TrendingUp size={15} /> : trend.direction === 'DOWN' ? <TrendingDown size={15} /> : <ChevronRight size={15} />}</span>
       <div className="pa-trend-copy"><strong>{trend.title}</strong><p>{trend.description}</p><small>{TREND_TYPE_LABELS[trend.trendType]} · {trend.timePeriod} · {trend.dataSource === 'INTERNAL' ? 'your data' : trend.dataSource.toLowerCase()} · {formatPercent(trend.magnitude, 1)} movement</small></div>
       <ConfidencePill score={trend.confidenceScore} />
-      <button className={`icon-button ${trend.alertsEnabled ? 'armed' : ''}`} title={trend.alertsEnabled ? 'Alerting on this trend' : 'Enable alerts'} onClick={async () => { try { await api.setInsightTrendAlerts(storeId, trend.id, !trend.alertsEnabled); onChanged() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Trend alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{trend.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</button>
+      <Button className={`icon-button ${trend.alertsEnabled ? 'armed' : ''}`} title={trend.alertsEnabled ? 'Alerting on this trend' : 'Enable alerts'} onClick={async () => { try { await api.setInsightTrendAlerts(storeId, trend.id, !trend.alertsEnabled); onChanged() } catch (error: unknown) { if (error instanceof ApiClientError && error.status === 402) { onToast('Trend alerts unlock with a plan upgrade.', 'warning'); onNavigateBilling() } else onToast('Could not toggle the alert.', 'error') } }}>{trend.alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}</Button>
     </article>
   )
 }
@@ -1942,7 +1943,7 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
     <section>
       <div className="pa-toolbar">
         <div className="pa-toolbar-filters"><span className="pa-muted">{list.data?.length ?? 0} comparison{(list.data?.length ?? 0) === 1 ? '' : 's'} run</span></div>
-        <div className="pa-toolbar-actions">{!props.createMode && <button className="button primary" onClick={() => go('comparisons', 'new')}><Scale size={13} /> New comparison</button>}</div>
+        <div className="pa-toolbar-actions">{!props.createMode && <Button className="button primary" onClick={() => go('comparisons', 'new')}><Scale size={13} /> New comparison</Button>}</div>
       </div>
 
       {(props.createMode || (list.data?.length ?? 0) === 0) && (
@@ -1960,8 +1961,8 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
           {form.type === 'PERIOD' && <p className="pa-muted">Each period subject is a start day (YYYY-MM-DD); the engine compares the following 30-day windows. Today is {today}. Try {thirtyBack} vs {sixtyBack}.</p>}
           {form.type === 'CHANNEL' && <p className="pa-muted">Channel attribution depends on Shopify channel fields; if sync has not captured them, the comparison will tell you honestly instead of inventing a split.</p>}
           <div className="pa-builder-actions">
-            {props.createMode && <button className="button ghost" onClick={() => go('comparisons', null)}><X size={12} /> Cancel</button>}
-            <button className="button primary" disabled={busy || !form.a.trim() || !form.b.trim() || form.a.trim() === form.b.trim()} onClick={() => void run()}>{busy ? 'Measuring…' : 'Run comparison'}</button>
+            {props.createMode && <Button className="button ghost" onClick={() => go('comparisons', null)}><X size={12} /> Cancel</Button>}
+            <Button className="button primary" disabled={busy || !form.a.trim() || !form.b.trim() || form.a.trim() === form.b.trim()} onClick={() => void run()}>{busy ? 'Measuring…' : 'Run comparison'}</Button>
           </div>
         </div>
       )}
@@ -1970,11 +1971,11 @@ function ComparisonsTab(props: TabProps & { createMode: boolean; detailId: strin
       {list.status === 'error' && <InsightsErrorPanel message={list.message ?? 'Comparisons failed to load.'} onRetry={list.reload} />}
       <div className="pa-comparison-list">
         {(list.data ?? []).map((comparison) => (
-          <button key={comparison.id} className="pa-comparison-row" onClick={() => go('comparisons', comparison.id)}>
+          <Button key={comparison.id} className="pa-comparison-row" onClick={() => go('comparisons', comparison.id)}>
             <Scale size={15} />
             <div><strong>{comparison.title}</strong><small>{COMPARISON_TYPE_LABELS_TEXT[comparison.comparisonType]} · {comparison.winner === 'INSUFFICIENT_DATA' ? 'not enough data yet' : comparison.winner === 'TIE' ? 'statistical tie' : `${subjectLabel(comparison.winner === 'A' ? comparison.subjectA : comparison.subjectB, comparison.winner)} leads`} · {formatRelativeTime(comparison.createdAt)}</small></div>
             <ChevronRight size={14} />
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -2015,7 +2016,7 @@ function ComparisonDetail({ storeId, id, onBack, onToast }: { storeId: string; i
   const item = state.data
   return (
     <section className="pa-detail">
-      <button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to comparisons</button>
+      <Button className="text-button" onClick={onBack}><ArrowLeft size={12} /> Back to comparisons</Button>
       <article className="pa-card pa-detail-card">
         <header className="pa-detail-head"><span className="pa-type-badge compare">{COMPARISON_TYPE_LABELS_TEXT[item.comparisonType]}</span><span className="pa-muted">{formatRelativeTime(item.createdAt)}</span></header>
         <h2>{item.title}</h2>
@@ -2029,7 +2030,7 @@ function ComparisonDetail({ storeId, id, onBack, onToast }: { storeId: string; i
             </div>
             <ul className="pa-insight-bullets">{item.insights.map((insight) => <li key={insight}>{insight}</li>)}</ul>
           </>}
-        <footer className="pa-detail-actions"><button className="button ghost compact subtle" onClick={async () => { try { await api.deleteInsightComparison(storeId, id); onToast('Comparison removed.', 'info'); onBack() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={12} /> Delete</button></footer>
+        <footer className="pa-detail-actions"><Button className="button ghost compact subtle" onClick={async () => { try { await api.deleteInsightComparison(storeId, id); onToast('Comparison removed.', 'info'); onBack() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={12} /> Delete</Button></footer>
       </article>
     </section>
   )
@@ -2081,9 +2082,9 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
         <form className="pa-search" onSubmit={(event) => { event.preventDefault(); void search() }}>
           <Search size={13} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search everything PatternAI has learned…" aria-label="Search knowledge base" />
-          {searchResults && <button type="button" className="icon-button" onClick={() => { setSearchResults(null); setQuery('') }} aria-label="Clear search"><X size={13} /></button>}
+          {searchResults && <Button type="button" className="icon-button" onClick={() => { setSearchResults(null); setQuery('') }} aria-label="Clear search"><X size={13} /></Button>}
         </form>
-        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => setEditor({ id: null, title: '', content: '', tags: '' })}><Library size={13} /> Add note</button></div>
+        <div className="pa-toolbar-actions"><Button className="button primary" onClick={() => setEditor({ id: null, title: '', content: '', tags: '' })}><Library size={13} /> Add note</Button></div>
       </div>
 
       {network.nodes.length > 1 && (
@@ -2094,7 +2095,7 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
       )}
 
       {cloud.length > 0 && <InsightsWordCloud words={cloud} onSelect={(tag) => { setActiveTag((current) => (current === tag ? null : tag)); setSearchResults(null) }} />}
-      {activeTag && <div className="pa-banner info"><Network size={13} /> Filtering by tag “{activeTag}”. <button className="text-button" onClick={() => setActiveTag(null)}>Clear</button></div>}
+      {activeTag && <div className="pa-banner info"><Network size={13} /> Filtering by tag “{activeTag}”. <Button className="text-button" onClick={() => setActiveTag(null)}>Clear</Button></div>}
 
       {list.status === 'loading' && <InsightsSkeleton rows={4} />}
       {list.status === 'error' && <InsightsErrorPanel message={list.message ?? 'The knowledge base failed to load.'} onRetry={list.reload} />}
@@ -2112,8 +2113,8 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
               <small>{entry.author === 'AI' ? 'Written by PatternAI' : 'Your note'} · updated {formatRelativeTime(entry.updatedAt)}{entry.tags.length > 0 ? ` · ${entry.tags.join(', ')}` : ''}</small>
             </div>
             <div className="pa-pattern-actions">
-              <button className="icon-button" title="Edit" onClick={() => setEditor({ id: entry.id, title: entry.title, content: entry.contentMarkdown, tags: entry.tags.join(', ') })}><BookOpen size={14} /></button>
-              <button className="icon-button" title="Delete" onClick={async () => { try { await api.deleteInsightsKnowledge(storeId, entry.id); list.reload() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={14} /></button>
+              <Button className="icon-button" title="Edit" onClick={() => setEditor({ id: entry.id, title: entry.title, content: entry.contentMarkdown, tags: entry.tags.join(', ') })}><BookOpen size={14} /></Button>
+              <Button className="icon-button" title="Delete" onClick={async () => { try { await api.deleteInsightsKnowledge(storeId, entry.id); list.reload() } catch { onToast('Delete failed.', 'error') } }}><Trash2 size={14} /></Button>
             </div>
           </article>
         ))}
@@ -2121,11 +2122,11 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
 
       {editor && (
         <div className="modal-overlay"><div className="modal-card pa-editor">
-          <div className="modal-card-top"><div><div className="section-kicker"><Library size={12} /> KNOWLEDGE NOTE</div><h2>{editor.id ? 'Edit note' : 'New note'}</h2></div><button className="icon-button" onClick={() => setEditor(null)}><X size={17} /></button></div>
+          <div className="modal-card-top"><div><div className="section-kicker"><Library size={12} /> KNOWLEDGE NOTE</div><h2>{editor.id ? 'Edit note' : 'New note'}</h2></div><Button className="icon-button" onClick={() => setEditor(null)}><X size={17} /></Button></div>
           <label>Title<input value={editor.title} onChange={(event) => setEditor({ ...editor, title: event.target.value })} placeholder="What did we learn?" maxLength={180} /></label>
           <label>Note<textarea value={editor.content} onChange={(event) => setEditor({ ...editor, content: event.target.value })} placeholder="Markdown supported — headings, lists, **bold**." rows={7} /></label>
           <label>Tags (comma separated)<input value={editor.tags} onChange={(event) => setEditor({ ...editor, tags: event.target.value })} placeholder="pricing, weekends, hoodies" /></label>
-          <div className="modal-actions"><button className="button secondary" onClick={() => setEditor(null)}>Cancel</button><button className="button primary" disabled={saving || !editor.title.trim()} onClick={() => void save()}>{saving ? 'Saving…' : 'Save note'}</button></div>
+          <div className="modal-actions"><Button className="button secondary" onClick={() => setEditor(null)}>Cancel</Button><Button className="button primary" disabled={saving || !editor.title.trim()} onClick={() => void save()}>{saving ? 'Saving…' : 'Save note'}</Button></div>
         </div></div>
       )}
     </section>
@@ -2174,11 +2175,11 @@ function TimelineTab({ storeId, overview, plan, go, onNavigateBilling }: TabProp
       <ol className="pa-timeline">
         {events.map((event) => (
           <li key={event.id} className={`pa-timeline-event type-${event.entityType.toLowerCase()}`}>
-            <button onClick={() => go(tabForTimelineEntity(event.entityType), event.entityId)}>
+            <Button onClick={() => go(tabForTimelineEntity(event.entityType), event.entityId)}>
               <span className="pa-timeline-badge">{TIMELINE_TYPE_LABELS[event.entityType]}</span>
               <span className="pa-timeline-text">{event.description}</span>
               <time>{formatRelativeTime(event.eventAt)}</time>
-            </button>
+            </Button>
           </li>
         ))}
       </ol>
@@ -2227,7 +2228,7 @@ function PredictionsTab({ storeId, overview, plan, onToast, onNavigateBilling }:
             {(Object.keys(HORIZON_LABELS) as PredictionHorizon[]).map((value) => <option key={value} value={value} disabled={allowedHorizons.length > 0 && !allowedHorizons.includes(value)}>{HORIZON_LABELS[value]}{allowedHorizons.length > 0 && !allowedHorizons.includes(value) ? ' — plan upgrade' : ''}</option>)}
           </select>
         </div>
-        <div className="pa-toolbar-actions"><button className="button primary" onClick={() => void generate()} disabled={generating}><Sparkles size={13} /> {generating ? 'Projecting…' : 'Refresh forecasts'}</button></div>
+        <div className="pa-toolbar-actions"><Button className="button primary" onClick={() => void generate()} disabled={generating}><Sparkles size={13} /> {generating ? 'Projecting…' : 'Refresh forecasts'}</Button></div>
       </div>
 
       {readiness && !readiness.canPredict && <div className="pa-banner info"><Clock3 size={13} /> Forecasting needs {readiness.predictRequirement.need} days of revenue history — you have {readiness.predictRequirement.have}. The model gets more honest every day you sync.</div>}
@@ -2264,7 +2265,7 @@ export function PredictionCard({ prediction, storeId, onChanged, onToast }: { pr
       <small className="pa-muted">Method: {prediction.method} · based on {prediction.basedOn.join(', ')}</small>
       {prediction.accuracyScore !== null
         ? <p className="pa-accuracy"><CheckCircle2 size={12} /> Actual: {isMoney ? formatInsightMoney(prediction.actualValue, prediction.currency) : formatInsightNumber(prediction.actualValue)} — accuracy {Math.round(prediction.accuracyScore * 100)}%</p>
-        : <div className="pa-validate"><input value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Actual value when the window closes" aria-label="Actual value" /><button className="button ghost compact" disabled={validating || !actual.trim()} onClick={() => void validate()}>Grade it</button></div>}
+        : <div className="pa-validate"><input value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Actual value when the window closes" aria-label="Actual value" /><Button className="button ghost compact" disabled={validating || !actual.trim()} onClick={() => void validate()}>Grade it</Button></div>}
     </article>
   )
 }
@@ -2293,8 +2294,8 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
         <h3><Network size={15} /> Auto-discovery</h3>
         <p className="pa-muted">The nightly sweep (2:00 AM UTC; Sundays for weekly) studies your newest synced data and files discoveries, patterns, and trends while you sleep.</p>
         <ToggleRow label="Auto-discovery" hint={autoDiscoveryPlanLocked ? 'Unlocks with a plan upgrade' : 'Run discovery automatically'} checked={prefs.autoDiscoveryEnabled && !autoDiscoveryPlanLocked} disabled={autoDiscoveryPlanLocked || saving} onChange={(value) => void patch({ autoDiscoveryEnabled: value })} />
-        <div className="pa-field"><span>Frequency</span><div className="pa-choice-row">{(['DAILY', 'WEEKLY', 'REALTIME'] as const).map((frequency) => { const realtimeLocked = frequency === 'REALTIME' && plan !== 'commander'; return <button key={frequency} className={`pa-choice ${prefs.discoveryFrequency === frequency ? 'active' : ''}`} disabled={realtimeLocked || saving} onClick={() => void patch({ discoveryFrequency: frequency })} title={realtimeLocked ? 'Real-time unlocks on the highest plan' : undefined}>{frequency === 'REALTIME' ? 'Real-time' : frequency === 'DAILY' ? 'Daily 2:00 AM' : 'Weekly (Sunday)'}{realtimeLocked && <Lock size={10} />}</button> })}</div></div>
-        <div className="pa-field"><span>Categories studied</span><div className="pa-choice-row wrap">{DISCOVERY_CATEGORIES.map((category) => { const active = prefs.discoveryCategories.includes(category); return <button key={category} className={`pa-choice ${active ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ discoveryCategories: active ? prefs.discoveryCategories.filter((item) => item !== category) : [...prefs.discoveryCategories, category] })}>{DISCOVERY_CATEGORY_LABELS[category]}</button> })}</div></div>
+        <div className="pa-field"><span>Frequency</span><div className="pa-choice-row">{(['DAILY', 'WEEKLY', 'REALTIME'] as const).map((frequency) => { const realtimeLocked = frequency === 'REALTIME' && plan !== 'commander'; return <Button key={frequency} className={`pa-choice ${prefs.discoveryFrequency === frequency ? 'active' : ''}`} disabled={realtimeLocked || saving} onClick={() => void patch({ discoveryFrequency: frequency })} title={realtimeLocked ? 'Real-time unlocks on the highest plan' : undefined}>{frequency === 'REALTIME' ? 'Real-time' : frequency === 'DAILY' ? 'Daily 2:00 AM' : 'Weekly (Sunday)'}{realtimeLocked && <Lock size={10} />}</Button> })}</div></div>
+        <div className="pa-field"><span>Categories studied</span><div className="pa-choice-row wrap">{DISCOVERY_CATEGORIES.map((category) => { const active = prefs.discoveryCategories.includes(category); return <Button key={category} className={`pa-choice ${active ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ discoveryCategories: active ? prefs.discoveryCategories.filter((item) => item !== category) : [...prefs.discoveryCategories, category] })}>{DISCOVERY_CATEGORY_LABELS[category]}</Button> })}</div></div>
       </div>
 
       <div className="pa-card pa-settings-card">
@@ -2309,8 +2310,8 @@ function SettingsTab({ storeId, plan, overview, onToast, onNavigateBilling }: Ta
         <h3><Waypoints size={15} /> Study behavior</h3>
         <ToggleRow label="Trend monitoring" hint="Keep business trend signals under watch" checked={prefs.trendMonitoringEnabled} disabled={saving} onChange={(value) => void patch({ trendMonitoringEnabled: value })} />
         <ToggleRow label="Persona refresh" hint="Re-cluster personas as customers evolve" checked={prefs.personaUpdatesEnabled} disabled={saving} onChange={(value) => void patch({ personaUpdatesEnabled: value })} />
-        <div className="pa-field"><span>Insight language</span><div className="pa-choice-row"><button className={`pa-choice ${prefs.language === 'en' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'en' })}>English</button><button className={`pa-choice ${prefs.language === 'hi' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'hi' })}>हिन्दी</button></div></div>
-        <p className="pa-muted">API access lives on its own page — {plan === 'commander' ? 'available on your plan.' : 'it unlocks on the highest plan.'} {plan !== 'commander' && <button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</button>}</p>
+        <div className="pa-field"><span>Insight language</span><div className="pa-choice-row"><Button className={`pa-choice ${prefs.language === 'en' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'en' })}>English</Button><Button className={`pa-choice ${prefs.language === 'hi' ? 'active' : ''}`} disabled={saving} onClick={() => void patch({ language: 'hi' })}>हिन्दी</Button></div></div>
+        <p className="pa-muted">API access lives on its own page — {plan === 'commander' ? 'available on your plan.' : 'it unlocks on the highest plan.'} {plan !== 'commander' && <Button className="text-button" onClick={onNavigateBilling}>{INSIGHTS_UPGRADE_CTA}</Button>}</p>
       </div>
     </section>
   )
@@ -2320,7 +2321,7 @@ function ToggleRow({ label, hint, checked, disabled, onChange }: { label: string
   return (
     <div className="pa-toggle-row">
       <div><strong>{label}</strong><small>{hint}</small></div>
-      <button className={`pa-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>
+      <Button className={`pa-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></Button>
     </div>
   )
 }
@@ -2360,13 +2361,13 @@ function ApiAccessTab({ storeId, plan, overview, onToast, onNavigateBilling }: T
         <h3><KeyRound size={15} /> Programmatic access</h3>
         <p className="pa-muted">Your insights as JSON — discoveries, patterns, personas, predictions, trends — for your own dashboards and automations. {data?.rateLimitPerHour !== null && data?.rateLimitPerHour !== undefined ? `${data.rateLimitPerHour} requests/hour · ${data.rateLimitPerHour * 10}/day.` : ''}</p>
         {data?.maskedKey
-          ? <div className="pa-key-row"><code>{data.maskedKey}</code><button className="button secondary compact" disabled={busy} onClick={() => void generate(true)}>Regenerate</button><small className="pa-muted">Regenerating invalidates the old key instantly.</small></div>
-          : <button className="button primary" disabled={busy} onClick={() => void generate(false)}>{busy ? 'Issuing…' : 'Generate API key'}</button>}
+          ? <div className="pa-key-row"><code>{data.maskedKey}</code><Button className="button secondary compact" disabled={busy} onClick={() => void generate(true)}>Regenerate</Button><small className="pa-muted">Regenerating invalidates the old key instantly.</small></div>
+          : <Button className="button primary" disabled={busy} onClick={() => void generate(false)}>{busy ? 'Issuing…' : 'Generate API key'}</Button>}
         {revealed && (
           <div className="pa-key-reveal">
             <strong>Your new key — shown once</strong>
-            <div className="pa-key-row"><code>{revealed}</code><button className="button ghost compact" onClick={() => { navigator.clipboard?.writeText(revealed).then(() => onToast('Key copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy</button></div>
-            <button className="text-button" onClick={() => setRevealed(null)}>I have stored it safely — hide it</button>
+            <div className="pa-key-row"><code>{revealed}</code><Button className="button ghost compact" onClick={() => { navigator.clipboard?.writeText(revealed).then(() => onToast('Key copied.', 'success'), () => onToast('Copy failed.', 'error')) }}><Copy size={12} /> Copy</Button></div>
+            <Button className="text-button" onClick={() => setRevealed(null)}>I have stored it safely — hide it</Button>
           </div>
         )}
       </div>

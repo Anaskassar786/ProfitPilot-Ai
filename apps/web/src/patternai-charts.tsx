@@ -15,6 +15,7 @@
  *    onSelect for interactive drilling.
  */
 
+import { Button } from './polaris-ui.js'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
 
@@ -216,9 +217,9 @@ export function InsightsWordCloud({ words, onSelect }: { words: readonly Readonl
   return (
     <div className="pa-wordcloud" role="list" aria-label="Knowledge tag cloud">
       {words.map((word, index) => (
-        <button key={word.tag} role="listitem" className={`pa-word depth-${index % 4}`} style={{ fontSize: `${12 + 12 * (word.weight / max)}px` }} onClick={() => onSelect?.(word.tag)} title={`${word.tag} · ${word.weight} ${word.weight === 1 ? 'entry' : 'entries'}`}>
+        <Button key={word.tag} role="listitem" className={`pa-word depth-${index % 4}`} style={{ fontSize: `${12 + 12 * (word.weight / max)}px` }} onClick={() => onSelect?.(word.tag)} title={`${word.tag} · ${word.weight} ${word.weight === 1 ? 'entry' : 'entries'}`}>
           {word.tag}
-        </button>
+        </Button>
       ))}
     </div>
   )

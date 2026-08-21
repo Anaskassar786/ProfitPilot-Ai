@@ -7,11 +7,11 @@
 
 .automation-page,
 .automation-subpage {
-  --auto-card: #1a1d27;
-  --auto-surface: #14161f;
-  --auto-border: #2a2e38;
-  --auto-muted: #9ca3af;
-  --auto-accent: #8b5cf6;
+  --auto-card: rgb(26, 29, 39);
+  --auto-surface: rgb(20, 22, 31);
+  --auto-border: rgb(42, 46, 56);
+  --auto-muted: rgb(156, 163, 175);
+  --auto-accent: rgb(139, 92, 246);
   --auto-accent-soft: rgba(139, 92, 246, 0.14);
   max-width: 1480px;
   margin: 0 auto;
@@ -111,9 +111,9 @@
 }
 
 .automation-primary {
-  color: #fff;
+  color: rgb(255, 255, 255);
   border-color: rgba(139, 92, 246, 0.55);
-  background: linear-gradient(135deg, #7c5cf0, #a855f7);
+  background: linear-gradient(135deg, rgb(124, 92, 240), rgb(168, 85, 247));
   box-shadow: 0 8px 24px rgba(124, 92, 240, 0.25);
 }
 
@@ -184,9 +184,9 @@
 .pending-approval-banner button {
   min-height: 36px;
   padding: 0 14px;
-  color: #fff;
+  color: rgb(255, 255, 255);
   border-radius: 9px;
-  background: #6b5dd3;
+  background: rgb(107, 93, 211);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -194,7 +194,7 @@
 
 .automation-plan-banner button + button {
   background: rgba(139, 92, 246, 0.18);
-  color: #d6ccff;
+  color: rgb(214, 204, 255);
   border: 1px solid rgba(139, 92, 246, 0.4);
 }
 
@@ -386,7 +386,7 @@
   display: grid;
   place-items: center;
   margin-bottom: 14px;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 12px;
   background: var(--auto-accent-soft);
 }
@@ -467,19 +467,19 @@
 }
 
 .set-up-mini {
-  color: #c9bdff;
+  color: rgb(201, 189, 255);
 }
 
 .set-up-mini:hover {
-  color: #fff;
+  color: rgb(255, 255, 255);
 }
 
 .upgrade-mini {
-  color: #f0a868;
+  color: rgb(240, 168, 104);
 }
 
 .upgrade-mini:hover {
-  color: #ffc48a;
+  color: rgb(255, 196, 138);
 }
 
 .browse-all-link {
@@ -487,13 +487,13 @@
   align-items: center;
   gap: 5px;
   margin: 4px 2px 0 auto;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   font-size: 13px;
   font-weight: 750;
 }
 
 .browse-all-link:hover {
-  color: #fff;
+  color: rgb(255, 255, 255);
 }
 
 .template-tabs,
@@ -517,7 +517,7 @@
 
 .template-tabs button.active,
 .automation-status-tabs button.active {
-  color: #d6ccff;
+  color: rgb(214, 204, 255);
   border-color: rgba(139, 92, 246, 0.38);
   background: rgba(139, 92, 246, 0.13);
 }
@@ -568,7 +568,7 @@
 .template-flow-preview i {
   width: 22px;
   height: 1px;
-  background: #7c5cf0;
+  background: rgb(124, 92, 240);
 }
 
 .template-preview-meta {
@@ -676,7 +676,7 @@
 }
 
 .view-toggle button.active {
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   background: rgba(139, 92, 246, 0.16);
 }
 
@@ -709,28 +709,28 @@
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 16px 0 0 16px;
-  background: #64748b;
+  background: rgb(100, 116, 139);
   content: '';
 }
 
 .automation-workflow-card.category-marketing::before {
-  background: #ec4899;
+  background: rgb(236, 72, 153);
 }
 
 .automation-workflow-card.category-operations::before {
-  background: #3b82f6;
+  background: rgb(59, 130, 246);
 }
 
 .automation-workflow-card.category-inventory::before {
-  background: #f59e0b;
+  background: rgb(245, 158, 11);
 }
 
 .automation-workflow-card.category-customer::before {
-  background: #8b5cf6;
+  background: rgb(139, 92, 246);
 }
 
 .automation-workflow-card.category-revenue::before {
-  background: #10b981;
+  background: rgb(16, 185, 129);
 }
 
 .automation-workflow-card:hover {
@@ -753,7 +753,7 @@
   height: 42px;
   display: grid;
   place-items: center;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 12px;
   background: var(--auto-accent-soft);
 }
@@ -788,36 +788,36 @@
 
 .automation-status.active,
 .run-status.completed {
-  color: #34d399;
+  color: rgb(52, 211, 153);
   background: rgba(16, 185, 129, 0.14);
 }
 
 .automation-status.draft,
 .run-status.queued {
-  color: #c1c5cf;
+  color: rgb(193, 197, 207);
   background: rgba(148, 163, 184, 0.13);
 }
 
 .automation-status.paused,
 .run-status.waiting,
 .run-status.approval_required {
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
   background: rgba(245, 158, 11, 0.15);
 }
 
 .automation-status.archived,
 .run-status.cancelled {
-  color: #8d94a3;
+  color: rgb(141, 148, 163);
   background: rgba(100, 116, 139, 0.13);
 }
 
 .run-status.failed {
-  color: #f87171;
+  color: rgb(248, 113, 113);
   background: rgba(239, 68, 68, 0.15);
 }
 
 .run-status.running {
-  color: #93c5fd;
+  color: rgb(147, 197, 253);
   background: rgba(59, 130, 246, 0.15);
 }
 
@@ -894,7 +894,7 @@
   padding: 6px;
   border: 1px solid var(--auto-border);
   border-radius: 11px;
-  background: #171a25;
+  background: rgb(23, 26, 37);
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.35);
 }
 
@@ -914,7 +914,7 @@
 }
 
 .workflow-menu button.danger {
-  color: #f87171;
+  color: rgb(248, 113, 113);
 }
 
 /* ---------- Empty states ---------- */
@@ -944,7 +944,7 @@
   height: 68px;
   display: grid;
   place-items: center;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border: 1px solid rgba(139, 92, 246, 0.28);
   border-radius: 20px;
   background: var(--auto-accent-soft);
@@ -1039,7 +1039,7 @@
   display: grid;
   place-items: center;
   margin-bottom: 13px;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 10px;
   background: var(--auto-accent-soft);
 }
@@ -1110,20 +1110,20 @@
   height: 9px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #64748b;
+  background: rgb(100, 116, 139);
 }
 
 .activity-timeline i.completed {
-  background: #10b981;
+  background: rgb(16, 185, 129);
 }
 
 .activity-timeline i.failed {
-  background: #ef4444;
+  background: rgb(239, 68, 68);
 }
 
 .activity-timeline i.waiting,
 .activity-timeline i.approval_required {
-  background: #f59e0b;
+  background: rgb(245, 158, 11);
 }
 
 .activity-timeline span {
@@ -1244,7 +1244,7 @@
   align-items: center;
   gap: 6px;
   padding: 0 11px;
-  color: #f87171;
+  color: rgb(248, 113, 113);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 9px;
   background: transparent;
@@ -1277,7 +1277,7 @@
   padding: 28px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
-  background: #171a25;
+  background: rgb(23, 26, 37);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
 }
 
@@ -1423,7 +1423,7 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 11px;
   background: var(--auto-accent-soft);
 }
@@ -1490,7 +1490,7 @@
 
 .library-grid button > svg {
   flex: 0 0 auto;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
 }
 
 .library-grid button > span {
@@ -1512,7 +1512,7 @@
 
 .library-grid button em {
   color: var(--auto-accent);
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 750;
 }
@@ -1627,7 +1627,7 @@
   height: calc(100vh - 74px);
   display: flex;
   flex-direction: column;
-  background: #10131c;
+  background: rgb(16, 19, 28);
 }
 
 .editor-topbar {
@@ -1637,7 +1637,7 @@
   gap: 18px;
   padding: 0 17px;
   border-bottom: 1px solid var(--auto-border);
-  background: #171a25;
+  background: rgb(23, 26, 37);
 }
 
 .editor-topbar > button {
@@ -1688,15 +1688,15 @@
 }
 
 .editor-top-actions button.mode-toggle {
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-color: rgba(139, 92, 246, 0.4);
   background: rgba(139, 92, 246, 0.1);
 }
 
 .editor-top-actions button.publish {
-  color: #fff;
-  border-color: #6d5bd0;
-  background: linear-gradient(135deg, #6d5bd0, #925bd3);
+  color: rgb(255, 255, 255);
+  border-color: rgb(109, 91, 208);
+  background: linear-gradient(135deg, rgb(109, 91, 208), rgb(146, 91, 211));
 }
 
 /* ---- Simple (guided) mode ---- */
@@ -1751,7 +1751,7 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 50%;
   background: var(--auto-accent-soft);
   font-size: 13px;
@@ -1815,27 +1815,27 @@
 }
 
 .simple-step-icon.trigger {
-  color: #34d399;
+  color: rgb(52, 211, 153);
   background: rgba(16, 185, 129, 0.13);
 }
 
 .simple-step-icon.check {
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
   background: rgba(245, 158, 11, 0.14);
 }
 
 .simple-step-icon.wait {
-  color: #93c5fd;
+  color: rgb(147, 197, 253);
   background: rgba(59, 130, 246, 0.14);
 }
 
 .simple-step-icon.action {
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   background: var(--auto-accent-soft);
 }
 
 .simple-step-icon.ai {
-  color: #e879f9;
+  color: rgb(232, 121, 249);
   background: rgba(217, 70, 239, 0.14);
 }
 
@@ -1882,7 +1882,7 @@
 }
 
 .simple-step-actions button.danger {
-  color: #f87171;
+  color: rgb(248, 113, 113);
 }
 
 .simple-connector {
@@ -1905,7 +1905,7 @@
   justify-content: center;
   gap: 8px;
   margin-top: 18px;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border: 1px dashed rgba(139, 92, 246, 0.5);
   border-radius: 13px;
   background: rgba(139, 92, 246, 0.07);
@@ -1922,7 +1922,7 @@
   gap: 10px;
   margin-top: 18px;
   padding: 13px 15px;
-  color: #ff9aa2;
+  color: rgb(255, 154, 162);
   border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: 11px;
   background: rgba(45, 18, 24, 0.6);
@@ -1956,7 +1956,7 @@
   overflow-y: auto;
   padding: 20px;
   border-left: 1px solid var(--auto-border);
-  background: #14161f;
+  background: rgb(20, 22, 31);
 }
 
 /* ---- Getting started panel ---- */
@@ -1971,7 +1971,7 @@
 }
 
 .property-empty svg {
-  color: #7f8bd8;
+  color: rgb(127, 139, 216);
 }
 
 .property-empty h2 {
@@ -1989,7 +1989,7 @@
   display: grid;
   place-items: center;
   margin: 0 auto 6px;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 13px;
   background: var(--auto-accent-soft);
 }
@@ -2020,7 +2020,7 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #b7a9ff;
+  color: rgb(183, 169, 255);
   border-radius: 50%;
   background: var(--auto-accent-soft);
   font-size: 12px;
@@ -2055,7 +2055,7 @@
 /* ---- Property panel ---- */
 
 .property-head > span {
-  color: #a09bef;
+  color: rgb(160, 155, 239);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -2114,11 +2114,11 @@
 }
 
 .property-actions button.danger {
-  color: #f87171;
+  color: rgb(248, 113, 113);
 }
 
 .property-actions button.done {
-  color: #34d399;
+  color: rgb(52, 211, 153);
   border: 1px solid rgba(16, 185, 129, 0.35);
   background: rgba(16, 185, 129, 0.08);
 }
@@ -2137,7 +2137,7 @@
   overflow-y: auto;
   padding: 17px;
   border-right: 1px solid var(--auto-border);
-  background: #171a25;
+  background: rgb(23, 26, 37);
 }
 
 .property-panel {
@@ -2184,7 +2184,7 @@
 }
 
 .node-library h3 span {
-  color: #a78bfa;
+  color: rgb(167, 139, 250);
 }
 
 .node-library section button {
@@ -2221,7 +2221,7 @@
 }
 
 .react-flow__background {
-  background: #0f121a;
+  background: rgb(15, 18, 26);
 }
 
 .react-flow__controls,
@@ -2229,67 +2229,67 @@
   overflow: hidden;
   border: 1px solid var(--auto-border) !important;
   border-radius: 9px !important;
-  background: #1b1e2a !important;
+  background: rgb(27, 30, 42) !important;
 }
 
 .react-flow__controls button {
   border-color: var(--auto-border) !important;
-  background: #1b1e2a !important;
-  fill: #d3d7e2 !important;
+  background: rgb(27, 30, 42) !important;
+  fill: rgb(211, 215, 226) !important;
 }
 
 .flow-node {
   min-width: 200px;
   position: relative;
   padding: 14px 15px;
-  border: 1px solid #3f76c7;
+  border: 1px solid rgb(63, 118, 199);
   border-radius: 12px;
-  background: #1b202d;
+  background: rgb(27, 32, 45);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 .flow-node.trigger {
-  border-color: #36a56b;
+  border-color: rgb(54, 165, 107);
 }
 
 .flow-node.condition,
 .flow-node.filter {
-  border-color: #c0872e;
+  border-color: rgb(192, 135, 46);
 }
 
 .flow-node.wait {
-  border-color: #77808f;
+  border-color: rgb(119, 128, 143);
 }
 
 .flow-node.ai {
-  border-color: #925bd3;
+  border-color: rgb(146, 91, 211);
 }
 
 .flow-node.invalid {
-  border-color: #ef4444;
+  border-color: rgb(239, 68, 68);
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 .flow-node > span {
   display: block;
   margin-bottom: 5px;
-  color: #7fa8e7;
+  color: rgb(127, 168, 231);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
 .flow-node.trigger > span {
-  color: #61d695;
+  color: rgb(97, 214, 149);
 }
 
 .flow-node.condition > span,
 .flow-node.filter > span {
-  color: #f4bc62;
+  color: rgb(244, 188, 98);
 }
 
 .flow-node.ai > span {
-  color: #c692fa;
+  color: rgb(198, 146, 250);
 }
 
 .flow-node strong {
@@ -2302,7 +2302,7 @@
   max-width: 190px;
   overflow: hidden;
   margin-top: 4px;
-  color: #9aa0ae;
+  color: rgb(154, 160, 174);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2311,7 +2311,7 @@
 .flow-node i {
   position: absolute;
   bottom: -22px;
-  color: #8d94a3;
+  color: rgb(141, 148, 163);
   font-size: 12px;
   font-style: normal;
 }
@@ -2327,8 +2327,8 @@
 .react-flow__handle {
   width: 9px !important;
   height: 9px !important;
-  border: 2px solid #171a25 !important;
-  background: #8494e9 !important;
+  border: 2px solid rgb(23, 26, 37) !important;
+  background: rgb(132, 148, 233) !important;
 }
 
 .editor-validation {
@@ -2340,7 +2340,7 @@
   gap: 9px;
   max-width: 380px;
   padding: 13px;
-  color: #ff9aa2;
+  color: rgb(255, 154, 162);
   border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: 11px;
   background: rgba(45, 18, 24, 0.94);
@@ -2430,11 +2430,11 @@
 }
 
 .run-icon.completed {
-  color: #10b981;
+  color: rgb(16, 185, 129);
 }
 
 .run-icon.failed {
-  color: #ef4444;
+  color: rgb(239, 68, 68);
 }
 
 .run-step-timeline {
@@ -2472,15 +2472,15 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #202431;
+  background: rgb(32, 36, 49);
 }
 
 .run-step.completed .run-step-dot {
-  color: #10b981;
+  color: rgb(16, 185, 129);
 }
 
 .run-step.failed .run-step-dot {
-  color: #ef4444;
+  color: rgb(239, 68, 68);
 }
 
 .run-step > div {
@@ -2501,7 +2501,7 @@
 }
 
 .run-step p {
-  color: #ff8d96;
+  color: rgb(255, 141, 150);
   font-size: 13px;
 }
 
@@ -2510,7 +2510,7 @@
 }
 
 .run-step summary {
-  color: #9ca7ed;
+  color: rgb(156, 167, 237);
   cursor: pointer;
   font-size: 12px;
 }
@@ -2520,7 +2520,7 @@
   max-height: 260px;
   padding: 11px;
   border-radius: 8px;
-  background: #0e1119;
+  background: rgb(14, 17, 25);
   font-size: 12px;
 }
 
@@ -2541,14 +2541,14 @@
   display: inline-flex;
   padding: 4px 8px;
   border-radius: 99px;
-  color: #f6bd5f;
+  color: rgb(246, 189, 95);
   background: rgba(245, 158, 11, 0.12);
   font-size: 12px;
   font-weight: 800;
 }
 
 .approval-risk.high {
-  color: #ff858e;
+  color: rgb(255, 133, 142);
   background: rgba(239, 68, 68, 0.13);
 }
 
@@ -2586,7 +2586,7 @@
 }
 
 .automation-secondary.danger {
-  color: #ff8b94;
+  color: rgb(255, 139, 148);
 }
 
 /* ==========================================================================
@@ -2595,11 +2595,11 @@
 
 .light-mode .automation-page,
 .light-mode .automation-subpage {
-  --auto-card: #ffffff;
-  --auto-surface: #f9fafb;
-  --auto-border: #e5e7eb;
-  --auto-muted: #6b7280;
-  --auto-accent: #7c5cf0;
+  --auto-card: rgb(255, 255, 255);
+  --auto-surface: rgb(249, 250, 251);
+  --auto-border: rgb(229, 231, 235);
+  --auto-muted: rgb(107, 114, 128);
+  --auto-accent: rgb(124, 92, 240);
   --auto-accent-soft: rgba(124, 92, 240, 0.1);
 }
 
@@ -2608,23 +2608,23 @@
 .light-mode .node-library,
 .light-mode .property-panel,
 .light-mode .workflow-menu {
-  background: #fff;
+  background: rgb(255, 255, 255);
 }
 
 .light-mode .simple-panel {
-  background: #f9fafb;
+  background: rgb(249, 250, 251);
 }
 
 .light-mode .workflow-editor {
-  background: #f6f7fb;
+  background: rgb(246, 247, 251);
 }
 
 .light-mode .react-flow__background {
-  background: #f7f8fc;
+  background: rgb(247, 248, 252);
 }
 
 .light-mode .flow-node {
-  background: #fff;
+  background: rgb(255, 255, 255);
   box-shadow: 0 8px 25px rgba(30, 41, 59, 0.1);
 }
 
@@ -2633,20 +2633,20 @@
 .light-mode .automation-modal select,
 .light-mode .property-fields input,
 .light-mode .property-fields select {
-  background: #f8fafc;
+  background: rgb(248, 250, 252);
 }
 
 .light-mode .run-step pre {
-  background: #f1f5f9;
+  background: rgb(241, 245, 249);
 }
 
 .light-mode .auto-getting-started,
 .light-mode .gs-popular {
-  border-color: #e5e7eb;
+  border-color: rgb(229, 231, 235);
 }
 
 .light-mode .gs-popular {
-  background: #f9fafb;
+  background: rgb(249, 250, 251);
 }
 
 .light-mode .template-card-pro,
@@ -2654,7 +2654,7 @@
 .light-mode .draft-row,
 .light-mode .library-grid button,
 .light-mode .how-step {
-  background: #fff;
+  background: rgb(255, 255, 255);
 }
 
 .light-mode .template-card-pro:hover,
@@ -2668,7 +2668,7 @@
 .light-mode .automation-kpis > button,
 .light-mode .activity-timeline,
 .light-mode .run-list {
-  background: #fff;
+  background: rgb(255, 255, 255);
 }
 
 .light-mode .automation-secondary {
@@ -2678,7 +2678,7 @@
 .light-mode .template-flow-preview span,
 .light-mode .workflow-trigger,
 .light-mode .simple-group {
-  background: #f9fafb;
+  background: rgb(249, 250, 251);
 }
 
 .light-mode .template-card-pro {
@@ -2689,8 +2689,8 @@
 .light-mode .simple-step-actions button,
 .light-mode .getting-started-actions button,
 .light-mode .editor-top-actions button {
-  border-color: #e5e7eb;
-  background: #fff;
+  border-color: rgb(229, 231, 235);
+  background: rgb(255, 255, 255);
 }
 
 .light-mode .workflow-menu {
@@ -2698,11 +2698,11 @@
 }
 
 .light-mode .auto-drafts {
-  background: #f9fafb;
+  background: rgb(249, 250, 251);
 }
 
 .light-mode .draft-row {
-  border-color: #e5e7eb;
+  border-color: rgb(229, 231, 235);
 }
 
 .light-mode .simple-add-step {
@@ -2711,25 +2711,25 @@
 
 /* Light theme contrast hardening (WCAG AA) */
 .light-mode .template-card-pro {
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .light-mode .template-card-pro:hover {
-  border-color: #cbd5e1;
+  border-color: rgb(203, 213, 225);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-.light-mode .template-card-pro h3 { color: #111827; }
+.light-mode .template-card-pro h3 { color: rgb(17, 24, 39); }
 .light-mode .template-card-pro p,
-.light-mode .template-impact-copy { color: #4b5563; }
-.light-mode .template-category { color: #6d28d9; }
+.light-mode .template-impact-copy { color: rgb(75, 85, 99); }
+.light-mode .template-category { color: rgb(109, 40, 217); }
 .light-mode .plan-badge {
-  color: #374151;
-  border-color: #e2e8f0;
-  background: #f8fafc;
+  color: rgb(55, 65, 81);
+  border-color: rgb(226, 232, 240);
+  background: rgb(248, 250, 252);
 }
 .light-mode .automation-kpis article,
 .light-mode .automation-kpis > button {
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 .light-mode .automation-status,
@@ -2738,50 +2738,50 @@
 }
 .light-mode .automation-status.active,
 .light-mode .run-status.completed {
-  color: #166534;
-  background: #dcfce7;
-  border-color: #86efac;
+  color: rgb(22, 101, 52);
+  background: rgb(220, 252, 231);
+  border-color: rgb(134, 239, 172);
 }
 .light-mode .automation-status.paused,
 .light-mode .run-status.waiting,
 .light-mode .run-status.approval_required {
-  color: #92400e;
-  background: #fef3c7;
-  border-color: #fcd34d;
+  color: rgb(146, 64, 14);
+  background: rgb(254, 243, 199);
+  border-color: rgb(252, 211, 77);
 }
 .light-mode .automation-status.draft,
 .light-mode .run-status.queued {
-  color: #374151;
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  color: rgb(55, 65, 81);
+  background: rgb(241, 245, 249);
+  border-color: rgb(226, 232, 240);
 }
 .light-mode .automation-status.archived,
 .light-mode .run-status.cancelled {
-  color: #4b5563;
-  background: #f8fafc;
-  border-color: #e5e7eb;
+  color: rgb(75, 85, 99);
+  background: rgb(248, 250, 252);
+  border-color: rgb(229, 231, 235);
 }
 .light-mode .run-status.failed {
-  color: #991b1b;
-  background: #fee2e2;
-  border-color: #fecaca;
+  color: rgb(153, 27, 27);
+  background: rgb(254, 226, 226);
+  border-color: rgb(254, 202, 202);
 }
-.light-mode .draft-row { border-color: #e2e8f0; }
+.light-mode .draft-row { border-color: rgb(226, 232, 240); }
 .light-mode .template-tabs button,
 .light-mode .automation-status-tabs button {
-  color: #4b5563;
-  border-color: #e2e8f0;
-  background: #ffffff;
+  color: rgb(75, 85, 99);
+  border-color: rgb(226, 232, 240);
+  background: rgb(255, 255, 255);
 }
 .light-mode .template-tabs button.active,
 .light-mode .automation-status-tabs button.active {
-  color: #6d28d9;
-  border-color: #c4b5fd;
-  background: #ede9fe;
+  color: rgb(109, 40, 217);
+  border-color: rgb(196, 181, 253);
+  background: rgb(237, 233, 254);
 }
 .light-mode .automation-status-tabs span {
-  background: #eef2f7;
-  color: #374151;
+  background: rgb(238, 242, 247);
+  color: rgb(55, 65, 81);
 }
 
 /* ==========================================================================
@@ -2993,22 +2993,22 @@
 .automation-page .warning-upgrade-btn,
 .automation-page .automation-plan-banner button,
 .automation-page .pending-approval-banner button {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  background-color: #6d28d9;
+  background: linear-gradient(135deg, rgb(124, 58, 237), rgb(109, 40, 217));
+  background-color: rgb(109, 40, 217);
 }
 
 .automation-page .automation-secondary,
 .automation-modal .automation-secondary {
-  background: #1a1d27;
-  color: #e5e7eb;
-  border-color: #2a2e38;
+  background: rgb(26, 29, 39);
+  color: rgb(229, 231, 235);
+  border-color: rgb(42, 46, 56);
 }
 
 .automation-page .automation-secondary:hover,
 .automation-modal .automation-secondary:hover {
-  background: #22263a;
-  color: #c4b5fd;
-  border-color: #7c3aed;
+  background: rgb(34, 38, 58);
+  color: rgb(196, 181, 253);
+  border-color: rgb(124, 58, 237);
 }
 
 .automation-header-actions {
@@ -3025,11 +3025,11 @@
 .automation-page .activity-timeline,
 .automation-page .draft-row,
 .automation-page .gs-popular-item {
-  background-color: #1a1d27;
+  background-color: rgb(26, 29, 39);
 }
 
 .automation-page .template-card-pro:hover {
-  background-color: #1e2130;
+  background-color: rgb(30, 33, 48);
 }
 
 .automation-page .template-card {
@@ -3044,76 +3044,76 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  background: linear-gradient(90deg, rgb(124, 58, 237), rgb(167, 139, 250));
   pointer-events: none;
 }
 
 .automation-page .template-card.sales-growth::after {
-  background: linear-gradient(90deg, #10b981, #34d399);
+  background: linear-gradient(90deg, rgb(16, 185, 129), rgb(52, 211, 153));
 }
 
 .automation-page .template-card.customer-experience::after {
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, rgb(59, 130, 246), rgb(96, 165, 250));
 }
 
 .automation-page .template-card.inventory-stock::after {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, rgb(245, 158, 11), rgb(251, 191, 36));
 }
 
 .automation-page .template-card.operations::after {
-  background: linear-gradient(90deg, #ef4444, #f87171);
+  background: linear-gradient(90deg, rgb(239, 68, 68), rgb(248, 113, 113));
 }
 
 .automation-page .template-card.revenue-retention::after {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  background: linear-gradient(90deg, rgb(139, 92, 246), rgb(167, 139, 250));
 }
 
 .automation-page .template-card.sales-growth .template-icon {
-  color: #34d399;
+  color: rgb(52, 211, 153);
   background: rgba(16, 185, 129, 0.14);
 }
 
 .automation-page .template-card.customer-experience .template-icon {
-  color: #60a5fa;
+  color: rgb(96, 165, 250);
   background: rgba(59, 130, 246, 0.14);
 }
 
 .automation-page .template-card.inventory-stock .template-icon {
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
   background: rgba(245, 158, 11, 0.14);
 }
 
 .automation-page .template-card.operations .template-icon {
-  color: #f87171;
+  color: rgb(248, 113, 113);
   background: rgba(239, 68, 68, 0.14);
 }
 
 .automation-page .template-card.revenue-retention .template-icon {
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
   background: rgba(139, 92, 246, 0.16);
 }
 
 .automation-page .template-plan-badge.start {
   background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
+  color: rgb(147, 197, 253);
   border-color: rgba(147, 197, 253, 0.35);
 }
 
 .automation-page .template-plan-badge.all-plans {
   background: rgba(16, 185, 129, 0.14);
-  color: #6ee7b7;
+  color: rgb(110, 231, 183);
   border-color: rgba(110, 231, 183, 0.3);
 }
 
 .automation-page .template-plan-badge.growth {
   background: rgba(139, 92, 246, 0.16);
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
   border-color: rgba(196, 181, 253, 0.35);
 }
 
 .automation-page .template-plan-badge.commander {
   background: rgba(245, 158, 11, 0.14);
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
   border-color: rgba(251, 191, 36, 0.3);
 }
 
@@ -3121,9 +3121,9 @@
   display: block;
   margin-top: 12px;
   padding: 8px 12px;
-  color: #94a3b8;
-  background: #0a0b0f;
-  border-left: 3px solid #7c3aed;
+  color: rgb(148, 163, 184);
+  background: rgb(10, 11, 15);
+  border-left: 3px solid rgb(124, 58, 237);
   border-radius: 4px;
   font-size: 12px;
   font-style: italic;
@@ -3139,21 +3139,21 @@
 }
 
 .automation-page .template-setup-btn {
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
   border: 1px solid rgba(196, 181, 253, 0.35);
   background: transparent;
 }
 
 .automation-page .template-setup-btn:hover {
-  color: #fff;
-  background: #7c3aed;
-  border-color: #7c3aed;
+  color: rgb(255, 255, 255);
+  background: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }
 
 .automation-page .template-upgrade-btn {
-  color: #fff;
+  color: rgb(255, 255, 255);
   border: none;
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  background: linear-gradient(135deg, rgb(245, 158, 11), rgb(234, 88, 12));
   box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
 }
 
@@ -3176,15 +3176,15 @@
 }
 
 .automation-page .automation-workflow-card.status-active::after {
-  background: linear-gradient(90deg, #10b981, #34d399);
+  background: linear-gradient(90deg, rgb(16, 185, 129), rgb(52, 211, 153));
 }
 
 .automation-page .automation-workflow-card.status-paused::after {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, rgb(245, 158, 11), rgb(251, 191, 36));
 }
 
 .automation-page .automation-workflow-card.status-draft::after {
-  background: linear-gradient(90deg, #64748b, #94a3b8);
+  background: linear-gradient(90deg, rgb(100, 116, 139), rgb(148, 163, 184));
 }
 
 .automation-page .workflow-empty-hint {
@@ -3194,7 +3194,7 @@
   gap: 6px;
   margin-top: 4px;
   padding: 8px 12px;
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(252, 211, 77, 0.28);
   border-radius: 6px;
@@ -3204,64 +3204,64 @@
 
 .automation-page .workflow-action-btn.edit:hover,
 .automation-page .workflow-action-btn.view-report:hover {
-  background: #2e1e4a;
-  color: #c4b5fd;
+  background: rgb(46, 30, 74);
+  color: rgb(196, 181, 253);
 }
 
 .automation-page .workflow-action-btn.pause {
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
 }
 
 .automation-page .workflow-action-btn.resume {
-  color: #34d399;
+  color: rgb(52, 211, 153);
 }
 
 .automation-page .workflow-menu {
-  background: #171a25;
-  color: #f5f5f5;
+  background: rgb(23, 26, 37);
+  color: rgb(245, 245, 245);
 }
 
 .automation-page .workflow-menu button:hover {
-  background: #2a2e38;
-  color: #f5f5f5;
+  background: rgb(42, 46, 56);
+  color: rgb(245, 245, 245);
 }
 
 .automation-page .automation-custom-select {
   min-width: 150px;
   height: 40px;
-  border: 1px solid #2a2e38;
+  border: 1px solid rgb(42, 46, 56);
   border-radius: 10px;
-  background: #1a1d27;
+  background: rgb(26, 29, 39);
 }
 
 .automation-page .automation-custom-select .custom-select-trigger {
   min-height: 38px;
-  color: #cbd5e1;
+  color: rgb(203, 213, 225);
   background: transparent;
   font-size: 13px;
 }
 
 .automation-page .automation-custom-select .custom-select-trigger:hover,
 .automation-page .automation-custom-select .custom-select-trigger[aria-expanded='true'] {
-  color: #f5f5f5;
-  background: #22263a;
+  color: rgb(245, 245, 245);
+  background: rgb(34, 38, 58);
 }
 
 .automation-page .automation-custom-select .custom-select-trigger > strong {
-  color: #f5f5f5;
+  color: rgb(245, 245, 245);
   font-size: 13px;
 }
 
 .automation-page .custom-select-menu,
 .automation-modal .custom-select-menu {
-  background: #1a1d27;
-  border-color: #2a2e38;
-  color: #e5e7eb;
+  background: rgb(26, 29, 39);
+  border-color: rgb(42, 46, 56);
+  color: rgb(229, 231, 235);
 }
 
 .automation-page .custom-select-menu li,
 .automation-modal .custom-select-menu li {
-  color: #cbd5e1;
+  color: rgb(203, 213, 225);
   font-size: 13px;
 }
 
@@ -3269,13 +3269,13 @@
 .automation-page .custom-select-menu li.highlighted,
 .automation-modal .custom-select-menu li:hover,
 .automation-modal .custom-select-menu li.highlighted {
-  background: #2a2e38;
-  color: #f5f5f5;
+  background: rgb(42, 46, 56);
+  color: rgb(245, 245, 245);
 }
 
 .automation-modal .automation-custom-select {
   width: 100%;
-  border: 1px solid #2a2e38;
+  border: 1px solid rgb(42, 46, 56);
   border-radius: 10px;
   background: rgba(7, 9, 15, 0.38);
 }
@@ -3287,46 +3287,46 @@
 .automation-page .automation-filter-tabs {
   padding: 4px;
   border-radius: 10px;
-  background: #14161f;
+  background: rgb(20, 22, 31);
 }
 
 .automation-page .filter-tab {
   background: transparent;
-  color: #94a3b8;
+  color: rgb(148, 163, 184);
 }
 
 .automation-page .filter-tab:hover {
-  background: #1e2130;
-  color: #f5f5f5;
+  background: rgb(30, 33, 48);
+  color: rgb(245, 245, 245);
 }
 
 .automation-page .filter-tab.active {
-  background: #2a2e38;
-  color: #c4b5fd;
+  background: rgb(42, 46, 56);
+  color: rgb(196, 181, 253);
 }
 
 .automation-page .filter-tab .count-badge {
   min-width: 20px;
   height: auto;
   padding: 2px 6px;
-  background: #2a2e38;
-  color: #94a3b8;
-  font-size: 11px;
+  background: rgb(42, 46, 56);
+  color: rgb(148, 163, 184);
+  font-size: 12px;
 }
 
 .automation-page .filter-tab.active .count-badge {
   background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
 }
 
 .automation-page .view-toggle button {
   background: transparent;
-  color: #94a3b8;
+  color: rgb(148, 163, 184);
 }
 
 .automation-page .view-toggle button.active {
-  background: #2a2e38;
-  color: #c4b5fd;
+  background: rgb(42, 46, 56);
+  color: rgb(196, 181, 253);
 }
 
 .automation-page .kpi-card {
@@ -3348,12 +3348,12 @@
   justify-content: center;
   border-radius: 6px;
   background: rgba(139, 92, 246, 0.16);
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
 }
 
 .automation-page .kpi-label {
-  color: #94a3b8;
-  font-size: 11px;
+  color: rgb(148, 163, 184);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3383,23 +3383,23 @@
 
 .automation-page .segment {
   border-radius: 3px;
-  background: #2a2e38;
+  background: rgb(42, 46, 56);
 }
 
 .automation-page .segment.filled {
-  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  background: linear-gradient(90deg, rgb(124, 58, 237), rgb(167, 139, 250));
 }
 
 .automation-page .segment-labels {
   display: flex;
   justify-content: space-between;
   margin-top: 6px;
-  color: #64748b;
-  font-size: 10px;
+  color: rgb(100, 116, 139);
+  font-size: 12px;
 }
 
 .automation-page .segment-label.active {
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
   font-weight: 700;
 }
 
@@ -3429,8 +3429,8 @@
 }
 
 .automation-page .mini-bar-label {
-  color: #94a3b8;
-  font-size: 9px;
+  color: rgb(148, 163, 184);
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -3445,11 +3445,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #2a2e38;
+  background: rgb(42, 46, 56);
 }
 
 .automation-page .approval-dot.pending {
-  background: #f59e0b;
+  background: rgb(245, 158, 11);
   animation: pulse 2s infinite;
 }
 
@@ -3459,13 +3459,13 @@
   justify-content: center;
   gap: 4px;
   margin-top: 8px;
-  color: #34d399;
+  color: rgb(52, 211, 153);
   font-size: 12px;
   font-weight: 600;
 }
 
 .automation-page .approval-status.waiting {
-  color: #fbbf24;
+  color: rgb(251, 191, 36);
 }
 
 .automation-page .kpi-value-wrap {
@@ -3475,7 +3475,7 @@
 }
 
 .automation-page .kpi-value {
-  color: #f5f5f5;
+  color: rgb(245, 245, 245);
   font-size: clamp(18px, 2.2vw, 28px);
   font-weight: 700;
   line-height: 1.1;
@@ -3484,20 +3484,20 @@
 }
 
 .automation-page .kpi-total {
-  color: #94a3b8;
+  color: rgb(148, 163, 184);
   font-size: 16px;
   font-weight: 500;
 }
 
 .automation-page .kpi-helper {
   margin-top: 6px;
-  color: #94a3b8;
+  color: rgb(148, 163, 184);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .automation-page .gauge-track {
-  color: #2a2e38;
+  color: rgb(42, 46, 56);
 }
 
 .automation-page .limit-warning {
@@ -3524,502 +3524,502 @@
 }
 
 .light-mode .automation-page {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .page-eyebrow,
 .light-mode .automation-page .section-eyebrow,
 .light-mode .automation-page .automation-eyebrow {
-  color: #7c3aed;
-  font-size: 11px;
+  color: rgb(124, 58, 237);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 .light-mode .automation-page .page-title,
 .light-mode .automation-page h1 {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .page-subtitle,
 .light-mode .automation-page .section-description {
-  color: #475569;
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .section-title,
 .light-mode .automation-page h2 {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .how-it-works-btn,
 .light-mode .automation-page .browse-templates-btn,
 .light-mode .automation-page .automation-secondary {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
+  border: 1px solid rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .how-it-works-btn:hover,
 .light-mode .automation-page .browse-templates-btn:hover,
 .light-mode .automation-page .automation-secondary:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .create-automation-btn,
 .light-mode .automation-page .automation-primary,
 .light-mode .automation-modal .automation-primary,
 .light-mpage .warning-upgrade-btn {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  color: #ffffff;
+  background: linear-gradient(135deg, rgb(124, 58, 237), rgb(109, 40, 217));
+  color: rgb(255, 255, 255);
   border: none;
   box-shadow: 0 2px 4px rgba(124, 58, 237, 0.25);
 }
 
 .light-mode .automation-page .limit-warning {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border-color: #fcd34d;
+  background: linear-gradient(135deg, rgb(254, 243, 199), rgb(253, 230, 138));
+  border-color: rgb(252, 211, 77);
 }
 
 .light-mode .automation-page .limit-warning-title,
 .light-mode .automation-page .limit-warning-description {
-  color: #92400e;
+  color: rgb(146, 64, 14);
 }
 
 .light-mode .automation-page .limit-warning-count {
-  color: #dc2626;
+  color: rgb(220, 38, 38);
   font-weight: 700;
 }
 
 .light-mode .automation-page .automation-plan-banner.reached {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border-color: #fcd34d;
+  background: linear-gradient(135deg, rgb(254, 243, 199), rgb(253, 230, 138));
+  border-color: rgb(252, 211, 77);
 }
 
 .light-mode .automation-page .automation-plan-banner.drafts {
-  background: linear-gradient(135deg, #f3e8ff, #ede9fe);
-  border-color: #c4b5fd;
+  background: linear-gradient(135deg, rgb(243, 232, 255), rgb(237, 233, 254));
+  border-color: rgb(196, 181, 253);
 }
 
 .light-mode .automation-page .browse-all-link {
-  color: #7c3aed;
+  color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .browse-all-link:hover {
-  color: #6d28d9;
+  color: rgb(109, 40, 217);
 }
 
 .light-mode .automation-page .template-card-pro,
 .light-mode .automation-page .template-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  border: 1px solid rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .light-mode .automation-page .template-card-pro:hover,
 .light-mode .automation-page .template-card:hover {
-  background: #ffffff;
-  border-color: #a78bfa;
+  background: rgb(255, 255, 255);
+  border-color: rgb(167, 139, 250);
   box-shadow: 0 8px 16px rgba(124, 58, 237, 0.15);
 }
 
 .light-mode .automation-page .template-name,
 .light-mode .automation-page .template-card-pro h3 {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .template-description,
 .light-mode .automation-page .template-card-pro p {
-  color: #475569;
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .template-detail {
-  background: #f8fafc;
-  color: #64748b;
-  border-left-color: #7c3aed;
+  background: rgb(248, 250, 252);
+  color: rgb(100, 116, 139);
+  border-left-color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .template-category {
-  color: #7c3aed;
+  color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .template-card.sales-growth .template-category {
-  color: #047857;
+  color: rgb(4, 120, 87);
 }
 
 .light-mode .automation-page .template-card.customer-experience .template-category {
-  color: #1d4ed8;
+  color: rgb(29, 78, 216);
 }
 
 .light-mode .automation-page .template-card.inventory-stock .template-category {
-  color: #b45309;
+  color: rgb(180, 83, 9);
 }
 
 .light-mode .automation-page .template-card.operations .template-category {
-  color: #b91c1c;
+  color: rgb(185, 28, 28);
 }
 
 .light-mode .automation-page .template-plan-badge.start {
-  background: #dbeafe;
-  color: #1e40af;
-  border-color: #93c5fd;
+  background: rgb(219, 234, 254);
+  color: rgb(30, 64, 175);
+  border-color: rgb(147, 197, 253);
 }
 
 .light-mode .automation-page .template-plan-badge.all-plans {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #86efac;
+  background: rgb(220, 252, 231);
+  color: rgb(22, 101, 52);
+  border-color: rgb(134, 239, 172);
 }
 
 .light-mode .automation-page .template-plan-badge.growth {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #c4b5fd;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(196, 181, 253);
 }
 
 .light-mode .automation-page .template-plan-badge.commander {
-  background: #fef3c7;
-  color: #92400e;
-  border-color: #fcd34d;
+  background: rgb(254, 243, 199);
+  color: rgb(146, 64, 14);
+  border-color: rgb(252, 211, 77);
 }
 
 .light-mode .automation-page .template-setup-btn {
-  background: #ffffff;
-  color: #7c3aed;
-  border: 1px solid #c4b5fd;
+  background: rgb(255, 255, 255);
+  color: rgb(124, 58, 237);
+  border: 1px solid rgb(196, 181, 253);
 }
 
 .light-mode .automation-page .template-setup-btn:hover {
-  background: #7c3aed;
-  color: #ffffff;
+  background: rgb(124, 58, 237);
+  color: rgb(255, 255, 255);
 }
 
 .light-mode .automation-page .set-up-mini:hover {
-  color: #ffffff;
+  color: rgb(255, 255, 255);
 }
 
 .light-mode .automation-page .automation-templates {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .automation-workflow-card {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .light-mode .automation-page .automation-workflow-card:hover {
-  background: #ffffff;
-  border-color: #a78bfa;
+  background: rgb(255, 255, 255);
+  border-color: rgb(167, 139, 250);
 }
 
 .light-mode .automation-page .workflow-name {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .workflow-trigger {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: rgb(248, 250, 252);
+  border: 1px solid rgb(226, 232, 240);
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .workflow-stat-value {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .workflow-empty-hint {
-  background: #fef3c7;
-  border-color: #fcd34d;
-  color: #92400e;
+  background: rgb(254, 243, 199);
+  border-color: rgb(252, 211, 77);
+  color: rgb(146, 64, 14);
 }
 
 .light-mode .automation-page .workflow-action-btn.edit,
 .light-mode .automation-page .workflow-action-btn.view-report {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
+  border: 1px solid rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .workflow-action-btn.edit:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .workflow-action-btn.view-report:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #3b82f6;
+  background: rgb(239, 246, 255);
+  color: rgb(37, 99, 235);
+  border-color: rgb(59, 130, 246);
 }
 
 .light-mode .automation-page .workflow-action-btn.pause {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: rgb(254, 243, 199);
+  color: rgb(146, 64, 14);
+  border: 1px solid rgb(252, 211, 77);
 }
 
 .light-mode .automation-page .workflow-action-btn.resume {
-  background: #dcfce7;
-  color: #166534;
-  border: 1px solid #86efac;
+  background: rgb(220, 252, 231);
+  color: rgb(22, 101, 52);
+  border: 1px solid rgb(134, 239, 172);
 }
 
 .light-mode .automation-page .workflow-more > button:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: rgb(241, 245, 249);
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .workflow-menu {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .workflow-menu button {
-  color: #334155;
+  color: rgb(51, 65, 85);
 }
 
 .light-mode .automation-page .workflow-menu button:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: rgb(241, 245, 249);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .automation-toolbar {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .automation-search {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .automation-search:focus-within {
-  border-color: #7c3aed;
+  border-color: rgb(124, 58, 237);
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
 
 .light-mode .automation-page .automation-search input {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .automation-filter-tabs {
-  background: #f1f5f9;
+  background: rgb(241, 245, 249);
 }
 
 .light-mode .automation-page .filter-tab {
-  color: #475569;
+  color: rgb(71, 85, 105);
   background: transparent;
 }
 
 .light-mode .automation-page .filter-tab:hover {
-  background: #ffffff;
-  color: #0f172a;
+  background: rgb(255, 255, 255);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .filter-tab.active {
-  background: #ffffff;
-  color: #7c3aed;
+  background: rgb(255, 255, 255);
+  color: rgb(124, 58, 237);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .light-mode .automation-page .filter-tab .count-badge {
-  background: #e2e8f0;
-  color: #64748b;
+  background: rgb(226, 232, 240);
+  color: rgb(100, 116, 139);
 }
 
 .light-mode .automation-page .filter-tab.active .count-badge {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .template-tabs button,
 .light-mode .automation-page .automation-status-tabs button {
-  background: #ffffff;
-  color: #475569;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .template-tabs button.active,
 .light-mode .automation-page .automation-status-tabs button.active {
-  background: #ffffff;
-  color: #7c3aed;
+  background: rgb(255, 255, 255);
+  color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .automation-custom-select {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .automation-custom-select .custom-select-trigger,
 .light-mode .automation-page .automation-custom-select .custom-select-trigger > strong {
-  color: #475569;
+  color: rgb(71, 85, 105);
 }
 
 .light-mode .automation-page .automation-custom-select .custom-select-trigger:hover,
 .light-mode .automation-page .automation-custom-select .custom-select-trigger[aria-expanded='true'] {
-  background: #f8fafc;
-  color: #0f172a;
+  background: rgb(248, 250, 252);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .custom-select-menu,
 .light-mode .automation-modal .custom-select-menu {
-  background: #ffffff;
-  border-color: #e2e8f0;
-  color: #0f172a;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .custom-select-menu li,
 .light-mode .automation-modal .custom-select-menu li {
-  color: #334155;
+  color: rgb(51, 65, 85);
 }
 
 .light-mode .automation-page .custom-select-menu li:hover,
 .light-mode .automation-page .custom-select-menu li.highlighted,
 .light-mode .automation-modal .custom-select-menu li:hover,
 .light-mode .automation-modal .custom-select-menu li.highlighted {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: rgb(241, 245, 249);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-modal .automation-custom-select {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: rgb(248, 250, 252);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .view-toggle {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  background: rgb(241, 245, 249);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .view-toggle button {
-  color: #64748b;
+  color: rgb(100, 116, 139);
   background: transparent;
 }
 
 .light-mode .automation-page .view-toggle button.active {
-  background: #ffffff;
-  color: #7c3aed;
+  background: rgb(255, 255, 255);
+  color: rgb(124, 58, 237);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .light-mode .automation-page .kpi-card,
 .light-mode .automation-page .automation-kpis article,
 .light-mode .automation-page .automation-kpis > button {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  border: 1px solid rgb(226, 232, 240);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .light-mode .automation-page .kpi-value {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-page .kpi-total,
 .light-mode .automation-page .kpi-helper,
 .light-mode .automation-page .kpi-label {
-  color: #64748b;
+  color: rgb(100, 116, 139);
 }
 
 .light-mode .automation-page .kpi-icon-wrap {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .segment.empty,
 .light-mode .automation-page .approval-dot {
-  background: #e2e8f0;
+  background: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .gauge-track {
-  color: #e2e8f0;
+  color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .auto-getting-started {
   background:
     radial-gradient(circle at 12% 20%, rgba(124, 58, 237, 0.1), transparent 42%),
-    #ffffff;
-  border-color: #e2e8f0;
+    rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .gs-popular {
-  background: #f8fafc;
+  background: rgb(248, 250, 252);
 }
 
 .light-mode .automation-page .gs-popular-item {
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
 }
 
 .light-mode .automation-page .gs-popular-name {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-modal {
-  background: #ffffff;
-  color: #0f172a;
+  background: rgb(255, 255, 255);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-modal .creation-mode button {
-  background: #ffffff;
-  border-color: #e2e8f0;
-  color: #0f172a;
+  background: rgb(255, 255, 255);
+  border-color: rgb(226, 232, 240);
+  color: rgb(15, 23, 42);
 }
 
 .light-mode .automation-modal .creation-mode button.active {
-  background: #f3e8ff;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  border-color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .draft-row {
-  background: #ffffff;
+  background: rgb(255, 255, 255);
 }
 
 .light-mode .automation-page .auto-drafts {
-  background: #f8fafc;
+  background: rgb(248, 250, 252);
 }
 
 /* ---------- Light theme: plan banners & approval banner ---------- */
 
 /* "Almost at your limit" banner (the 80% variant without a modifier class). */
 .light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border-color: #fcd34d;
+  background: linear-gradient(135deg, rgb(254, 243, 199), rgb(253, 230, 138));
+  border-color: rgb(252, 211, 77);
 }
 
 .light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) strong,
 .light-mode .automation-page .automation-plan-banner:not(.reached):not(.drafts) span {
-  color: #92400e;
+  color: rgb(146, 64, 14);
 }
 
 .light-mode .automation-page .automation-plan-banner button,
 .light-mode .automation-page .pending-approval-banner button {
-  background: #7c3aed;
-  color: #ffffff;
-  border: 1px solid #7c3aed;
+  background: rgb(124, 58, 237);
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(124, 58, 237);
 }
 
 .light-mode .automation-page .automation-plan-banner button:hover,
 .light-mode .automation-page .pending-approval-banner button:hover {
-  background: #6d28d9;
-  border-color: #6d28d9;
+  background: rgb(109, 40, 217);
+  border-color: rgb(109, 40, 217);
 }
 
 /* Secondary action paired with "Upgrade Plan" (e.g. "Complete Drafts"). */
 .light-mode .automation-page .automation-plan-banner button + button {
-  background: #ffffff;
-  color: #7c3aed;
-  border: 1px solid #c4b5fd;
+  background: rgb(255, 255, 255);
+  color: rgb(124, 58, 237);
+  border: 1px solid rgb(196, 181, 253);
 }
 
 .light-mode .automation-page .automation-plan-banner button + button:hover {
-  background: #f3e8ff;
-  border-color: #a78bfa;
+  background: rgb(243, 232, 255);
+  border-color: rgb(167, 139, 250);
 }
 
 .light-mode .automation-page .pending-approval-banner {
-  background: #fffbeb;
-  border-color: #fcd34d;
+  background: rgb(255, 251, 235);
+  border-color: rgb(252, 211, 77);
 }
 
 /* ---------- Light theme: meta text & workflow stats ---------- */
@@ -4027,7 +4027,7 @@
 .light-mode .automation-page .setup-time,
 .light-mode .automation-page .template-meta,
 .light-mode .automation-page .workflow-card-stats {
-  color: #64748b;
+  color: rgb(100, 116, 139);
 }
 
 /* ---------- Light theme: focus ring & 200ms transitions ---------- */
@@ -4036,7 +4036,7 @@
 .light-mode .automation-subpage button:focus-visible,
 .light-mode .automation-modal button:focus-visible,
 .light-mode .workflow-editor button:focus-visible {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid rgb(124, 58, 237);
   outline-offset: 2px;
 }
 
@@ -4055,39 +4055,39 @@
 /* ---------- Light theme: editor + modal secondary controls ---------- */
 
 .light-mode .workflow-editor .automation-secondary {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
+  border: 1px solid rgb(226, 232, 240);
 }
 
 .light-mode .workflow-editor .automation-secondary:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }
 
 .light-mode .workflow-editor .editor-top-actions button.mode-toggle {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #c4b5fd;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(196, 181, 253);
 }
 
 .light-mode .workflow-editor .editor-top-actions button.publish {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  color: #ffffff;
-  border-color: #7c3aed;
+  background: linear-gradient(135deg, rgb(124, 58, 237), rgb(109, 40, 217));
+  color: rgb(255, 255, 255);
+  border-color: rgb(124, 58, 237);
 }
 
 .light-mode .automation-modal .automation-secondary {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
+  border: 1px solid rgb(226, 232, 240);
 }
 
 .light-mode .automation-modal .automation-secondary:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }
 
 
@@ -4118,8 +4118,8 @@
   padding: 6px 16px !important;
   border: none !important;
   border-radius: 8px !important;
-  color: #ffffff !important;
-  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  color: rgb(255, 255, 255) !important;
+  background: linear-gradient(135deg, rgb(34, 197, 94), rgb(22, 163, 74)) !important;
   box-shadow: 0 2px 6px rgba(34, 197, 94, 0.28) !important;
   font-size: 13px !important;
   font-weight: 700 !important;
@@ -4138,7 +4138,7 @@
 .light-mode .automation-page .warning-upgrade-btn:hover,
 .light-mode .automation-page .upgrade-plan-btn:hover,
 .light-mode .automation-modal .upgrade-plan-btn:hover {
-  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  background: linear-gradient(135deg, rgb(22, 163, 74), rgb(21, 128, 61)) !important;
   box-shadow: 0 4px 10px rgba(34, 197, 94, 0.36) !important;
   transform: translateY(-1px);
 }
@@ -4200,41 +4200,41 @@
 }
 
 .automation-page .template-card.sales-growth::after {
-  background: linear-gradient(90deg, #22c55e, #34d399);
+  background: linear-gradient(90deg, rgb(34, 197, 94), rgb(52, 211, 153));
 }
 
 .automation-page .template-card.customer-experience::after {
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, rgb(59, 130, 246), rgb(96, 165, 250));
 }
 
 .automation-page .template-card.inventory-stock::after {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, rgb(245, 158, 11), rgb(251, 191, 36));
 }
 
 .automation-page .template-card.operations::after {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  background: linear-gradient(90deg, rgb(139, 92, 246), rgb(167, 139, 250));
 }
 
 .automation-page .template-card.revenue-retention::after {
-  background: linear-gradient(90deg, #ef4444, #f87171);
+  background: linear-gradient(90deg, rgb(239, 68, 68), rgb(248, 113, 113));
 }
 
 .automation-page .template-card.operations .template-icon {
-  color: #c4b5fd;
+  color: rgb(196, 181, 253);
   background: rgba(139, 92, 246, 0.16);
 }
 
 .automation-page .template-card.revenue-retention .template-icon {
-  color: #fca5a5;
+  color: rgb(252, 165, 165);
   background: rgba(239, 68, 68, 0.14);
 }
 
 .light-mode .automation-page .template-card.operations .template-category {
-  color: #6d28d9;
+  color: rgb(109, 40, 217);
 }
 
 .light-mode .automation-page .template-card.revenue-retention .template-category {
-  color: #b91c1c;
+  color: rgb(185, 28, 28);
 }
 
 /* --- 6. Equal card heights ------------------------------------------------ */
@@ -4352,8 +4352,8 @@
 }
 
 .light-mode .automation-page .workflow-card-body:hover .workflow-empty-hint {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: rgb(254, 243, 199);
+  border-color: rgb(252, 211, 77);
 }
 
 /* --- 8. Editor rename ------------------------------------------------------ */
@@ -4404,7 +4404,7 @@
 .automation-subpage button:focus-visible,
 .automation-modal button:focus-visible,
 .workflow-editor button:focus-visible {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid rgb(124, 58, 237);
   outline-offset: 2px;
 }
 
@@ -4446,21 +4446,21 @@
    ========================================================================== */
 
 .workflow-editor {
-  --auto-card: #1a1d27;
-  --auto-surface: #14161f;
-  --auto-border: #2a2e38;
-  --auto-muted: #9ca3af;
-  --auto-accent: #8b5cf6;
+  --auto-card: rgb(26, 29, 39);
+  --auto-surface: rgb(20, 22, 31);
+  --auto-border: rgb(42, 46, 56);
+  --auto-muted: rgb(156, 163, 175);
+  --auto-accent: rgb(139, 92, 246);
   --auto-accent-soft: rgba(139, 92, 246, 0.14);
   color-scheme: dark;
 }
 
 .light-mode .workflow-editor {
-  --auto-card: #ffffff;
-  --auto-surface: #f9fafb;
-  --auto-border: #e5e7eb;
-  --auto-muted: #6b7280;
-  --auto-accent: #7c5cf0;
+  --auto-card: rgb(255, 255, 255);
+  --auto-surface: rgb(249, 250, 251);
+  --auto-border: rgb(229, 231, 235);
+  --auto-muted: rgb(107, 114, 128);
+  --auto-accent: rgb(124, 92, 240);
   --auto-accent-soft: rgba(124, 92, 240, 0.1);
   color-scheme: light;
 }
@@ -4482,13 +4482,13 @@
 
 /* Save Draft / Test Run / Save & Activate — explicit dark fills + borders. */
 .editor-top-actions button {
-  background: #1a1d27;
-  color: #e5e7eb;
+  background: rgb(26, 29, 39);
+  color: rgb(229, 231, 235);
 }
 .editor-top-actions button:hover:not(:disabled) {
-  background: #22263a;
-  color: #c4b5fd;
-  border-color: #7c3aed;
+  background: rgb(34, 38, 58);
+  color: rgb(196, 181, 253);
+  border-color: rgb(124, 58, 237);
 }
 
 /* Property panel actions (Remove step / Done) — no UA-white backgrounds. */
@@ -4502,17 +4502,17 @@
 /* Light-theme counterparts for the same surfaces. */
 .light-mode .editor-topbar > button,
 .light-mode .editor-name-button {
-  color: #475569;
+  color: rgb(71, 85, 105);
 }
 .light-mode .editor-name-button strong {
-  color: #0f172a;
+  color: rgb(15, 23, 42);
 }
 .light-mode .editor-top-actions button {
-  background: #ffffff;
-  color: #475569;
+  background: rgb(255, 255, 255);
+  color: rgb(71, 85, 105);
 }
 .light-mode .editor-top-actions button:hover:not(:disabled) {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #7c3aed;
+  background: rgb(243, 232, 255);
+  color: rgb(124, 58, 237);
+  border-color: rgb(124, 58, 237);
 }

@@ -3,7 +3,7 @@
  *
  * An upward growth arrow woven through neural-network nodes: the arrow is
  * the business trajectory, the nodes are the intelligence layer that reads
- * it. Purple gradient (#8B5CF6 → #6366F1) is the GrowthIQ signature and the
+ * it. Purple gradient (rgb(139, 92, 246) → rgb(99, 102, 241)) is the GrowthIQ signature and the
  * mark is built from strokes + circles only, so it stays crisp from 16px up
  * and reads identically in dark and light themes (the gradient badge is
  * self-contained; only the wordmark text uses theme tokens).
@@ -28,13 +28,13 @@ export function GrowthIqMark({ size = 24, withBadge = true, title = 'GrowthIQ' }
     >
       <defs>
         <linearGradient id={`${gradientId}g`} x1="0" y1="32" x2="32" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#6366F1" />
-          <stop offset="1" stopColor="#8B5CF6" />
+          <stop offset="0" stopColor="rgb(99, 102, 241)" />
+          <stop offset="1" stopColor="rgb(139, 92, 246)" />
         </linearGradient>
         <radialGradient id={`${gradientId}h`} cx="0.82" cy="0.12" r="0.9">
-          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.28" />
-          <stop offset="0.55" stopColor="#FFFFFF" stopOpacity="0.06" />
-          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="0" stopColor="rgb(255, 255, 255)" stopOpacity="0.28" />
+          <stop offset="0.55" stopColor="rgb(255, 255, 255)" stopOpacity="0.06" />
+          <stop offset="1" stopColor="rgb(255, 255, 255)" stopOpacity="0" />
         </radialGradient>
       </defs>
       {withBadge ? (
@@ -42,18 +42,18 @@ export function GrowthIqMark({ size = 24, withBadge = true, title = 'GrowthIQ' }
       ) : null}
       <rect x="1" y="1" width="30" height="30" rx="8" fill={`url(#${gradientId}h)`} />
       {/* Neural links (faint connections between intelligence nodes) */}
-      <g stroke="#FFFFFF" strokeWidth="1.1" opacity="0.5" strokeLinecap="round">
+      <g stroke="rgb(255, 255, 255)" strokeWidth="1.1" opacity="0.5" strokeLinecap="round">
         <line x1="11.5" y1="17" x2="7.5" y2="12.5" />
         <line x1="15.5" y1="21" x2="22.5" y2="23.5" />
       </g>
       {/* Satellite nodes */}
-      <circle cx="7.5" cy="12.5" r="1.5" fill="#FFFFFF" opacity="0.75" />
-      <circle cx="22.5" cy="23.5" r="1.8" fill="#FFFFFF" opacity="0.75" />
+      <circle cx="7.5" cy="12.5" r="1.5" fill="rgb(255, 255, 255)" opacity="0.75" />
+      <circle cx="22.5" cy="23.5" r="1.8" fill="rgb(255, 255, 255)" opacity="0.75" />
       {/* The growth arrow */}
       <path
         d="M5 24.5 L11.5 17.5 L15.5 21.5 L25.5 10"
         fill="none"
-        stroke="#FFFFFF"
+        stroke="rgb(255, 255, 255)"
         strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -61,14 +61,14 @@ export function GrowthIqMark({ size = 24, withBadge = true, title = 'GrowthIQ' }
       <path
         d="M19.5 8.8 L26 8.4 L26.2 14.8"
         fill="none"
-        stroke="#FFFFFF"
+        stroke="rgb(255, 255, 255)"
         strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       {/* Primary neural nodes on the trajectory */}
-      <circle cx="11.5" cy="17" r="2.3" fill="#FFFFFF" />
-      <circle cx="15.5" cy="21" r="1.9" fill="#FFFFFF" />
+      <circle cx="11.5" cy="17" r="2.3" fill="rgb(255, 255, 255)" />
+      <circle cx="15.5" cy="21" r="1.9" fill="rgb(255, 255, 255)" />
     </svg>
   )
 }

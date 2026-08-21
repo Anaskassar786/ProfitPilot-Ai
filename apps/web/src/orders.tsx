@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
@@ -40,7 +41,7 @@ import {
   Users,
   X,
   XCircle,
-} from 'lucide-react'
+} from './icons.js'
 import { fetchOrder, fetchOrderInsights, fetchOrders } from './api.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -131,7 +132,7 @@ export function OrdersWorkspace({ context, onSync, onNavigate, onToast }: Orders
 
   return <div className="orders-workspace">
     <div className="orders-page-actions">
-      <button className="button secondary" disabled={syncing} onClick={() => void sync()}><RefreshCw size={15} className={syncing ? 'spin' : ''} /> {syncing ? 'Syncing…' : 'Sync orders'}</button>
+      <Button className="button secondary" disabled={syncing} onClick={() => void sync()}><RefreshCw size={15} className={syncing ? 'spin' : ''} /> {syncing ? 'Syncing…' : 'Sync orders'}</Button>
     </div>
 
     <OrderTabs counts={data.tabCounts} active={activeTab} onSelect={(tab) => { setActiveTab(tab); setPage(1) }} />
@@ -140,11 +141,11 @@ export function OrdersWorkspace({ context, onSync, onNavigate, onToast }: Orders
 
     <section className="card orders-table-card">
       <div className="orders-toolbar">
-        <label className="orders-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by order ID or customer" aria-label="Search orders" />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></button>}</label>
+        <label className="orders-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by order ID or customer" aria-label="Search orders" />{query && <Button onClick={() => setQuery('')} aria-label="Clear search"><X size={14} /></Button>}</label>
         <div className="orders-toolbar-actions">
-          <button className={`button secondary ${filterOpen ? 'active' : ''}`} onClick={() => { setDraftFilters(filters); setFilterOpen((value) => !value) }}><Filter size={14} /> Filters{activeFilterCount(filters) > 0 && <span className="filter-count">{activeFilterCount(filters)}</span>}</button>
+          <Button className={`button secondary ${filterOpen ? 'active' : ''}`} onClick={() => { setDraftFilters(filters); setFilterOpen((value) => !value) }}><Filter size={14} /> Filters{activeFilterCount(filters) > 0 && <span className="filter-count">{activeFilterCount(filters)}</span>}</Button>
           <SortControl sort={sort} direction={direction} onSort={(value) => { setSort(value); setPage(1) }} onDirection={() => { setDirection((value) => value === 'asc' ? 'desc' : 'asc'); setPage(1) }} />
-          <button className="button secondary" disabled={exporting || data.pagination.total === 0} onClick={() => void exportCsv()}><Download size={14} /> {exporting ? 'Exporting…' : 'Export'}</button>
+          <Button className="button secondary" disabled={exporting || data.pagination.total === 0} onClick={() => void exportCsv()}><Download size={14} /> {exporting ? 'Exporting…' : 'Export'}</Button>
         </div>
       </div>
 
@@ -168,7 +169,7 @@ function OrderTabs({ counts, active, onSelect }: { counts: OrdersPageResult['tab
     { id: 'pending', label: 'Pending', count: counts.pending },
   ]
   return <div className="orders-tabs" role="tablist" aria-label="Order status">
-    {tabs.map((tab) => <button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}><span>{tab.label}</span><strong>{tab.count}</strong></button>)}
+    {tabs.map((tab) => <Button key={tab.id} role="tab" aria-selected={active === tab.id} className={active === tab.id ? 'active' : ''} onClick={() => onSelect(tab.id)}><span>{tab.label}</span><strong>{tab.count}</strong></Button>)}
   </div>
 }
 
@@ -188,7 +189,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
   return <section className={`card orders-insights ${collapsed ? 'collapsed' : ''}`}>
     <header className="orders-insights-header">
       <div className="orders-insights-title"><span className="ai-insights-icon"><ShoppingBag size={18} /></span><div><div className="section-kicker">ORDER INTELLIGENCE</div><h2>AI Insights</h2><p>Smart analysis from your Shopify orders.</p></div></div>
-      <div className="orders-insights-head-actions">{result && <UpgradePlanButton plan={result.plan} onUpgrade={onNavigateBilling} />}<button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand AI insights' : 'Collapse AI insights'}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}</button></div>
+      <div className="orders-insights-head-actions">{result && <UpgradePlanButton plan={result.plan} onUpgrade={onNavigateBilling} />}<Button onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand AI insights' : 'Collapse AI insights'}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}</Button></div>
     </header>
     {!collapsed && <div className="orders-insights-body">
       {loading ? <InsightsSkeleton /> : !result ? <div className="orders-insight-unavailable"><AlertTriangle size={18} /> Insights could not be loaded.</div> : <>
@@ -210,7 +211,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <CommanderCapability title="Auto-action suggestions" icon={<Bot size={15} />} insight={available('auto_action_suggestions')} locked={locked('auto_action_suggestions')} onUpgrade={onNavigateBilling} />
           <CommanderCapability title="Custom AI queries" icon={<ShoppingBag size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
         </div>
-        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
+        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
       </>}
     </div>}
   </section>
@@ -231,7 +232,7 @@ export function PlanLockedFeature({
 }) {
   const tagline = description ?? (_requiredPlan === 'commander' ? 'Upgrade to Commander to unlock' : 'Upgrade to unlock')
   return (
-    <button
+    <Button
       className="plan-locked-feature"
       onClick={onUpgrade}
       aria-label={`Upgrade to unlock ${featureName}`}
@@ -245,7 +246,7 @@ export function PlanLockedFeature({
         <strong>{featureName}</strong>
         <small>{tagline}</small>
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -300,8 +301,8 @@ export function TopProductInsight({ insight, orders, ordersTotal, onNavigate }: 
         {multipleOfAverage !== null && <p><Sparkles size={13} /><span><b>{multipleOfAverage.toFixed(1)}x the average product</b><small>by units sold across synced orders</small></span></p>}
       </div>
       <div className="top-product-actions">
-        <button type="button" onClick={() => onNavigate?.('products')}>View Product Details</button>
-        <button type="button" onClick={() => document.querySelector('.orders-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>See All Orders</button>
+        <Button type="button" onClick={() => onNavigate?.('products')}>View Product Details</Button>
+        <Button type="button" onClick={() => document.querySelector('.orders-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>See All Orders</Button>
       </div>
     </div>
   </article>
@@ -320,7 +321,7 @@ export function CancellationRateCard({ insight, orders = [] }: { insight: Return
   return <article className={`orders-basic-card rate-card cancellation ${tone}`}>
     <div className="orders-insight-label"><AlertTriangle size={16} /><span>Cancellation Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
-      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#10B981 ${sweep}deg, #EF4444 0)` }}>
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders canceled, ${completed} of ${total} completed`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(rgb(16, 185, 129) ${sweep}deg, rgb(239, 68, 68) 0)` }}>
         <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Cancelled</span></div>
       </div>
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${canceled} of ${total} order${total === 1 ? '' : 's'} cancelled`}</p>
@@ -347,13 +348,13 @@ export function FulfillmentRateCard({ insight, orders = [] }: { insight: ReturnT
   const remaining = Math.max(0, total - fulfilled)
   const tone = rate === null ? 'muted' : rate === 100 ? 'excellent' : rate >= 80 ? 'good' : rate >= 50 ? 'watch' : 'attention'
   const sweep = total > 0 ? Math.max(2, Math.round((fulfilled / total) * 360)) : 360
-  const restColor = rate === 0 && total > 0 ? '#EF4444' : '#F59E0B'
+  const restColor = rate === 0 && total > 0 ? 'rgb(239, 68, 68)' : 'rgb(245, 158, 11)'
   const avgDays = averageFulfillmentDays(orders)
   const status = fulfillmentStatus(rate, total)
   return <article className={`orders-basic-card rate-card fulfillment ${tone}`}>
     <div className="orders-insight-label"><CheckCircle2 size={16} /><span>Fulfillment Rate</span><i className={`rate-dot ${tone}`} /></div>
     <div className="rate-card-body">
-      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(#2563EB ${sweep}deg, ${restColor} 0)` }}>
+      <div className="rate-donut" role="img" aria-label={`${rate === null ? '—' : `${rate}%`} of orders fulfilled, ${fulfilled} of ${total}`} style={{ background: rate === null ? 'conic-gradient(rgba(107,114,128,.18) 360deg, rgba(107,114,128,.18) 0)' : `conic-gradient(rgb(37, 99, 235) ${sweep}deg, ${restColor} 0)` }}>
         <div><strong>{rate === null ? '—' : `${rate}%`}</strong><span>Fulfilled</span></div>
       </div>
       <p className="rate-subtitle">{total === 0 ? 'No orders synced yet' : `${fulfilled} of ${total} order${total === 1 ? '' : 's'} fulfilled`}</p>
@@ -475,13 +476,13 @@ function OrderFilterPanel({ value, onChange, onApply, onClear }: { value: Filter
       <FilterField label="Status"><select value={value.status} onChange={(event) => update('status', event.target.value as OrderStatus | '')}><option value="">All statuses</option><option value="new">New</option><option value="completed">Completed</option><option value="canceled">Canceled</option><option value="pending">Pending</option></select></FilterField>
       <FilterField label="From"><input type="date" value={value.dateFrom} onChange={(event) => update('dateFrom', event.target.value)} /></FilterField>
       <FilterField label="To"><input type="date" value={value.dateTo} onChange={(event) => update('dateTo', event.target.value)} /></FilterField>
-    </div><div className="orders-filter-actions"><button className="button secondary" onClick={onClear}>Clear all</button><button className="button primary" onClick={onApply}>Apply filters</button></div>
+    </div><div className="orders-filter-actions"><Button className="button secondary" onClick={onClear}>Clear all</Button><Button className="button primary" onClick={onApply}>Apply filters</Button></div>
   </div>
 }
 function FilterField({ label, children }: { label: string; children: ReactNode }) { return <label className="orders-filter-field"><span>{label}</span>{children}</label> }
 
 function SortControl({ sort, direction, onSort, onDirection }: { sort: 'date' | 'price' | 'status'; direction: 'asc' | 'desc'; onSort: (value: 'date' | 'price' | 'status') => void; onDirection: () => void }) {
-  return <div className="orders-sort-control"><CustomSelect ariaLabel="Sort orders" value={sort} onChange={onSort} label="Sort" options={[{ value: 'date', label: 'Date' }, { value: 'price', label: 'Price' }, { value: 'status', label: 'Status' }]} /><button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</button></div>
+  return <div className="orders-sort-control"><CustomSelect ariaLabel="Sort orders" value={sort} onChange={onSort} label="Sort" options={[{ value: 'date', label: 'Date' }, { value: 'price', label: 'Price' }, { value: 'status', label: 'Status' }]} /><Button onClick={onDirection} aria-label={`Sort ${direction === 'asc' ? 'descending' : 'ascending'}`}>{direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}</Button></div>
 }
 
 function OrdersTable({ orders, onSelect }: { orders: readonly OrderView[]; onSelect: (id: string) => void }) {
@@ -497,21 +498,21 @@ function OrderTableRow({ order, onSelect }: { order: OrderView; onSelect: (id: s
     <td data-label="Price"><strong>{money(order.totalPrice, order.currency)}</strong><small>{order.currency ?? 'Currency unavailable'}</small></td>
     <td data-label="Payment"><PaymentBadge status={order.paymentStatus} /></td>
     <td data-label="Status"><OrderStatusBadge status={order.status} /></td>
-    <td data-label="Actions"><button className="order-action-button" aria-label={`View ${order.orderNumber}`} onClick={(event) => { event.stopPropagation(); onSelect(order.id) }}><MoreHorizontal size={17} /></button></td>
+    <td data-label="Actions"><Button className="order-action-button" aria-label={`View ${order.orderNumber}`} onClick={(event) => { event.stopPropagation(); onSelect(order.id) }}><MoreHorizontal size={17} /></Button></td>
   </tr>
 }
 function ProductSummary({ order }: { order: OrderView }) { const first = order.lineItems[0]; const quantity = order.lineItems.reduce((sum, line) => sum + line.quantity, 0); return <div className="order-product-summary"><strong>{first?.title ?? 'Product details unavailable'}</strong><small>{quantity} item{quantity === 1 ? '' : 's'}{order.lineItems.length > 1 ? ` · ${order.lineItems.length} products` : ''}</small></div> }
 function PaymentBadge({ status }: { status: PaymentStatus }) { return <span className={`order-badge payment-${status}`}>{paymentStatusLabel(status)}</span> }
 function OrderStatusBadge({ status }: { status: OrderStatus }) { return <span className={`order-badge status-${status}`}>{orderStatusLabel(status)}</span> }
 
-function OrdersPagination({ pagination, onPage }: { pagination: OrdersPageResult['pagination']; onPage: (page: number) => void }) { return <footer className="orders-pagination"><span>Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} real orders</span><div><button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)}><ChevronLeft size={15} /></button><strong>Page {pagination.page} of {pagination.pages}</strong><button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)}><ChevronRight size={15} /></button></div></footer> }
+function OrdersPagination({ pagination, onPage }: { pagination: OrdersPageResult['pagination']; onPage: (page: number) => void }) { return <footer className="orders-pagination"><span>Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} real orders</span><div><Button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)}><ChevronLeft size={15} /></Button><strong>Page {pagination.page} of {pagination.pages}</strong><Button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)}><ChevronRight size={15} /></Button></div></footer> }
 
 function OrderDetailsDrawer({ storeId, orderId, shop, onClose, onToast }: { storeId: string; orderId: string; shop: string | null; onClose: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [order, setOrder] = useState<OrderView | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => { let cancelled = false; setLoading(true); void fetchOrder(storeId, orderId).then((value) => { if (!cancelled) setOrder(value) }).catch((reason: unknown) => { if (!cancelled) onToast(errorText(reason), 'error') }).finally(() => { if (!cancelled) setLoading(false) }); return () => { cancelled = true } }, [storeId, orderId])
-  return <div className="order-drawer-layer"><button className="order-drawer-backdrop" onClick={onClose} aria-label="Close order details" /><aside className="order-details-drawer" aria-label="Order details">{loading || !order ? <DrawerSkeleton onClose={onClose} /> : <>
-    <header><div><div className="section-kicker">SHOPIFY ORDER · READ ONLY</div><h2>{order.orderNumber}</h2><span><OrderStatusBadge status={order.status} /><PaymentBadge status={order.paymentStatus} /></span></div><button onClick={onClose} aria-label="Close order details"><X size={19} /></button></header>
+  return <div className="order-drawer-layer"><Button className="order-drawer-backdrop" onClick={onClose} aria-label="Close order details" /><aside className="order-details-drawer" aria-label="Order details">{loading || !order ? <DrawerSkeleton onClose={onClose} /> : <>
+    <header><div><div className="section-kicker">SHOPIFY ORDER · READ ONLY</div><h2>{order.orderNumber}</h2><span><OrderStatusBadge status={order.status} /><PaymentBadge status={order.paymentStatus} /></span></div><Button onClick={onClose} aria-label="Close order details"><X size={19} /></Button></header>
     <div className="order-drawer-scroll">
       <DetailSection title="Order summary" icon={<ShoppingBag size={16} />}><DetailGrid items={[['Created', formatDateTime(order.createdAt)], ['Processed', formatDateTime(order.processedAt)], ['Updated', formatDateTime(order.updatedAt)], ['Last synced', formatDateTime(order.syncedAt)], ['Financial status', order.financialStatus], ['Fulfillment status', order.fulfillmentStatus], ['Shopify ID', order.id]]} /></DetailSection>
       <DetailSection title="Customer" icon={<UserRound size={16} />}><DetailGrid items={[['Name', order.customer.name], ['Email', order.customer.email], ['Phone', order.customer.phone], ['Customer ID', order.customer.id]]} /></DetailSection>
@@ -529,11 +530,11 @@ function DetailSection({ title, icon, children }: { title: string; icon: ReactNo
 function DetailGrid({ items }: { items: readonly (readonly [string, string | null])[] }) { return <dl className="order-detail-grid">{items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl> }
 function TotalLine({ label, value, total = false }: { label: string; value: string; total?: boolean }) { return <div className={total ? 'total' : ''}><span>{label}</span><strong>{value}</strong></div> }
 function AddressBlock({ address }: { address: OrderAddress | null }) { if (!address) return <p className="order-detail-empty">No shipping address was returned by Shopify.</p>; const lines = [[address.firstName, address.lastName].filter(Boolean).join(' '), address.company, address.address1, address.address2, [address.city, address.province, address.zip].filter(Boolean).join(', '), [address.country, address.countryCode].filter(Boolean).join(' · '), address.phone].filter(Boolean); return <address>{lines.map((line) => <span key={line}>{line}</span>)}</address> }
-function DrawerSkeleton({ onClose }: { onClose: () => void }) { return <div className="drawer-skeleton"><button onClick={onClose}><X size={18} /></button><span /><span /><span /><span /></div> }
+function DrawerSkeleton({ onClose }: { onClose: () => void }) { return <div className="drawer-skeleton"><Button onClick={onClose}><X size={18} /></Button><span /><span /><span /><span /></div> }
 
 function OrdersTableSkeleton() { return <div className="orders-table-skeleton">{[1, 2, 3, 4, 5].map((row) => <div key={row}>{[1, 2, 3, 4, 5, 6].map((cell) => <span key={cell} />)}</div>)}</div> }
-function OrdersErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <div className="orders-error"><AlertTriangle size={21} /><strong>Orders could not be loaded</strong><p>{message}</p><button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry</button></div> }
-export function OrdersEmptyState({ title, description, action, onAction, compact = false }: { title: string; description: string; action: string; onAction: () => void; compact?: boolean }) { return <div className={`orders-empty ${compact ? 'compact' : ''}`}><span><ShoppingBag size={23} /></span><strong>{title}</strong><p>{description}</p><button className="button secondary" onClick={onAction}>{action}</button></div> }
+function OrdersErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <div className="orders-error"><AlertTriangle size={21} /><strong>Orders could not be loaded</strong><p>{message}</p><Button className="button secondary" onClick={onRetry}><RefreshCw size={14} /> Retry</Button></div> }
+export function OrdersEmptyState({ title, description, action, onAction, compact = false }: { title: string; description: string; action: string; onAction: () => void; compact?: boolean }) { return <div className={`orders-empty ${compact ? 'compact' : ''}`}><span><ShoppingBag size={23} /></span><strong>{title}</strong><p>{description}</p><Button className="button secondary" onClick={onAction}>{action}</Button></div> }
 
 function activeFilterCount(filters: FilterState): number { return Object.values(filters).filter(Boolean).length }
 /** Sum of fully refunded order totals from the loaded Shopify order rows. */

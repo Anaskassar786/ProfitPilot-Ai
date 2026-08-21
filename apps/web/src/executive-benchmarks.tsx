@@ -5,8 +5,9 @@
  * rank, median, top-10% target, gap to next tier, and honest "not
  * measurable" states. Metric visibility follows the plan allowance.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Gauge, RefreshCw, Target } from 'lucide-react'
+import { BarChart3, Gauge, RefreshCw, Target } from './icons.js'
 import type { BenchmarkMetricPosition, BenchmarkPosition } from './executive-model.js'
 import { formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
 import { fetchBenchmarkPosition, refreshBenchmarks } from './executive-api.js'
@@ -69,11 +70,11 @@ export function ExecutiveBenchmarksPage({ context, plan, gates, onToast, onUpgra
         kicker="Industry intelligence"
         title="Industry Benchmarks"
         description="Your store's real metrics positioned against curated public Shopify benchmarks for your category. Missing values mean the metric is not measurable yet — never estimated."
-        actions={<button type="button" className="button secondary" onClick={() => void refresh()} disabled={refreshing || !storeId}><RefreshCw size={14} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Refreshing…' : 'Refresh data'}</button>}
+        actions={<Button type="button" className="button secondary" onClick={() => void refresh()} disabled={refreshing || !storeId}><RefreshCw size={14} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Refreshing…' : 'Refresh data'}</Button>}
       />
       <div className="exec-category-chips" role="tablist" aria-label="Benchmark category">
         {EXECUTIVE_CATEGORIES.map((entry) => (
-          <button key={entry} type="button" role="tab" aria-selected={category === entry} className={`exec-category-chip ${category === entry ? 'active' : ''}`} onClick={() => void load(entry)}>{entry}</button>
+          <Button key={entry} type="button" role="tab" aria-selected={category === entry} className={`exec-category-chip ${category === entry ? 'active' : ''}`} onClick={() => void load(entry)}>{entry}</Button>
         ))}
       </div>
       {loading && <ExecutiveSkeleton rows={5} label="Benchmark position" />}

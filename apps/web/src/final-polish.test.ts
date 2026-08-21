@@ -60,12 +60,12 @@ describe('PR #41 final polish contracts', () => {
     ]
     for (const selector of lightContracts) expect(css).toContain(selector)
 
-    expect(css).toContain('background: #FFFFFF !important')
-    expect(css).toContain('color: #111827 !important')
-    expect(css).toContain('background: #059669 !important')
-    expect(css).toContain('background: #2563EB !important')
-    expect(css).toContain('background: #D97706 !important')
-    expect(css).toContain('background: #DC2626 !important')
+    expect(css).toContain('background: rgb(255, 255, 255) !important')
+    expect(css).toContain('color: rgb(17, 24, 39) !important')
+    expect(css).toContain('background: rgb(5, 150, 105) !important')
+    expect(css).toContain('background: rgb(37, 99, 235) !important')
+    expect(css).toContain('background: rgb(217, 119, 6) !important')
+    expect(css).toContain('background: rgb(220, 38, 38) !important')
   })
 
   it('keeps the premium dark surfaces alongside light overrides', () => {
@@ -115,11 +115,11 @@ describe('PR #42 final polish contracts', () => {
   it('ships light-theme visibility for every Analytics header control', () => {
     const css = source('./analytics.css')
     expect(css).toContain('.light-mode .analytics-page-icon')
-    expect(css).toContain('color: #2563EB !important')
+    expect(css).toContain('color: rgb(37, 99, 235) !important')
     expect(css).toContain('.light-mode .period-toggle button.active')
-    expect(css).toContain('background: #2563EB !important')
+    expect(css).toContain('background: rgb(37, 99, 235) !important')
     expect(css).toContain('.light-mode .analytics-tool-button')
-    expect(css).toContain('color: #111827 !important')
+    expect(css).toContain('color: rgb(17, 24, 39) !important')
     expect(css).toContain('.light-mode .custom-range-popover')
   })
 

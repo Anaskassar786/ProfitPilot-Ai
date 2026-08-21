@@ -1,3 +1,4 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
@@ -12,7 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
   XCircle,
-} from 'lucide-react'
+} from './icons.js'
 import type { WorkspaceContext } from './model.js'
 import {
   QA_AREAS,
@@ -161,9 +162,9 @@ export function QaChartBoard({ context }: { context: WorkspaceContext }) {
             <h3>Is the server throwing errors right now?</h3>
             <p>Hits the real API endpoints used by every page. Any red row = an "Internet server error" a merchant would see.</p>
           </div>
-          <button className="button secondary" onClick={() => void runLiveCheck()} disabled={checking}>
+          <Button className="button secondary" onClick={() => void runLiveCheck()} disabled={checking}>
             {checking ? <RefreshCw size={14} className="spin" /> : <RefreshCw size={14} />} Re-check now
-          </button>
+          </Button>
         </div>
         {live.length === 0 && !checking && <p className="qa-live-empty">Run a check to probe the live server.</p>}
         {live.length > 0 && (
@@ -315,7 +316,7 @@ function AreaCard({ area, expanded, onToggle }: { area: (typeof QA_AREAS)[number
   const passCount = area.checks.filter((c) => c.status === 'PASS').length
   return (
     <article className="qa-area-card">
-      <button className="qa-area-card-head" onClick={onToggle} aria-expanded={expanded}>
+      <Button className="qa-area-card-head" onClick={onToggle} aria-expanded={expanded}>
         <span className="qa-area-index">{String(area.id).padStart(2, '0')}</span>
         <span className="qa-area-title">
           <strong>{area.title}</strong>
@@ -326,7 +327,7 @@ function AreaCard({ area, expanded, onToggle }: { area: (typeof QA_AREAS)[number
           {fixedCount > 0 && <span className="qa-area-stat fixed">{fixedCount} fixed</span>}
         </span>
         <StatusChip status={area.outcome} />
-      </button>
+      </Button>
       {expanded && (
         <div className="qa-area-detail">
           <table className="qa-table qa-table-tight">

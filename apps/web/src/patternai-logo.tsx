@@ -6,7 +6,7 @@
  *
  * The mark is pure SVG with a per-instance gradient id (so several marks can
  * share a page safely), scales cleanly from 16px favicons to 48px headers, and
- * reads correctly on both the dark (#0B0D14) and light (#FAFBFC) canvases —
+ * reads correctly on both the dark (rgb(11, 13, 20)) and light (rgb(250, 251, 252)) canvases —
  * strokes and nodes use theme-aware currentColor-independent brand values so
  * the constellation never disappears into either background.
  */
@@ -59,13 +59,13 @@ export function PatternAiMark({ size = 24, variant = 'plain', title = 'PatternAI
       <title>{title}</title>
       <defs>
         <linearGradient id={stroke} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--pa-mark-from, #A78BFA)" />
-          <stop offset="55%" stopColor="var(--pa-mark-mid, #8B5CF6)" />
-          <stop offset="100%" stopColor="var(--pa-mark-to, #06B6D4)" />
+          <stop offset="0%" stopColor="var(--pa-mark-from, rgb(167, 139, 250))" />
+          <stop offset="55%" stopColor="var(--pa-mark-mid, rgb(139, 92, 246))" />
+          <stop offset="100%" stopColor="var(--pa-mark-to, rgb(6, 182, 212))" />
         </linearGradient>
         <radialGradient id={node} cx="35%" cy="30%" r="80%">
-          <stop offset="0%" stopColor="var(--pa-mark-node-core, #FFFFFF)" />
-          <stop offset="100%" stopColor="var(--pa-mark-node-edge, #8B5CF6)" />
+          <stop offset="0%" stopColor="var(--pa-mark-node-core, rgb(255, 255, 255))" />
+          <stop offset="100%" stopColor="var(--pa-mark-node-edge, rgb(139, 92, 246))" />
         </radialGradient>
         <linearGradient id={plate} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--pa-mark-plate-from, rgba(139, 92, 246, 0.18))" />
@@ -86,7 +86,7 @@ export function PatternAiMark({ size = 24, variant = 'plain', title = 'PatternAI
       {NODES.map((point, index) => (
         <g key={index}>
           <circle cx={point.cx} cy={point.cy} r={point.r + 1.5} fill="var(--pa-mark-halo, rgba(139, 92, 246, 0.16))" />
-          <circle cx={point.cx} cy={point.cy} r={point.r} fill={point.accent ? 'var(--pa-mark-accent, #06B6D4)' : `url(#${node})`} />
+          <circle cx={point.cx} cy={point.cy} r={point.r} fill={point.accent ? 'var(--pa-mark-accent, rgb(6, 182, 212))' : `url(#${node})`} />
         </g>
       ))}
     </svg>
@@ -125,7 +125,7 @@ export function PatternAiWordmark({ size = 28 }: { size?: number }) {
  *
  * Pure SVG, per-instance gradient ids, legible at 12/14/16/24/32px, and driven
  * by the same theme-aware `--pa-mark-*` variables as the brand constellation
- * so it reads on both the dark (#0B0D14) and light (#F8FAFC) canvases.
+ * so it reads on both the dark (rgb(11, 13, 20)) and light (rgb(248, 250, 252)) canvases.
  */
 export function PatternAiDiscoverGlyph({ size = 16, title = 'Run discovery', className }: Readonly<{ size?: number; title?: string; className?: string }>) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
@@ -144,12 +144,12 @@ export function PatternAiDiscoverGlyph({ size = 16, title = 'Run discovery', cla
       <title>{title}</title>
       <defs>
         <linearGradient id={ring} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--pa-mark-from, #A78BFA)" />
-          <stop offset="100%" stopColor="var(--pa-mark-to, #06B6D4)" />
+          <stop offset="0%" stopColor="var(--pa-mark-from, rgb(167, 139, 250))" />
+          <stop offset="100%" stopColor="var(--pa-mark-to, rgb(6, 182, 212))" />
         </linearGradient>
         <linearGradient id={spark} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--pa-mark-mid, #8B5CF6)" />
-          <stop offset="100%" stopColor="var(--pa-mark-accent, #06B6D4)" />
+          <stop offset="0%" stopColor="var(--pa-mark-mid, rgb(139, 92, 246))" />
+          <stop offset="100%" stopColor="var(--pa-mark-accent, rgb(6, 182, 212))" />
         </linearGradient>
       </defs>
 
@@ -169,8 +169,8 @@ export function PatternAiDiscoverGlyph({ size = 16, title = 'Run discovery', cla
       />
 
       {/* Constellation points being revealed outside the ring. */}
-      <circle cx="20.8" cy="4.6" r="1.5" fill="var(--pa-mark-accent, #06B6D4)" />
-      <circle cx="17.4" cy="3.2" r="0.9" fill="var(--pa-mark-from, #A78BFA)" />
+      <circle cx="20.8" cy="4.6" r="1.5" fill="var(--pa-mark-accent, rgb(6, 182, 212))" />
+      <circle cx="17.4" cy="3.2" r="0.9" fill="var(--pa-mark-from, rgb(167, 139, 250))" />
     </svg>
   )
 }

@@ -5,8 +5,9 @@
  * category, and language. Growth+ gates on email toggles are shown
  * honestly with the upgrade CTA.
  */
+import { Button } from './polaris-ui.js'
 import { useEffect, useState } from 'react'
-import { Bell, CalendarDays, Mail, Save, SlidersHorizontal } from 'lucide-react'
+import { Bell, CalendarDays, Mail, Save, SlidersHorizontal } from './icons.js'
 import type { ExecutivePreferences } from './executive-model.js'
 import { fetchExecutivePreferences, saveExecutivePreferences } from './executive-api.js'
 import { EXECUTIVE_CATEGORIES } from './executive-benchmarks.js'
@@ -66,7 +67,7 @@ export function ExecutiveSettingsPage({ context, plan, gates, onToast, onUpgrade
         kicker="Boardroom configuration"
         title="Executive Settings"
         description="Schedule your monthly board report, choose the delivery address, set risk alert thresholds, and pick your benchmark category and language."
-        actions={<button type="button" className="button primary" onClick={() => void save()} disabled={saving || !storeId || !preferences}><Save size={14} /> {saving ? 'Saving…' : 'Save Preferences'}</button>}
+        actions={<Button type="button" className="button primary" onClick={() => void save()} disabled={saving || !storeId || !preferences}><Save size={14} /> {saving ? 'Saving…' : 'Save Preferences'}</Button>}
       />
       {loading && <ExecutiveSkeleton rows={4} label="Preferences" />}
       {error && !loading && <ExecutiveErrorState message={error} onRetry={() => void load()} />}
@@ -76,7 +77,7 @@ export function ExecutiveSettingsPage({ context, plan, gates, onToast, onUpgrade
             <div className="exec-settings-form">
               <div className="exec-setting-row">
                 <span>Monthly board report<small>Auto-generates for your store every month</small></span>
-                <button type="button" className={`exec-toggle ${preferences.monthlyReportEnabled ? 'on' : ''}`} aria-pressed={preferences.monthlyReportEnabled} onClick={() => patch({ monthlyReportEnabled: !preferences.monthlyReportEnabled })}><span /></button>
+                <Button type="button" className={`exec-toggle ${preferences.monthlyReportEnabled ? 'on' : ''}`} aria-pressed={preferences.monthlyReportEnabled} onClick={() => patch({ monthlyReportEnabled: !preferences.monthlyReportEnabled })}><span /></Button>
               </div>
               <div className="exec-setting-row">
                 <span>Generation day<small>Day of the month the report is produced (1-28)</small></span>
@@ -84,9 +85,9 @@ export function ExecutiveSettingsPage({ context, plan, gates, onToast, onUpgrade
               </div>
               <div className="exec-setting-row">
                 <span>Email the report<small>Delivered on generation day via Brevo</small></span>
-                <button type="button" className={`exec-toggle ${preferences.monthlyReportEmailEnabled && emailAllowed ? 'on' : ''}`} aria-pressed={preferences.monthlyReportEmailEnabled} onClick={() => patch({ monthlyReportEmailEnabled: !preferences.monthlyReportEmailEnabled })}><span /></button>
+                <Button type="button" className={`exec-toggle ${preferences.monthlyReportEmailEnabled && emailAllowed ? 'on' : ''}`} aria-pressed={preferences.monthlyReportEmailEnabled} onClick={() => patch({ monthlyReportEmailEnabled: !preferences.monthlyReportEmailEnabled })}><span /></Button>
               </div>
-              {!emailAllowed && <p className="exec-muted-note" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={12} /> Monthly email reports are included from a higher plan. <button type="button" className="text-button" onClick={onUpgrade}><strong>Upgrade Plan</strong></button></p>}
+              {!emailAllowed && <p className="exec-muted-note" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={12} /> Monthly email reports are included from a higher plan. <Button type="button" className="text-button" onClick={onUpgrade}><strong>Upgrade Plan</strong></Button></p>}
               <div className="exec-setting-row">
                 <span>Report email address<small>Where the monthly board report is sent</small></span>
                 <input value={emailInput} onChange={(event) => setEmailInput(event.target.value)} placeholder="merchant@example.com" style={{ width: 230 }} className="exec-settings-form" />
@@ -97,7 +98,7 @@ export function ExecutiveSettingsPage({ context, plan, gates, onToast, onUpgrade
             <div className="exec-settings-form">
               <div className="exec-setting-row">
                 <span>Risk alerts<small>Notify when the radar detects new exposures</small></span>
-                <button type="button" className={`exec-toggle ${preferences.riskAlertsEnabled ? 'on' : ''}`} aria-pressed={preferences.riskAlertsEnabled} onClick={() => patch({ riskAlertsEnabled: !preferences.riskAlertsEnabled })}><span /></button>
+                <Button type="button" className={`exec-toggle ${preferences.riskAlertsEnabled ? 'on' : ''}`} aria-pressed={preferences.riskAlertsEnabled} onClick={() => patch({ riskAlertsEnabled: !preferences.riskAlertsEnabled })}><span /></Button>
               </div>
               <div className="exec-setting-row">
                 <span>Minimum severity<small>Only alert at this level or above</small></span>

@@ -1,7 +1,8 @@
+import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Boxes, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from 'lucide-react'
+import { AlertTriangle, Boxes, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from './icons.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -49,7 +50,7 @@ export function AIInventoryInsightsCard({ storeId, insights, loading, error, onU
   if (error) {
     return <section className="card inventory-ai-card">
       <InsightsHeader insights={insights} open={open} onToggle={() => setOpen((value) => !value)} onUpgrade={onUpgrade} />
-      <div className="inventory-ai-error"><AlertTriangle size={15} /><span>{error}</span><button className="button secondary" onClick={onRetry}>Retry</button></div>
+      <div className="inventory-ai-error"><AlertTriangle size={15} /><span>{error}</span><Button className="button secondary" onClick={onRetry}>Retry</Button></div>
     </section>
   }
   return <section className="card inventory-ai-card">
@@ -85,7 +86,7 @@ function InsightsHeader({ insights, open, onToggle, onUpgrade }: { insights: Inv
     </div>
     <div className="inventory-insights-head-actions">
       {insights && <UpgradePlanButton plan={insights.plan} onUpgrade={onUpgrade} />}
-      <button type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Collapse inventory intelligence' : 'Expand inventory intelligence'}>{open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</button>
+      <Button type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Collapse inventory intelligence' : 'Expand inventory intelligence'}>{open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</Button>
     </div>
   </header>
 }
@@ -270,8 +271,8 @@ export function AutoReorderCard({ storeId, insights, onUpgrade, onToast }: { sto
             return <li key={productId}>
               <span>{text(item.title) ?? 'Untitled product'}</span>
               {decision ? <em className={`inventory-decision ${decision}`}>{decision === 'approved' ? 'Approved' : 'Dismissed'}</em> : <span className="inventory-decision-actions">
-                <button type="button" disabled={pending === productId} aria-label={`Approve reorder for ${text(item.title) ?? productId}`} onClick={() => void decide(productId, 'approved')}>{pending === productId ? <Loader2 size={12} className="spin" /> : <Check size={12} />}</button>
-                <button type="button" disabled={pending === productId} aria-label={`Dismiss reorder for ${text(item.title) ?? productId}`} onClick={() => void decide(productId, 'dismissed')}><X size={12} /></button>
+                <Button type="button" disabled={pending === productId} aria-label={`Approve reorder for ${text(item.title) ?? productId}`} onClick={() => void decide(productId, 'approved')}>{pending === productId ? <Loader2 size={12} className="spin" /> : <Check size={12} />}</Button>
+                <Button type="button" disabled={pending === productId} aria-label={`Dismiss reorder for ${text(item.title) ?? productId}`} onClick={() => void decide(productId, 'dismissed')}><X size={12} /></Button>
               </span>}
             </li>
           })}
@@ -321,9 +322,9 @@ export function HistoricalInventoryChart({ storeId, insights, onUpgrade, onToast
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={points as unknown as Record<string, unknown>[]} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
           <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 8 }} tickLine={false} axisLine={false} minTickGap={16} />
-          <YAxis tick={{ fill: '#94A3B8', fontSize: 8 }} tickLine={false} axisLine={false} width={44} />
-          <Tooltip contentStyle={{ background: 'rgba(15,23,42,.96)', border: '1px solid rgba(148,163,184,.25)', borderRadius: 10, color: '#E2E8F0', fontSize: 10 }} formatter={(value: unknown, name: unknown) => [String(value), name === 'units' ? 'Units in stock' : String(name)]} />
+          <XAxis dataKey="label" tick={{ fill: 'rgb(148, 163, 184)', fontSize: 8 }} tickLine={false} axisLine={false} minTickGap={16} />
+          <YAxis tick={{ fill: 'rgb(148, 163, 184)', fontSize: 8 }} tickLine={false} axisLine={false} width={44} />
+          <Tooltip contentStyle={{ background: 'rgba(15,23,42,.96)', border: '1px solid rgba(148,163,184,.25)', borderRadius: 10, color: 'rgb(226, 232, 240)', fontSize: 10 }} formatter={(value: unknown, name: unknown) => [String(value), name === 'units' ? 'Units in stock' : String(name)]} />
           <Line type="monotone" dataKey="units" stroke="var(--blue-bright)" strokeWidth={2} dot={points.length < 12} />
         </LineChart>
       </ResponsiveContainer>
@@ -366,9 +367,9 @@ export function CustomInventoryQueryInput({ storeId, insights, onUpgrade, onToas
         onChange={(event) => setQuestion(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter') void ask() }}
       />
-      <button type="button" className="button primary" disabled={pending || question.trim().length === 0} onClick={() => void ask()}>
+      <Button type="button" className="button primary" disabled={pending || question.trim().length === 0} onClick={() => void ask()}>
         {pending ? <Loader2 size={13} className="spin" /> : <Send size={13} />} Ask
-      </button>
+      </Button>
     </div>
     {answer && <p className="inventory-ai-suggestion">{answer}</p>}
     <small className="inventory-ai-footnote">Questions are stripped of product names, SKUs, and ids before they reach the model. 20 questions per day.</small>
