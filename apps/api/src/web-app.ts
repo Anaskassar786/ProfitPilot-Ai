@@ -26,6 +26,13 @@ const API_PATH_PREFIXES = [
   '/legal',
   '/live',
   '/orders',
+  // QA (2026-08-20): the PatternAI router registers BOTH /patternai and
+  // /insights paths. Only /insights was listed here, so every POST to the
+  // /patternai alias skipped express.json (body arrived unparsed →
+  // "a JSON body is required" on investigations/generate) and, worse, skipped
+  // the authentication/CSRF middleware chain. Adding the prefix restores
+  // JSON parsing and the full security pipeline for the alias.
+  '/patternai',
   '/public-api',
   '/ready',
   '/recommendations',

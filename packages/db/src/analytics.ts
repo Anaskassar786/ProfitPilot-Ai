@@ -76,17 +76,34 @@ export class PostgresAnalyticsRepository implements AnalyticsRepository {
   }
 
   public async read(storeId: StoreId): Promise<AnalyticsSnapshot> {
-    const [revenue, orders, productSales, customerCohorts] = await Promise.all([
-      this.executor.query<RevenueRow>('SELECT store_id, day, gross_revenue, discounts, order_count FROM analytics_revenue_daily WHERE store_id = $1 ORDER BY day', [storeId]),
-      this.executor.query<OrdersRow>('SELECT store_id, day, order_count, fulfilled_count, cancelled_count, average_order_value FROM analytics_orders_daily WHERE store_id = $1 ORDER BY day', [storeId]),
-      this.executor.query<ProductSalesRow>('SELECT store_id, day, product_id, units_sold, gross_revenue FROM analytics_product_sales_daily WHERE store_id = $1 ORDER BY day', [storeId]),
-      this.executor.query<CohortRow>('SELECT store_id, cohort_day, activity_day, customer_count, gross_revenue FROM analytics_customer_cohorts_daily WHERE store_id = $1 ORDER BY activity_day', [storeId]),
-    ])
-    return {
-      revenue: revenue.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), grossRevenue: numeric(row.gross_revenue), discounts: numeric(row.discounts), orderCount: row.order_count })),
-      orders: orders.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), orderCount: row.order_count, fulfilledCount: row.fulfilled_count, cancelledCount: row.cancelled_count, averageOrderValue: numeric(row.average_order_value) })),
-      productSales: productSales.rows.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), productId: row.product_id, unitsSold: row.units_sold, grossRevenue: numeric(row.gross_revenue) })),
-      customerCohorts: customerCohorts.rows.map((row) => ({ storeId: row.store_id as StoreId, cohortDay: dayLabel(row.cohort_day), activityDay: dayLabel(row.activity_day), customerCount: row.customer_count, grossRevenue: numeric(row.gross_revenue) })),
+    // QA (2026-08-21): the four reads used to run as Promise.all over four
+    // pooled connections. Under a connection-multiplexing proxy (or the QA
+    // PGlite emulator) concurrent extended-protocol streams can interleave
+    // and glitch a portal, surfacing as a 500 "Internal server error" on the
+    // GrowthIQ dashboard. Sequential reads are deterministic and halve peak
+    // pool usage at negligible latency cost for typical aggregates.
+    const readRows = async (): Promise<Readonly<{ revenue: readonly RevenueRow[]; orders: readonly OrdersRow[]; productSales: readonly ProductSalesRow[]; customerCohorts: readonly CohortRow[] }>> => {
+      const revenue = await this.executor.query<RevenueRow>('SELECT store_id, day, gross_revenue, discounts, order_count FROM analytics_revenue_daily WHERE store_id = $1 ORDER BY day', [storeId])
+      const orders = await this.executor.query<OrdersRow>('SELECT store_id, day, order_count, fulfilled_count, cancelled_count, average_order_value FROM analytics_orders_daily WHERE store_id = $1 ORDER BY day', [storeId])
+      const productSales = await this.executor.query<ProductSalesRow>('SELECT store_id, day, product_id, units_sold, gross_revenue FROM analytics_product_sales_daily WHERE store_id = $1 ORDER BY day', [storeId])
+      const customerCohorts = await this.executor.query<CohortRow>('SELECT store_id, cohort_day, activity_day, customer_count, gross_revenue FROM analytics_customer_cohorts_daily WHERE store_id = $1 ORDER BY activity_day', [storeId])
+      return { revenue: revenue.rows, orders: orders.rows, productSales: productSales.rows, customerCohorts: customerCohorts.rows }
+    }
+    const mapRows = (rows: Readonly<{ revenue: readonly RevenueRow[]; orders: readonly OrdersRow[]; productSales: readonly ProductSalesRow[]; customerCohorts: readonly CohortRow[] }>): AnalyticsSnapshot => ({
+      revenue: rows.revenue.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), grossRevenue: numeric(row.gross_revenue), discounts: numeric(row.discounts), orderCount: row.order_count })),
+      orders: rows.orders.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), orderCount: row.order_count, fulfilledCount: row.fulfilledCount, cancelledCount: row.cancelledCount, averageOrderValue: numeric(row.average_order_value) })),
+      productSales: rows.productSales.map((row) => ({ storeId: row.store_id as StoreId, day: dayLabel(row.day), productId: row.product_id, unitsSold: row.units_sold, grossRevenue: numeric(row.gross_revenue) })),
+      customerCohorts: rows.customerCohorts.map((row) => ({ storeId: row.store_id as StoreId, cohortDay: dayLabel(row.cohort_day), activityDay: dayLabel(row.activity_day), customerCount: row.customer_count, grossRevenue: numeric(row.gross_revenue) })),
+    })
+    try {
+      return mapRows(await readRows())
+    } catch (error: unknown) {
+      // A glitched multiplexed response can hand back a row with an undefined
+      // column, which numeric() rejects. One clean re-read recovers it; if the
+      // second read also fails the error propagates — real corruption must
+      // never be silently zeroed.
+      if (error instanceof Error && error.message.includes('non-numeric')) return mapRows(await readRows())
+      throw error
     }
   }
 

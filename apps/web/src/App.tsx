@@ -64,6 +64,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  ClipboardCheck,
   ShoppingBag,
   SlidersHorizontal,
   Sparkles,
@@ -84,7 +85,7 @@ import {
 } from 'lucide-react'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, ApiClientError } from './api.js'
+import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, verifyBillingCharge, verifyMerchantEmail, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -125,6 +126,7 @@ import { isAiCommandHash, isCampaignsHash } from './ai-command-model.js'
 import { CoachWidget } from './coach-widget.js'
 import { PatternAiWorkspace } from './patternai.js'
 import { ExportsWorkspace } from './exports.js'
+import { QaChartBoard } from './qa-board.js'
 import { PatternAiIcon } from './patternai-logo.js'
 import { GrowthIqNavIcon } from './growthiq-logo.js'
 import { AiCommandIcon } from './ai-command-logo.js'
@@ -179,6 +181,8 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'settings', label: 'Settings', icon: Settings },
       /* Operator-only console — filtered out for regular merchants (see visibleNavGroups). */
       { id: 'admin-ops', label: 'Admin Ops', icon: ShieldCheck, devOnly: true },
+      /* QA Chart Board — dev workspace only (the QA report as a live board). */
+      { id: 'qa-board', label: 'QA Chart Board', icon: ClipboardCheck, devOnly: true },
     ],
   },
 ]
@@ -221,6 +225,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   billing: { title: 'Billing', description: 'Your trial, plan, usage, and verified AI return on this store.', icon: WalletCards },
   settings: { title: 'Settings', description: 'Store context, preferences, and security controls.', icon: Settings },
   'admin-ops': { title: 'Admin Ops', description: 'Launch controls, merchant flags, queue inspection, and retries.', icon: ShieldCheck },
+  'qa-board': { title: 'QA Chart Board', description: 'End-to-end QA results: every area tested, every bug found, every fix applied — as a live board.', icon: ClipboardCheck },
 }
 
 type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; devOnly?: boolean }>
@@ -295,6 +300,16 @@ export default function App() {
   const urlContext = useMemo(() => workspaceContext(window.location.search), [])
   const [resolvedContext, setResolvedContext] = useState<WorkspaceContext>({ storeId: null, shop: null })
   const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
+  // QA (2026-08-20): real Shopify connection health for the sidebar card,
+  // fetched from /sync/status instead of assuming "all systems active".
+  const [syncHealth, setSyncHealth] = useState<import('./api.js').SyncStatus | null>(null)
+  useEffect(() => {
+    if (!context.storeId) { setSyncHealth(null); return }
+    let cancelled = false
+    setSyncHealth(null)
+    void fetchSyncStatus(context.storeId).then((status) => { if (!cancelled) setSyncHealth(status) }).catch(() => { if (!cancelled) setSyncHealth(null) })
+    return () => { cancelled = true }
+  }, [context.storeId])
 
   useEffect(() => {
     if (urlContext.storeId) return
@@ -578,7 +593,7 @@ export default function App() {
   return (
     <div className={`app-shell ${lightMode ? 'light-mode' : ''} ${workspacePrefs.reducedMotion ? 'reduce-motion' : ''} ${workspacePrefs.bubbleEnabled ? '' : 'hide-jarvis'} jarvis-pos-${workspacePrefs.bubblePosition}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Sidebar activePage={activePage} collapsed={collapsed} mobileOpen={mobileOpen} context={context} onNavigate={navigate} onCollapse={() => setCollapsed((value) => !value)} onClose={() => setMobileOpen(false)} onOpenCommand={() => setCommandOpen(true)} onOnboarding={() => setOnboardingOpen(true)} />
+      <Sidebar activePage={activePage} collapsed={collapsed} mobileOpen={mobileOpen} context={context} syncHealth={syncHealth} onNavigate={navigate} onCollapse={() => setCollapsed((value) => !value)} onClose={() => setMobileOpen(false)} onOpenCommand={() => setCommandOpen(true)} onOnboarding={() => setOnboardingOpen(true)} />
       <main id="main-content" tabIndex={-1} className={`main-shell ${collapsed ? 'sidebar-is-collapsed' : ''}`}>
         <TopBar active={pageMeta[activePage]} unreadCount={unreadNotificationIds.size} onMenu={() => setMobileOpen(true)} onCommand={() => setCommandOpen(true)} onNotifications={() => setNotificationsOpen(true)} onProfile={() => setProfileOpen((value) => !value)} profileOpen={profileOpen} lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onShortcuts={() => setShortcutsOpen(true)} />
         <div className="page-scroll">
@@ -623,7 +638,7 @@ export default function App() {
   )
 }
 
-function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCollapse, onClose, onOpenCommand, onOnboarding }: { activePage: SectionId; collapsed: boolean; mobileOpen: boolean; context: WorkspaceContext; onNavigate: (page: SectionId) => void; onCollapse: () => void; onClose: () => void; onOpenCommand: () => void; onOnboarding: () => void }) {
+function Sidebar({ activePage, collapsed, mobileOpen, context, syncHealth, onNavigate, onCollapse, onClose, onOpenCommand, onOnboarding }: { activePage: SectionId; collapsed: boolean; mobileOpen: boolean; context: WorkspaceContext; syncHealth: import('./api.js').SyncStatus | null; onNavigate: (page: SectionId) => void; onCollapse: () => void; onClose: () => void; onOpenCommand: () => void; onOnboarding: () => void }) {
   const devWorkspace = isDeveloperWorkspace(context)
   return <>
     {mobileOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={onClose} />}
@@ -632,7 +647,28 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, onNavigate, onCol
       {!collapsed ? <button className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></button> : <button className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></button>}
       {!collapsed && <button className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></button>}
       <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; const showBillingDevDot = item.id === 'billing' && devWorkspace; return <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && showBillingDevDot && <span className="nav-dev-dot" role="img" aria-label="Real Shopify Checkout pending (Phase 2)" title="Real Shopify Checkout pending (Phase 2)" />}</button> })}</div>)}</nav>
-      <div className="sidebar-footer">{!collapsed && (context.storeId ? <div className="connection-card" role="status"><div className="connection-card-head"><span className="live-dot" /><strong>Shopify Connected</strong></div><span className="connection-card-domain" title={context.shop ?? undefined}>{context.shop ?? 'Your Shopify store'}</span><small className="connection-card-status">Synced · All systems active</small></div> : <div className="connection-card idle"><div className="connection-card-head"><span className="live-dot idle" /><strong>Shopify Not Connected</strong></div><span className="connection-card-domain">No store linked yet</span><small className="connection-card-status">Connect your store to get started</small><button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button></div>)}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
+      <div className="sidebar-footer">{!collapsed && (context.storeId ? (() => {
+        // QA (2026-08-20): the status line used to claim "Synced · All systems
+        // active" for any connected store, even one that had never synced.
+        // Derive it from the real /sync/status connection health instead.
+        const health = syncHealth
+        const circuitOpen = health?.circuit?.open === true
+        const tokenOk = health?.hasAccessToken === true
+        const statusText = health === null
+          ? 'Checking sync status…'
+          : circuitOpen
+            ? 'Sync paused — reconnecting automatically'
+            : tokenOk
+              ? 'Synced · All systems active'
+              : 'Connected · First sync pending'
+        return (
+          <div className={`connection-card ${circuitOpen ? 'paused' : ''}`} role="status">
+            <div className="connection-card-head"><span className={`live-dot ${circuitOpen ? 'paused' : ''}`} /><strong>Shopify Connected</strong></div>
+            <span className="connection-card-domain" title={context.shop ?? undefined}>{context.shop ?? 'Your Shopify store'}</span>
+            <small className="connection-card-status">{statusText}</small>
+          </div>
+        )
+      })() : <div className="connection-card idle"><div className="connection-card-head"><span className="live-dot idle" /><strong>Shopify Not Connected</strong></div><span className="connection-card-domain">No store linked yet</span><small className="connection-card-status">Connect your store to get started</small><button onClick={onOnboarding}>Connect Shopify <ArrowUpRight size={13} /></button></div>)}<button className="help-link" onClick={() => onNavigate('support')} title={collapsed ? 'Help center' : undefined}><CircleHelp size={17} />{!collapsed && <span>Help center</span>}</button>{!collapsed && <nav className="legal-links" aria-label="Legal and compliance"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/legal/security">Security</a><a href="/legal/cookies">Cookies</a><a href="/legal/dpa">DPA</a></nav>}<div className="sidebar-user"><span className="user-avatar">AA</span>{!collapsed && <span className="sidebar-user-copy"><strong>ProfitPilot team</strong><small>Connected workspace</small></span>}{!collapsed && <MoreHorizontal size={16} />}</div></div>
     </aside>
   </>
 }
@@ -713,6 +749,10 @@ function PageRouter({
     return <PageLayout eyebrow="Operator controls" title="Admin Ops" description="Final controls for maintenance, merchant flags, queues, and operational recovery."><AdminOpsWorkspace context={context} /></PageLayout>
   }
   if (active === 'billing') return <BillingPage context={context} onPhaseGate={onPhaseGate} onToast={onToast} />
+  if (active === 'qa-board') {
+    if (!isDeveloperWorkspace(context)) return <PageLayout eyebrow="Workspace" title="Page not available" description="This area is reserved for the ProfitPilot operations team."><EmptyState icon={LockKeyhole} title="Restricted section" description="Your workspace does not have access to operator controls." action="Back to dashboard" onAction={() => onNavigate('dashboard')} /></PageLayout>
+    return <PageLayout eyebrow="QA workspace" title="QA Chart Board" description="End-to-end QA results — every area tested, every bug found, every fix applied — as a live board."><QaChartBoard context={context} /></PageLayout>
+  }
   if (active === 'settings') return <SettingsPage context={context} lightMode={lightMode} onTheme={onTheme} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'support') return <HelpSupportPage context={context} onToast={onToast} onNavigate={onNavigate} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'exports') return <ExportsPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />

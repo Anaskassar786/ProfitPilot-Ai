@@ -1199,7 +1199,15 @@ export class InsightsHubService {
         const preferences = await this.preferences(storeId)
         const due = await repository.getLastDiscoveryRun(storeId)
         if (preferences.autoDiscoveryEnabled && autoDiscoveryDue(preferences, plan, due, this.now())) {
-          autoDiscoveryRan = await this.runDiscoveryPipeline(storeId, plan, true).then((result) => result.generated > 0 || result.patternsDetected > 0).catch(() => false)
+          // QA (2026-08-21): the pipeline's narrator can stall on a slow AI
+          // provider (or an unconfigured key), which used to hang the whole
+          // overview response in-band. Bound it: if it does not finish in
+          // time the page renders without fresh discoveries; the pipeline
+          // itself continues in the background and its writes are idempotent.
+          autoDiscoveryRan = await Promise.race([
+            this.runDiscoveryPipeline(storeId, plan, true).then((result) => result.generated > 0 || result.patternsDetected > 0),
+            new Promise<false>((resolve) => setTimeout(() => resolve(false), 8000)),
+          ]).catch(() => false)
           await repository.setLastDiscoveryRun(storeId, this.iso()).catch(() => undefined)
         }
       } catch { autoDiscoveryRan = false }

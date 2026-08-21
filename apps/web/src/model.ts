@@ -22,6 +22,7 @@ export type SectionId =
   | 'billing'
   | 'settings'
   | 'admin-ops'
+  | 'qa-board'
 
 export type JsonValue = string | number | boolean | null | JsonObject | readonly JsonValue[]
 export interface JsonObject { readonly [key: string]: JsonValue }
