@@ -30,7 +30,8 @@ const results = [];
   await pg0.query('DELETE FROM gift_redemptions WHERE shop_id = $1', [B]);
   await pg0.query("UPDATE billing_subscriptions SET state='TRIAL_ACTIVE', plan='trial', interval='MONTHLY', charge_id=NULL WHERE shop_id IN ($1, $2)", [A, B]);
   await pg0.query('UPDATE gift_codes SET uses = GREATEST(uses - 1, 0) WHERE code = $1', ['KASSAR786']);
-  await pg0.query('DELETE FROM store_coach_goals WHERE store_id = $1', [A]);
+  await pg0.query('DELETE FROM store_coach_goals WHERE store_id IN ($1, $2)', [A, B]);
+  await pg0.query('DELETE FROM workflows WHERE store_id IN ($1, $2)', [A, B]);
   await pg0.end();
 }
 async function call(name, path, { method = 'GET', body, storeId = A, timeout = 60000, expect, shopParam = false } = {}) {

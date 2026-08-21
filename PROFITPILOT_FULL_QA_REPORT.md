@@ -10,10 +10,10 @@
 ## EXECUTIVE SUMMARY
 
 - **Total pages/areas tested:** 20 (all app areas, mapped 1:1 to the QA scope)
-- **Total API calls executed:** 293 (240 GET routes × 2 stores + 53 flow calls)
+- **Total API calls executed:** 293 recorded in the harness + ~1,500 stress calls (Inventory/pages 20× loops, GrowthIQ 50×, sweeps)
 - **End-to-end flows executed:** 56
-- **Bugs found:** 8 (P0: 3, P1: 3, P2: 1, P3: 1)
-- **Bugs fixed in this PR:** 7
+- **Bugs found:** 10 (P0: 3, P1: 5, P2: 1, P3: 1)
+- **Bugs fixed in this PR:** 9
 - **Bugs deferred:** 1 (P3 — by design)
 - **Fake data instances audited:** 12 — 11 confirmed honest (real data or clearly labeled samples), 1 was fake and is fixed
 - **Overall app health: B** (was D before this PR — 56 five-hundreds on the happy path and a process crash)
@@ -33,8 +33,8 @@
 | 5 | Recommendations | PASS | Analyze ran the deterministic engine over the real snapshot and returned real recommendations; approve/reject/undo/execute all persisted; monthly cap → friendly upgrade prompt; activity timeline reads backend history. | — |
 | 6 | Automation | PASS | Templates list, create→save→list, pause/resume/delete, template install/validate/activate/run; Trial cap 2 → third workflow 402 upgrade prompt (not 500). | — |
 | 7 | Store Coach | PASS | Priorities load real data; SSE chat answered with real revenue numbers; goals create/delete; plan caps (402). | — |
-| 8 | GrowthIQ | PASS | All lists 200 with real (mostly empty) rows; report generation correctly 402s on Trial with upgrade context. | — |
-| 9 | PatternAI | FAIL → FIXED | All POSTs through the `/patternai` alias returned 400 "a JSON body is required" (alias missing from the API-path middleware list). Fixed; verified plan gates + honest empty data. | YES |
+| 8 | GrowthIQ | FAIL → FIXED | Lists 200 with real rows. Dashboard used to 500 intermittently (4/30) with transient portal/non-numeric errors under concurrent pooled reads — serialized reads + protocol retry fixed it: 0/50 stress runs. | YES |
+| 9 | PatternAI | FAIL → FIXED | (1) All POSTs through the `/patternai` alias returned 400 "a JSON body is required" (alias missing from the API-path middleware list) — fixed. (2) `/patternai/overview` could hang 15s+ when auto-discovery was due — bounded to 8s. Verified plan gates, honest empty data, 10/10 fast overview runs. | YES |
 | 10 | Reports | PASS | Generate produced a real closed-period report; Trial limit 1/month enforced with friendly 402; PDF endpoints present. | — |
 | 11 | Exports | PASS | `/exports/catalog` produced a real .xlsx from the 16 synced rows; history + monthly allowance metered. | — |
 | 12 | Help & Support | PASS | Ticket creation 201 with plan-derived priority; ticket list; help/legal pages all 200. | — |
@@ -68,6 +68,8 @@
 
 **Result: zero fake store data on customer-facing surfaces.**
 
+> **Post-verification round (same PR):** the user asked specifically about the "Internet server error" on Inventory and other pages. A 20× stress pass over Inventory + all data pages returned **0/300 failures**, and a 50× GrowthIQ stress returned **0/50** (previously 4/30). The two new fixes above (BUG-09, BUG-10) are included in this PR.
+
 ---
 
 ## BUGS FIXED IN THIS PR
@@ -79,6 +81,10 @@
 5. **[P1] Expired gift codes were indistinguishable from wrong codes** — **Fix:** migration `0027_gift_code_expiry.sql` adds `gift_codes.expires_at`; redemption now returns "This gift code has expired" (`GIFT_EXPIRED`) for expired codes.
 6. **[P1] Sidebar showed fake "Synced · All systems active"** for any connected store — **Fix:** the connection card now fetches real `/sync/status` and shows checking / synced / sync paused / first-sync-pending.
 7. **[P2] Harness-only:** `GET /store-coach/priorities` (base) 404 — the app calls `/store-coach/priorities/today`; corrected the QA harness, no product change.
+
+7. **[P1] GrowthIQ dashboard — intermittent 500s** — the dashboard read the four analytics tables as four concurrent extended-protocol queries over pooled connections; under a connection-multiplexing proxy the streams can interleave and glitch a portal (`portal "" does not exist`) or return a row with an undefined column ("non-numeric value"). Reproduced 4/30 runs. **Fix:** sequential analytics reads + one retry on transient protocol errors in `PostgresDatabase.query` + one re-read on a glitched row. **Verified: 0/50 stress runs.**
+8. **[P1] PatternAI overview could hang** — auto-discovery (including AI narrator calls) ran in-band and a stalled provider blocked the whole page response for 15s+ (client aborted). **Fix:** auto-discovery bounded by an 8-second race; the page always renders. **Verified: 10/10 runs at 15–44ms on both stores.**
+9. **[P1] Defense-in-depth already above** — the pg pool error listener and undefined→NULL guard from the earlier fixes keep single malformed queries from killing the process.
 
 ## BUGS DEFERRED (Need Follow-up)
 
