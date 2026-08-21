@@ -35,6 +35,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const appSource = readFileSync(join(here, 'App.tsx'), 'utf8')
 const apiSource = readFileSync(join(here, 'api.ts'), 'utf8')
 const polarisUiSource = readFileSync(join(here, 'polaris-ui.tsx'), 'utf8')
+const coachWidgetSource = readFileSync(join(here, 'coach-widget.tsx'), 'utf8')
 
 // ---------------------------------------------------------------------------
 // HOTFIX 3 — false "Session expired" banner + sluggish tab navigation.
@@ -119,6 +120,14 @@ describe('HOTFIX 3 — auto-clear + cached bootstrap in the app shell', () => {
 
   it('wires the App Bridge nav menu to the SPA router', () => {
     expect(appSource).toContain('<AppNavigationMenu onNavigate={(section) => navigate(section as SectionId)} />')
+  })
+
+  it('routes the floating Coach widget client-side instead of hard-reloading', () => {
+    // "Open Store Coach" from the widget is a tab switch too — it must go
+    // through the SPA router, never a bare href navigation.
+    expect(coachWidgetSource).toContain('event.preventDefault()')
+    expect(coachWidgetSource).toContain('onNavigate?')
+    expect(appSource).toContain('onNavigate={() => navigate(\'store-coach\')}')
   })
 })
 

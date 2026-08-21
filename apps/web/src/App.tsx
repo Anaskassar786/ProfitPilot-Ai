@@ -836,7 +836,7 @@ export default function App() {
       {showConnect && onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {profileOpen && <ProfileMenu lightMode={lightMode} onTheme={() => setLightMode((value) => !value)} onClose={() => setProfileOpen(false)} onSettings={() => { setProfileOpen(false); navigate('settings') }} />}
-      {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} />}
+      {context.storeId && <CoachWidget storeId={context.storeId} onToast={showToast} onNavigate={() => navigate('store-coach')} />}
     </div>
   )
 }

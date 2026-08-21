@@ -12,7 +12,7 @@ import type { CoachHuddle, CoachPlan, CoachPriority, CoachStreakView } from './s
  * session and disabled from Store Coach preferences.
  */
 
-export function CoachWidget({ storeId, onToast }: { storeId: string; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
+export function CoachWidget({ storeId, onToast, onNavigate }: { storeId: string; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void; onNavigate?: () => void }) {
   const [plan, setPlan] = useState<CoachPlan | null>(null)
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
@@ -100,7 +100,19 @@ export function CoachWidget({ storeId, onToast }: { storeId: string; onToast: (m
               <Button className="icon-button" onClick={() => void ask()} disabled={busy || !message.trim()} aria-label="Send"><MessageSquare size={14} /></Button>
             </div>
           </div>
-          <a className="coach-widget-open" href={`/ai-growth-command/coach${window.location.search}`}>Open Store Coach <ChevronRight size={13} /></a>
+          {/* HOTFIX 3: SPA navigation — intercept the click so opening Store
+              Coach from the floating widget never hard-reloads the embedded
+              iframe (which would re-run the whole bootstrap). The href stays
+              for middle-click / deep-link semantics. */}
+          <a
+            className="coach-widget-open"
+            href={`/ai-growth-command/coach${window.location.search}`}
+            onClick={(event) => {
+              if (!onNavigate) return
+              event.preventDefault()
+              onNavigate()
+            }}
+          >Open Store Coach <ChevronRight size={13} /></a>
         </div>
       )}
       <Button
