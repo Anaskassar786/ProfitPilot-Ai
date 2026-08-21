@@ -238,6 +238,37 @@ type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; statu
 
 type WorkspaceData = Readonly<{ analytics: AnalyticsSnapshot | null; catalog: readonly CatalogProduct[]; agents: readonly AgentStatus[]; recommendations: readonly Recommendation[]; inventory: InventoryPageResult | null; loadState: LoadState; error: string | null }>
 
+const HEADER_NAV: ReadonlyArray<Readonly<{ label: string; page: SectionId }>> = [
+  { label: 'Dashboard', page: 'dashboard' },
+  { label: 'AI Command Center', page: 'command-center' },
+  { label: 'Recommendations', page: 'recommendations' },
+  { label: 'Automation', page: 'automation' },
+  { label: 'Products', page: 'products' },
+  { label: 'Orders', page: 'orders' },
+  { label: 'Customers', page: 'customers' },
+  { label: 'Inventory', page: 'inventory' },
+  { label: 'Store Coach', page: 'store-coach' },
+  { label: 'GrowthIQ', page: 'ai-executive' },
+  { label: 'PatternAI', page: 'patternai' },
+  { label: 'Reports', page: 'reports' },
+  { label: 'Billing', page: 'billing' },
+  { label: 'Settings', page: 'settings' },
+]
+
+function HeaderNavigation({ activePage, onNavigate }: { activePage: SectionId; onNavigate: (page: SectionId) => void }) {
+  return (
+    <nav className="header-navigation" aria-label="ProfitPilot pages">
+      <div className="header-navigation-scroll">
+        {HEADER_NAV.map((item) => (
+          <button key={item.page} type="button" className={`header-navigation-tab ${activePage === item.page ? 'is-active' : ''}`} aria-current={activePage === item.page ? 'page' : undefined} onClick={() => onNavigate(item.page)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
 export default function App() {
   // PR #46: a #/recommendations deep link (with optional /:id) opens the
   // Recommendations page directly, so shared links and refreshes land where
@@ -352,7 +383,9 @@ export default function App() {
           if (cancelled) return
           if (error instanceof ApiClientError && error.status === 401) {
             // Session expired: single re-auth banner, NOT an install wall.
-            setSessionError('Your Shopify session expired — reload the app to reconnect.')
+            // A context 401 can be a background token race. Never obscure a
+            // successfully loaded tenant with a global expiry banner.
+            if (!urlContext.storeId && !context.storeId) setSessionError('Your Shopify session expired — reload the app to reconnect.')
             setAuthState('ready')
             return
           }
@@ -403,10 +436,14 @@ export default function App() {
     // single surface is the Polaris session banner below — never stacked
     // toasts.
     setEmbeddedAuthFailureHandler(() => {
-      setSessionError('Your Shopify session expired — reload the app to reconnect.')
+      // Background API calls silently retry tokens. Only the primary
+      // bootstrap is allowed to surface this banner, and only when no
+      // usable store data has loaded yet.
+      const primaryDataLoaded = Boolean(context.storeId && data.analytics)
+      if (!primaryDataLoaded) setSessionError('Your Shopify session expired — reload the app to reconnect.')
     })
     return () => setEmbeddedAuthFailureHandler(null)
-  }, [])
+  }, [context.storeId, data.analytics])
 
   useEffect(() => {
     // Unsafe requests (sync, billing, tickets, ...) must echo a signed CSRF
@@ -679,6 +716,7 @@ export default function App() {
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <AppNavigationMenu />
       <AppTitleBar title={pageMeta[activePage].title} />
+      <HeaderNavigation activePage={activePage} onNavigate={navigate} />
       <main id="main-content" tabIndex={-1} className="page-scroll">
           {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
           {/* HOTFIX 2: one session-expired banner, one install banner (only
