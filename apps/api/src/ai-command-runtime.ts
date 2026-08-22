@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { collectNumbers, humanizeSource } from '@profitpilot/ai'
-import type { ActionExecutionResult, AiCommandActionRecord, AiCommandActionRuntime, AiCommandToolRuntime, ToolCall, ToolOutcome } from '@profitpilot/ai'
+import type { ActionExecutionResult, ActionPreflightResult, AiCommandActionRecord, AiCommandActionRuntime, AiCommandActionType, AiCommandToolRuntime, ToolCall, ToolOutcome } from '@profitpilot/ai'
 import type { StoreId } from '@profitpilot/types'
-import { ShopifyClient } from '@profitpilot/shopify'
+import { ShopifyClient, ShopifyApiError } from '@profitpilot/shopify'
 import type { TokenVault } from '@profitpilot/shopify'
 import type { StoreDirectory } from '@profitpilot/db'
+import { missingShopifyScopes } from './app-store-assets.js'
 import type { CustomerRepository } from './customers.js'
 import type { OrderRepository } from './orders.js'
 import type { InventoryRepository } from './inventory.js'
@@ -257,14 +258,23 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     }
     if (action.actionType === 'CREATE_DISCOUNT') {
       const client = await this.shopify(storeId)
-      if (!client.ok) return { status: 'FAILED', result: { message: client.error }, errorDetails: { reason: client.error }, rollbackAvailable: false }
+      if (!client.ok) return { status: 'FAILED', result: { message: client.error }, errorDetails: { message: client.error, reason: 'SHOPIFY_UNAVAILABLE' }, rollbackAvailable: false }
       const id = isRecord(action.executionResult) ? action.executionResult.discountId : null
-      if (typeof id !== 'string' || !id) return { status: 'FAILED', result: { message: 'No Shopify discount id is available to deactivate.' }, rollbackAvailable: false }
+      if (typeof id !== 'string' || !id) return { status: 'FAILED', result: { message: 'No Shopify discount id is available to deactivate.' }, errorDetails: { message: 'No Shopify discount id is available to deactivate.', reason: 'MISSING_DISCOUNT_ID' }, rollbackAvailable: false }
       const query = 'mutation discountCodeDeactivate($id: ID!) { discountCodeDeactivate(id: $id) { userErrors { message } } }'
-      const result = await client.client.request<{ data: { discountCodeDeactivate: { userErrors: readonly { message: string }[] } } }>({ method: 'POST', path: '/graphql.json', body: JSON.stringify({ query, variables: { id } }) })
-      const errors = result.data.data.discountCodeDeactivate.userErrors
-      if (errors.length) return { status: 'FAILED', result: { message: errors[0]?.message }, rollbackAvailable: false }
-      return { status: 'SUCCESS', result: { rolledBack: true, discountId: id }, rollbackAvailable: false }
+      try {
+        const result = await client.client.request<{ data: { discountCodeDeactivate: { userErrors: readonly { message: string }[] } } }>({ method: 'POST', path: '/graphql.json', body: JSON.stringify({ query, variables: { id } }) })
+        const errors = result.data.data.discountCodeDeactivate.userErrors
+        if (errors.length) {
+          const message = errors.map((entry) => entry.message).filter(Boolean).join('; ') || 'Shopify could not deactivate the discount.'
+          return { status: 'FAILED', result: { message }, errorDetails: { message, reason: 'GRAPHQL_USER_ERRORS' }, rollbackAvailable: false }
+        }
+        return { status: 'SUCCESS', result: { rolledBack: true, discountId: id }, rollbackAvailable: false }
+      } catch (error: unknown) {
+        const scopeFailure = discountScopeFailure(error)
+        const message = scopeFailure ?? (error instanceof Error ? error.message : 'Shopify discount deactivate failed.')
+        return { status: 'FAILED', result: { message }, errorDetails: { message, reason: scopeFailure ? 'MISSING_WRITE_DISCOUNTS_SCOPE' : 'SHOPIFY_REQUEST_FAILED' }, rollbackAvailable: false }
+      }
     }
     return { status: 'FAILED', result: { message: 'This action cannot be undone.' }, rollbackAvailable: false }
   }
@@ -326,7 +336,7 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
 
   private async createDiscount(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult> {
     const client = await this.shopify(storeId)
-    if (!client.ok) return { status: 'FAILED', result: { message: client.error }, errorDetails: { reason: client.error }, rollbackAvailable: false }
+    if (!client.ok) return { status: 'FAILED', result: { message: client.error }, errorDetails: { message: client.error, reason: 'SHOPIFY_UNAVAILABLE' }, rollbackAvailable: false }
     const value = Number(action.actionParams.value)
     const usageLimit = Number(action.actionParams.usage_limit ?? action.actionParams.usageLimit)
     const title = String(action.actionParams.title ?? 'AI Command discount')
@@ -335,14 +345,61 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     const query = 'mutation CreateDiscount($input: DiscountCodeBasicInput!) { discountCodeBasicCreate(basicCodeDiscount: $input) { codeDiscountNode { id } userErrors { field message } } }'
     const variables = { input: { title, code, startsAt: new Date().toISOString(), endsAt: expiresAt, usageLimit, customerSelection: { all: true }, customerGets: { value: { percentage: value / 100 }, items: { all: true } } } }
     try {
-      const result = await client.client.request<{ data: { discountCodeBasicCreate: { codeDiscountNode: { id: string } | null; userErrors: readonly { message: string }[] } } }>({ method: 'POST', path: '/graphql.json', body: JSON.stringify({ query, variables }) })
+      const result = await client.client.request<{ data: { discountCodeBasicCreate: { codeDiscountNode: { id: string } | null; userErrors: readonly { field?: readonly string[] | string | null; message: string }[] } } }>({ method: 'POST', path: '/graphql.json', body: JSON.stringify({ query, variables }) })
       const payload = result.data.data.discountCodeBasicCreate
       if (payload.userErrors.length || !payload.codeDiscountNode?.id) {
-        return { status: 'FAILED', result: { message: payload.userErrors[0]?.message ?? 'Shopify did not return a discount code.' }, rollbackAvailable: false }
+        // GraphQL userErrors carry the specific cause — forward it verbatim so
+        // the merchant never sees a generic failure for a fixable problem.
+        const details = payload.userErrors.map((entry) => entry.message).filter(Boolean)
+        const message = details.length > 0 ? details.join('; ') : 'Shopify did not return a discount code.'
+        return { status: 'FAILED', result: { message }, errorDetails: { message, reason: 'GRAPHQL_USER_ERRORS', userErrors: payload.userErrors }, rollbackAvailable: false }
       }
       return { status: 'SUCCESS', result: { code, discountId: payload.codeDiscountNode.id, title }, rollbackAvailable: true }
     } catch (error: unknown) {
-      return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Shopify discount create failed.' }, rollbackAvailable: false }
+      const scopeFailure = discountScopeFailure(error)
+      if (scopeFailure) {
+        return { status: 'FAILED', result: { message: scopeFailure }, errorDetails: { message: scopeFailure, reason: 'MISSING_WRITE_DISCOUNTS_SCOPE', missingScope: 'write_discounts' }, rollbackAvailable: false }
+      }
+      const message = error instanceof Error ? error.message : 'Shopify discount create failed.'
+      return { status: 'FAILED', result: { message }, errorDetails: { message, reason: 'SHOPIFY_REQUEST_FAILED' }, rollbackAvailable: false }
+    }
+  }
+
+  /**
+   * Preflight permission check run before an action preview is rendered. For
+   * CREATE_DISCOUNT it asks Shopify which scopes the active access token
+   * actually holds; if `write_discounts` is absent the merchant gets a
+   * re-authorize/re-install prompt instead of an approval that must fail.
+   * An unreachable scope endpoint is treated as "proceed" — the execution
+   * path then surfaces the exact Shopify error instead.
+   */
+  public async preflight(storeId: StoreId, actionType: AiCommandActionType): Promise<ActionPreflightResult> {
+    if (actionType !== 'CREATE_DISCOUNT') return { ok: true }
+    if (!this.deps.shopify) return { ok: false, missingScope: 'write_discounts', reason: 'Shopify is not connected for this store, so discounts cannot be created. Connect your store, then try again.' }
+    const connection = await this.deps.shopify.directory.get(storeId)
+    if (!connection) return { ok: false, missingScope: 'write_discounts', reason: 'Your Shopify store is not connected. Re-install ProfitPilot to reconnect, then try this command again.' }
+    const token = await this.deps.shopify.tokens.get(connection.shopDomain)
+    if (!token) return { ok: false, missingScope: 'write_discounts', reason: 'Your Shopify access token is missing. Hard refresh the embedded app or re-install ProfitPilot to reconnect, then try this command again.' }
+    const granted = await this.grantedScopes(connection.shopDomain, token)
+    if (granted === null) return { ok: true }
+    const missing = missingShopifyScopes(granted)
+    if (missing.includes('write_discounts')) {
+      return { ok: false, missingScope: 'write_discounts', reason: 'Your Shopify connection is missing the "write_discounts" permission, so discounts cannot be created. Re-authorize or re-install ProfitPilot from the Shopify App Store to grant it, then try this command again.' }
+    }
+    return { ok: true }
+  }
+
+  private async grantedScopes(shopDomain: string, token: string): Promise<readonly string[] | null> {
+    try {
+      const response = await fetch(`https://${shopDomain}/admin/oauth/access_scopes.json`, { headers: { 'x-shopify-access-token': token, accept: 'application/json' } })
+      if (!response.ok) return null
+      const payload: unknown = await response.json()
+      if (!isRecord(payload) || !Array.isArray(payload.access_scopes)) return null
+      return payload.access_scopes
+        .map((entry) => (isRecord(entry) && typeof entry.handle === 'string' ? entry.handle : typeof entry === 'string' ? entry : ''))
+        .filter((scope) => scope.length > 0)
+    } catch {
+      return null
     }
   }
 
@@ -474,6 +531,26 @@ function idsFromResolvedReference(query: string): readonly string[] {
   const match = /\bids\s+([a-z0-9_, -]+)/i.exec(query)
   return match?.[1]?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
 }
+/**
+ * Detects Shopify rejections caused by the installed token missing discount
+ * scopes (HTTP 403 / "Access denied"). These must surface as a specific
+ * re-authorize message, never the generic failure string.
+ */
+function discountScopeFailure(error: unknown): string | null {
+  const status = error instanceof ShopifyApiError ? error.status : null
+  const text = error instanceof Error ? error.message : String(error ?? '')
+  // Shopify answers 403/401 on discountCodeBasicCreate when the installed
+  // token lacks write_discounts (the only authorization failure possible on
+  // that mutation), so the merchant gets a specific re-authorize message.
+  if (status === 403 || status === 401) {
+    return `Shopify rejected the discount request because the app is missing the write_discounts permission (HTTP ${status}). Re-authorize or re-install ProfitPilot from the Shopify App Store, then try again.`
+  }
+  if (/write_discounts|access denied|requires? .*scope|missing .*scope|not authorized|insufficient permissions/i.test(text)) {
+    return `Shopify rejected the discount request because the app is missing the write_discounts permission (${text}). Re-authorize or re-install ProfitPilot from the Shopify App Store, then try again.`
+  }
+  return null
+}
+
 function stringArray(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : []
 }

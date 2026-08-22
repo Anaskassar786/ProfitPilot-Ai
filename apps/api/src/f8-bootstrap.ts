@@ -45,9 +45,21 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     maxRetries: nonNegativeNumber(env.AI_MAX_RETRIES, 1),
     temperature: numberEnv(env.AI_TEMPERATURE, .3),
     maxTokens: positiveNumber(env.AI_MAX_TOKENS, 2_000),
-    ...(logger ? { onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => logger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }) } : {}),
+    onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => {
+      const context = { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }
+      if (logger) logger.warn('OpenRouter provider failure', context)
+      else if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level: 'warn', message: 'OpenRouter provider failure', context }))
+    },
   })
-  if (logger) void validateOpenRouterModels(provider, logger)
+  // Startup validation is enforced for EVERY boot (not only when a logger is
+  // wired): dead model slugs must raise a clear alert immediately instead of
+  // silently degrading every AI feature to its fallback string.
+  void validateOpenRouterModels(provider, logger ?? null)
+  const insightDiagnostics = (event: string, context: Readonly<Record<string, unknown>>): void => {
+    const payload = context as import('@profitpilot/logger').JsonObject
+    if (logger) logger.warn(`AI insight diagnostic: ${event}`, payload)
+    else if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level: 'warn', message: `AI insight diagnostic: ${event}`, context }))
+  }
   const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
   const jarvisTts = createJarvisTtsProvider(env)
   const copilot = new CopilotService({ get: (storeId, intent, page) => context.factsForIntent(storeId, intent, page) }, new PostgresCopilotRepository(f7.database))
@@ -61,6 +73,8 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     new PostgresOrderInsightAudit(f7.database),
     provider,
     (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
+    () => Date.now(),
+    insightDiagnostics,
   )
   const customerRepository = new PostgresCustomerRepository(f7.database)
   const customerAudit = new PostgresCustomerInsightAudit(f7.database)
@@ -74,6 +88,8 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       customerAudit,
       provider,
       (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
+      () => Date.now(),
+      insightDiagnostics,
     ),
   }
   const inventoryRepository = new PostgresInventoryRepository(f7.database)
@@ -90,6 +106,8 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       new PostgresInventoryInsightAudit(f7.database),
       provider,
       (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) },
+      () => Date.now(),
+      insightDiagnostics,
     ),
   }
   const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
@@ -187,19 +205,52 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     enabled: env.AI_COMMAND_ENABLED !== 'false',
     actionsEnabled: env.AI_COMMAND_ACTIONS_ENABLED !== 'false',
   }
-  // AI Command answers are deterministic and grounded in the tool outcomes.
-  // The previous adapter made an OpenRouter request but always discarded its
-  // text and returned zero tool calls, adding latency and an unmetered failure
-  // point without changing a single answer.
-  const aiCommand = new AiCommandService(commandConfig)
+  // AI Command answers stay deterministic and grounded in the tool outcomes.
+  // The previous `generate` adapter made an OpenRouter request but always
+  // discarded its text and returned zero tool calls, adding latency and an
+  // unmetered failure point without changing a single answer.
+  //
+  // `proseFormatter` is different: it is ONLY invoked when the merchant
+  // requests a strict output format ("answer only yes or no", "short summary",
+  // "bullet points") or writes in Hindi/Hinglish, and its output is grounded
+  // against the tool-outcome numbers before it is shown.
+  const aiCommand = new AiCommandService({
+    ...commandConfig,
+    proseFormatter: async ({ system, user }) => {
+      const generation = await provider.generate(system, user, { maxTokens: 400 })
+      return generation.text
+    },
+  })
   return { ...f7, f8: { jarvis: { service: jarvis, ...(jarvisTts ? { tts: jarvisTts } : {}) }, copilot: { service: copilot }, forecasting, reports: { service: reports } }, analyticsInsights, orders: { repository: orderRepository, insights: orderInsights }, customers, inventory, jarvisProvider: provider, aiCommand: { service: aiCommand, pageMetrics } }
 }
 
-async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger): Promise<void> {
-  const validations = await provider.validateModels()
+async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logger | null): Promise<void> {
+  const emit = (level: 'info' | 'warn' | 'error', message: string, context: Readonly<Record<string, unknown>>): void => {
+    if (logger) {
+      if (level === 'info') logger.info(message, context as import('@profitpilot/logger').JsonObject)
+      else if (level === 'warn') logger.warn(message, context as import('@profitpilot/logger').JsonObject)
+      else logger.error(message, context as import('@profitpilot/logger').JsonObject)
+      return
+    }
+    if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level, message, context }))
+  }
+  let validations: readonly import('@profitpilot/ai').ModelValidation[]
+  try {
+    validations = await provider.validateModels()
+  } catch (error: unknown) {
+    emit('error', 'OpenRouter model validation failed at startup — AI features may be offline', { error: error instanceof Error ? error.message : String(error) })
+    return
+  }
+  let unavailable = 0
   for (const validation of validations) {
-    if (validation.available) logger.info('OpenRouter model validated', { model: validation.model, status_code: validation.statusCode })
-    else logger.warn('OpenRouter model unavailable at startup', { model: validation.model, status_code: validation.statusCode, reason: validation.reason })
+    if (validation.available) emit('info', 'OpenRouter model validated', { model: validation.model, status_code: validation.statusCode })
+    else {
+      unavailable += 1
+      emit('error', 'STARTUP ALERT: OpenRouter model slug is invalid or has no active endpoints — update AI_MODEL_PRIMARY/AI_MODEL_FALLBACK*', { model: validation.model, status_code: validation.statusCode, reason: validation.reason })
+    }
+  }
+  if (validations.length > 0 && unavailable === validations.length) {
+    emit('error', 'STARTUP ALERT: every configured OpenRouter model is unavailable — AI features will return fallback messaging until the model list is fixed', { models: validations.map((validation) => validation.model) })
   }
 }
 

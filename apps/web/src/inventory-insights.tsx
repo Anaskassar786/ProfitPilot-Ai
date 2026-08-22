@@ -324,7 +324,11 @@ export function HistoricalInventoryChart({ storeId, insights, onUpgrade, onToast
           <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: 'rgb(148, 163, 184)', fontSize: 8 }} tickLine={false} axisLine={false} minTickGap={16} />
           <YAxis tick={{ fill: 'rgb(148, 163, 184)', fontSize: 8 }} tickLine={false} axisLine={false} width={44} />
-          <Tooltip contentStyle={{ background: 'rgba(15,23,42,.96)', border: '1px solid rgba(148,163,184,.25)', borderRadius: 10, color: 'rgb(226, 232, 240)', fontSize: 10 }} formatter={(value: unknown, name: unknown) => [String(value), name === 'units' ? 'Units in stock' : String(name)]} />
+          {/* Class-based tooltip (QA Bug #2): the old inline contentStyle hard-coded
+              dark colors, so the tooltip was unreadable in Light theme. Styling now
+              flows from `.inventory-history-tooltip` in inventory.css, which uses
+              Polaris tokens that flip with the theme. */}
+          <Tooltip wrapperClassName="inventory-history-tooltip" cursor={{ stroke: 'var(--p-color-border)' }} formatter={(value: unknown, name: unknown) => [String(value), name === 'units' ? 'Units in stock' : String(name)]} />
           <Line type="monotone" dataKey="units" stroke="var(--blue-bright)" strokeWidth={2} dot={points.length < 12} />
         </LineChart>
       </ResponsiveContainer>

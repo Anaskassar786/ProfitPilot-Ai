@@ -2,9 +2,45 @@ import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
-import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
+import type { BillingRecord, BillingRepository, BillingInterval, BillingState, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
 import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, expiredGiftRevert } from '@profitpilot/billing'
 import { assertGiftSingleUse } from './gift-codes.js'
+
+/**
+ * Gift-expiry enforcement for EVERY entitlement read (GA 2026-08-22).
+ *
+ * Feature services resolve the plan through `BillingRepository.get`. Without
+ * this decorator an expired gift kept granting Commander until somebody
+ * happened to call GET /billing. Wrapping the repository makes the store
+ * transition to TRIAL_EXPIRED (or its still-valid trial) the moment the gift
+ * window is read after expiry — and persists the corrected record so every
+ * later read agrees.
+ */
+export class ExpiringGiftBillingRepository implements BillingRepository {
+  public constructor(
+    private readonly inner: BillingRepository,
+    private readonly trials: Pick<TrialGiftSurface, 'trial'>,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  public async get(shopId: string): Promise<BillingRecord | null> {
+    const record = await this.inner.get(shopId)
+    if (!record || record.state !== 'GIFT_ACCESS_UNLIMITED') return record
+    if (record.currentPeriodEnd === null || record.currentPeriodEnd > this.now()) return record
+    try {
+      const trial = await Promise.resolve(this.trials.trial(shopId, this.now()))
+      const reverted = expiredGiftRevert(record, trial, this.now())
+      if (reverted) {
+        await this.inner.put(reverted).catch(() => undefined)
+        return reverted
+      }
+    } catch { /* fall back to the stored record when the trial lookup fails */ }
+    return record
+  }
+
+  public put(record: BillingRecord): Promise<void> { return this.inner.put(record) }
+  public transition(shopId: string, expectedVersion: number, state: BillingState, now: number): Promise<BillingRecord> { return this.inner.transition(shopId, expectedVersion, state, now) }
+}
 
 /**
  * Trial / gift surface used by billing routes.

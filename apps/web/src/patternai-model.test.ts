@@ -36,6 +36,8 @@ import {
   tagCloud,
   trendScatter,
   insightsUpgradeMessage,
+  axisScale,
+  axisTickLabel,
 } from './patternai-model.js'
 import { discoveryTreemapBlocks, hourHeatCells, knowledgeNetwork, navBadgeCount, weekdayHeatCells } from './patternai.js'
 import type { InsightDiscovery, InsightKnowledgeEntry, InsightPattern, InsightsOverview, InsightTrend } from './patternai-model.js'
@@ -293,5 +295,43 @@ describe('chart data derivations (presentation of API values only)', () => {
     const network = knowledgeNetwork(entries)
     expect(network.nodes.length).toBeGreaterThanOrEqual(2)
     expect(network.edges).toEqual([{ from: 'a', to: 'b' }])
+  })
+})
+
+describe('axis normalization for scatter/bubble charts (SC-4)', () => {
+  it('spreads clustered confidence values across the full canvas instead of the far edge', () => {
+    // Real confidence scores cluster near 1.0; a fixed 0–1 canvas bunched them
+    // on the right edge. The normalized scale must map min->~0 and max->~1.
+    const scale = axisScale([0.91, 0.94, 0.97])
+    expect(scale.normalize(0.91)).toBeLessThan(0.2)
+    expect(scale.normalize(0.97)).toBeGreaterThan(0.8)
+    expect(scale.min).toBeLessThan(0.91)
+    expect(scale.max).toBeGreaterThan(0.97)
+  })
+
+  it('exposes three labeled ticks for the merchant to read the scale', () => {
+    const scale = axisScale([10, 20, 30])
+    expect(scale.ticks).toHaveLength(3)
+    expect(scale.ticks.map((tick) => tick.label)).toEqual(['8.4', '20', '31.6'])
+  })
+
+  it('keeps a readable window for a flat series', () => {
+    const scale = axisScale([5, 5, 5])
+    expect(scale.max).toBeGreaterThan(scale.min)
+    expect(scale.normalize(5)).toBeGreaterThan(0.3)
+    expect(scale.normalize(5)).toBeLessThan(0.7)
+  })
+
+  it('falls back to a 0–1 window with no data', () => {
+    const scale = axisScale([])
+    expect(Number.isFinite(scale.min)).toBe(true)
+    expect(Number.isFinite(scale.max)).toBe(true)
+    expect(scale.ticks).toHaveLength(3)
+  })
+
+  it('formats tick labels without floating-point noise', () => {
+    expect(axisTickLabel(0.30000000000000004)).toBe('0.3')
+    expect(axisTickLabel(1200)).toBe('1200')
+    expect(axisTickLabel(NaN)).toBe('0')
   })
 })

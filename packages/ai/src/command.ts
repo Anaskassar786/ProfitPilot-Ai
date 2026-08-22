@@ -215,9 +215,18 @@ export type ActionExecutionResult = Readonly<{
   rollbackAvailable: boolean
 }>
 
+export type ActionPreflightResult = Readonly<{ ok: boolean; reason?: string | null; missingScope?: string | null }>
+
 export interface AiCommandActionRuntime {
   execute(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult>
   rollback?(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult>
+  /**
+   * Verifies the live Shopify session token can actually perform this action
+   * BEFORE the preview is rendered. When the required scope (e.g.
+   * `write_discounts`) is missing the merchant is shown a re-authorize /
+   * re-install prompt instead of approving a preview that can only fail.
+   */
+  preflight?(storeId: StoreId, actionType: AiCommandActionType): Promise<ActionPreflightResult>
 }
 
 export interface AiCommandRepository {
@@ -1130,6 +1139,19 @@ export function humanizeSources(sources: readonly string[]): string {
   return badges.join(' · ')
 }
 
+/** Compact JSON of tool outcomes for constrained LLM prose formatting. */
+export function serializeToolOutcomes(outcomes: readonly ToolOutcome[], maxBytes = 6_000): string {
+  const rows = outcomes.map((outcome) => outcome.ok
+    ? { tool: outcome.name, source: outcome.source, data: outcome.data }
+    : { tool: outcome.name, error: outcome.error })
+  let serialized = JSON.stringify(rows, null, 1)
+  while (serialized.length > maxBytes && rows.length > 1) {
+    rows.pop()
+    serialized = JSON.stringify(rows, null, 1)
+  }
+  return serialized.length > maxBytes ? `${serialized.slice(0, maxBytes)}\n…` : serialized
+}
+
 export function groundCommandText(text: string, allowedNumbers: readonly number[]): string {
   const allowed = new Set(allowedNumbers.map(normalizeNumber))
   allowed.add(normalizeNumber(0))
@@ -1152,6 +1174,12 @@ export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: str
     'Think like a senior e-commerce growth consultant: articulate, professional, encouraging, and deeply fluent in AOV, LTV, retention, CAC, conversion, and stock cover.',
     'Synthesise the merchant\'s real data into advice, not just metric dumps. Cross-reference modules (orders, customers, inventory, recommendations, automations) so answers connect the dots.',
     'Be concise but substantive. Use Markdown: bold headings, bullets, and inline code for codes/IDs. Never repeat the same canned paragraph for different questions.',
+    '',
+    'LANGUAGE COMPREHENSION',
+    'Understand Hindi and Hinglish (Roman-script Hindi) fully. When the merchant writes in Hindi, reply in warm, natural Hindi (Devanagari); when they write in Hinglish, reply in friendly Hinglish. Keep numbers, metric names, currency, codes and UI labels in English in every language.',
+    '',
+    'FORMAT CONSTRAINTS',
+    'Honor explicit output constraints exactly: "answer only yes or no" gets a single Yes/No (हाँ/नहीं) first, "short summary" gets at most two sentences, "bullet points" gets concise bullets. When a strict constraint is present, drop tables and extra sections.',
     '',
     'FOUR INTENTS — classify every question and shape the answer accordingly:',
     'A. STRATEGIC / ADVISORY ("How can I increase profit?", "How do I grow sales?"): do NOT just show a revenue card. Give 3 specific, data-backed recommendations tailored to the store, each with a concrete number from the data, then suggest a next action.',
@@ -1233,6 +1261,64 @@ export function parseConfirmIntent(query: string): 'confirm' | 'cancel' | 'undo'
   if (/^(cancel|no|stop|never mind|nevermind)$/i.test(normalized)) return 'cancel'
   if (/^(undo|rollback|revert)$/i.test(normalized)) return 'undo'
   return null
+}
+
+/* ── Merchant format constraints & language detection (QA 2026-08-22) ──── */
+
+export type AiCommandFormatConstraints = Readonly<{
+  /** "answer only yes or no", "reply in yes/no", "haan ya na mein batao" */
+  yesNo: boolean
+  /** "short summary", "keep it short", "one line answer" */
+  shortSummary: boolean
+  /** "bullet points", "as a list", "points mein" */
+  bulletPoints: boolean
+  /** Detected query language when Hindi/Hinglish is used. */
+  language: 'hindi' | 'hinglish' | null
+}>
+
+const YES_NO_PATTERN = /\b(?:answer|reply|respond|tell|say|bolo|batao|bata(?:\s+do)?)\s+(?:only|just|strictly|in|with|mein|me)?\s*(?:a\s+)?(?:yes\s+or\s+no|yes\/no|y\/n|one\s+word|haan\s+ya\s+na|haan\/na|han\s+ya\s+na)\b|\b(?:yes\s+or\s+no|yes\/no|haan\s+ya\s+na)\s+(?:only|answer|reply|mein|me)\b/i
+const SHORT_SUMMARY_PATTERN = /\b(?:short\s+(?:summary|answer|reply|response)|brief\s+(?:summary|answer)|keep\s+it\s+(?:short|brief)|summar(?:ise|ize)[^.]{0,40}\b(?:in|within)\s+(?:one|two|1|2)\s+(?:line|sentence)s?\b|one[- ](?:line|liner|sentence)\s+(?:answer|summary|reply)?|tl;?dr|chota\s+(?:sa\s+)?(?:summary|jawab))\b/i
+const BULLET_POINTS_PATTERN = /\b(?:bullet\s+points?|bullets?|as\s+(?:a\s+)?(?:list|bullets)|in\s+(?:bullet\s+)?points?|list\s+format|points\s+mein|bullet\s+mein)\b/i
+const DEVANAGARI_PATTERN = /[\u0900-\u097F]/
+const HINGLISH_MARKERS = /\b(kya|kaise|kitna|kitne|batao|bata\s+do|mujhe|mera|meri|mere|dikhao|dikha\s+do|chahiye|kab|kaun|konsa|karna|karo|nahi|nahin|hai|hain|tha|the|ho|hua|hui|kar\s+do|samjha|madad|zaroorat|wala|wali|bhi|aur|lekin|agar|toh|abhi|aaj|kal|week|mahine|paise|paisa|kamai|badhao|badhana|ghatao|bhejo|nikalo)\b/i
+
+/**
+ * Parses explicit output-format constraints from the merchant's command.
+ * When a strict constraint is present the final prose is produced by the LLM
+ * (when wired) instead of the deterministic template tables, so "answer only
+ * yes or no" actually receives a yes/no answer.
+ */
+export function parseFormatConstraints(query: string): AiCommandFormatConstraints {
+  const language: AiCommandFormatConstraints['language'] = DEVANAGARI_PATTERN.test(query)
+    ? 'hindi'
+    : HINGLISH_MARKERS.test(query)
+      ? 'hinglish'
+      : null
+  return {
+    yesNo: YES_NO_PATTERN.test(query),
+    shortSummary: SHORT_SUMMARY_PATTERN.test(query),
+    bulletPoints: BULLET_POINTS_PATTERN.test(query),
+    language,
+  }
+}
+
+export function hasStrictFormatConstraints(constraints: AiCommandFormatConstraints): boolean {
+  return constraints.yesNo || constraints.shortSummary || constraints.bulletPoints
+}
+
+/** System prompt used when the LLM formats constrained final prose. */
+export function buildConstrainedFormatPrompt(constraints: AiCommandFormatConstraints, input: Readonly<{ plan: PlanTier; shop?: string | null }>): string {
+  const rules: string[] = [
+    'You are AI Command, ProfitPilot\'s e-commerce assistant, rewriting a grounded store-data answer into the merchant\'s requested format.',
+    'Use ONLY the numbers and facts present in the supplied tool results. Never invent figures, dates, causes, or completed actions.',
+  ]
+  if (constraints.yesNo) rules.push('The merchant asked for a strict yes/no answer. Start with exactly "Yes." or "No." (or "हाँ।"/"नहीं।" when replying in Hindi), then add at most one short supporting sentence. No tables, no headings, no extra sections.')
+  if (constraints.shortSummary) rules.push('The merchant asked for a short summary. Reply in at most two short sentences. No tables and no headings.')
+  if (constraints.bulletPoints) rules.push('The merchant asked for bullet points. Reply as 3-6 concise Markdown bullets. No tables and no long paragraphs.')
+  if (constraints.language === 'hindi') rules.push('The merchant wrote in Hindi. Reply in natural, friendly Hindi (Devanagari script). Keep metric names, codes, and currency in English.')
+  if (constraints.language === 'hinglish') rules.push('The merchant wrote in Hinglish (Roman-script Hindi). Reply in friendly, natural Hinglish. Keep metric names, codes, and currency in English.')
+  rules.push(`The merchant is on the ${input.plan} plan.${input.shop ? ` Store: ${input.shop}.` : ''} Never expose table names or internal identifiers.`)
+  return rules.join('\n')
 }
 
 export function validateDiscountParams(params: Readonly<Record<string, unknown>>, now = Date.now()): Readonly<{ ok: true; value: number; usageLimit: number; expiresAt: string; title: string }> | Readonly<{ ok: false; error: string }> {
@@ -1402,6 +1488,7 @@ export class AiCommandService {
   private readonly actions: AiCommandActionRuntime
   private readonly planFor: (storeId: StoreId) => Promise<PlanTier>
   private readonly generate: ((input: AiCommandGenerateInput) => Promise<AiCommandGenerateResult>) | null
+  private readonly proseFormatter: ((input: Readonly<{ system: string; user: string }>) => Promise<string>) | null
   private readonly now: () => number
   private readonly enabled: boolean
   private readonly actionsEnabled: boolean
@@ -1413,6 +1500,13 @@ export class AiCommandService {
     actions?: AiCommandActionRuntime
     planFor: (storeId: StoreId) => Promise<PlanTier>
     generate?: (input: AiCommandGenerateInput) => Promise<AiCommandGenerateResult>
+    /**
+     * Optional LLM prose formatter. When the merchant requests a strict output
+     * format (yes/no only, short summary, bullet points) or writes in
+     * Hindi/Hinglish, the final answer is produced here from the grounded tool
+     * outcomes instead of the deterministic template tables.
+     */
+    proseFormatter?: (input: Readonly<{ system: string; user: string }>) => Promise<string>
     shopFor?: (storeId: StoreId) => Promise<string | null>
     now?: () => number
     enabled?: boolean
@@ -1423,6 +1517,7 @@ export class AiCommandService {
     this.actions = input.actions ?? new InMemoryCommandActions()
     this.planFor = input.planFor
     this.generate = input.generate ?? null
+    this.proseFormatter = input.proseFormatter ?? null
     this.shopFor = input.shopFor ?? null
     this.now = input.now ?? (() => Date.now())
     this.enabled = input.enabled !== false
@@ -1741,12 +1836,51 @@ export class AiCommandService {
     const formatted = detectGrowthIntent(text)
       ? formatGrowthAnswer(outcomes, this.actionAccess(plan))
       : formatToolAnswer(text, outcomes)
+
+    // Strict format constraints ("answer only yes or no", "short summary",
+    // "bullet points") and Hindi/Hinglish queries get LLM-formatted prose from
+    // the grounded outcomes instead of the deterministic template tables.
+    const constraints = parseFormatConstraints(text)
+    const needsProse = hasStrictFormatConstraints(constraints) || constraints.language !== null
+    if (needsProse && this.proseFormatter) {
+      const prose = await this.formatConstrainedProse(storeId, plan, text, outcomes, formatted.numbers, constraints)
+      if (prose !== null) {
+        return message('assistant', prose, formatted.structuredData ? 'structured_data' : 'text', this.now(), {
+          structuredData: formatted.structuredData,
+          thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
+        })
+      }
+    }
+
     const styled = applyResponseStyle(formatted.content, preferences.defaultResponseStyle, outcomes)
     const grounded = groundCommandText(styled, formatted.numbers)
     return message('assistant', grounded, formatted.structuredData ? 'structured_data' : 'text', this.now(), {
       structuredData: formatted.structuredData,
       thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
     })
+  }
+
+  /**
+   * Asks the wired LLM to format the final prose for constrained or
+   * Hindi/Hinglish requests. Output is grounded against the tool-outcome
+   * numbers; any hallucinated figure or failed call falls back to null so the
+   * deterministic template answer is used instead.
+   */
+  private async formatConstrainedProse(storeId: StoreId, plan: PlanTier, text: string, outcomes: readonly ToolOutcome[], allowedNumbers: readonly number[], constraints: AiCommandFormatConstraints): Promise<string | null> {
+    if (!this.proseFormatter) return null
+    try {
+      const shop = this.shopFor ? await this.shopFor(storeId) : null
+      const system = buildConstrainedFormatPrompt(constraints, { plan, shop })
+      const user = `Merchant command (verbatim): ${text}\n\nGrounded tool results (JSON, the only allowed source of facts):\n${serializeToolOutcomes(outcomes)}`
+      const prose = await this.proseFormatter({ system, user })
+      const trimmed = typeof prose === 'string' ? prose.trim() : ''
+      if (!trimmed) return null
+      const grounded = groundCommandText(trimmed, allowedNumbers)
+      if (grounded.startsWith('I could not safely present')) return null
+      return grounded
+    } catch {
+      return null
+    }
   }
 
   private async resolveInfoTools(storeId: StoreId, conversation: AiCommandConversation, text: string, plan: PlanTier, memoryEnabled: boolean): Promise<readonly ToolCall[]> {
@@ -1775,6 +1909,23 @@ export class AiCommandService {
     const validationError = validateActionPreview(tool, params, this.now())
     if (validationError) return message('assistant', validationError, 'error', this.now())
     const type = toolToActionType(tool)
+    // Preflight scope check: verify the live session token permissions BEFORE
+    // rendering the preview so a missing scope (e.g. `write_discounts`)
+    // becomes a clear re-authorize/re-install prompt instead of an approval
+    // that can only fail at execution time.
+    if (this.actions.preflight) {
+      emit(listener, 'thinking', { step: 'Checking permissions...' })
+      try {
+        const check = await this.actions.preflight(storeId, type)
+        if (!check.ok) {
+          const scope = check.missingScope ? `the "${check.missingScope}" permission` : 'the required permission'
+          return message('assistant', check.reason ?? `This action needs ${scope} that your current Shopify connection has not granted. Re-authorize or re-install ProfitPilot from the Shopify App Store, then try this command again.`, 'error', this.now(), {
+            structuredData: { type: 'action_blocked', data: { actionType: type, missingScope: check.missingScope ?? null, reason: check.reason ?? null }, actions: [] },
+            thinkingSteps: thinkingStepsFor(text, [{ name: tool, params }], 'preview'),
+          })
+        }
+      } catch { /* a failed preflight probe must never block a preview the runtime can still attempt */ }
+    }
     const nowIso = new Date(this.now()).toISOString()
     const action = await this.repository.createAction({
       id: randomUUID(),
@@ -2028,8 +2179,7 @@ export function summarizeActionResult(action: AiCommandActionRecord): string {
   if (action.executionStatus === 'CANCELLED') return 'Cancelled. Nothing was executed.'
   if (action.executionStatus === 'ROLLED_BACK') return 'The action was rolled back. The reverse change was applied.'
   if (action.executionStatus === 'FAILED') {
-    const details = isRecord(action.errorDetails) ? String(action.errorDetails.message ?? action.errorDetails.reason ?? 'The backend did not confirm success.') : 'The backend did not confirm success.'
-    return `The action failed. ${details}`
+    return `The action failed. ${actionFailureDetails(action)}`
   }
   if (action.actionType === 'SEND_EMAIL' && isRecord(action.executionResult)) {
     const sent = numberish(action.executionResult.sent) ?? 0
@@ -2056,6 +2206,39 @@ export function summarizeActionResult(action: AiCommandActionRecord): string {
   if (action.executionStatus === 'PARTIAL_SUCCESS') return 'The action completed with partial success. See the details below.'
   if (action.executionStatus === 'SUCCESS') return 'The action completed and the backend confirmed the result.'
   return 'The action finished. Review the backend result below.'
+}
+
+const GENERIC_FAILURE = 'The backend did not confirm success.'
+
+/**
+ * Extracts the most specific failure reason available for a FAILED action.
+ * Shopify / GraphQL `userErrors`, HTTP scope errors, and per-recipient reasons
+ * are surfaced verbatim so the merchant sees the real cause; the generic
+ * fallback is used only when no specific detail was recorded anywhere.
+ */
+export function actionFailureDetails(action: AiCommandActionRecord): string {
+  const errorDetails = isRecord(action.errorDetails) ? action.errorDetails : null
+  const result = isRecord(action.executionResult) ? action.executionResult : null
+
+  // errorDetails is the authoritative structured channel when present.
+  if (errorDetails) {
+    const message = typeof errorDetails.message === 'string' ? errorDetails.message.trim() : ''
+    if (message) return message
+    const reasons = Array.isArray(errorDetails.reasons) ? errorDetails.reasons.map(String).filter(Boolean) : []
+    if (reasons.length) return reasons.join('; ')
+    const reason = typeof errorDetails.reason === 'string' ? errorDetails.reason.trim() : ''
+    if (reason) return reason
+  }
+
+  // Fall back to whatever the execution result recorded.
+  if (result) {
+    const message = typeof result.message === 'string' ? result.message.trim() : ''
+    if (message) return message
+    const reasons = Array.isArray(result.reasons) ? result.reasons.map(String).filter(Boolean) : []
+    if (reasons.length) return reasons.join('; ')
+  }
+
+  return GENERIC_FAILURE
 }
 
 function latestPendingId(conversation: AiCommandConversation): string | null {

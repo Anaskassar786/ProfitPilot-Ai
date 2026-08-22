@@ -8,6 +8,7 @@ import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
 import { createF4Bootstrap } from './f4-bootstrap.js'
 import type { F4Bootstrap } from './f4-bootstrap.js'
+import { ExpiringGiftBillingRepository } from './billing-routes.js'
 import type { BillingRouteDependencies } from './billing-routes.js'
 import type { AdminRouteDependencies } from './admin-routes.js'
 
@@ -21,10 +22,13 @@ type CommandCountRow = QueryResultRow & { total: string | number | null }
 export function createF5Bootstrap(env: Readonly<Record<string, string | undefined>>): F5Bootstrap | null {
   const f4 = createF4Bootstrap(env)
   if (!f4) return null
-  const repository = new PostgresBillingRepository(f4.database)
   const directory = new PostgresStoreDirectory(f4.database)
   const vault = new TokenVault(AesGcmCipher.fromHex(requiredEnv(env, 'ENCRYPTION_KEY')), new PostgresTokenRecordStore(f4.database))
   const giftStore = new PostgresTrialGiftStore(f4.database, giftCodesFromEnv(env))
+  // Every entitlement read flows through this decorator: an expired gift
+  // reverts the store to TRIAL_EXPIRED (or its still-valid trial) at read
+  // time, not only when GET /billing happens to be called.
+  const repository = new ExpiringGiftBillingRepository(new PostgresBillingRepository(f4.database), giftStore)
   // Best-effort seed so KASSAR786 / AFRIDI786 (or env overrides) exist even if
   // the migration seed was wiped. Failures are non-fatal at boot.
   void giftStore.seedDefaultCodes(giftCodesFromEnv(env)).catch(() => undefined)

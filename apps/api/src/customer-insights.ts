@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AiGeneration, OpenRouterClient } from '@profitpilot/ai'
-import { planAtLeast, planDisplayName, validateLanguageResponse } from '@profitpilot/ai'
+import { generateValidatedInsight, planAtLeast, planDisplayName } from '@profitpilot/ai'
 import type { BillingRepository } from '@profitpilot/billing'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
@@ -192,6 +192,7 @@ export class CustomerInsightsService {
     private readonly provider: Pick<OpenRouterClient, 'generate'>,
     private readonly recordGeneration: ((storeId: StoreId, generation: AiGeneration) => void) | null = null,
     private readonly now: () => number = () => Date.now(),
+    private readonly diagnose: ((event: string, context: Readonly<Record<string, unknown>>) => void) | null = null,
   ) {}
 
   public async get(storeId: StoreId, requestedFeature?: CustomerInsightFeature): Promise<CustomerInsightsResult> {
@@ -258,17 +259,22 @@ export class CustomerInsightsService {
   private async generate(storeId: StoreId, dataset: CustomerDataset, question: string): Promise<unknown> {
     const facts = groundedCustomerFacts(dataset)
     if (facts.length === 0) return { status: 'insufficient_data', message: 'There are not enough non-personal aggregate facts to generate an answer.' }
-    try {
-      const generation = await this.provider.generate(
-        'You are ProfitPilot customer intelligence. Use only the supplied aggregate, non-personal facts. Never infer or request names, email addresses, phone numbers, addresses, customer IDs, notes, or tags. Never invent a number, date, currency, cause, or action already completed. Keep the response to two short sentences.',
-        `${question ? `Question with personal data removed: ${question}` : 'Give one practical, manual retention suggestion.'}\n\nGrounded aggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If evidence is insufficient, say so.`,
-        { maxTokens: 180 },
-      )
-      this.recordGeneration?.(storeId, generation)
-      return { status: 'generated', text: validateLanguageResponse(generation.text, facts, 0), model: generation.model }
-    } catch {
-      return { status: 'unavailable', message: 'AI customer intelligence is temporarily unavailable. Deterministic segments remain available.' }
+    // Provider outages and language-firewall rejections surface as distinct,
+    // merchant-readable states instead of one swallowed "unavailable" string.
+    const outcome = await generateValidatedInsight({
+      provider: this.provider,
+      system: 'You are ProfitPilot customer intelligence. Use only the supplied aggregate, non-personal facts. Never infer or request names, email addresses, phone numbers, addresses, customer IDs, notes, or tags. Never invent a number, date, currency, cause, or action already completed. Keep the response to two short sentences.',
+      user: `${question ? `Question with personal data removed: ${question}` : 'Give one practical, manual retention suggestion.'}\n\nGrounded aggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If evidence is insufficient, say so.`,
+      evidence: facts,
+      maxTokens: 180,
+      diagnose: this.diagnose ? (event, context) => { this.diagnose?.(event, { ...context, storeId, feature: 'customers' }) } : undefined,
+    })
+    if (outcome.status === 'generated') {
+      this.recordGeneration?.(storeId, outcome.generation)
+      return { status: 'generated', text: outcome.text, model: outcome.model }
     }
+    if (outcome.status === 'safety_failed') return { status: 'safety_failed', message: outcome.message }
+    return { status: 'unavailable', message: outcome.message }
   }
 
   private async plan(storeId: StoreId): Promise<PlanTier> { return (await this.billing.get(storeId))?.plan ?? 'trial' }

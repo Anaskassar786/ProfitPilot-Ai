@@ -1,6 +1,6 @@
 export type WorkflowStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
 export type WorkflowCategory = 'Marketing' | 'Operations' | 'Inventory' | 'Customer' | 'Revenue'
-export type WorkflowNode = Readonly<{ id: string; type: 'trigger' | 'condition' | 'action' | 'wait' | 'filter' | 'ai'; config: Readonly<Record<string, string | number | boolean | null>>; next: readonly string[]; position?: Readonly<{ x: number; y: number }> }>
+export type WorkflowNode = Readonly<{ id: string; type: 'trigger' | 'condition' | 'action' | 'wait' | 'filter' | 'ai' | 'exit'; config: Readonly<Record<string, string | number | boolean | null>>; next: readonly string[]; position?: Readonly<{ x: number; y: number }> }>
 export type WorkflowRecord = Readonly<{ id:string;storeId:string;name:string;description:string|null;category:WorkflowCategory;tags:readonly string[];version:number;nodes:readonly WorkflowNode[];status:WorkflowStatus;definitionHash:string|null;activatedAt:string|null;createdAt:string;updatedAt:string;createdBy:string;updatedBy:string;lastRunAt:string|null;successCount:number;failureCount:number;enabled:boolean;triggerSummary:string;nodeCount:number;nextRunAt:string|null;timezone?:string;overlapPolicy?:'SKIP'|'QUEUE'|'PARALLEL' }>
 export type WorkflowPage = Readonly<{items:readonly WorkflowRecord[];nextCursor:string|null;total:number}>
 export type AutomationUsage = Readonly<{plan:'trial'|'start'|'growth'|'commander';used:number;limit:number|null;remaining:number|null;limitReached:boolean}>

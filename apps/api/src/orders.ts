@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
 import type { BillingRepository } from '@profitpilot/billing'
-import { extractNumbers, planAtLeast, planDisplayName, validateLanguageResponse } from '@profitpilot/ai'
+import { extractNumbers, generateValidatedInsight, planAtLeast, planDisplayName } from '@profitpilot/ai'
 import type { AiGeneration, OpenRouterClient } from '@profitpilot/ai'
 import type { PlanTier, StoreId } from '@profitpilot/types'
 import { AppError } from '@profitpilot/types'
@@ -263,6 +263,7 @@ export class OrderInsightsService {
     private readonly provider: Pick<OpenRouterClient, 'generate'>,
     private readonly recordGeneration: ((storeId: StoreId, generation: AiGeneration) => void) | null = null,
     private readonly now: () => number = () => Date.now(),
+    private readonly diagnose: ((event: string, context: Readonly<Record<string, unknown>>) => void) | null = null,
   ) {}
 
   public async get(storeId: StoreId, requestedFeature?: OrderInsightFeature, question?: string): Promise<OrderInsightsResult> {
@@ -332,18 +333,22 @@ export class OrderInsightsService {
     const request = question
       ? `Answer this order-analysis question: ${question}`
       : 'Give one short, practical suggestion based on the strongest order pattern.'
-    try {
-      const generation = await this.provider.generate(
-        'You are ProfitPilot order intelligence. Use only the supplied aggregate facts. Never mention or infer customer PII. Never invent a number, date, amount, cause, or action already completed. Keep the answer to one or two short sentences.',
-        `${request}\n\nGrounded facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If evidence is weak, say more orders are needed.`,
-        { maxTokens: 180 },
-      )
-      this.recordGeneration?.(storeId, generation)
-      const text = validateLanguageResponse(generation.text, facts, 0)
-      return { status: 'generated', text, model: generation.model }
-    } catch {
-      return { status: 'unavailable', message: 'AI suggestion is temporarily unavailable. Deterministic insights remain available.' }
+    // Provider outages and language-firewall rejections surface as distinct,
+    // merchant-readable states instead of one swallowed "unavailable" string.
+    const outcome = await generateValidatedInsight({
+      provider: this.provider,
+      system: 'You are ProfitPilot order intelligence. Use only the supplied aggregate facts. Never mention or infer customer PII. Never invent a number, date, amount, cause, or action already completed. Keep the answer to one or two short sentences.',
+      user: `${request}\n\nGrounded facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If evidence is weak, say more orders are needed.`,
+      evidence: facts,
+      maxTokens: 180,
+      diagnose: this.diagnose ? (event, context) => { this.diagnose?.(event, { ...context, storeId, feature: 'orders' }) } : undefined,
+    })
+    if (outcome.status === 'generated') {
+      this.recordGeneration?.(storeId, outcome.generation)
+      return { status: 'generated', text: outcome.text, model: outcome.model }
     }
+    if (outcome.status === 'safety_failed') return { status: 'safety_failed', message: outcome.message }
+    return { status: 'unavailable', message: outcome.message }
   }
 }
 

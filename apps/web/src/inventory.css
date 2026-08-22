@@ -97,7 +97,7 @@
 .inventory-decision { flex:0 0 auto; color:var(--green); font-family:var(--font-mono); font-size: 12px; font-style:normal; text-transform:uppercase; }
 .inventory-decision.dismissed { color:var(--text-tertiary); }
 .inventory-ai-suggestion { max-height:96px; overflow:auto; margin:6px 0 0; color:var(--text-secondary); font-size: 12px; line-height:1.55; }
-.inventory-ai-footnote { display:block; margin-top:8px; color:var(--text-tertiary); font-size:6.5px; line-height:1.5; }
+.inventory-ai-footnote { display:block; margin-top:8px; color:var(--text-tertiary); font-size:10px; line-height:1.5; }
 .inventory-ai-error { display:flex; align-items:center; gap:10px; margin:0 18px 16px; padding:11px 12px; color:var(--amber); border:1px solid rgba(245,158,11,.2); border-radius:10px; background:rgba(245,158,11,.06); font-size: 12px; }
 .inventory-ai-error > span { flex:1; }
 .inventory-chart-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
@@ -114,7 +114,7 @@
 .inventory-cover-cell strong.tone-amber { color:var(--amber); }
 .inventory-cover-cell strong.tone-red { color:var(--red); }
 .inventory-cover-cell strong.tone-muted { color:var(--text-tertiary); }
-.inventory-cover-cell small { color:var(--text-tertiary); font-size:6.5px; }
+.inventory-cover-cell small { color:var(--text-tertiary); font-size:10px; }
 
 /* ── Tabs, toolbar, table ───────────────────────────────────────── */
 .inventory-table-card { display:flex; flex-direction:column; padding:0; }
@@ -676,3 +676,29 @@
   }
 }
 
+
+/* Stock-history chart tooltip (QA Bug #2).
+   The previous implementation passed a hard-coded dark rgba() `contentStyle`
+   inline, which painted a dark box with light text regardless of theme and
+   failed contrast in Light mode. The tooltip is now class-based and reads
+   Polaris color tokens, so it stays legible in both Light and Dark themes. */
+.inventory-history-tooltip {
+  --pp-tooltip-bg: var(--p-color-bg-surface, rgb(255, 255, 255));
+  --pp-tooltip-fg: var(--p-color-text, rgb(32, 34, 35));
+  --pp-tooltip-border: var(--p-color-border, rgba(130, 143, 156, 0.35));
+}
+.inventory-history-tooltip .recharts-default-tooltip-content,
+.inventory-history-tooltip .recharts-tooltip-wrapper > div {
+  background: var(--pp-tooltip-bg) !important;
+  border: 1px solid var(--pp-tooltip-border) !important;
+  border-radius: 10px !important;
+  color: var(--pp-tooltip-fg) !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  box-shadow: var(--p-shadow-md, 0 6px 18px rgba(15, 23, 42, 0.18)) !important;
+}
+.inventory-history-tooltip .recharts-tooltip-label,
+.inventory-history-tooltip .recharts-tooltip-item-name,
+.inventory-history-tooltip .recharts-tooltip-item {
+  color: var(--pp-tooltip-fg) !important;
+}

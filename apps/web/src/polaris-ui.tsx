@@ -40,6 +40,17 @@ function firstElement(node: ReactNode): ReactElement | undefined {
   return isValidElement(found) ? found : undefined
 }
 
+/**
+ * Icon detection for mixed children: an icon is an element child that carries
+ * NO text of its own. Textual elements (e.g. `<strong>Label</strong>`) are
+ * content, not icons — treating them as the icon made Polaris render the same
+ * text twice ("VIP Customer Tagging VIP Customer Tagging").
+ */
+function firstIconElement(node: ReactNode): ReactElement | undefined {
+  const found = Children.toArray(node).find((child) => isValidElement(child) && nodeText(child).trim() === '')
+  return isValidElement(found) ? found : undefined
+}
+
 function classList(className: string | undefined): string {
   return ` ${className ?? ''} `
 }
@@ -90,7 +101,7 @@ export const UiButton = forwardRef<HTMLElement, UiButtonProps>(function UiButton
   const resolvedSize: PolarisButtonProps['size'] = size
     ?? (classes.includes(' sm ') || classes.includes(' slim ') || classes.includes(' btn-sm ') ? 'slim' : 'medium')
   const text = nodeText(children).replace(/\s+/g, ' ').trim()
-  const iconChild = icon ?? firstElement(children)
+  const iconChild = icon ?? firstIconElement(children) ?? (text ? undefined : firstElement(children))
   const accessibilityLabel = (rest['aria-label'] as string | undefined) ?? title ?? (text || undefined)
   const props: Record<string, unknown> = {
     variant: resolvedVariant,

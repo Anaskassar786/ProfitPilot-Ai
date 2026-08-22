@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import '@xyflow/react/dist/style.css'
 import { addEdge, Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState } from '@xyflow/react'
 import type { Connection, Edge, Node, NodeProps } from '@xyflow/react'
@@ -11,7 +11,7 @@ import type { AutomationUsage, WorkflowNode, WorkflowRecord } from './automation
 import { friendlyCron, friendlyNodeLabel, friendlyNodeSummary, friendlyStatus, friendlyTriggerLabel, relativeTime } from './automation-helpers.js'
 import { HowItWorksModal } from './automation-tutorial.js'
 
-type NodeKind = 'trigger' | 'condition' | 'filter' | 'action' | 'wait' | 'ai'
+type NodeKind = 'trigger' | 'condition' | 'filter' | 'action' | 'wait' | 'ai' | 'exit'
 type NodeConfig = Record<string, string | number | boolean | null>
 type LibraryItem = Readonly<{ group: string; kind: NodeKind; subtype: string; label: string; summary: string; icon: LucideIcon; config: NodeConfig; commander?: boolean }>
 
@@ -56,6 +56,7 @@ const KIND_HEADERS: Readonly<Record<NodeKind, string>> = {
   action: 'DO',
   wait: 'WAIT',
   ai: 'AI',
+  exit: 'END',
 }
 
 type CanvasData = { label: string; summary: string; kind: NodeKind; config: NodeConfig; invalid?: boolean }
@@ -184,18 +185,45 @@ function EditorInner({
 
   const serialize = (): readonly WorkflowNode[] => {
     if (mode === 'simple') {
-      // Guided mode keeps a simple linear recipe: the next step runs after the
-      // current one. Checks only continue when they pass; otherwise the run ends.
-      return nodes.map((node, index) => {
-        const next = nodes[index + 1]
-        return {
+      // Guided mode keeps a simple recipe, but condition nodes must satisfy
+      // the backend rule "condition nodes require YES and NO branches" or
+      // Save & Activate answers HTTP 400.
+      //
+      // Nodes that were already part of the saved workflow keep their stored
+      // wiring exactly (prebuilt templates branch YES→action / NO→notify and
+      // must not be flattened into a line). Only NEW nodes added in the
+      // guided editor fall back to positional chaining — and a new condition
+      // always gets its NO path auto-wired to a terminal exit node.
+      const loadedNext = new Map(workflow.nodes.map((item) => [item.id, item.next]))
+      const nodeIds = new Set(nodes.map((item) => item.id))
+      const serialized: WorkflowNode[] = []
+      const exitNodes: WorkflowNode[] = []
+      const autoExitFor = (node: CanvasNode): string => {
+        const exitId = `${node.id}-no-exit`
+        exitNodes.push({ id: exitId, type: 'exit', config: {}, next: [], position: { x: node.position.x + 260, y: node.position.y + 140 } })
+        return exitId
+      }
+      nodes.forEach((node, index) => {
+        const isLoaded = loadedNext.has(node.id)
+        const loaded = (loadedNext.get(node.id) ?? []).filter((id) => nodeIds.has(id))
+        const base = {
           id: node.id,
           type: node.data.kind as WorkflowNode['type'],
           config: (node.data.config ?? {}) as WorkflowNode['config'],
-          next: next ? [next.id] : [],
           position: node.position,
         }
+        if (node.data.kind === 'condition') {
+          const yes = loaded[0] ?? nodes[index + 1]?.id ?? null
+          const no = loaded[1] ?? autoExitFor(node)
+          serialized.push({ ...base, next: [yes ?? no, no] })
+        } else if (isLoaded) {
+          serialized.push({ ...base, next: loaded })
+        } else {
+          const next = nodes[index + 1]
+          serialized.push({ ...base, next: next ? [next.id] : [] })
+        }
       })
+      return [...serialized, ...exitNodes]
     }
     return nodes.map((node) => {
       const outgoing = edges.filter((edge) => edge.source === node.id).sort((a, b) => handleOrder(a.sourceHandle) - handleOrder(b.sourceHandle))
@@ -208,9 +236,14 @@ function EditorInner({
     if (nodes.filter((node) => node.data.kind === 'trigger').length !== 1) result.push('Choose one starting point (When this happens).')
     if (nodes.length > 50) result.push('An automation can have up to 50 steps.')
     for (const node of nodes) {
-      const outgoing = edges.filter((edge) => edge.source === node.id)
-      if ((node.data.kind === 'condition' || node.data.kind === 'filter') && outgoing.length === 0) {
-        result.push(`“${node.data.label}” needs to connect to the next step.`)
+      // The explicit edge check only applies to the free-form canvas: in
+      // simple mode the serializer auto-wires condition YES/NO branches, so a
+      // condition without drawn edges is still valid.
+      if (mode === 'advanced') {
+        const outgoing = edges.filter((edge) => edge.source === node.id)
+        if ((node.data.kind === 'condition' || node.data.kind === 'filter') && outgoing.length === 0) {
+          result.push(`“${node.data.label}” needs to connect to the next step.`)
+        }
       }
       if (node.data.kind === 'action' && node.data.config?.action === 'email' && !String(node.data.config?.templateId ?? '').trim()) {
         result.push('Choose a verified email template before activating.')
@@ -342,9 +375,15 @@ function EditorInner({
               onBlur={() => void commitRename()}
             />
           ) : (
-            <Button
+            // RichButton (not the Polaris Button shim): the shim flattens mixed
+            // children into icon + label and treats the first element child —
+            // the <strong> — as the icon, which rendered the name twice
+            // ("VIP Customer Tagging VIP Customer Tagging"). RichButton keeps
+            // the composite content intact, so the title appears exactly once.
+            <RichButton
               className="editor-name-button"
               title="Rename automation"
+              aria-label={`Rename automation ${workflow.name}`}
               onClick={() => {
                 setDraftName(workflow.name)
                 setRenaming(true)
@@ -352,7 +391,7 @@ function EditorInner({
             >
               <strong>{workflow.name}</strong>
               <Pencil size={13} aria-hidden="true" />
-            </Button>
+            </RichButton>
           )}
           <span>
             {friendlyStatus(workflow.status)}
@@ -701,6 +740,7 @@ function StepIcon({ node }: { node: CanvasData }): JSX.Element {
   if (node.kind === 'trigger') return <span className="simple-step-icon trigger"><Target size={16} /></span>
   if (node.kind === 'condition' || node.kind === 'filter') return <span className="simple-step-icon check"><ListChecks size={16} /></span>
   if (node.kind === 'wait') return <span className="simple-step-icon wait"><Clock3 size={16} /></span>
+  if (node.kind === 'exit') return <span className="simple-step-icon exit"><XCircle size={16} /></span>
   if (node.kind === 'ai') return <span className="simple-step-icon ai"><Sparkles size={16} /></span>
   const action = String(node.config.action ?? '')
   const Icon = action === 'email' ? Mail : action === 'tag_customer' ? Tag : action === 'create_discount' ? Sparkles : action === 'internal_notification' ? Bell : PackagePlus
@@ -823,7 +863,7 @@ function AutomationCanvasNode({ data }: NodeProps<CanvasNode>): JSX.Element {
           <i className="yes-label">YES</i>
           <i className="no-label">NO</i>
         </>
-      ) : (
+      ) : data.kind === 'exit' ? null : (
         <Handle type="source" position={Position.Bottom} />
       )}
     </div>

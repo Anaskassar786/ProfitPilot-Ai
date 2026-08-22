@@ -225,6 +225,13 @@ export type StockRisk = Readonly<{
   hasInventory: boolean
   /** False when the plan does not include days-of-cover (never guessed). */
   coverAvailable: boolean
+  /**
+   * True ONLY when days-of-cover is locked behind the plan (an Upgrade CTA is
+   * appropriate). False on Commander and on young stores that simply have not
+   * collected enough sales history yet — those show an "awaiting baseline"
+   * note instead of an upgrade button.
+   */
+  coverLocked: boolean
   outCount: number
   lowCount: number
   healthyCount: number
@@ -258,6 +265,11 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
   const items = page?.items ?? []
   const coverAvailable = items.some((item) => item.daysOfCover.status === 'available')
   const locked = items.some((item) => item.daysOfCover.status === 'locked')
+  // The Upgrade CTA is keyed STRICTLY on a plan-locked days-of-cover status.
+  // A store on Commander (or any plan) whose days-of-cover is missing because
+  // there is not yet a 30-day sales baseline is NOT locked — it is awaiting
+  // history, and showing an Upgrade button there is a false upsell.
+  const coverLocked = locked
   const distribution = page?.distribution ?? { healthy: 0, low: 0, out: 0, untracked: 0 }
   const stats = page?.stats
 
@@ -284,10 +296,15 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
   const exposureItems = ranked.filter((item) => item.exposure !== null && item.exposure > 0)
   const urgentCount = ranked.filter((item) => item.status === 'out' || (item.days !== null && item.days <= REORDER_WINDOW_DAYS)).length
 
+  // Cover missing for a non-locked store = not enough synced sales history yet
+  // (young stores, Commander included). That is an "awaiting baseline" state,
+  // never an upsell.
+  const awaitingBaseline = items.length > 0 && !coverAvailable && !coverLocked
   return {
     items: ranked.slice(0, limit),
     hasInventory: items.length > 0,
     coverAvailable,
+    coverLocked,
     outCount: distribution.out || stats?.outOfStockCount || 0,
     lowCount: distribution.low || stats?.lowStockCount || 0,
     healthyCount: distribution.healthy || stats?.inStockCount || 0,
@@ -298,8 +315,10 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
     exposureItems: exposureItems.length,
     currency: stats?.currency ?? null,
     reorderWindowDays: REORDER_WINDOW_DAYS,
-    explanation: locked && !coverAvailable
+    explanation: coverLocked
       ? 'Days of cover is a Growth feature. Stock counts below come straight from Shopify.'
-      : page?.coverage.explanation ?? 'Sync your Shopify products to measure stock-out risk.',
+      : awaitingBaseline
+        ? 'Awaiting sales history baseline — days of cover appear once enough daily sales history has synced.'
+        : page?.coverage.explanation ?? 'Sync your Shopify products to measure stock-out risk.',
   }
 }
