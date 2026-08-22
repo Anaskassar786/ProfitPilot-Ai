@@ -4,14 +4,25 @@ import type { Subscription } from './billing.js'
 import type { PlanTier } from '@profitpilot/types'
 import type { BillingRecord } from './repository.js'
 
-export type TrialRecord = Readonly<{ shopId: string; startedAt: number; expiresAt: number; consumed: boolean; state: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' }>
-export type GiftCode = Readonly<{ code: string; maxUses: number; uses: number; active: boolean; durationDays: number; accessLevel: 'commander'; expiresAt: number | null }>
+export type TrialRecord = Readonly<{ shopId: string; startedAt: number; expiresAt: number; consumed: boolean; state: 'ACTIVE' | 'EXPIRED' | 'CANCELLED'; trialForfeited: boolean }>
+export type GiftCode = Readonly<{ code: string; maxUses: number; uses: number; active: boolean; durationDays: number; accessLevel: 'commander'; expiresAt: number | null; sequence: number }>
 export type GiftRedemption = Readonly<{ shopId: string; code: string; redeemedAt: number; expiresAt: number }>
 
 export const DEFAULT_TRIAL_DAYS = 14
+
+/** Gift-code policy copy surfaced to merchants (single source of truth). */
+export const GIFT_ALREADY_REDEEMED = 'A gift code has already been redeemed for this store'
+export const USE_PRIMARY_PROMO_FIRST = 'Please use the active primary promotion code first'
+
+/**
+ * DEFAULT_GIFT_CODES — primary/secondary ordering.
+ * `sequence` encodes the redemption order: `KASSAR786` (sequence 1) is the
+ * active primary code, and `AFRIDI786` (sequence 2) is secondary — valid ONLY
+ * once the primary has reached its usage cap or been marked inactive/expired.
+ */
 export const DEFAULT_GIFT_CODES: readonly GiftCode[] = [
-  { code: 'KASSAR786', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null },
-  { code: 'AFRIDI786', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null },
+  { code: 'KASSAR786', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 1 },
+  { code: 'AFRIDI786', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 2 },
 ]
 
 /** QA (2026-08-20): distinct "expired" errors instead of lumping expired and
@@ -27,24 +38,46 @@ export function giftCodeError(gift: GiftCode | null, now: number): AppError | nu
  * Gift expiry enforcement (GA 2026-08-21).
  *
  * A redeemed gift grants Commander for `durationDays`. Once
- * `currentPeriodEnd` passes, the store must NOT keep Commander entitlements:
- * it reverts to its previous plan state — Trial (TRIAL_LIMITED) when the
- * 14-day trial is still running, otherwise locked (PENDING_CONFIRMATION).
+ * `currentPeriodEnd` passes, the store must NOT keep Commander entitlements
+ * and must NEVER be granted any remaining trial time: redeeming a gift
+ * permanently forfeits the 14-day trial (see `redeemGift`), so the store
+ * reverts to the Trial state only when the trial was never forfeited and is
+ * still running, and otherwise transitions directly to the LOCKED state
+ * `TRIAL_EXPIRED` (upgrade required) with zero remaining trial days.
  * Returns the corrected record to persist, or `null` when nothing changed.
  */
 export function expiredGiftRevert(record: BillingRecord | null, trial: TrialRecord | null, now = Date.now()): BillingRecord | null {
   if (!record || record.state !== 'GIFT_ACCESS_UNLIMITED') return null
   if (record.currentPeriodEnd === null || record.currentPeriodEnd > now) return null
-  const trialActive = trial !== null && trial.state === 'ACTIVE' && trial.expiresAt > now
+  const trialActive = trial !== null && !trial.trialForfeited && trial.state === 'ACTIVE' && trial.expiresAt > now
   return {
     ...record,
     plan: 'trial',
-    state: trialActive ? 'TRIAL_LIMITED' : 'PENDING_CONFIRMATION',
+    state: trialActive ? 'TRIAL_LIMITED' : 'TRIAL_EXPIRED',
     currentPeriodEnd: trialActive ? trial.expiresAt : record.currentPeriodEnd,
     version: record.version + 1,
     interval: null,
     chargeId: null,
   }
+}
+
+/**
+ * Sequencing enforcement (GA 2026-08-22).
+ *
+ * A gift code is only redeemable while every *earlier* (lower `sequence`)
+ * code is no longer available. `KASSAR786` (sequence 1) is the active primary;
+ * `AFRIDI786` (sequence 2) is secondary and is rejected with a 400
+ * (`USE_PRIMARY_PROMO_FIRST`) while the primary is still active and has
+ * capacity.
+ */
+export function assertGiftSequence(gifts: Iterable<GiftCode>, target: GiftCode, now: number): void {
+  let primary: GiftCode | null = null
+  for (const gift of gifts) {
+    if (!primary || gift.sequence < primary.sequence) primary = gift
+  }
+  if (!primary || target.sequence <= primary.sequence) return
+  const primaryAvailable = primary.active && primary.uses < primary.maxUses && (primary.expiresAt === null || primary.expiresAt > now)
+  if (primaryAvailable) throw new AppError('VALIDATION_ERROR', USE_PRIMARY_PROMO_FIRST, 400, { primary: primary.code, requested: target.code, reason: 'PRIMARY_CODE_ACTIVE' })
 }
 
 /**
@@ -66,9 +99,11 @@ export class TrialAndGiftLedger {
   public hydrateRedemption(redemption: GiftRedemption): void { this.redemptions.set(redemption.shopId, redemption) }
 
   public startTrial(shopId: string, now = Date.now(), days = DEFAULT_TRIAL_DAYS): TrialRecord {
+    // The trial start date is set ONCE — a reload, context refresh, or
+    // reinstall must never re-initialise it (see ensureTrial/hydrate).
     const existing = this.trials.get(shopId)
     if (existing) return existing
-    const trial: TrialRecord = { shopId, startedAt: now, expiresAt: now + days * 86_400_000, consumed: false, state: 'ACTIVE' }
+    const trial: TrialRecord = { shopId, startedAt: now, expiresAt: now + days * 86_400_000, consumed: false, state: 'ACTIVE', trialForfeited: false }
     this.trials.set(shopId, trial)
     return trial
   }
@@ -86,22 +121,39 @@ export class TrialAndGiftLedger {
 
   public redeemGift(shopId: string, rawCode: string, now = Date.now()): GiftRedemption {
     if (this.giftKillSwitch) throw new AppError('FORBIDDEN', 'Gift code redemption is disabled', 403)
-    if (this.redemptions.has(shopId)) throw new AppError('CONFLICT', 'This store has already redeemed a gift code', 409, { shopId })
+    // Single-use limit: a store can redeem at most ONE gift code in its lifetime.
+    if (this.redemptions.has(shopId)) throw new AppError('CONFLICT', GIFT_ALREADY_REDEEMED, 400, { shopId })
     const code = rawCode.trim().toUpperCase()
     const gift = this.gifts.get(code) ?? null
     const invalid = giftCodeError(gift, now)
     if (invalid) throw invalid
     const activeGift = gift as GiftCode
+    // Sequencing: a secondary code (AFRIDI786) is only valid once the primary
+    // (KASSAR786) is exhausted/inactive.
+    assertGiftSequence(this.gifts.values(), activeGift, now)
     const trial = this.trials.get(shopId) ?? null
     if (trial?.consumed) throw new AppError('CONFLICT', 'Trial or gift access was already consumed', 409)
-    // The gift OVERRIDES the trial while its window is open, but the trial is
-    // left intact so the store reverts to it when the gift expires (Trial if
-    // still valid, else locked). Only an explicit upgrade cancels the trial.
+    // Redeeming a gift PERMANENTLY forfeits the trial: the 3-day Commander
+    // window replaces it and, once the window closes, the store goes straight
+    // to TRIAL_EXPIRED (locked) with zero remaining trial days.
     const nextGift = { ...activeGift, uses: activeGift.uses + 1, active: activeGift.uses + 1 < activeGift.maxUses }
     this.gifts.set(code, nextGift)
     const redemption: GiftRedemption = { shopId, code, redeemedAt: now, expiresAt: now + activeGift.durationDays * 86_400_000 }
     this.redemptions.set(shopId, redemption)
+    this.forfeitTrial(shopId, now)
     return redemption
+  }
+
+  /** Voids the store's trial forever. `startedAt` is never touched so the
+   *  trial-start persistence guarantee holds; the trial is marked forfeited,
+   *  consumed, and its window clamped to the past so it can never be active. */
+  private forfeitTrial(shopId: string, now: number): TrialRecord {
+    const existing = this.trials.get(shopId)
+    const forfeited: TrialRecord = existing
+      ? { ...existing, consumed: true, state: 'CANCELLED', expiresAt: Math.min(existing.expiresAt, now), trialForfeited: true }
+      : { shopId, startedAt: now - DEFAULT_TRIAL_DAYS * 86_400_000, expiresAt: now, consumed: true, state: 'CANCELLED', trialForfeited: true }
+    this.trials.set(shopId, forfeited)
+    return forfeited
   }
 
   /** Ends an ACTIVE trial (used when a merchant upgrades during the trial). */
@@ -122,8 +174,8 @@ export class TrialAndGiftLedger {
   public redemption(shopId: string): GiftRedemption | null { return this.redemptions.get(shopId) ?? null }
 }
 
-type TrialRow = QueryResultRow & { shop_id: string; started_at: Date | string | number; expires_at: Date | string | number; consumed: boolean; state: TrialRecord['state'] }
-type GiftCodeRow = QueryResultRow & { code: string; max_uses: number; uses: number; active: boolean; duration_days: number; access_level: string; expires_at: Date | string | number | null }
+type TrialRow = QueryResultRow & { shop_id: string; started_at: Date | string | number; expires_at: Date | string | number; consumed: boolean; state: TrialRecord['state']; trial_forfeited?: boolean | null }
+type GiftCodeRow = QueryResultRow & { code: string; max_uses: number; uses: number; active: boolean; duration_days: number; access_level: string; expires_at: Date | string | number | null; sequence?: number | null }
 type GiftRedemptionRow = QueryResultRow & { shop_id: string; code: string; redeemed_at: Date | string | number; expires_at: Date | string | number }
 
 function toMillis(value: Date | string | number): number {
@@ -140,6 +192,7 @@ function mapTrial(row: TrialRow): TrialRecord {
     expiresAt: toMillis(row.expires_at),
     consumed: Boolean(row.consumed),
     state: row.state,
+    trialForfeited: Boolean(row.trial_forfeited),
   }
 }
 
@@ -152,6 +205,7 @@ function mapGift(row: GiftCodeRow): GiftCode {
     durationDays: Number(row.duration_days) || 3,
     accessLevel: 'commander',
     expiresAt: row.expires_at == null ? null : toMillis(row.expires_at),
+    sequence: Number(row.sequence) || 1,
   }
 }
 
@@ -213,6 +267,7 @@ export class PostgresTrialGiftStore {
       expiresAt: now + days * 86_400_000,
       consumed: false,
       state: 'ACTIVE',
+      trialForfeited: false,
     }
     await this.persistTrial(created)
     this.cache.hydrate(created)
@@ -256,7 +311,7 @@ export class PostgresTrialGiftStore {
       // gift_codes is a global table (no tenant RLS); locking the row here
       // serialises concurrent redemptions of the same code.
       const lockResult = await client.query<GiftCodeRow>(
-        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
+        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
         [code],
       )
       let giftRow = lockResult.rows[0]
@@ -267,13 +322,13 @@ export class PostgresTrialGiftStore {
           throw new AppError('VALIDATION_ERROR', 'Gift code is invalid or exhausted', 400)
         }
         await client.query(
-          `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, expires_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, expires_at, sequence)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (code) DO NOTHING`,
-          [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel, seeded.expiresAt],
+          [seeded.code, seeded.maxUses, seeded.uses, seeded.active, seeded.durationDays, seeded.accessLevel, seeded.expiresAt, seeded.sequence],
         )
         giftRow = (await client.query<GiftCodeRow>(
-          'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
+          'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes WHERE upper(code) = $1 LIMIT 1 FOR UPDATE',
           [code],
         )).rows[0]
       }
@@ -281,17 +336,25 @@ export class PostgresTrialGiftStore {
       const invalid = giftCodeError(gift, now)
       if (invalid) throw invalid
       const activeGift = gift as GiftCode
+      // Sequencing (strict Postgres check): a secondary code is only valid once
+      // the active primary (lowest `sequence`) is exhausted/inactive/expired.
+      const primaryResult = await client.query<GiftCodeRow>(
+        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes ORDER BY sequence ASC NULLS LAST, code ASC LIMIT 1',
+        [],
+      )
+      if (primaryResult.rows[0]) assertGiftSequence([mapGift(primaryResult.rows[0])], activeGift, now)
 
       const existing = await client.query<GiftRedemptionRow>(
         'SELECT shop_id, code, redeemed_at, expires_at FROM gift_redemptions WHERE shop_id = $1 LIMIT 1',
         [shopId],
       )
+      // Single-use limit (strict Postgres check): one gift code per store lifetime.
       if (existing.rows[0]) {
-        throw new AppError('CONFLICT', 'This store has already redeemed a gift code', 409, { shopId })
+        throw new AppError('CONFLICT', GIFT_ALREADY_REDEEMED, 400, { shopId })
       }
 
       const trialResult = await client.query<TrialRow>(
-        'SELECT shop_id, started_at, expires_at, consumed, state FROM trials WHERE shop_id = $1 LIMIT 1',
+        'SELECT shop_id, started_at, expires_at, consumed, state, trial_forfeited FROM trials WHERE shop_id = $1 LIMIT 1',
         [shopId],
       )
       const trialRow = trialResult.rows[0]
@@ -309,10 +372,21 @@ export class PostgresTrialGiftStore {
       const row = inserted.rows[0]
       if (!row) throw new AppError('INTERNAL_ERROR', 'Failed to persist gift redemption', 500)
 
-      // The gift overrides the trial while its window is open but does NOT
-      // cancel it — after the gift expires the store reverts to the trial
-      // (Trial if still valid, else locked). Only an explicit upgrade calls
-      // cancelTrial().
+      // Redeeming a gift PERMANENTLY forfeits the trial. `trial_started_at` is
+      // never overwritten (the ON CONFLICT preserves an existing started_at),
+      // but the trial is marked consumed/cancelled/forfeited and its window is
+      // clamped to the past so it can never be active. Once the gift window
+      // closes the store goes straight to TRIAL_EXPIRED with zero trial days.
+      await client.query(
+        `INSERT INTO trials (shop_id, started_at, expires_at, consumed, state, trial_forfeited)
+         VALUES ($1, to_timestamp($2 / 1000.0), to_timestamp($3 / 1000.0), true, 'CANCELLED', true)
+         ON CONFLICT (shop_id) DO UPDATE SET
+           consumed = true,
+           state = 'CANCELLED',
+           trial_forfeited = true,
+           expires_at = LEAST(trials.expires_at, to_timestamp($3 / 1000.0))`,
+        [shopId, now - DEFAULT_TRIAL_DAYS * 86_400_000, now],
+      )
 
       // Consume one use atomically (guarded by the FOR UPDATE lock above).
       await client.query(
@@ -328,7 +402,7 @@ export class PostgresTrialGiftStore {
 
     this.cache.hydrateRedemption(redemption)
     const updatedGift = await this.executor.query<GiftCodeRow>(
-      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
+      'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes WHERE upper(code) = $1 LIMIT 1',
       [code],
     )
     if (updatedGift.rows[0]) this.cache.hydrateGift(mapGift(updatedGift.rows[0]))
@@ -360,7 +434,7 @@ export class PostgresTrialGiftStore {
    */
   public async expiringTrials(now = Date.now(), withinMs = 24 * 60 * 60 * 1000): Promise<readonly TrialRecord[]> {
     const result = await this.executor.query<TrialRow>(
-      `SELECT shop_id, started_at, expires_at, consumed, state
+      `SELECT shop_id, started_at, expires_at, consumed, state, trial_forfeited
        FROM trials
        WHERE state = 'ACTIVE' AND expires_at > to_timestamp($1 / 1000.0) AND expires_at <= to_timestamp($2 / 1000.0)`,
       [now, now + withinMs],
@@ -371,10 +445,10 @@ export class PostgresTrialGiftStore {
   public async seedDefaultCodes(codes: readonly GiftCode[] = DEFAULT_GIFT_CODES): Promise<void> {
     for (const gift of codes) {
       await this.executor.query(
-        `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, sequence)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (code) DO NOTHING`,
-        [gift.code.trim().toUpperCase(), gift.maxUses, gift.uses, gift.active, gift.durationDays, gift.accessLevel],
+        [gift.code.trim().toUpperCase(), gift.maxUses, gift.uses, gift.active, gift.durationDays, gift.accessLevel, gift.sequence],
       )
       this.cache.hydrateGift(gift)
     }
@@ -384,7 +458,7 @@ export class PostgresTrialGiftStore {
     try {
       return await this.withTenant(shopId, async (client) => {
         const result = await client.query<TrialRow>(
-          'SELECT shop_id, started_at, expires_at, consumed, state FROM trials WHERE shop_id = $1 LIMIT 1',
+          'SELECT shop_id, started_at, expires_at, consumed, state, trial_forfeited FROM trials WHERE shop_id = $1 LIMIT 1',
           [shopId],
         )
         return result.rows[0] ? mapTrial(result.rows[0]) : null
@@ -410,15 +484,18 @@ export class PostgresTrialGiftStore {
 
   private async persistTrial(trial: TrialRecord): Promise<void> {
     await this.withTenant(trial.shopId, async (client) => {
+      // `started_at` is only ever written on the initial INSERT. The
+      // ON CONFLICT update deliberately omits it so a reload, context
+      // refresh, or reinstall can never reset the trial start date.
       await client.query(
-        `INSERT INTO trials (shop_id, started_at, expires_at, consumed, state)
-         VALUES ($1, to_timestamp($2 / 1000.0), to_timestamp($3 / 1000.0), $4, $5)
+        `INSERT INTO trials (shop_id, started_at, expires_at, consumed, state, trial_forfeited)
+         VALUES ($1, to_timestamp($2 / 1000.0), to_timestamp($3 / 1000.0), $4, $5, $6)
          ON CONFLICT (shop_id) DO UPDATE SET
-           started_at = EXCLUDED.started_at,
            expires_at = EXCLUDED.expires_at,
            consumed = EXCLUDED.consumed,
-           state = EXCLUDED.state`,
-        [trial.shopId, trial.startedAt, trial.expiresAt, trial.consumed, trial.state],
+           state = EXCLUDED.state,
+           trial_forfeited = EXCLUDED.trial_forfeited`,
+        [trial.shopId, trial.startedAt, trial.expiresAt, trial.consumed, trial.state, trial.trialForfeited],
       )
     })
   }
@@ -442,7 +519,7 @@ export function subscriptionForTrial(shopId: string, trial: TrialRecord, now = D
   return {
     storeId: shopId,
     plan: 'trial' as PlanTier,
-    state: trial.state === 'ACTIVE' && trial.expiresAt > now ? 'TRIAL_LIMITED' : 'PENDING_CONFIRMATION',
+    state: trial.state === 'ACTIVE' && trial.expiresAt > now ? 'TRIAL_LIMITED' : 'TRIAL_EXPIRED',
     currentPeriodEnd: trial.expiresAt,
     version: 0,
   }

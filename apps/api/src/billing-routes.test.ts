@@ -66,25 +66,30 @@ describe('F5 trial & gift lifecycle (GA 2026-08-21)', () => {
     expect(trials.trial('s')?.consumed).toBe(true)
   })
 
-  it('reverts an expired gift to the still-running trial (Commander features lock)', async () => {
+  it('forfeits the trial on gift redemption: when the 3-day gift expires the store enters TRIAL_EXPIRED with zero trial days', async () => {
     const repository = new InMemoryBillingRepository()
     const trials = new TrialAndGiftLedger()
-    // Day 10 of a 14-day trial (still active).
-    trials.startTrial('s', Date.now() - 10 * 86_400_000)
+    const startedAt = Date.now() - 10 * 86_400_000
+    // Day 10 of a 14-day trial (still active at redemption time).
+    trials.startTrial('s', startedAt)
     // 3-day gift redeemed 4 days ago → the window ended yesterday.
     trials.redeemGift('s', 'KASSAR786', Date.now() - 4 * 86_400_000)
     await repository.put({ storeId: 's', plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: Date.now() - 86_400_000, version: 1, interval: null, chargeId: null })
     await withLedgerServer(repository, trials, async (base) => {
       const data = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
       expect(data.gift).toBeTruthy()
-      expect(data.subscription.state).toBe('TRIAL_LIMITED')
+      // Trial was forfeited forever — no remaining trial days, straight to locked.
+      expect(data.subscription.state).toBe('TRIAL_EXPIRED')
       expect(data.subscription.plan).toBe('trial')
+      expect(data.trial?.trialForfeited).toBe(true)
+      // The original trial start date is preserved (never reset on reload).
+      expect(data.trial?.startedAt).toBe(startedAt)
     })
-    // The revert is persisted — a second read agrees.
-    expect((await repository.get('s'))?.state).toBe('TRIAL_LIMITED')
+    // The revert is persisted — a second read agrees and stays locked.
+    expect((await repository.get('s'))?.state).toBe('TRIAL_EXPIRED')
   })
 
-  it('reverts an expired gift to locked when the trial has also expired', async () => {
+  it('reverts an expired gift to locked (TRIAL_EXPIRED) when the trial has also expired', async () => {
     const repository = new InMemoryBillingRepository()
     const trials = new TrialAndGiftLedger()
     trials.startTrial('s', Date.now() - 20 * 86_400_000) // trial expired 6 days ago
@@ -92,7 +97,7 @@ describe('F5 trial & gift lifecycle (GA 2026-08-21)', () => {
     await repository.put({ storeId: 's', plan: 'commander', state: 'GIFT_ACCESS_UNLIMITED', currentPeriodEnd: Date.now() - 86_400_000, version: 1, interval: null, chargeId: null })
     await withLedgerServer(repository, trials, async (base) => {
       const data = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
-      expect(data.subscription.state).toBe('PENDING_CONFIRMATION')
+      expect(data.subscription.state).toBe('TRIAL_EXPIRED')
       expect(data.subscription.plan).toBe('trial')
     })
   })
@@ -127,10 +132,49 @@ describe('F5 trial & gift lifecycle (GA 2026-08-21)', () => {
       const first = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'KASSAR786' }) })
       expect(first.status).toBe(201)
       const second = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'AFRIDI786' }) })
-      expect(second.status).toBe(409)
-      expect((await second.json()).error.message.toLowerCase()).toContain('already redeemed')
+      expect(second.status).toBe(400)
+      expect((await second.json()).error.message).toBe('A gift code has already been redeemed for this store')
       const expired = await fetch(`${base}/billing/gift?shopId=other`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT-A-CODE' }) })
       expect(expired.status).toBe(400)
+    })
+  })
+
+  it('rejects AFRIDI786 with HTTP 400 while the primary KASSAR786 is still active', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    await withLedgerServer(repository, trials, async (base) => {
+      const response = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'AFRIDI786' }) })
+      expect(response.status).toBe(400)
+      expect((await response.json()).error.message).toBe('Please use the active primary promotion code first')
+    })
+  })
+
+  it('never resets the 14-day trial start date on reloads or context refreshes', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    const startedAt = Date.now() - 3 * 86_400_000
+    trials.startTrial('s', startedAt)
+    await withLedgerServer(repository, trials, async (base) => {
+      const first = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
+      expect(first.trial?.startedAt).toBe(startedAt)
+      // A later reload / context refresh must not re-initialise the trial.
+      const second = (await (await fetch(`${base}/billing?shopId=s`)).json()).data
+      expect(second.trial?.startedAt).toBe(startedAt)
+      expect(second.trial?.expiresAt).toBe(startedAt + 14 * 86_400_000)
+    })
+    // Re-starting must also be a no-op once the trial exists.
+    trials.startTrial('s', Date.now())
+    expect(trials.trial('s')?.startedAt).toBe(startedAt)
+  })
+
+  it('redeeming a gift grants exactly 72 hours of Commander', async () => {
+    const repository = new InMemoryBillingRepository()
+    const trials = new TrialAndGiftLedger()
+    await withLedgerServer(repository, trials, async (base) => {
+      const response = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'KASSAR786' }) })
+      expect(response.status).toBe(201)
+      const payload = (await response.json()).data
+      expect(payload.expiresAt - payload.redeemedAt).toBe(3 * 86_400_000)
     })
   })
 })

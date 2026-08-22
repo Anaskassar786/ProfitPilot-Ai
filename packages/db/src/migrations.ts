@@ -124,7 +124,13 @@ export const GDPR_DATA_REQUEST_MIGRATIONS: readonly Migration[] = [
   { id: '0030', filename: '0030_gdpr_data_request_export.sql', sql: 'privacy_compliance_requests.export_data for compiled data_request exports' },
 ]
 
-export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS, ...QA_REGISTERED_MIGRATIONS, ...GDPR_DATA_REQUEST_MIGRATIONS]
+// Gift-code sequencing (primary/secondary) + permanent trial forfeiture on
+// gift redemption (GA 2026-08-22). See 0031_gift_sequence_trial_forfeit.sql.
+export const GIFT_POLICY_MIGRATIONS: readonly Migration[] = [
+  { id: '0031', filename: '0031_gift_sequence_trial_forfeit.sql', sql: 'gift_codes.sequence for primary/secondary ordering and trials.trial_forfeited for permanent trial forfeiture on gift redemption' },
+]
+
+export const ALL_MIGRATIONS: readonly Migration[] = [...F0_MIGRATIONS, ...F1_MIGRATIONS, ...F2_MIGRATIONS, ...F4_MIGRATIONS, ...F5_MIGRATIONS, ...F6_MIGRATIONS, ...F7_MIGRATIONS, ...F8_MIGRATIONS, ...F9_MIGRATIONS, ...F10_MIGRATIONS, ...SECURITY_MIGRATIONS, ...OPERATOR_MIGRATIONS, ...CUSTOMER_CAMPAIGN_MIGRATIONS, ...PRIVACY_COMPLIANCE_MIGRATIONS, ...INVENTORY_INTELLIGENCE_MIGRATIONS, ...AUTOMATION_PROFESSIONAL_MIGRATIONS, ...AI_COMMAND_CENTER_MIGRATIONS, ...RECOMMENDATION_LIFECYCLE_MIGRATIONS, ...AI_COMMAND_MIGRATIONS, ...AI_EXECUTIVE_MIGRATIONS, ...STORE_COACH_MIGRATIONS, ...INSIGHTS_HUB_MIGRATIONS, ...PATTERN_AI_MIGRATIONS, ...DATA_EXPORT_MIGRATIONS, ...QA_REGISTERED_MIGRATIONS, ...GDPR_DATA_REQUEST_MIGRATIONS, ...GIFT_POLICY_MIGRATIONS]
 
 export function pendingMigrations(appliedIds: readonly string[]): readonly Migration[] {
   const applied = new Set(appliedIds)

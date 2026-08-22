@@ -103,9 +103,17 @@ describe('trial and gift redemption', () => {
   it('expires trials after fourteen days', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); expect(ledger.trial('s', 100 + 14 * 86_400_000)?.state).toBe('EXPIRED') })
   it('finds trials for an hourly nudge window', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100, 1); expect(ledger.expiringTrials(100, 86_400_000)).toHaveLength(1) })
   it('redeems a gift for Commander for the full duration', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'KASSAR786', 200); expect(redemption.code).toBe('KASSAR786'); expect(redemption.expiresAt).toBe(200 + 3 * 86_400_000) })
-  it('leaves the trial intact so the store reverts after the gift window (6.2.4)', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); ledger.redeemGift('s', 'KASSAR786', 200); expect(ledger.trial('s', 1_000)?.state).toBe('ACTIVE'); expect(ledger.trial('s', 1_000)?.consumed).toBe(false) })
+  it('forfeits the trial permanently when a gift is redeemed (no trial days after the gift)', () => { const ledger = new TrialAndGiftLedger(); const original = ledger.startTrial('s', 100); ledger.redeemGift('s', 'KASSAR786', 200); const forfeited = ledger.trial('s', 1_000); expect(forfeited?.trialForfeited).toBe(true); expect(forfeited?.consumed).toBe(true); expect(forfeited?.startedAt).toBe(original.startedAt) })
   it('cancels the trial only on an explicit upgrade', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const cancelled = ledger.cancelTrial('s'); expect(cancelled?.state).toBe('CANCELLED'); expect(cancelled?.consumed).toBe(true) })
-  it('prevents a store from redeeming twice', () => { const ledger = new TrialAndGiftLedger(); ledger.redeemGift('s', 'KASSAR786'); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('already redeemed') })
+  it('prevents a store from redeeming twice', () => { const ledger = new TrialAndGiftLedger(); ledger.redeemGift('s', 'KASSAR786'); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('A gift code has already been redeemed for this store') })
+  it('blocks a secondary code while the primary is still active', () => { const ledger = new TrialAndGiftLedger(); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('primary promotion code') })
+  it('allows the secondary code once the primary is exhausted', () => {
+    const ledger = new TrialAndGiftLedger()
+    for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786')
+    expect(ledger.gift('KASSAR786')?.active).toBe(false)
+    const redemption = ledger.redeemGift('z', 'AFRIDI786')
+    expect(redemption.code).toBe('AFRIDI786')
+  })
   it('auto-deactivates an exhausted code', () => { const ledger = new TrialAndGiftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786'); expect(ledger.gift('KASSAR786')?.active).toBe(false) })
   it('supports an admin kill switch', () => { const ledger = new TrialAndGiftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'KASSAR786')).toThrow('disabled') })
   it('rejects invalid codes', () => expect(() => new TrialAndGiftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))
@@ -121,18 +129,24 @@ describe('gift expiry revert (expiredGiftRevert)', () => {
   it('returns null while the gift window is still open', () => {
     expect(expiredGiftRevert({ ...giftRecord, currentPeriodEnd: now + 86_400_000 }, null, now)).toBeNull()
   })
-  it('reverts to Trial (TRIAL_LIMITED) when the trial is still valid', () => {
-    const trial = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: false, state: 'ACTIVE' as const }
+  it('reverts to Trial (TRIAL_LIMITED) when the trial is still valid and never forfeited', () => {
+    const trial = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: false, state: 'ACTIVE' as const, trialForfeited: false }
     const reverted = expiredGiftRevert(giftRecord, trial, now)
     expect(reverted?.state).toBe('TRIAL_LIMITED')
     expect(reverted?.plan).toBe('trial')
     expect(reverted?.currentPeriodEnd).toBe(trial.expiresAt)
     expect(reverted?.version).toBe(4)
   })
-  it('reverts to locked (PENDING_CONFIRMATION) when the trial is also expired', () => {
-    const trial = { shopId: 's', startedAt: now - 30 * 86_400_000, expiresAt: now - 2 * 86_400_000, consumed: false, state: 'EXPIRED' as const }
+  it('reverts to locked (TRIAL_EXPIRED) when the trial is also expired', () => {
+    const trial = { shopId: 's', startedAt: now - 30 * 86_400_000, expiresAt: now - 2 * 86_400_000, consumed: false, state: 'EXPIRED' as const, trialForfeited: false }
     const reverted = expiredGiftRevert(giftRecord, trial, now)
-    expect(reverted?.state).toBe('PENDING_CONFIRMATION')
+    expect(reverted?.state).toBe('TRIAL_EXPIRED')
+    expect(reverted?.plan).toBe('trial')
+  })
+  it('reverts to locked (TRIAL_EXPIRED) with zero trial days when the trial was forfeited by the gift', () => {
+    const trial = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: true, state: 'CANCELLED' as const, trialForfeited: true }
+    const reverted = expiredGiftRevert(giftRecord, trial, now)
+    expect(reverted?.state).toBe('TRIAL_EXPIRED')
     expect(reverted?.plan).toBe('trial')
   })
 })

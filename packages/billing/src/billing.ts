@@ -1,17 +1,18 @@
 import { AppError } from '@profitpilot/types'
 import type { PlanTier } from '@profitpilot/types'
 
-export type BillingState = 'TRIAL_LIMITED' | 'GIFT_ACCESS_UNLIMITED' | 'ACTIVE_MONTHLY' | 'ACTIVE_ANNUAL' | 'PENDING_CONFIRMATION' | 'PAST_DUE' | 'SUSPENDED' | 'CANCELLED'
+export type BillingState = 'TRIAL_LIMITED' | 'TRIAL_EXPIRED' | 'GIFT_ACCESS_UNLIMITED' | 'ACTIVE_MONTHLY' | 'ACTIVE_ANNUAL' | 'PENDING_CONFIRMATION' | 'PAST_DUE' | 'SUSPENDED' | 'CANCELLED'
 export type BillingEvent = 'trial_expired' | 'charge_confirmed_monthly' | 'charge_confirmed_annual' | 'charge_pending' | 'charge_failed' | 'charge_declined' | 'charge_recovered' | 'cancelled' | 'suspend' | 'gift_redeemed'
 
 export type Subscription = Readonly<{ storeId?: string; plan: PlanTier; state: BillingState; currentPeriodEnd: number | null; version: number; priceLockedAt?: number | null; grandfathered?: boolean }>
 
 const transitions: Readonly<Record<BillingState, Partial<Record<BillingEvent, BillingState>>>> = {
-  TRIAL_LIMITED: { trial_expired: 'PENDING_CONFIRMATION', charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', gift_redeemed: 'GIFT_ACCESS_UNLIMITED' },
-  GIFT_ACCESS_UNLIMITED: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', trial_expired: 'PENDING_CONFIRMATION' },
+  TRIAL_LIMITED: { trial_expired: 'TRIAL_EXPIRED', charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', gift_redeemed: 'GIFT_ACCESS_UNLIMITED' },
+  GIFT_ACCESS_UNLIMITED: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', trial_expired: 'TRIAL_EXPIRED' },
   ACTIVE_MONTHLY: { charge_pending: 'PENDING_CONFIRMATION', charge_failed: 'PAST_DUE', charge_declined: 'PAST_DUE', cancelled: 'CANCELLED', suspend: 'SUSPENDED' },
   ACTIVE_ANNUAL: { charge_pending: 'PENDING_CONFIRMATION', charge_failed: 'PAST_DUE', charge_declined: 'PAST_DUE', cancelled: 'CANCELLED', suspend: 'SUSPENDED' },
   PENDING_CONFIRMATION: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', charge_failed: 'PAST_DUE', charge_declined: 'PAST_DUE', suspend: 'SUSPENDED' },
+  TRIAL_EXPIRED: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', charge_pending: 'PENDING_CONFIRMATION', charge_failed: 'PAST_DUE', charge_declined: 'PAST_DUE', suspend: 'SUSPENDED' },
   PAST_DUE: { charge_recovered: 'ACTIVE_MONTHLY', cancelled: 'CANCELLED', suspend: 'SUSPENDED' },
   SUSPENDED: { charge_recovered: 'ACTIVE_MONTHLY', charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', cancelled: 'CANCELLED' },
   CANCELLED: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', gift_redeemed: 'GIFT_ACCESS_UNLIMITED' },

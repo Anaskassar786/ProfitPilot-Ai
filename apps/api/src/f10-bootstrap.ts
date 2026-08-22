@@ -77,7 +77,7 @@ export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string
   const trialExpired = async (storeId: StoreId, plan: 'trial'): Promise<boolean> => {
     if (plan !== 'trial') return false
     const billing = await f9.billing.repository.get(String(storeId))
-    if (billing && billing.state !== 'TRIAL_LIMITED' && billing.state !== 'PENDING_CONFIRMATION') return false
+    if (billing && billing.state !== 'TRIAL_LIMITED' && billing.state !== 'PENDING_CONFIRMATION' && billing.state !== 'TRIAL_EXPIRED') return false
     const result = await f9.database.query<{ expires_at: Date }>('SELECT expires_at FROM trials WHERE shop_id = $1 AND consumed = false ORDER BY expires_at DESC LIMIT 1', [storeId])
     const expiresAt = result.rows[0]?.expires_at
     return expiresAt !== undefined && new Date(expiresAt).getTime() <= Date.now()
