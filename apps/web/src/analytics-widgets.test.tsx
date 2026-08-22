@@ -6,6 +6,8 @@ import './jsdom-polaris-setup.js'
  */
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AppProvider } from '@shopify/polaris'
+import type { ReactNode } from 'react'
 import { periodTrend } from './analytics-model.js'
 import { revenueLeakage, revenuePacing, stockRisk } from './analytics-widgets-model.js'
 import { DiscountLeakage, RevenueTrendChart, StockoutRisk } from './analytics.js'
@@ -13,6 +15,9 @@ import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { InventoryPageResult, InventoryRowItem } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
 import type { TrendPoint } from './analytics-model.js'
+
+/** Polaris Button/Banner read the i18n context; provide a minimal AppProvider. */
+const polaris = (node: ReactNode) => <AppProvider i18n={{}}>{node}</AppProvider>
 
 const day = (offset: number) => { const date = new Date('2026-08-19T00:00:00Z'); date.setUTCDate(date.getUTCDate() - offset); return date.toISOString().slice(0, 10) }
 
@@ -166,9 +171,38 @@ describe('stockRisk', () => {
   it('never invents a runway when days of cover is plan-locked', () => {
     const locked = stockRisk({ ...page, items: [item({ variantId: 'v9', status: 'low', quantity: 3, price: 20, daysOfCover: { status: 'locked', required_plan: 'growth' } })] })
     expect(locked.coverAvailable).toBe(false)
+    expect(locked.coverLocked).toBe(true)
     expect(locked.items[0]?.days).toBeNull()
     expect(locked.items[0]?.exposure).toBeNull()
     expect(locked.explanation).toContain('Growth feature')
+  })
+
+  it('is never plan-locked for Commander even when cover is short on data', () => {
+    const commander = stockRisk({
+      ...page,
+      plan: 'commander',
+      items: [item({ variantId: 'v1', title: 'Snowboard', status: 'low', quantity: 3, price: 20, daysOfCover: { status: 'insufficient_data', reason: 'sales_history', message: 'Awaiting more sales history.' } })],
+      stats: { ...page.stats, trackedSkus: 1, untrackedSkus: 0, totalSkus: 1 },
+    })
+    expect(commander.coverAvailable).toBe(false)
+    expect(commander.coverLocked).toBe(false)
+    expect(commander.coverNote).toContain('Awaiting sales history')
+  })
+
+  it('flags an all-untracked store so the UI can skip the zero grid', () => {
+    const untracked = stockRisk({
+      ...page,
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: null, daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...page.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+    })
+    expect(untracked.hasInventory).toBe(true)
+    expect(untracked.allUntracked).toBe(true)
+    expect(untracked.untrackedCount).toBe(27)
+    expect(untracked.trackedCount).toBe(0)
+    // Mixed stores (some tracked, some not) must NOT show the all-untracked state.
+    const mixed = stockRisk({ ...page, stats: { ...page.stats, totalSkus: 27, trackedSkus: 3, untrackedSkus: 24 } })
+    expect(mixed.allUntracked).toBe(false)
   })
 
   it('is empty when inventory has never synced', () => {
@@ -184,7 +218,7 @@ describe('rebuilt analytics widgets render measured data', () => {
   const trend = periodTrend(snapshot, 30, null)
 
   it('renders revenue momentum as a pacing narrative with the legacy summary contract', () => {
-    const html = renderToStaticMarkup(<RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />)
+    const html = renderToStaticMarkup(polaris(<RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />))
     for (const contract of ['revenue-trend', 'chart-summary', 'Total', 'Average / day', 'Peak Day', 'Growth', 'Current', 'Previous', 'AI forecast', 'banked', 'run rate of']) {
       expect(html).toContain(contract)
     }
@@ -216,5 +250,52 @@ describe('rebuilt analytics widgets render measured data', () => {
 
     const empty = renderToStaticMarkup(<StockoutRisk inventory={null} loading={false} onUpgrade={() => {}} />)
     expect(empty).toContain('Protect your bestsellers')
+  })
+
+  it('never shows the Upgrade CTA on Commander when cover is merely short on data', () => {
+    const commander: InventoryPageResult = {
+      ...EMPTY_INVENTORY_PAGE,
+      plan: 'commander',
+      items: [item({ variantId: 'v1', title: 'Snowboard', status: 'low', quantity: 3, price: 20, daysOfCover: { status: 'insufficient_data', reason: 'sales_history', message: 'Awaiting more sales history.' } })],
+      distribution: { healthy: 0, low: 1, out: 0, untracked: 0 },
+      stats: { ...EMPTY_INVENTORY_PAGE.stats, totalSkus: 1, trackedSkus: 1, untrackedSkus: 0, lowStockCount: 1 },
+    }
+    const html = renderToStaticMarkup(<StockoutRisk inventory={commander} loading={false} onUpgrade={() => {}} />)
+    expect(html).not.toContain('Upgrade')
+    expect(html).not.toContain('risk-note">') // no locked/upsell note (no lock icon + CTA)
+    expect(html).toContain('risk-note info')
+    expect(html).toContain('Awaiting sales history')
+  })
+
+  it('keeps the Upgrade CTA only for a plan that genuinely locks days of cover', () => {
+    const trial: InventoryPageResult = {
+      ...EMPTY_INVENTORY_PAGE,
+      plan: 'trial',
+      items: [item({ variantId: 'v1', title: 'Snowboard', status: 'low', quantity: 3, price: 20, daysOfCover: { status: 'locked', required_plan: 'growth' } })],
+      distribution: { healthy: 0, low: 1, out: 0, untracked: 0 },
+      stats: { ...EMPTY_INVENTORY_PAGE.stats, totalSkus: 1, trackedSkus: 1, untrackedSkus: 0, lowStockCount: 1 },
+    }
+    const html = renderToStaticMarkup(polaris(<StockoutRisk inventory={trial} loading={false} onUpgrade={() => {}} />))
+    expect(html).toContain('Upgrade')
+    expect(html).toContain('Growth feature')
+  })
+
+  it('shows an "Inventory tracking is disabled" banner instead of a grid of zeros', () => {
+    const untracked: InventoryPageResult = {
+      ...EMPTY_INVENTORY_PAGE,
+      plan: 'commander',
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: null, daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...EMPTY_INVENTORY_PAGE.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+    }
+    const html = renderToStaticMarkup(polaris(<StockoutRisk inventory={untracked} loading={false} onUpgrade={() => {}} />))
+    expect(html).toContain('Inventory tracking is disabled')
+    expect(html).toContain('Enable ‘Track quantity’ in your Shopify admin')
+    expect(html).toContain('Tracking disabled')
+    expect(html).not.toContain('All SKUs covered')
+    // No fake zero grid, no summary, no upsell CTA.
+    expect(html).not.toContain('chart-summary')
+    expect(html).not.toContain('Out of stock')
+    expect(html).not.toContain('Upgrade')
   })
 })
