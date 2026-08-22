@@ -18,12 +18,16 @@ import {
   conversationMemoryAvailable,
   defaultQuickCommands,
   detectBlockedAction,
+  detectInstructionalIntent,
   detectOffTopic,
   detectWriteTool,
   emptyUsage,
   formatGrowthAnswer,
+  formatInstructionalAnswer,
   formatToolAnswer,
   groundCommandText,
+  humanizeSource,
+  humanizeSources,
   limitsForPlan,
   parseConfirmIntent,
   parseInfoTools,
@@ -181,11 +185,12 @@ describe('AI Command safety parsers', () => {
 
 describe('AI Command info answers', () => {
   it('routes growth requests to a multi-signal plan before the sales keyword can collapse them to analytics', () => {
-    for (const query of ['Help me increase sales', 'Help me increasing sale', 'Show growth opportunities', 'How can I grow revenue?']) {
+    for (const query of ['Help me increase sales', 'Help me increasing sale', 'Show growth opportunities', 'How can I grow revenue?', 'How can I increase profit?', 'mai profit kaise increase kro']) {
       expect(detectGrowthIntent(query)).toBe(true)
-      expect(parseInfoTools(query).map((call) => call.name)).toEqual(['get_analytics', 'get_recommendations', 'get_store_health', 'get_inventory_status'])
+      expect(parseInfoTools(query).map((call) => call.name)).toEqual(['get_analytics', 'get_recommendations', 'get_store_health', 'get_inventory_status', 'search_customers', 'search_products'])
     }
     expect(detectGrowthIntent('What is my revenue?')).toBe(false)
+    expect(detectGrowthIntent('How many orders today?')).toBe(false)
     expect(parseInfoTools('What is my revenue?').map((call) => call.name)).toEqual(['get_analytics'])
   })
 
@@ -504,7 +509,7 @@ describe('AI Command helpers', () => {
     const outcomes: readonly ToolOutcome[] = [{ ok: true, name: 'get_analytics', data: { revenue: 10 }, source: 'analytics_revenue_daily', numbers: [10] }]
     expect(applyResponseStyle('Revenue is $10.', 'CONCISE', outcomes)).toBe('Revenue is $10.')
     expect(applyResponseStyle('Revenue is $10.', 'DETAILED', outcomes)).toContain('Data coverage: Analytics')
-    expect(applyResponseStyle('Revenue is $10.', 'TECHNICAL', outcomes)).toContain('get_analytics → analytics_revenue_daily')
+    expect(applyResponseStyle('Revenue is $10.', 'TECHNICAL', outcomes)).toContain('get_analytics → 📊 Live Analytics Sync')
   })
 
   it('formats mixed tool outcomes without claiming full success', () => {
@@ -525,5 +530,106 @@ describe('AI Command helpers', () => {
 
     const notInactive: readonly ToolOutcome[] = [{ ok: true, name: 'search_customers', data: { count: 0, total: 6, items: [], coverage: 'synced' }, source: 'sync_records.customers', numbers: [] }]
     expect(formatToolAnswer('Show my top customers', notInactive).content).toContain('No customers matched')
+  })
+})
+
+describe('AI Command strategic advisor overhaul', () => {
+  it('maps every raw data-feed identifier to a clean merchant-facing badge and never leaks table names', () => {
+    expect(humanizeSource('analytics_revenue_daily')).toBe('📊 Live Analytics Sync')
+    expect(humanizeSource('sync_records.customers')).toBe('👥 Verified Customer Data')
+    expect(humanizeSource('sync_records.orders')).toBe('🧾 Verified Order Data')
+    expect(humanizeSource('catalog_products + analytics_product_sales_daily')).toBe('📦 Inventory & Sales History')
+    expect(humanizeSource('inventory_levels')).toBe('📦 Inventory & Sales History')
+    expect(humanizeSource('variant_inventory_quantity')).toBe('📦 Inventory & Sales History')
+    expect(humanizeSource('analytics + inventory')).toBe('✨ Verified Store Data')
+    expect(humanizeSource('ai_recommendations')).toBe('💡 AI Growth Recommendations')
+    expect(humanizeSource('automation_workflows')).toBe('⚙️ Automation Engine')
+    // Unknown / empty never surfaces a raw identifier.
+    expect(humanizeSource('')).toBe('✨ Verified Store Data')
+    expect(humanizeSource('some_made_up_table')).toBe('✨ Verified Store Data')
+    expect(humanizeSource('📊 Live Analytics Sync')).toBe('📊 Live Analytics Sync')
+    expect(humanizeSources(['analytics_revenue_daily', 'sync_records.customers'])).toBe('📊 Live Analytics Sync · 👥 Verified Customer Data')
+  })
+
+  it('emits a clean Source badge and never a raw table name in a revenue answer', async () => {
+    const result = await service().chat({ storeId: tenant, text: "What's my revenue this month?" })
+    expect(result.message.content).not.toMatch(/analytics_revenue_daily|sync_records|\.[a-z]/)
+    expect(result.message.content).toMatch(/Source: /)
+    const source = result.message.structuredData?.source ?? ''
+    expect(source).toMatch(/\p{Extended_Pictographic}/u)
+    expect(source).not.toMatch(/[a-z0-9]_[a-z0-9]|\./)
+  })
+
+  it('builds a 3-recommendation growth plan with data-backed priorities and CTAs (INTENT A)', () => {
+    const outcomes: readonly ToolOutcome[] = [
+      { ok: true, name: 'get_analytics', data: { currency: 'USD', revenue: 8940, previousRevenue: 7240, orders: 42, aov: 213, days: 30 }, source: 'analytics_revenue_daily', numbers: [8940, 7240, 42, 213, 30] },
+      { ok: true, name: 'get_store_health', data: { score: 81, label: 'Healthy' }, source: 'analytics + inventory', numbers: [81] },
+      { ok: true, name: 'get_inventory_status', data: { lowStockCount: 3, outOfStockCount: 1, items: [] }, source: 'inventory_levels', numbers: [3, 1] },
+      { ok: true, name: 'search_customers', data: { total: 4, items: [{ id: 'c1', totalSpent: 600, lifetimeOrders: 0, activity: 'inactive' }, { id: 'c2', totalSpent: 250, lifetimeOrders: 3 }] }, source: 'sync_records.customers', numbers: [4, 600, 0, 250, 3] },
+      { ok: true, name: 'search_products', data: { items: [{ id: 'p1', unitsSold: 0 }, { id: 'p2', unitsSold: 12 }] }, source: 'catalog_products + analytics_product_sales_daily', numbers: [0, 12] },
+      { ok: true, name: 'get_recommendations', data: { count: 1, items: [{ id: 'r1', title: 'Restock mugs' }] }, source: 'ai_recommendations', numbers: [1] },
+    ]
+    const answer = formatGrowthAnswer(outcomes, true)
+    // No raw database labels leak.
+    expect(answer.content).not.toMatch(/analytics_revenue_daily|sync_records|inventory_levels|catalog_products/)
+    expect(answer.content).toContain('growth plan')
+    expect(answer.content).toContain('Priorities:')
+    // 3 numbered priorities.
+    expect(answer.content.match(/^\d\. /gm)?.length).toBe(3)
+    // Data-backed: real figures surface inside the priorities/read.
+    expect(answer.content).toContain('$8,940')
+    expect(answer.content).toContain('1 out-of-stock')
+    expect(answer.content).toContain('3 low-stock')
+    // Clean humanized source attribution.
+    expect(answer.content).toMatch(/Source:.*Live Analytics Sync/)
+    const data = answer.structuredData?.data as { recommendations: readonly unknown[]; nextCommands: readonly { kind: string; command: string }[]; signals: { inactiveCount: number; repeatRate: number; deadStockCount: number } }
+    expect(data.recommendations).toHaveLength(3)
+    expect(data.signals.inactiveCount).toBe(1)
+    expect(data.signals.deadStockCount).toBe(1)
+    expect(data.nextCommands.some((item) => item.kind === 'action' && /email/i.test(item.command))).toBe(true)
+  })
+
+  it('detects instructional how-to questions and keeps plain lookups as data (INTENT C)', () => {
+    expect(detectInstructionalIntent('How do I set up an automated email?')).toBe('automation')
+    expect(detectInstructionalIntent('How do I create an automation?')).toBe('automation')
+    expect(detectInstructionalIntent('What can PatternAI do?')).toBe('patternai')
+    expect(detectInstructionalIntent('What can you do?')).toBe('generic')
+    // "Show automation status" is a lookup, not guidance — must not be instructional.
+    expect(detectInstructionalIntent('Show automation status')).toBeNull()
+    // Growth questions are handled by the growth plan path in the service, not
+    // the instructional path.
+    expect(detectInstructionalIntent('How do I use the recommendations page?')).toBe('recommendations')
+  })
+
+  it('routes growth questions to the growth plan, not instructional guidance', async () => {
+    const result = await service().chat({ storeId: tenant, text: 'How can I increase profit?' })
+    expect(result.message.structuredData?.type).toBe('growth_plan')
+    expect(result.message.structuredData?.type).not.toBe('instructional')
+  })
+
+  it('renders an instructional automation answer with steps and a navigation CTA', () => {
+    const answer = formatInstructionalAnswer('automation', { plan: 'trial', actionsEnabled: false })
+    expect(answer.structuredData.type).toBe('instructional')
+    const data = answer.structuredData.data as { title: string; steps: readonly string[]; ctas: readonly { kind: string; target?: string; command?: string }[] }
+    expect(data.title.toLowerCase()).toContain('automation')
+    expect(data.steps.length).toBeGreaterThanOrEqual(3)
+    expect(data.ctas.some((cta) => cta.kind === 'navigate' && cta.target === 'automation')).toBe(true)
+    expect(answer.content).toContain('Upgrade Plan')
+  })
+
+  it('answers a "how do I set up an automated email" question with instructional guidance (INTENT C)', async () => {
+    const result = await service().chat({ storeId: tenant, text: 'How do I set up an automated email?' })
+    expect(result.message.contentType).toBe('structured_data')
+    expect(result.message.structuredData?.type).toBe('instructional')
+    expect(result.message.content.toLowerCase()).toContain('automation')
+  })
+
+  it('adds an executive key takeaway and next step to a summary/trend query (INTENT B)', async () => {
+    const result = await service().chat({ storeId: tenant, text: 'Summarize this week\'s store performance' })
+    expect(result.message.content).toContain('Key takeaway')
+    expect(result.message.content).toContain('Next logical step')
+    const data = result.message.structuredData?.data as { keyTakeaway: string | null; trend: string }
+    expect(data.keyTakeaway).not.toBeNull()
+    expect(['up', 'down', 'flat']).toContain(data.trend)
   })
 })

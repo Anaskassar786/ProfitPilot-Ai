@@ -283,6 +283,45 @@ export function planLabel(plan: AiCommandPlan): string {
   return 'Trial'
 }
 
+/**
+ * Maps an internal data-feed identifier to a clean merchant-facing badge so a
+ * raw database/table name never reaches the chat surface. Mirrors the backend
+ * `humanizeSource`; kept here as defense-in-depth for any pre-existing stored
+ * messages.
+ */
+const SOURCE_BADGES: Readonly<Record<string, string>> = {
+  'analytics_revenue_daily': '📊 Live Analytics Sync',
+  'analytics_product_sales_daily': '📊 Live Analytics Sync',
+  'sync_records.customers': '👥 Verified Customer Data',
+  'sync_records_customers': '👥 Verified Customer Data',
+  'sync_records.orders': '🧾 Verified Order Data',
+  'sync_records_orders': '🧾 Verified Order Data',
+  'catalog_products': '📦 Inventory & Sales History',
+  'catalog_products + analytics_product_sales_daily': '📦 Inventory & Sales History',
+  'ai_recommendations': '💡 AI Growth Recommendations',
+  'inventory_levels': '📦 Inventory & Sales History',
+  'variant_inventory_quantity': '📦 Inventory & Sales History',
+  'unavailable': '✨ Verified Store Data',
+  'analytics + inventory': '✨ Verified Store Data',
+  'automation_workflows': '⚙️ Automation Engine',
+}
+
+export function humanizeSource(source: string | null | undefined): string {
+  const trimmed = typeof source === 'string' ? source.trim() : ''
+  if (!trimmed) return '✨ Verified Store Data'
+  const direct = SOURCE_BADGES[trimmed.toLowerCase()]
+  if (direct) return direct
+  if (/\p{Extended_Pictographic}/u.test(trimmed) && /\s/.test(trimmed)) return trimmed
+  const parts = trimmed.toLowerCase().split(/\s*\+\s*|\s*,\s*/).filter(Boolean)
+  if (parts.length > 1) {
+    for (const part of parts) {
+      const mapped = SOURCE_BADGES[part]
+      if (mapped) return mapped
+    }
+  }
+  return '✨ Verified Store Data'
+}
+
 export function formatTimestamp(value: string): string {
   const at = Date.parse(value)
   if (!Number.isFinite(at)) return ''

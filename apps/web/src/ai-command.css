@@ -2161,6 +2161,178 @@
 .aic-ring-inner small.size-sm { font-size: 9.5px; }
 .aic-ring-inner small.size-xs { font-size: 12px; }
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AI Command — strategic advisor surfaces
+   Clean attribution badges, growth recommendation cards, executive takeaway
+   callouts, and instructional how-to cards.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Attribution badge — replaces the old "Source: analytics_revenue_daily" line
+   with a polished, enterprise-SaaS chip. Never a raw database label. */
+.aic-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--aic-border-soft);
+  background: var(--aic-panel-2);
+  color: var(--aic-text-secondary);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: .01em;
+}
+.app-shell.light-mode .aic-source-badge { background: rgb(248, 250, 252); border-color: rgb(226, 232, 240); color: rgb(71, 85, 105); }
+.aic-source-badge svg { color: var(--aic-success); flex: 0 0 auto; }
+
+/* Growth recommendation cards (INTENT A) */
+.aic-growth-recs { display: grid; gap: 9px; }
+.aic-growth-rec {
+  display: grid;
+  gap: 6px;
+  padding: 12px 13px;
+  border: 1px solid var(--aic-border-soft);
+  border-radius: 12px;
+  background: var(--aic-panel);
+}
+.app-shell.light-mode .aic-growth-rec { background: rgb(255, 255, 255); }
+.aic-growth-rec-head { display: flex; align-items: center; gap: 9px; }
+.aic-growth-rec-num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgb(255, 255, 255);
+  background: linear-gradient(135deg, rgb(109, 40, 217), rgb(139, 92, 246));
+}
+.aic-growth-rec-head strong { font-size: 13.5px; font-weight: 750; color: var(--aic-text); }
+.aic-growth-rec p { margin: 0; color: var(--aic-text-secondary); font-size: 12.5px; line-height: 1.5; }
+.aic-growth-rec-cta {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid var(--aic-accent-border);
+  border-radius: 8px;
+  background: var(--aic-accent-soft);
+  color: var(--aic-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+.aic-growth-rec-cta:hover { transform: translateY(-1px); border-color: var(--aic-accent); }
+.aic-growth-plan.action-ready .aic-growth-rec-cta { border-color: rgba(16, 185, 129, .35); background: rgba(16, 185, 129, .1); }
+
+/* Executive takeaway callout (INTENT B) */
+.aic-takeaway {
+  flex-basis: 100%;
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--aic-border-soft);
+  border-left: 3px solid var(--aic-accent);
+  border-radius: 10px;
+  background: var(--aic-panel-2);
+}
+.app-shell.light-mode .aic-takeaway { background: rgb(248, 250, 252); }
+.aic-takeaway strong { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 750; color: var(--aic-text); }
+.aic-takeaway strong svg { color: var(--aic-accent); }
+.aic-takeaway p { margin: 0; color: var(--aic-text-secondary); font-size: 13px; line-height: 1.55; }
+.aic-takeaway small { color: var(--aic-text-muted); font-size: 12px; line-height: 1.45; }
+.aic-takeaway.up { border-left-color: var(--aic-success); }
+.aic-takeaway.up strong svg { color: var(--aic-success); }
+.aic-takeaway.down { border-left-color: var(--aic-danger); }
+.aic-takeaway.down strong svg { color: var(--aic-danger); }
+.app-shell.light-mode .aic-takeaway.up { border-left-color: rgb(22, 163, 74); }
+.app-shell.light-mode .aic-takeaway.down { border-left-color: rgb(220, 38, 38); }
+
+/* Instructional how-to card (INTENT C) */
+.aic-instructional {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 15px;
+  border: 1px solid var(--aic-border-soft);
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--aic-panel-2), rgba(124, 58, 237, .06));
+}
+.app-shell.light-mode .aic-instructional { background: rgb(248, 250, 252); }
+.aic-instructional-head { display: flex; align-items: center; gap: 10px; }
+.aic-instructional-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  color: var(--aic-accent);
+  background: var(--aic-accent-soft);
+}
+.aic-instructional-head strong { font-size: 14.5px; font-weight: 750; color: var(--aic-text); }
+.aic-instructional-intro { margin: 0; color: var(--aic-text-secondary); font-size: 13px; line-height: 1.6; }
+.aic-instructional-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.aic-instructional-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--aic-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.aic-instructional-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--aic-accent);
+  background: var(--aic-accent-soft);
+}
+.aic-instructional-note { margin: 0; padding: 10px 12px; border-radius: 9px; background: var(--aic-panel); color: var(--aic-text-secondary); font-size: 12px; line-height: 1.5; border: 1px solid var(--aic-border-soft); }
+.app-shell.light-mode .aic-instructional-note { background: rgb(255, 255, 255); }
+.aic-instructional-ctas { display: flex; flex-wrap: wrap; gap: 8px; }
+.aic-instructional-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border: 1px solid var(--aic-border);
+  border-radius: 9px;
+  background: var(--aic-panel);
+  color: var(--aic-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.aic-instructional-cta:hover { transform: translateY(-1px); border-color: var(--aic-accent-border); }
+.aic-instructional-cta.primary {
+  color: rgb(255, 255, 255);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgb(109, 40, 217), rgb(124, 58, 237));
+  box-shadow: 0 4px 12px rgba(124, 58, 237, .25);
+}
+.aic-instructional-cta:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+@media (max-width: 560px) {
+  .aic-instructional-cta { flex: 1 1 auto; justify-content: center; }
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════════
    AI Command — LIGHT THEME (high-contrast, Claude/ChatGPT-grade)
    Loaded last so these win. Dark theme is never matched (all rules are
