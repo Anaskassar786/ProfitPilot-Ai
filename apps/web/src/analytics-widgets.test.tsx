@@ -131,7 +131,7 @@ function item(values: Partial<InventoryRowItem> & { variantId: string }): Invent
     price: values.price ?? null,
     currency: 'USD',
     quantity: values.quantity ?? null,
-    quantitySource: 'inventory_levels',
+    quantitySource: values.quantitySource ?? 'inventory_levels',
     tracked: values.tracked ?? true,
     inventoryPolicy: 'deny',
     status: values.status ?? 'in_stock',
@@ -203,6 +203,38 @@ describe('stockRisk', () => {
     // Mixed stores (some tracked, some not) must NOT show the all-untracked state.
     const mixed = stockRisk({ ...page, stats: { ...page.stats, totalSkus: 27, trackedSkus: 3, untrackedSkus: 24 } })
     expect(mixed.allUntracked).toBe(false)
+  })
+
+  it('keeps the metrics grid when inventory levels are synced even if no variant payload is marked tracked', () => {
+    // `trackedSkus === 0` alone must NOT trigger the "tracking disabled" state:
+    // active level rows in sync_records are a live stock signal, so the card
+    // renders the real Out of stock / Low stock / Healthy SKUs grid instead.
+    const withLevels = stockRisk({
+      ...page,
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: 12, daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...page.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+      coverage: { ...EMPTY_INVENTORY_PAGE.coverage, levelRowCount: 27, quantitySource: 'inventory_levels' },
+    })
+    expect(withLevels.allUntracked).toBe(false)
+    expect(withLevels.trackedCount).toBe(0)
+    // A variant-level `inventory_quantity` is a live signal too.
+    const withVariantQuantities = stockRisk({
+      ...page,
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: 8, quantitySource: 'variant_inventory_quantity', daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...page.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+    })
+    expect(withVariantQuantities.allUntracked).toBe(false)
+    // But zero quantity on a variant field is NOT a live signal — the catalog
+    // is still 100% untracked with nothing synced, so the warning stays.
+    const emptyVariantQuantity = stockRisk({
+      ...page,
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: null, quantitySource: 'variant_inventory_quantity', daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...page.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+    })
+    expect(emptyVariantQuantity.allUntracked).toBe(true)
   })
 
   it('is empty when inventory has never synced', () => {
@@ -297,5 +329,21 @@ describe('rebuilt analytics widgets render measured data', () => {
     expect(html).not.toContain('chart-summary')
     expect(html).not.toContain('Out of stock')
     expect(html).not.toContain('Upgrade')
+  })
+
+  it('renders the metrics grid instead of the warning when inventory levels exist in sync_records', () => {
+    const withLevels: InventoryPageResult = {
+      ...EMPTY_INVENTORY_PAGE,
+      plan: 'commander',
+      items: [item({ variantId: 'u1', title: 'Mug', tracked: false, status: 'untracked', quantity: 12, daysOfCover: { status: 'insufficient_data', reason: 'no_stock_signal', message: 'Shopify returned no tracked quantity for this variant.' } })],
+      distribution: { healthy: 0, low: 0, out: 0, untracked: 27 },
+      stats: { ...EMPTY_INVENTORY_PAGE.stats, totalSkus: 27, trackedSkus: 0, untrackedSkus: 27 },
+      coverage: { ...EMPTY_INVENTORY_PAGE.coverage, levelRowCount: 27, quantitySource: 'inventory_levels' },
+    }
+    const html = renderToStaticMarkup(polaris(<StockoutRisk inventory={withLevels} loading={false} onUpgrade={() => {}} />))
+    // The card must NOT be blocked by the tracking-disabled warning.
+    expect(html).not.toContain('Inventory tracking is disabled')
+    expect(html).not.toContain('Tracking disabled')
+    expect(html).not.toContain('risk-untracked-empty')
   })
 })

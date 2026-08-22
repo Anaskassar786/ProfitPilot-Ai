@@ -443,7 +443,66 @@
 .risk-note button { padding: 4px 9px; color: rgb(237, 233, 254); border: 1px solid rgba(139,92,246,.35); border-radius: 99px; background: rgba(139,92,246,.2); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 /* Informational (never upsell) variant: cover is short on data, not plan-gated. */
 .risk-note.info { color: rgb(147, 197, 253); border-color: rgba(56,189,248,.18); background: rgba(56,189,248,.06); }
-.risk-untracked-empty { padding: 18px 14px 14px; }
+/* ── "Inventory tracking is disabled" warning — never a white box ─────────────
+   The Polaris Banner resolves LIGHT-token surfaces (white `--p-color-bg-surface`
+   on the banner root, solid amber `--p-color-bg-fill-warning` title strip)
+   because the embedded app runs Polaris with its default light tokens even in
+   dark mode. The banner's uncolored content area then inherits the app's
+   near-white `:root` text color — a white box with white text. Theme the
+   warning explicitly per mode: dark mode gets a dark translucent caution
+   surface with high-contrast light text; light mode keeps the soft amber
+   caution surface with crisp dark text. */
+.risk-untracked-empty { padding: 18px 14px 14px; color-scheme: dark; }
+.risk-untracked-empty .Polaris-Banner {
+  background-color: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+}
+/* Kill the Polaris bevel pseudo-element (light-token inset shadow). */
+.risk-untracked-empty .Polaris-Banner--withinPage::before { box-shadow: none; }
+/* Both inner Boxes (title strip + content area) get the themed surface. */
+.risk-untracked-empty .Polaris-Banner .Polaris-Box {
+  background-color: rgba(251, 191, 36, 0.12) !important;
+  color: rgb(226, 232, 240) !important;
+  border-radius: 9px;
+}
+.risk-untracked-empty .Polaris-Banner h2 {
+  margin: 0;
+  color: rgb(253, 230, 138);
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.risk-untracked-empty .Polaris-Banner p {
+  margin: 4px 0 0;
+  color: rgb(226, 232, 240);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.risk-untracked-empty .Polaris-Banner .Polaris-Icon svg {
+  color: rgb(251, 191, 36) !important;
+  fill: rgb(251, 191, 36) !important;
+}
+/* Light theme: soft amber/yellow caution surface with crisp dark text. */
+.app-shell.light-mode .risk-untracked-empty,
+.light-mode .risk-untracked-empty { color-scheme: light; }
+.app-shell.light-mode .risk-untracked-empty .Polaris-Banner,
+.light-mode .risk-untracked-empty .Polaris-Banner { border-color: rgb(253, 230, 138); }
+.app-shell.light-mode .risk-untracked-empty .Polaris-Banner .Polaris-Box,
+.light-mode .risk-untracked-empty .Polaris-Banner .Polaris-Box {
+  background-color: var(--p-color-bg-surface-caution, rgb(255, 248, 219)) !important;
+  color: rgb(79, 71, 0) !important;
+}
+.app-shell.light-mode .risk-untracked-empty .Polaris-Banner h2,
+.light-mode .risk-untracked-empty .Polaris-Banner h2 { color: rgb(120, 53, 15); }
+.app-shell.light-mode .risk-untracked-empty .Polaris-Banner p,
+.light-mode .risk-untracked-empty .Polaris-Banner p { color: rgb(87, 83, 78); }
+.app-shell.light-mode .risk-untracked-empty .Polaris-Banner .Polaris-Icon svg,
+.light-mode .risk-untracked-empty .Polaris-Banner .Polaris-Icon svg {
+  color: rgb(178, 132, 0) !important;
+  fill: rgb(178, 132, 0) !important;
+}
 .risk-footnote { margin: 0 17px 14px; color: var(--text-tertiary); font-size: 10.5px; }
 
 /* Light theme parity */

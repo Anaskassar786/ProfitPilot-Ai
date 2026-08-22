@@ -307,7 +307,18 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
   const trackedCount = stats?.trackedSkus ?? 0
   const untrackedCount = distribution.untracked || stats?.untrackedSkus || 0
   const totalSkus = stats?.totalSkus ?? 0
-  const allUntracked = totalSkus > 0 && trackedCount === 0
+  // "Inventory tracking is disabled" must only block the card when the synced
+  // catalog is 100% untracked AND Shopify delivered no live stock signal at
+  // all. A store can carry real stock data without `inventory_management` on
+  // every variant payload — inventory level rows may still exist in
+  // `sync_records` (or a variant may still ship `inventory_quantity`). In that
+  // case the metrics grid (Out of stock / Low stock / Healthy SKUs) is the
+  // truth and a blanket "disabled" warning would hide real stock-out risk.
+  // `coverage.levelRowCount` is computed from the FULL dataset server-side, so
+  // it stays reliable even though the Analytics page only fetches 50 rows.
+  const hasSyncedLevels = (page?.coverage?.levelRowCount ?? 0) > 0
+  const hasVariantQuantities = items.some((item) => item.quantitySource === 'variant_inventory_quantity' && item.quantity !== null)
+  const allUntracked = totalSkus > 0 && trackedCount === 0 && !hasSyncedLevels && !hasVariantQuantities
 
   return {
     items: ranked.slice(0, limit),

@@ -415,7 +415,7 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
       : risk.allUntracked ? (
         <div className="risk-untracked-empty">
           <Banner tone="warning" title="Inventory tracking is disabled">
-            <p>ProfitPilot cannot calculate stock risk because your products are set to &lsquo;Not tracked&rsquo; in Shopify. Enable &lsquo;Track quantity&rsquo; in your Shopify admin to unlock these insights.</p>
+            <p>ProfitPilot can&rsquo;t measure stock-out risk because your products are set to &lsquo;Not tracked&rsquo; in Shopify. Enable &lsquo;Track quantity&rsquo; in your Shopify admin &rarr; Products to unlock stock-out risk analytics.</p>
           </Banner>
         </div>
       ) : <>
