@@ -958,7 +958,7 @@ function PageRouter({
   if (active === 'recommendations') return <PageLayout eyebrow="AI team" title="Recommendations" description="Your AI team has been watching your store 🎯 Here are opportunities to grow your business — review and take action."><RecommendationsWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigateSection={onNavigate} /></PageLayout>
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
-  if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
+  if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigate={(page) => onNavigate(page as SectionId)} />
   /* 🛑 Jarvis page route temporarily removed — restore when Jarvis returns */
   // if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} onToast={onToast} workspaceSettings={workspaceSettings} /></PageLayout>
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />

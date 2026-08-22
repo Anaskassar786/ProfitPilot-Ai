@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { collectNumbers } from '@profitpilot/ai'
+import { collectNumbers, humanizeSource } from '@profitpilot/ai'
 import type { ActionExecutionResult, AiCommandActionRecord, AiCommandActionRuntime, AiCommandToolRuntime, ToolCall, ToolOutcome } from '@profitpilot/ai'
 import type { StoreId } from '@profitpilot/types'
 import { ShopifyClient } from '@profitpilot/shopify'
@@ -62,7 +62,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       successCount: workflow.successCount ?? 0,
       failureCount: workflow.failureCount ?? 0,
     }))
-    return ok(call.name, { count: items.length, total: typeof page.total === 'number' ? page.total : items.length, items }, 'automation_workflows')
+    return ok(call.name, { count: items.length, total: typeof page.total === 'number' ? page.total : items.length, items }, '⚙️ Automation Engine')
   }
 
   private async customers(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -102,7 +102,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       canEmail: customer.canEmail,
     }))
     const data = { count: items.length, total: dataset.customers.length, items, coverage: dataset.coverage.explanation }
-    return ok(call.name, data, 'sync_records.customers')
+    return ok(call.name, data, '👥 Verified Customer Data')
   }
 
   private async products(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -127,7 +127,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       .filter((product) => !searchTerm || product.title.toLowerCase().includes(searchTerm) || String(product.vendor ?? '').toLowerCase().includes(searchTerm))
     if (asksTop) items = items.sort((left, right) => right.grossRevenue - left.grossRevenue || right.unitsSold - left.unitsSold)
     else if (asksUnderperforming) items = items.sort((left, right) => left.unitsSold - right.unitsSold || left.grossRevenue - right.grossRevenue)
-    return ok(call.name, { count: Math.min(items.length, limit), total: items.length, items: items.slice(0, limit), days: rangeDaysFromQuery(query) }, 'catalog_products + analytics_product_sales_daily')
+    return ok(call.name, { count: Math.min(items.length, limit), total: items.length, items: items.slice(0, limit), days: rangeDaysFromQuery(query) }, '📦 Inventory & Sales History')
   }
 
   private async orders(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -145,7 +145,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     })
     if (/\b(highest|top|largest|most valuable)\b/.test(query)) matched = [...matched].sort((left, right) => (right.totalPrice ?? 0) - (left.totalPrice ?? 0))
     const items = matched.slice(0, limit).map((order) => ({ id: order.id, orderNumber: order.orderNumber, totalPrice: order.totalPrice, currency: order.currency, status: order.status, createdAt: order.createdAt }))
-    return ok(call.name, { count: items.length, total: matched.length, items }, 'sync_records.orders')
+    return ok(call.name, { count: items.length, total: matched.length, items }, '🧾 Verified Order Data')
   }
 
   private async analytics(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -177,7 +177,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       days,
       sourceDays: current.map((row) => row.day),
     }
-    return ok(call.name, data, 'analytics_revenue_daily')
+    return ok(call.name, data, '📊 Live Analytics Sync')
   }
 
   private async recommendations(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -189,7 +189,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       .filter((row) => !status || String(row.status ?? '') === status)
       .slice(0, limit)
       .map((row) => ({ id: row.id, title: row.title, status: row.status, version: row.version, agent: row.agent, impactValue: row.impactValue }))
-    return ok(call.name, { count: items.length, items }, 'ai_recommendations')
+    return ok(call.name, { count: items.length, items }, '💡 AI Growth Recommendations')
   }
 
   private async inventory(storeId: StoreId, call: ToolCall): Promise<ToolOutcome> {
@@ -206,7 +206,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
       items,
       coverage: dataset.coverage.explanation,
     }
-    return ok(call.name, data, dataset.coverage.quantitySource)
+    return ok(call.name, data, humanizeSource(dataset.coverage.quantitySource))
   }
 
   private async health(storeId: StoreId): Promise<ToolOutcome> {
@@ -223,7 +223,7 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     score = Math.min(100, score)
     const label = score >= 75 ? 'Healthy' : score >= 50 ? 'Needs attention' : 'Critical'
     if (!analytics && !inventory) return missing('get_store_health', 'Store health cannot be scored until analytics or inventory rows exist.')
-    return ok('get_store_health', { score, label, revenue, orders, inventoryScore: stock?.score ?? null }, 'analytics + inventory')
+    return ok('get_store_health', { score, label, revenue, orders, inventoryScore: stock?.score ?? null }, '✨ Verified Store Data')
   }
 }
 

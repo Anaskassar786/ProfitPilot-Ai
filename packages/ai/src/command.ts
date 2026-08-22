@@ -357,11 +357,43 @@ export function detectWriteTool(query: string): AiCommandWriteTool | null {
   return null
 }
 
-const GROWTH_INTENT = /(?:\b(?:help|how|ways?|ideas?|opportunit(?:y|ies)|strategy|plan|tips?)\b.{0,32}\b(?:grow|growth|sales?|revenue|conversion)\b)|(?:\b(?:increas(?:e|ing)|grow|growing|boost|improve|improving)\b.{0,20}\b(?:sales?|revenue|conversion)\b)|(?:\b(?:sales?|revenue|conversion)\b.{0,20}\b(?:increas(?:e|ing)|grow|growth|boost|improve|improving)\b)|(?:\bgrowth\b.{0,20}\b(?:ideas?|opportunit(?:y|ies)|plan|strategy|tips?)\b)/i
+// Advisory verbs the merchant can use to ask for *guidance* (not a lookup).
+// "how" alone is intentionally excluded so trend/lookup questions such as
+// "how is my revenue trending" stay analytical instead of collapsing to a
+// growth plan.
+const GROWTH_TRIGGER = /\b(?:help|ways?|ideas?|opportunit(?:y|ies)|strateg(?:y|ies)|plan|tips?|advice|suggest(?:ion|ions)?|recommend(?:ation|ations|s)?|how\s+(?:can|do|should|would|to|kaise)|increase|increasing|grow|growing|boost|boosting|improve|improving|maximi[sz]e|badhao|badhana|badhaye|karo|karen|kaise)\b/i
+// Business outcomes the merchant wants to move (revenue, profit, retention…).
+const GROWTH_GOAL = /\b(?:grow(?:th)?|sales?|revenue|profit(?:s|ability)?|margin?s?|conversion|retention|earnings?|income|money)\b/i
+const GROWTH_INTENT = new RegExp(`(?:${GROWTH_TRIGGER.source}.{0,40}${GROWTH_GOAL.source})|(?:${GROWTH_GOAL.source}.{0,40}${GROWTH_TRIGGER.source})`, 'i')
 
 /** Distinguishes a request for growth guidance from a plain revenue lookup. */
 export function detectGrowthIntent(query: string): boolean {
   return GROWTH_INTENT.test(query)
+}
+
+// "How do I / how to / what is / explain" phrasing that signals the merchant
+// wants guidance on using a feature rather than a data lookup.
+const HOW_TO_TRIGGER = /\b(?:how\s+(?:do|to|can|does|should|would)|set\s?up|create an?|guide me|walk me|explain|what is|what are|what can|tell me about|how does)\b/i
+
+const INSTRUCTIONAL_TOPICS: readonly Readonly<{ topic: string; pattern: RegExp }>[] = [
+  { topic: 'automation', pattern: /\b(?:automation|automations|automate|workflow|workflows|abandoned cart|win[ -]?back|welcome (?:email|series|flow)|drip|automated email|email (?:automation|flow|sequence|campaign)|broadcast|sequence)\b/i },
+  { topic: 'patternai', pattern: /\b(?:patternai|pattern ai|insight hub|product ai)\b/i },
+  { topic: 'recommendations', pattern: /\b(?:recommend(?:ation|ations|s)?|what should i do|next steps?|prioriti)/i },
+]
+
+/**
+ * Detects instructional / how-to questions (INTENT C). Returns a topic key or
+ * null. Requires an explicit "how/what/explain/set up" phrasing so plain
+ * lookups such as "Show automation status" still route to live data.
+ */
+export function detectInstructionalIntent(query: string): string | null {
+  const text = query.trim()
+  if (!text) return null
+  if (!HOW_TO_TRIGGER.test(text)) return null
+  for (const entry of INSTRUCTIONAL_TOPICS) {
+    if (entry.pattern.test(text)) return entry.topic
+  }
+  return 'generic'
 }
 
 export function parseInfoTools(query: string): readonly ToolCall[] {
@@ -379,12 +411,20 @@ export function parseInfoTools(query: string): readonly ToolCall[] {
     push('get_recommendations', { status: 'PENDING', limit: 5 })
     push('get_store_health', {})
     push('get_inventory_status', { filter: 'low', limit: 10 })
+    // Customer + product intelligence powers data-backed recommendations
+    // (at-risk customers, repeat rate, dead stock). Empty queries return the
+    // full synced sets so the plan can compute real counts and never invent.
+    push('search_customers', { query: '', limit: 50 })
+    push('search_products', { query: '', limit: 50 })
     return calls
   }
 
   if (/\b(customers?|vips?|churn|inactive|repeat buyers?|subscribers?)\b/.test(normalized)) push('search_customers', { query, limit: 20 })
   if (/\b(products?|catalog|skus?|best[ -]?sellers?|top products?|underperform)/.test(normalized)) push('search_products', { query, limit: 20 })
   if (/\b(orders?|fulfil|fulfill|cancel)\b/.test(normalized)) push('search_orders', { query, limit: 20 })
+  // Performance summaries / trends are analytics-led so the response can end
+  // on a key takeaway rather than a bare health score.
+  if (/\b(summari[sz]e|summary|overview|trend|trending|performance|recap|review)\b/.test(normalized)) push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
   if (/\b(revenue|sales|aov|analytics|this month|today)\b/.test(normalized)) push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
   if (/\brecommend/.test(normalized)) push('get_recommendations', { status: 'PENDING', limit: 10 })
   if (/\b(stock|inventory|stockout|low stock)\b/.test(normalized)) push('get_inventory_status', { filter: /low|out/.test(normalized) ? 'low' : 'all' })
@@ -632,7 +672,7 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   if (failures.length > 0) {
     lines.push(`Some modules could not answer: ${failures.map((failure) => `${failure.name} (${failure.error})`).join('; ')}.`)
   }
-  lines.push(`Source: ${successes.map((outcome) => outcome.source).join(', ')}.`)
+  lines.push(`Source: ${humanizeSources(successes.map((outcome) => outcome.source))}.`)
   if (!query.trim()) lines.unshift('Here is what I found from your store.')
   const content = lines.join('\n\n')
   // renderOutcome is deterministic application code, so formula-derived
@@ -641,8 +681,10 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
 }
 
 /** Builds a decision-oriented growth plan instead of concatenating the normal
- * revenue answer. Every signal and priority is derived from the supplied tool
- * outcomes; action commands are proposals that still enter the approval flow. */
+ * revenue answer. Every signal and recommendation is derived from the supplied
+ * tool outcomes; the result reads like an e-commerce growth consultant — a
+ * cross-workspace situational read, three data-backed priorities, and one-click
+ * next steps. Action commands are proposals that still enter the approval flow. */
 export function formatGrowthAnswer(outcomes: readonly ToolOutcome[], actionsEnabled: boolean): Readonly<{ content: string; structuredData: AiCommandStructuredData | null; numbers: readonly number[] }> {
   const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
   const failures = outcomes.filter((outcome): outcome is ToolFailure => !outcome.ok)
@@ -656,57 +698,132 @@ export function formatGrowthAnswer(outcomes: readonly ToolOutcome[], actionsEnab
   const recommendations = outcomeData(successes, 'get_recommendations')
   const health = outcomeData(successes, 'get_store_health')
   const inventory = outcomeData(successes, 'get_inventory_status')
+  const customersData = outcomeData(successes, 'search_customers')
+  const productsData = outcomeData(successes, 'search_products')
+
   const revenue = numberish(analytics?.revenue)
   const previousRevenue = numberish(analytics?.previousRevenue)
   const orders = numberish(analytics?.orders)
   const aov = numberish(analytics?.aov)
   const currency = currencyCode(analytics?.currency)
+  const days = numberish(analytics?.days) ?? 30
   const healthScore = numberish(health?.score)
   const healthLabel = typeof health?.label === 'string' ? health.label : null
   const lowStockCount = numberish(inventory?.lowStockCount)
   const outOfStockCount = numberish(inventory?.outOfStockCount)
+
+  // Customer intelligence — repeat rate, churn-risk, top spenders.
+  const customerRows = arrayOfRecords(customersData?.items ?? customersData?.customers)
+  const totalCustomers = numberish(customersData?.total) ?? customerRows.length
+  const inactiveRows = customerRows.filter((row) => row.activity === 'inactive' || row.primarySegment === 'churn_risk')
+  const inactiveCount = inactiveRows.length
+  const atRiskValue = inactiveRows.reduce((sum, row) => sum + (numberish(row.totalSpent) ?? 0), 0)
+  const repeatCount = customerRows.filter((row) => (numberish(row.lifetimeOrders) ?? 0) >= 2).length
+  const repeatRate = totalCustomers > 0 ? Math.round((repeatCount / totalCustomers) * 100) : null
+
+  // Product intelligence — dead / underperforming stock.
+  const productRows = arrayOfRecords(productsData?.items ?? productsData?.products)
+  const deadStockCount = productRows.filter((row) => (numberish(row.unitsSold) ?? 0) === 0).length
+
   const recommendationRows = arrayOfRecords(recommendations?.items ?? recommendations?.recommendations)
-  const priorities: string[] = []
+  const pendingRecCount = numberish(recommendations?.count) ?? recommendationRows.length
 
-  if (recommendationRows.length > 0) {
-    const title = typeof recommendationRows[0]?.title === 'string' ? recommendationRows[0].title : 'the top pending recommendation'
-    priorities.push(`Review ${title}; it is the highest available recommendation from the recommendation ledger.`)
+  type Recommendation = Readonly<{ title: string; detail: string; cta: Readonly<{ label: string; command: string; kind: 'info' | 'action' }> }>
+  const candidates: Recommendation[] = []
+
+  if ((outOfStockCount ?? 0) > 0) {
+    candidates.push({
+      title: 'Restore availability on out-of-stock items',
+      detail: `${outOfStockCount} tracked variant${outOfStockCount === 1 ? ' is' : 's are'} out of stock, which is actively blocking sales. Restock or cleanly mark them sold out so demand stops landing on dead pages.`,
+      cta: { label: 'View out-of-stock products', command: 'Show out-of-stock products', kind: 'info' },
+    })
   }
-  if ((outOfStockCount ?? 0) > 0) priorities.push(`Recover availability on ${outOfStockCount} out-of-stock tracked variant${outOfStockCount === 1 ? '' : 's'} before sending more demand to them.`)
-  if ((lowStockCount ?? 0) > 0) priorities.push(`Protect sales on ${lowStockCount} low-stock tracked variant${lowStockCount === 1 ? '' : 's'} by checking replenishment first.`)
+  if ((lowStockCount ?? 0) > 0) {
+    candidates.push({
+      title: 'Protect your low-stock best sellers',
+      detail: `${lowStockCount} low-stock tracked variant${lowStockCount === 1 ? '' : 's'} could sell out soon. Confirm replenishment lead times before you push more paid traffic toward them.`,
+      cta: { label: 'View low-stock products', command: 'Which products are low stock?', kind: 'info' },
+    })
+  }
+  if (deadStockCount > 0) {
+    candidates.push({
+      title: 'Liquidate dead stock to free up cash',
+      detail: `${deadStockCount} product${deadStockCount === 1 ? ' has' : 's have'} generated zero sales in the last ${days} days. Bundle or discount them to recover capital tied up in inventory.`,
+      cta: { label: 'View products with no sales', command: 'Show products with no sales this month', kind: 'info' },
+    })
+  }
+  if (inactiveCount > 0) {
+    candidates.push({
+      title: 'Win back at-risk customers',
+      detail: `${inactiveCount} high-value customer${inactiveCount === 1 ? '' : 's'} worth ${formatMoney(atRiskValue, currency)} in lifetime spend ${inactiveCount === 1 ? "hasn't" : "haven't"} ordered recently. A targeted win-back offer is usually the fastest revenue you can recover.`,
+      cta: { label: 'View at-risk customers', command: 'Find at-risk customers with no orders in 30 days', kind: 'info' },
+    })
+  }
   if (revenue !== null && previousRevenue !== null) {
-    if (revenue < previousRevenue) priorities.push('Focus the next campaign on retention or proven products because revenue is below the previous comparison period.')
-    else if (revenue > previousRevenue) priorities.push('Build on the current positive revenue direction with a targeted, measurable campaign rather than a store-wide change.')
-    else priorities.push('Revenue is flat against the comparison period, so test one targeted offer and measure the result before expanding it.')
+    const change = previousRevenue !== 0 ? Math.round(((revenue - previousRevenue) / previousRevenue) * 100) : null
+    if (change !== null && change < 0) {
+      candidates.push({ title: 'Stem the revenue dip', detail: `Revenue is down ${Math.abs(change)}% versus the previous comparison period. Focus your next campaign on retention and proven best sellers before testing new acquisition spend.`, cta: { label: 'View best-selling products', command: 'Show my best-selling products', kind: 'info' } })
+    } else if (change !== null && change > 0) {
+      candidates.push({ title: 'Double down on what is working', detail: `Revenue is up ${change}% versus the previous period — momentum worth scaling. Reinforce the products and segments driving it with a targeted, measurable push rather than a store-wide change.`, cta: { label: 'View best-selling products', command: 'Show my best-selling products', kind: 'info' } })
+    } else {
+      candidates.push({ title: 'Break the revenue plateau', detail: `Revenue is flat against the previous period. Test one targeted offer (a bundle, a threshold discount, or a win-back email) and measure the result before expanding it store-wide.`, cta: { label: 'View best-selling products', command: 'Show my best-selling products', kind: 'info' } })
+    }
   }
-  if (priorities.length === 0) priorities.push('Sync more analytics, recommendation, and inventory history before choosing a growth intervention.')
+  if (repeatRate !== null && totalCustomers > 1 && repeatRate < 30) {
+    candidates.push({ title: 'Lift your repeat purchase rate', detail: `Your repeat purchase rate is ${repeatRate}% across ${totalCustomers} customers. Add a post-purchase thank-you flow with a small upsell coupon to turn one-time buyers into returning ones.`, cta: { label: 'View repeat customers', command: 'Show repeat customers', kind: 'info' } })
+  }
+  if (pendingRecCount > 0) {
+    const recTitle = typeof recommendationRows[0]?.title === 'string' ? recommendationRows[0].title : 'your top pending recommendation'
+    candidates.push({ title: 'Act on the top AI recommendation', detail: `There ${pendingRecCount === 1 ? 'is 1 pending recommendation' : `are ${pendingRecCount} pending recommendations`} in your ledger — start with "${recTitle}". These are the highest-impact moves the AI team has already surfaced.`, cta: { label: 'View recommendations', command: 'Show pending recommendations', kind: 'info' } })
+  }
+  if (candidates.length === 0) {
+    candidates.push({ title: 'Build your growth baseline first', detail: 'Sync more analytics, recommendation, and inventory history so the next plan can be grounded in real signals rather than generic advice.', cta: { label: 'Run store health check', command: 'How healthy is my store?', kind: 'info' } })
+  }
 
-  const nextCommands = actionsEnabled
-    ? [
-        ...(recommendationRows.length > 0 ? [{ label: 'Prepare recommendation approval', command: 'Approve the top pending recommendation', kind: 'action' }] : []),
-        { label: 'Prepare a VIP email', command: 'Draft an email to VIP customers', kind: 'action' },
-        { label: 'Prepare a discount', command: 'Create a 10% growth discount with a 100 use limit that expires in 3 days', kind: 'action' },
-      ]
-    : [
-        { label: 'Inspect top customers', command: 'Show my top customers', kind: 'info' },
-        { label: 'Inspect best sellers', command: 'Show my best-selling products', kind: 'info' },
-        { label: 'Review recommendations', command: 'Show pending recommendations', kind: 'info' },
-      ]
+  const selected = candidates.slice(0, 3)
+  const priorities = selected.map((rec) => `${rec.title}: ${rec.detail}`)
+  const infoCommands = selected.map((rec) => rec.cta)
+  const commanderActions: ReadonlyArray<Readonly<{ label: string; command: string; kind: 'action' }>> = [
+    { label: 'Prepare a VIP email', command: 'Draft an email to VIP customers', kind: 'action' },
+    { label: 'Prepare a growth discount', command: 'Create a 10% growth discount with a 100 use limit that expires in 3 days', kind: 'action' },
+    ...(recommendationRows.length > 0 ? [{ label: 'Prepare recommendation approval', command: 'Approve the top pending recommendation', kind: 'action' as const }] : []),
+  ]
+  const seenCommands = new Set<string>()
+  const nextCommands = [...infoCommands, ...(actionsEnabled ? commanderActions : [])].filter((item) => {
+    if (seenCommands.has(item.command)) return false
+    seenCommands.add(item.command)
+    return true
+  })
 
-  const signalLines = [
-    revenue === null ? null : `Revenue signal: ${formatMoney(revenue, currency)}${previousRevenue === null ? '' : ` versus ${formatMoney(previousRevenue, currency)} in the previous comparison period`}.`,
-    orders === null ? null : `Order signal: ${orders} orders${aov === null ? '' : ` at an average order value of ${formatMoney(aov, currency)}`}.`,
-    healthScore === null ? null : `Store health signal: ${healthScore}/100${healthLabel ? ` (${healthLabel})` : ''}.`,
-  ].filter((line): line is string => Boolean(line))
+  // Cross-workspace situational read — the "consultant" opening that ties
+  // revenue, customers, and inventory together in plain language.
+  const readParts: string[] = []
+  if (revenue !== null) {
+    const head = `Your store did ${formatMoney(revenue, currency)}`
+    const tail = orders !== null ? ` across ${orders} order${orders === 1 ? '' : 's'}` : ''
+    const aovPart = aov !== null ? ` at a ${formatMoney(aov, currency)} average order value` : ''
+    readParts.push(`${head}${tail}${aovPart} over the last ${days} days`)
+  }
+  if (healthScore !== null) readParts.push(`store health sits at ${healthScore}/100${healthLabel ? ` (${healthLabel.toLowerCase()})` : ''}`)
+  if ((lowStockCount ?? 0) > 0 || (outOfStockCount ?? 0) > 0) {
+    readParts.push(`inventory shows ${lowStockCount ?? 0} low-stock and ${outOfStockCount ?? 0} out-of-stock tracked variants`)
+  }
+  if (totalCustomers > 0) {
+    readParts.push(inactiveCount > 0 ? `${inactiveCount} of your ${totalCustomers} customers are at risk of churning` : `all ${totalCustomers} customers are currently active`)
+  }
+  const situationalRead = readParts.length > 0
+    ? `Here is what your live store data is telling me: ${readParts.join(', ')}.`
+    : 'Sync analytics, customers, and inventory to unlock a fully grounded plan.'
+
   const lines = [
-    'Here is a growth plan built from your live store signals — not a repeat of the revenue lookup:',
-    ...(signalLines.length > 0 ? signalLines : ['The available modules did not return a revenue or health figure.']),
-    `Priorities:\n${priorities.map((priority) => `• ${priority}`).join('\n')}`,
+    'Here is a growth plan built from your live store signals — not a repeat of your revenue lookup:',
+    situationalRead,
+    `Priorities:\n${selected.map((rec, index) => `${index + 1}. ${rec.title} — ${rec.detail}`).join('\n')}`,
     actionsEnabled
-      ? 'Commander action mode is ready. Choose an action below and I will prepare a preview; nothing executes until you approve it.'
+      ? 'Commander action mode is ready. Pick any action below and I will prepare a preview — nothing executes until you approve it.'
       : 'Your plan is insight-only in AI Command, so the next steps below are data checks rather than store changes.',
     ...(failures.length > 0 ? [`Unavailable signals: ${failures.map((failure) => `${failure.name} (${failure.error})`).join('; ')}.`] : []),
-    `Source: ${successes.map((outcome) => outcome.source).join(', ')}.`,
+    `Source: ${humanizeSources(successes.map((outcome) => outcome.source))}.`,
   ]
   const content = lines.join('\n\n')
   return {
@@ -714,16 +831,119 @@ export function formatGrowthAnswer(outcomes: readonly ToolOutcome[], actionsEnab
     structuredData: {
       type: 'growth_plan',
       data: {
-        signals: { currency, revenue, previousRevenue, orders, aov, healthScore, healthLabel, lowStockCount, outOfStockCount },
+        signals: { currency, revenue, previousRevenue, orders, aov, days, healthScore, healthLabel, lowStockCount, outOfStockCount, totalCustomers, inactiveCount, atRiskValue, repeatRate, deadStockCount, pendingRecCount },
         priorities,
+        recommendations: selected.map((rec) => ({ title: rec.title, detail: rec.detail, cta: rec.cta })),
         nextCommands,
         actionsEnabled,
       },
-      source: successes.map((outcome) => outcome.source).join(', '),
+      source: humanizeSources(successes.map((outcome) => outcome.source)),
       actions: nextCommands.map((item) => item.command),
     },
     numbers: [...successes.flatMap((outcome) => outcome.numbers), ...extractNumbers(content)],
   }
+}
+
+/** Builds an instructional, step-by-step answer for "how do I…" questions
+ * (INTENT C). The guidance is grounded in how ProfitPilot actually works and
+ * carries one-click navigation CTAs the chat can render as buttons. */
+export function formatInstructionalAnswer(topic: string, input: Readonly<{ plan: PlanTier; actionsEnabled: boolean }>): Readonly<{ content: string; structuredData: AiCommandStructuredData }> {
+  const guide: InstructionalGuide = INSTRUCTIONAL_GUIDES[topic] ?? GENERIC_GUIDE
+  const planNote = input.actionsEnabled
+    ? 'You are on Commander, so you can also ask me to execute the related action right here (email, tag, discount) — nothing runs until you approve it.'
+    : 'You can design and preview this on your current plan. Live execution (sending emails, applying tags) unlocks when you Upgrade Plan to Commander.'
+  const steps = guide.steps
+  const ctas: ReadonlyArray<Readonly<{ label: string; kind: 'navigate' | 'command'; target?: string; command?: string }>> = [...guide.ctas, { label: 'Open in app', kind: 'navigate', target: guide.target }]
+  const lines = [
+    guide.title,
+    '',
+    guide.intro,
+    '',
+    'Here is how to do it in ProfitPilot:',
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
+    '',
+    planNote,
+  ]
+  const content = lines.join('\n')
+  return {
+    content,
+    structuredData: {
+      type: 'instructional',
+      data: { topic, title: guide.title, intro: guide.intro, steps, planNote, ctas },
+      actions: ['navigate'],
+    },
+  }
+}
+
+type InstructionalGuide = Readonly<{
+  title: string
+  intro: string
+  steps: readonly string[]
+  target: string
+  ctas: readonly Readonly<{ label: string; kind: 'navigate' | 'command'; target?: string; command?: string }>[]
+}>
+
+const GENERIC_GUIDE: InstructionalGuide = {
+  title: 'What AI Command can do for your store',
+  intro: 'I am your store\'s command center. Ask me anything in plain English (or Hindi) and I answer from your real Shopify data — and on Commander I can take safe, approved actions without you leaving this chat.',
+  steps: [
+    'Ask about performance: "What is my revenue this month?" or "Show revenue trend for the last 6 months".',
+    'Ask for strategy: "How can I increase profit?" and I will give you a grounded growth plan with next steps.',
+    'Ask about customers, products, inventory, or automations any time.',
+    'On Commander, ask me to act: "Draft an email to VIP customers" or "Create a 10% discount" — you approve before anything runs.',
+  ],
+  target: 'dashboard',
+  ctas: [
+    { label: 'How can I increase profit?', kind: 'command', command: 'How can I increase profit?' },
+    { label: "Summarize this week's performance", kind: 'command', command: "Summarize this week's store performance" },
+  ],
+}
+
+const INSTRUCTIONAL_GUIDES: Readonly<Record<string, InstructionalGuide>> = {
+  generic: GENERIC_GUIDE,
+  automation: {
+    title: 'Setting up an automation in ProfitPilot',
+    intro: 'Automations are visual, no-code workflows that run on a trigger (like an abandoned cart or a new order) and carry out actions (send an email, tag a customer, create a discount). You can start from a template or build one from scratch.',
+    steps: [
+      'Open the Automation gallery and pick a template (Abandoned Cart, Welcome Series, Win-Back, Post-Purchase) or start from a blank workflow.',
+      'Choose the trigger — the event that starts the workflow (e.g. "cart abandoned for 1 hour").',
+      'Add the actions the workflow should perform, in order — send an email, wait, tag the customer, or branch on a condition.',
+      'Review the flow, name it, and activate it. You can pause or edit it any time from the same page.',
+    ],
+    target: 'automation',
+    ctas: [
+      { label: 'Go to Automation gallery', kind: 'navigate', target: 'automation' },
+      { label: 'Show my automations', kind: 'command', command: 'Show automation status' },
+    ],
+  },
+  patternai: {
+    title: 'Getting product insights from PatternAI',
+    intro: 'PatternAI analyses your catalog and sales history to surface best sellers, underperformers, dead stock, and pricing opportunities — all grounded in your real synced data.',
+    steps: [
+      'Open PatternAI from the sidebar.',
+      'Review the highlighted product opportunities (top performers, slow movers, stock risks).',
+      'Ask follow-up questions directly, or approve a generated recommendation to act on one.',
+    ],
+    target: 'patternai',
+    ctas: [
+      { label: 'Open PatternAI', kind: 'navigate', target: 'patternai' },
+      { label: 'Show my best-selling products', kind: 'command', command: 'Show my best-selling products' },
+    ],
+  },
+  recommendations: {
+    title: 'Working with AI recommendations',
+    intro: 'Your AI team continuously watches the store and writes prioritised growth recommendations. Review, approve, or dismiss each one — approvals can flow straight into a safe action.',
+    steps: [
+      'Open Recommendations to see the prioritised list from each agent.',
+      'Open any recommendation to read the evidence and expected impact.',
+      'Approve the ones you want to act on, or dismiss the ones that do not fit right now.',
+    ],
+    target: 'recommendations',
+    ctas: [
+      { label: 'Open Recommendations', kind: 'navigate', target: 'recommendations' },
+      { label: 'Show pending recommendations', kind: 'command', command: 'Show pending recommendations' },
+    ],
+  },
 }
 
 function outcomeData(outcomes: readonly ToolSuccess[], name: AiCommandToolName): Record<string, unknown> | null {
@@ -736,7 +956,7 @@ export function applyResponseStyle(content: string, style: AiCommandResponseStyl
   const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
   if (successes.length === 0) return content
   if (style === 'TECHNICAL') {
-    return `${content}\n\nTool trace: ${successes.map((outcome) => `${outcome.name} → ${outcome.source}`).join('; ')}.`
+    return `${content}\n\nTool trace: ${successes.map((outcome) => `${outcome.name} → ${humanizeSource(outcome.source)}`).join('; ')}.`
   }
   return `${content}\n\nData coverage: ${successes.map((outcome) => moduleLabel(outcome.name)).join(', ')} returned live results.`
 }
@@ -750,12 +970,24 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const aov = numberish(data.aov)
     const currency = currencyCode(data.currency)
     const change = revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null
+    const trend: 'up' | 'down' | 'flat' | null = change === null ? null : change > 0 ? 'up' : change < 0 ? 'down' : 'flat'
+    const takeaway = analyticsTakeaway(change, trend)
+    const nextStep = takeaway === null ? null : 'Next logical step: ask "How can I increase profit?" for a grounded growth plan, or "Show my best-selling products" to see what is driving this.'
     const parts = [
       revenue === null ? 'Revenue for the requested period is not available.' : `Your store's revenue for this period is ${formatMoney(revenue, currency)}${change === null || previous === null ? '' : `, which is ${change}% ${change >= 0 ? 'higher' : 'lower'} than the previous period (${formatMoney(previous, currency)})`}.`,
       orders === null ? null : `Orders: ${orders}.`,
       aov === null ? null : `Average order value: ${formatMoney(aov, currency)}.`,
     ].filter(Boolean)
-    return { text: parts.join(' '), structured: { type: 'analytics', data, source: outcome.source, actions: ['export'] } }
+    // Executive summary framing (INTENT B): for summary / trend queries, end
+    // on insight rather than bare numbers.
+    if (/\b(summari[sz]e|summary|overview|trend|performance|recap|review|how (?:did|are|is))\b/i.test(query)) {
+      if (takeaway !== null) parts.push(`Key takeaway: ${takeaway}`)
+      if (nextStep !== null) parts.push(nextStep)
+    }
+    return {
+      text: parts.join(' '),
+      structured: { type: 'analytics', data: { ...data, keyTakeaway: takeaway, nextStep, trend, change }, source: humanizeSource(outcome.source), actions: ['export'] },
+    }
   }
   if (outcome.name === 'search_customers') {
     const items = arrayOfRecords(data.items ?? data.customers)
@@ -775,7 +1007,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     }
     return {
       text,
-      structured: { type: 'customer_list', data: items, source: outcome.source, actions: ['email', 'tag', 'export'] },
+      structured: { type: 'customer_list', data: items, source: humanizeSource(outcome.source), actions: ['email', 'tag', 'export'] },
     }
   }
   if (outcome.name === 'search_products') {
@@ -783,7 +1015,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const count = numberish(data.count) ?? items.length
     return {
       text: count === 0 ? 'No products matched that query in the synced catalog.' : `I found ${count} product${count === 1 ? '' : 's'} from your synced catalog.`,
-      structured: { type: 'product_list', data: items, source: outcome.source, actions: ['export'] },
+      structured: { type: 'product_list', data: items, source: humanizeSource(outcome.source), actions: ['export'] },
     }
   }
   if (outcome.name === 'search_orders') {
@@ -791,7 +1023,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const count = numberish(data.count) ?? items.length
     return {
       text: count === 0 ? 'No orders matched that query in the synced order table.' : `I found ${count} order${count === 1 ? '' : 's'} from your synced Shopify orders.`,
-      structured: { type: 'order_list', data: items, source: outcome.source, actions: ['export'] },
+      structured: { type: 'order_list', data: items, source: humanizeSource(outcome.source), actions: ['export'] },
     }
   }
   if (outcome.name === 'get_inventory_status') {
@@ -802,7 +1034,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
       text: low === null && out === null
         ? 'Inventory status is not available yet. Sync inventory to load real stock levels.'
         : `Inventory: ${low ?? 0} low-stock and ${out ?? 0} out-of-stock tracked variants.`,
-      structured: { type: 'inventory_list', data: items, source: outcome.source, actions: ['export'] },
+      structured: { type: 'inventory_list', data: items, source: humanizeSource(outcome.source), actions: ['export'] },
     }
   }
   if (outcome.name === 'get_recommendations') {
@@ -810,7 +1042,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const count = numberish(data.count) ?? items.length
     return {
       text: count === 0 ? 'There are no recommendations matching that filter right now.' : `There are ${count} recommendation${count === 1 ? '' : 's'} from the recommendations ledger.`,
-      structured: { type: 'recommendation_list', data: items, source: outcome.source, actions: ['approve'] },
+      structured: { type: 'recommendation_list', data: items, source: humanizeSource(outcome.source), actions: ['approve'] },
     }
   }
   if (outcome.name === 'get_store_health') {
@@ -818,7 +1050,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const label = typeof data.label === 'string' ? data.label : 'unknown'
     return {
       text: score === null ? 'Store health cannot be scored until analytics or inventory rows exist.' : `Store health score is ${score}/100 (${label}).`,
-      structured: { type: 'store_health', data, source: outcome.source },
+      structured: { type: 'store_health', data, source: humanizeSource(outcome.source) },
     }
   }
   if (outcome.name === 'list_workflows') {
@@ -826,10 +1058,10 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const count = numberish(data.count) ?? items.length
     return {
       text: count === 0 ? 'You have no automations yet. Head to the Automation page to create your first workflow.' : `You have ${count} automation${count === 1 ? '' : 's'} — here is their current status from the automation ledger.`,
-      structured: { type: 'workflow_list', data: items, source: outcome.source, actions: ['trigger', 'pause', 'resume'] },
+      structured: { type: 'workflow_list', data: items, source: humanizeSource(outcome.source), actions: ['trigger', 'pause', 'resume'] },
     }
   }
-  return { text: 'I retrieved live store data for that request.', structured: { type: outcome.name, data, source: outcome.source } }
+  return { text: 'I retrieved live store data for that request.', structured: { type: outcome.name, data, source: humanizeSource(outcome.source) } }
 }
 
 export function collectNumbers(value: unknown, into: number[] = []): readonly number[] {
@@ -837,6 +1069,65 @@ export function collectNumbers(value: unknown, into: number[] = []): readonly nu
   else if (Array.isArray(value)) for (const item of value) collectNumbers(item, into)
   else if (isRecord(value)) for (const item of Object.values(value)) collectNumbers(item, into)
   return into
+}
+
+/**
+ * Maps an internal data-feed identifier (for example `analytics_revenue_daily`
+ * or `sync_records.customers`) to a clean, merchant-facing attribution badge.
+ * Raw database/table names must never reach the chat surface — this is the
+ * single source of truth that every response formatter funnels through.
+ */
+const SOURCE_BADGES: Readonly<Record<string, string>> = {
+  // analytics feeds
+  'analytics_revenue_daily': '📊 Live Analytics Sync',
+  'analytics_product_sales_daily': '📊 Live Analytics Sync',
+  // customer / order sync records
+  'sync_records.customers': '👥 Verified Customer Data',
+  'sync_records_customers': '👥 Verified Customer Data',
+  'sync_records.orders': '🧾 Verified Order Data',
+  'sync_records_orders': '🧾 Verified Order Data',
+  // catalog + product performance
+  'catalog_products': '📦 Inventory & Sales History',
+  'catalog_products + analytics_product_sales_daily': '📦 Inventory & Sales History',
+  // recommendation ledger
+  'ai_recommendations': '💡 AI Growth Recommendations',
+  // inventory quantity feeds
+  'inventory_levels': '📦 Inventory & Sales History',
+  'variant_inventory_quantity': '📦 Inventory & Sales History',
+  'unavailable': '✨ Verified Store Data',
+  // cross-module store health
+  'analytics + inventory': '✨ Verified Store Data',
+  // automation engine
+  'automation_workflows': '⚙️ Automation Engine',
+}
+
+export function humanizeSource(source: string): string {
+  const trimmed = typeof source === 'string' ? source.trim() : ''
+  if (!trimmed) return '✨ Verified Store Data'
+  const lower = trimmed.toLowerCase()
+  const direct = SOURCE_BADGES[lower]
+  if (direct) return direct
+  // Already a polished badge (emoji + words)? Pass it through unchanged.
+  if (/\p{Extended_Pictographic}/u.test(trimmed) && /\s/.test(trimmed)) return trimmed
+  // Compound sources such as "catalog_products + analytics_product_sales_daily".
+  const parts = lower.split(/\s*\+\s*|\s*,\s*/).filter(Boolean)
+  if (parts.length > 1) {
+    for (const part of parts) {
+      const mapped = SOURCE_BADGES[part]
+      if (mapped) return mapped
+    }
+  }
+  return '✨ Verified Store Data'
+}
+
+/** Joins several feed identifiers into one clean, deduplicated badge line. */
+export function humanizeSources(sources: readonly string[]): string {
+  const badges: string[] = []
+  for (const source of sources) {
+    const badge = humanizeSource(source)
+    if (!badges.includes(badge)) badges.push(badge)
+  }
+  return badges.join(' · ')
 }
 
 export function groundCommandText(text: string, allowedNumbers: readonly number[]): string {
@@ -854,10 +1145,22 @@ export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: str
   const limits = limitsForPlan(input.plan)
   const tools = AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => input.actionsEnabled || !tool.commanderOnly)
   return [
-    'You are AI Command, ProfitPilot\'s merchant command center.',
+    'You are AI Command — ProfitPilot\'s expert e-commerce growth consultant and action engine for Shopify merchants.',
     ...STORE_SCOPE_GUIDANCE,
-    'You never invent numbers, statistics, or action outcomes.',
-    'Every claim must come from a tool result or from the merchant\'s own words.',
+    '',
+    'PERSONA & TONE',
+    'Think like a senior e-commerce growth consultant: articulate, professional, encouraging, and deeply fluent in AOV, LTV, retention, CAC, conversion, and stock cover.',
+    'Synthesise the merchant\'s real data into advice, not just metric dumps. Cross-reference modules (orders, customers, inventory, recommendations, automations) so answers connect the dots.',
+    'Be concise but substantive. Use Markdown: bold headings, bullets, and inline code for codes/IDs. Never repeat the same canned paragraph for different questions.',
+    '',
+    'FOUR INTENTS — classify every question and shape the answer accordingly:',
+    'A. STRATEGIC / ADVISORY ("How can I increase profit?", "How do I grow sales?"): do NOT just show a revenue card. Give 3 specific, data-backed recommendations tailored to the store, each with a concrete number from the data, then suggest a next action.',
+    'B. PERFORMANCE SUMMARY / TREND ("Summarize this week", "Revenue trend 6 months"): give a 2-sentence executive summary, surface the relevant metric/card, then end with a "Key takeaway" and a single "Next logical step" — never end on bare numbers.',
+    'C. INSTRUCTIONAL / HOW-TO ("How do I create an automation?", "What can PatternAI do?"): give friendly, numbered, step-by-step guidance tied to the real ProfitPilot feature, note any plan limits, and offer a direct navigation CTA.',
+    'D. ACTION COMMAND ("Create a 10% discount", "Pause the cart workflow"): on Commander, prepare an action preview card the merchant approves before anything runs; on other plans, explain it needs Commander and show what would happen, with an Upgrade Plan CTA.',
+    '',
+    'GROUNDING & SAFETY',
+    'You never invent numbers, statistics, or action outcomes. Every claim must come from a tool result or the merchant\'s own words.',
     'If a tool returns no data, say so. If you are uncertain, say "I\'m not sure".',
     'Never claim an email was sent, a tag applied, or a discount created unless the backend confirmed it.',
     `The merchant is on the ${input.plan} plan. Daily command limit: ${limits.commandsPerDay ?? 'unlimited'}. Action execution: ${input.actionsEnabled ? 'allowed after explicit merchant approval' : 'not available — suggest Upgrade Plan'}.`,
@@ -866,6 +1169,7 @@ export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: str
     'Write actions always require a preview and merchant approval. Never auto-execute.',
     'Blocked: delete data, refunds, bulk price edits, bulk inventory edits, billing access, store configuration.',
     'When refusing a blocked action, name the page where the merchant can do it manually.',
+    'Never expose internal database or table names (e.g. analytics_revenue_daily, sync_records). Attribution should read as clean merchant-facing badges.',
     'Upgrade CTAs must say Upgrade Plan. Never name a specific paid tier in the CTA.',
   ].join('\n')
 }
@@ -1415,6 +1719,20 @@ export class AiCommandService {
       }
       return this.previewWrite(storeId, conversation, text, write, plan, listener)
     }
+    // INTENT C — instructional / how-to questions get grounded step-by-step
+    // guidance with one-click navigation CTAs, unless the same question also
+    // asks for growth strategy (handled by the growth plan path below).
+    if (!detectGrowthIntent(text)) {
+      const instructionalTopic = detectInstructionalIntent(text)
+      if (instructionalTopic) {
+        emit(listener, 'thinking', { step: 'Preparing guidance...' })
+        const answer = formatInstructionalAnswer(instructionalTopic, { plan, actionsEnabled: this.actionAccess(plan) })
+        return message('assistant', answer.content, 'structured_data', this.now(), {
+          structuredData: answer.structuredData,
+          thinkingSteps: ['Understanding your request...', 'Preparing guidance...'],
+        })
+      }
+    }
     const preferences = await this.repository.getPreferences(storeId)
     const memoryEnabled = conversationMemoryAvailable(preferences.conversationMemoryEnabled, plan, conversation, this.now())
     const infoTools = await this.resolveInfoTools(storeId, conversation, text, plan, memoryEnabled)
@@ -1859,6 +2177,15 @@ function workflowName(params: Readonly<Record<string, unknown>>): string {
 function formatMoney(value: number, currency: string | null = null): string {
   if (!currency) return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} (currency unavailable)`
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
+}
+
+/** One-line, data-grounded insight for analytics summaries/trends (INTENT B).
+ * Returns null when there is no period-over-period change to comment on. */
+function analyticsTakeaway(change: number | null, trend: 'up' | 'down' | 'flat' | null): string | null {
+  if (change === null || trend === null) return null
+  if (trend === 'up') return `revenue is trending up ${change}% versus the previous period — momentum you can compound by pushing your best sellers and repeating what is already working.`
+  if (trend === 'down') return `revenue is down ${Math.abs(change)}% versus the previous period — prioritise retention and your proven best sellers before scaling acquisition spend.`
+  return 'revenue is flat versus the previous period — a single targeted offer is the lowest-risk way to test for lift before committing to bigger changes.'
 }
 
 function normalizeNumber(value: number): string {

@@ -49,6 +49,7 @@ import {
   dailyResetCountdown,
   formatTimestamp,
   groupConversations,
+  humanizeSource,
   hoursUntilDailyReset,
   lastUserQuestion,
   planLabel,
@@ -124,11 +125,12 @@ const SHOWCASES: readonly Readonly<{ icon: LucideIcon; tone: AiCommandTone; titl
   { icon: TrendingUp, tone: 'orange', title: 'Growth guidance', description: 'Combine analytics, recommendations, and store health into a single grounded answer about growing sales.', sample: 'Help me increase sales' },
 ]
 
-export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigateBilling, initialConversationId = null }: {
+export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigateBilling, onNavigateSection, initialConversationId = null }: {
   context: WorkspaceContext
   plan?: AiCommandPlan
   onToast: ToastFn
   onNavigateBilling: () => void
+  onNavigateSection?: (page: string) => void
   initialConversationId?: string | null
 }) {
   const storeId = context.storeId
@@ -257,6 +259,7 @@ export function AiCommandWorkspace({ context, plan = 'trial', onToast, onNavigat
                 }}
                 onUndo={(id) => void workspace.undo(id)}
                 onUpgrade={onNavigateBilling}
+                onNavigateSection={onNavigateSection ?? (() => undefined)}
                 plan={plan}
                 onSave={() => {
                   const previous = previousUserMessage(messages, index)
@@ -687,7 +690,7 @@ function comparison(current: number | null | undefined, previous: number | null 
   return `${change >= 0 ? '↑' : '↓'} ${Math.abs(change)}% vs ${period}`
 }
 
-function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo, onUpgrade, plan, onSave, onRegenerate, onFeedback, onPrompt, onToast }: {
+function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo, onUpgrade, onNavigateSection, plan, onSave, onRegenerate, onFeedback, onPrompt, onToast }: {
   message: AiCommandMessage
   now: number
   busy: boolean
@@ -696,6 +699,7 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo
   onEdit: (id: string) => void
   onUndo: (id: string) => void
   onUpgrade: () => void
+  onNavigateSection?: (page: string) => void
   plan: AiCommandPlan
   onSave: () => void
   onRegenerate: () => void
@@ -755,7 +759,7 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo
           : (
             <>
               <p>{message.content}</p>
-              {message.structuredData && <StructuredBlock data={message.structuredData} onPrompt={onPrompt} />}
+              {message.structuredData && <StructuredBlock data={message.structuredData} onPrompt={onPrompt} onNavigateSection={onNavigateSection ?? (() => undefined)} />}
             </>
           )}
 
@@ -819,14 +823,15 @@ function OffTopicBlock({ content, onPrompt }: { content: string; onPrompt: (valu
   )
 }
 
-function StructuredBlock({ data, onPrompt }: { data: NonNullable<AiCommandMessage['structuredData']>; onPrompt: (value: string) => void }) {
+function StructuredBlock({ data, onPrompt, onNavigateSection }: { data: NonNullable<AiCommandMessage['structuredData']>; onPrompt: (value: string) => void; onNavigateSection: (page: string) => void }) {
   const record = isRecord(data.data) ? data.data : {}
   if (data.type === 'analytics') return <AnalyticsBlock data={record} source={data.source} />
   if (data.type === 'store_health') return <HealthBlock data={record} source={data.source} />
   if (data.type === 'growth_plan') return <GrowthPlanBlock data={record} source={data.source} onPrompt={onPrompt} />
+  if (data.type === 'instructional') return <InstructionalBlock data={record} onPrompt={onPrompt} onNavigateSection={onNavigateSection} />
 
   const rows = tableRows(data.data)
-  if (rows.length === 0) return data.source ? <small className="aic-source">Source: {data.source}</small> : null
+  if (rows.length === 0) return data.source ? <SourceBadge source={data.source} /> : null
   const columns = Object.keys(rows[0] ?? {}).slice(0, 6)
   const label = STRUCTURED_LABELS[data.type] ?? 'Results'
   return (
@@ -845,9 +850,15 @@ function StructuredBlock({ data, onPrompt }: { data: NonNullable<AiCommandMessag
           </tbody>
         </table>
       </div>
-      {data.source && <small className="aic-source">Source: {data.source}</small>}
+      {data.source && <SourceBadge source={data.source} />}
     </div>
   )
+}
+
+/** Clean, enterprise-SaaS attribution chip — never a raw database label. */
+function SourceBadge({ source }: { source: string | undefined }) {
+  const badge = humanizeSource(source)
+  return <span className="aic-source-badge" title="Grounded in your live store data"><ShieldCheck size={12} /> {badge}</span>
 }
 
 const STRUCTURED_LABELS: Readonly<Record<string, string>> = {
@@ -862,11 +873,13 @@ const STRUCTURED_LABELS: Readonly<Record<string, string>> = {
   action_preview: 'Action preview',
   action_result: 'Action result',
   growth_plan: 'Growth plan',
+  instructional: 'How-to guide',
 }
 
 function GrowthPlanBlock({ data, source, onPrompt }: { data: Record<string, unknown>; source: string | undefined; onPrompt: (value: string) => void }) {
   const signals = isRecord(data.signals) ? data.signals : {}
   const priorities = Array.isArray(data.priorities) ? data.priorities.map(String) : []
+  const recommendations = Array.isArray(data.recommendations) ? data.recommendations.filter(isRecord) : []
   const commands = Array.isArray(data.nextCommands) ? data.nextCommands.filter(isRecord) : []
   const actionMode = data.actionsEnabled === true
   const currency = asCurrency(signals.currency)
@@ -881,7 +894,26 @@ function GrowthPlanBlock({ data, source, onPrompt }: { data: Record<string, unkn
       <div className="aic-growth-signals">
         {signalCards.map((card) => <div key={card.label}><card.icon size={14} /><span>{card.label}</span><strong>{card.value}</strong></div>)}
       </div>
-      {priorities.length > 0 && <ul className="aic-growth-priorities">{priorities.map((priority) => <li key={priority}>{priority}</li>)}</ul>}
+      {recommendations.length > 0 ? (
+        <div className="aic-growth-recs">
+          {recommendations.map((rec, index) => {
+            const title = typeof rec.title === 'string' ? rec.title : `Priority ${index + 1}`
+            const detail = typeof rec.detail === 'string' ? rec.detail : ''
+            const cta = isRecord(rec.cta) ? rec.cta : null
+            const ctaLabel = typeof cta?.label === 'string' ? cta.label : ''
+            const ctaCommand = typeof cta?.command === 'string' ? cta.command : ''
+            return (
+              <div className="aic-growth-rec" key={`${title}-${index}`}>
+                <div className="aic-growth-rec-head"><span className="aic-growth-rec-num">{index + 1}</span><strong>{title}</strong></div>
+                {detail && <p>{detail}</p>}
+                {ctaCommand && <Button type="button" className="aic-growth-rec-cta" onClick={() => onPrompt(ctaCommand)}>{ctaLabel || 'Take action'}<ChevronRight size={13} /></Button>}
+              </div>
+            )
+          })}
+        </div>
+      ) : priorities.length > 0 ? (
+        <ul className="aic-growth-priorities">{priorities.map((priority) => <li key={priority}>{priority}</li>)}</ul>
+      ) : null}
       {commands.length > 0 && (
         <div className="aic-growth-actions">
           <strong>{actionMode ? 'Commander actions — preview first' : 'Next analysis'}</strong>
@@ -892,7 +924,7 @@ function GrowthPlanBlock({ data, source, onPrompt }: { data: Record<string, unkn
           })}</div>
         </div>
       )}
-      {source && <small className="aic-source">Source: {source}</small>}
+      <SourceBadge source={source} />
     </div>
   )
 }
@@ -903,7 +935,10 @@ function AnalyticsBlock({ data, source }: { data: Record<string, unknown>; sourc
   const orders = asNumber(data.orders)
   const aov = asNumber(data.aov)
   const currency = asCurrency(data.currency)
-  const change = revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null
+  const change = asNumber(data.change) ?? (revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null)
+  const trend = typeof data.trend === 'string' ? data.trend : null
+  const takeaway = typeof data.keyTakeaway === 'string' && data.keyTakeaway ? data.keyTakeaway : null
+  const nextStep = typeof data.nextStep === 'string' && data.nextStep ? data.nextStep : null
   const maxForBar = Math.max(revenue ?? 0, previous ?? 0, 1)
   return (
     <div className="aic-metrics">
@@ -935,7 +970,14 @@ function AnalyticsBlock({ data, source }: { data: Record<string, unknown>; sourc
           </div>
         </div>
       )}
-      {source && <small className="aic-source">Source: {source}</small>}
+      {takeaway && (
+        <div className={`aic-takeaway ${trend ?? ''}`}>
+          <strong><TrendingUp size={13} /> Key takeaway</strong>
+          <p>{takeaway}</p>
+          {nextStep && <small>{nextStep}</small>}
+        </div>
+      )}
+      <SourceBadge source={source} />
     </div>
   )
 }
@@ -955,8 +997,43 @@ function HealthBlock({ data, source }: { data: Record<string, unknown>; source: 
       <div className="aic-health-copy">
         <strong>{label}</strong>
         <small>Computed from live analytics and inventory.</small>
-        {source && <small className="aic-source">Source: {source}</small>}
+        <SourceBadge source={source} />
       </div>
+    </div>
+  )
+}
+
+function InstructionalBlock({ data, onPrompt, onNavigateSection }: { data: Record<string, unknown>; onPrompt: (value: string) => void; onNavigateSection: (page: string) => void }) {
+  const title = typeof data.title === 'string' ? data.title : 'How-to guide'
+  const intro = typeof data.intro === 'string' ? data.intro : ''
+  const steps = Array.isArray(data.steps) ? data.steps.map(String) : []
+  const planNote = typeof data.planNote === 'string' ? data.planNote : ''
+  const ctas = Array.isArray(data.ctas) ? data.ctas.filter(isRecord) : []
+  return (
+    <div className="aic-instructional">
+      <div className="aic-instructional-head"><span className="aic-instructional-icon"><Command size={15} /></span><strong>{title}</strong></div>
+      {intro && <p className="aic-instructional-intro">{intro}</p>}
+      {steps.length > 0 && (
+        <ol className="aic-instructional-steps">
+          {steps.map((step, index) => <li key={index}><span>{index + 1}</span>{step}</li>)}
+        </ol>
+      )}
+      {planNote && <p className="aic-instructional-note">{planNote}</p>}
+      {ctas.length > 0 && (
+        <div className="aic-instructional-ctas">
+          {ctas.map((cta, index) => {
+            const label = typeof cta.label === 'string' ? cta.label : 'Continue'
+            const kind = cta.kind === 'navigate' ? 'navigate' : 'command'
+            const target = typeof cta.target === 'string' ? cta.target : ''
+            const command = typeof cta.command === 'string' ? cta.command : ''
+            const key = `${label}-${index}`
+            if (kind === 'navigate' && target) {
+              return <Button key={key} type="button" className="aic-instructional-cta primary" onClick={() => onNavigateSection?.(target)}><ArrowUpRight size={13} /> {label}</Button>
+            }
+            return <Button key={key} type="button" className="aic-instructional-cta" disabled={!command} onClick={() => onPrompt(command)}>{label}<ChevronRight size={13} /></Button>
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -5,10 +5,11 @@ import { conversationIdFromHash } from './ai-command-model.js'
 import type { AiCommandPlan } from './ai-command-model.js'
 import type { WorkspaceContext } from './model.js'
 
-export function AiCommandPage({ context, onToast, onNavigateBilling }: {
+export function AiCommandPage({ context, onToast, onNavigateBilling, onNavigate }: {
   context: WorkspaceContext
   onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
   onNavigateBilling: () => void
+  onNavigate?: (page: string) => void
 }) {
   const [plan, setPlan] = useState<AiCommandPlan>('trial')
   useEffect(() => {
@@ -22,7 +23,7 @@ export function AiCommandPage({ context, onToast, onNavigateBilling }: {
   }, [context.storeId])
   return (
     <div className="page-content">
-      <AiCommandWorkspace context={context} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} initialConversationId={conversationIdFromHash(window.location.hash)} />
+      <AiCommandWorkspace context={context} plan={plan} onToast={onToast} onNavigateBilling={onNavigateBilling} onNavigateSection={onNavigate ?? (() => undefined)} initialConversationId={conversationIdFromHash(window.location.hash)} />
     </div>
   )
 }
