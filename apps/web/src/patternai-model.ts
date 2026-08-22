@@ -675,6 +675,52 @@ export function tagCloud(entries: readonly InsightKnowledgeEntry[], limit = 18):
     .map(([tag, count]) => ({ tag, weight: count }))
 }
 
+/**
+ * Dynamic axis normalization for the scatter/bubble charts (QA 2026-08-22).
+ *
+ * Raw confidence scores cluster near 1.0, so plotting them on a fixed 0–1
+ * canvas pushed every point onto the far right edge. Instead the visible
+ * canvas is scaled to the actual data range (with padding) and labeled tick
+ * marks make the scale explicit to the merchant.
+ */
+export type AxisScale = Readonly<{
+  min: number
+  max: number
+  /** Maps a data value into the 0..1 fraction of the visible canvas. */
+  normalize: (value: number) => number
+  /** Three labeled ticks (min / mid / max) in data units. */
+  ticks: readonly Readonly<{ value: number; label: string }>[]
+}>
+
+export function axisScale(values: readonly number[], padRatio = 0.08): AxisScale {
+  const finite = values.filter((value) => Number.isFinite(value))
+  let min = finite.length ? Math.min(...finite) : 0
+  let max = finite.length ? Math.max(...finite) : 1
+  if (min === max) {
+    // A flat series still gets a readable window around its single value.
+    const span = Math.max(Math.abs(min) * 0.25, 0.5)
+    min -= span
+    max += span
+  }
+  const pad = (max - min) * padRatio
+  min -= pad
+  max += pad
+  const range = max - min
+  const normalize = (value: number): number => {
+    const clamped = Math.max(min, Math.min(max, Number.isFinite(value) ? value : min))
+    return range > 0 ? (clamped - min) / range : 0
+  }
+  const mid = (min + max) / 2
+  return { min, max, normalize, ticks: [min, mid, max].map((value) => ({ value, label: axisTickLabel(value) })) }
+}
+
+export function axisTickLabel(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  const abs = Math.abs(value)
+  const rounded = abs >= 100 ? Math.round(value) : abs >= 10 ? Math.round(value * 10) / 10 : Math.round(value * 100) / 100
+  return String(rounded)
+}
+
 /** Bubble-chart points from patterns: real confidence × occurrences. */
 export function patternBubbles(patterns: readonly InsightPattern[]): readonly Readonly<{ id: string; label: string; x: number; y: number; r: number; type: InsightPatternType }>[] {
   const maxOccurrences = Math.max(1, ...patterns.map((pattern) => pattern.occurrenceCount))

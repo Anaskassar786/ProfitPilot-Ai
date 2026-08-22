@@ -101,4 +101,36 @@ describe('Polaris migration: composite controls keep their structure', () => {
     expect(automation).toContain('<RichButton key={value} className={`filter-tab')
     expect(recommendations).toContain('<RichButton key={tab} role="tab"')
   })
+
+  /* QA Bug #5: the Workflow Editor header rendered the workflow name twice
+     ("VIP Customer Tagging VIP Customer Tagging") because the Button shim
+     treated the first element child — the <strong> holding the name — as the
+     icon and ALSO rendered the flattened text. The title control must be a
+     RichButton with composite children. */
+  it('the automation editor title button is a RichButton, never a flattening Button', () => {
+    const source = readFileSync(resolve(process.cwd(), 'apps/web/src/WorkflowEditor.tsx'), 'utf8')
+    expect(source).toContain('<RichButton\n              className="editor-name-button"')
+    expect(source).toContain('<strong>{workflow.name}</strong>')
+    expect(source).not.toContain('<Button\n              className="editor-name-button"')
+  })
+
+  it('UiButton never treats a textual element child as its icon', async () => {
+    const { AppProvider } = await import('@shopify/polaris')
+    const enTranslations = (await import('@shopify/polaris/locales/en.json')).default
+    const { UiButton } = await import('./polaris-ui.js')
+    const html = renderToStaticMarkup(
+      createElement(AppProvider, { i18n: enTranslations },
+        createElement(UiButton, { onClick: vi.fn() },
+          createElement('strong', null, 'VIP Customer Tagging'),
+          createElement('span', { 'aria-hidden': true }, '✎'),
+        ),
+      ),
+    )
+    // Exactly one VISIBLE label (the second hit is the aria-label attribute,
+    // which is correct a11y). The old bug painted the text twice on screen.
+    const textNodes = html.replace(/<[^>]*>/g, ' ')
+    expect(textNodes.match(/VIP Customer Tagging/g) ?? []).toHaveLength(1)
+    expect(html).not.toContain('VIP Customer Tagging VIP Customer Tagging')
+    expect(html).not.toContain('VIP Customer TaggingVIP Customer Tagging')
+  })
 })

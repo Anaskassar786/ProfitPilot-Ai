@@ -71,7 +71,9 @@ export class AutomationExecutionService {
       }
       await this.runs.saveStep(workflow.storeId, { key, runId, nodeId: node.id, sequence, status: 'RUNNING', input: redact(context), output: {}, errorMessage: null, startedAt, completedAt: null, durationMs: null })
       try {
-        const output = node.type === 'condition' || node.type === 'filter' ? evaluate(node, context) : node.type === 'trigger' ? {} : await timeout(this.actions.execute(workflow.storeId, node, context, key, run.testMode), 30_000)
+        // 'exit' is a terminal node: it records a completed step and stops the
+        // run without invoking any action adapter (next[] is empty).
+        const output = node.type === 'condition' || node.type === 'filter' ? evaluate(node, context) : node.type === 'trigger' || node.type === 'exit' ? {} : await timeout(this.actions.execute(workflow.storeId, node, context, key, run.testMode), 30_000)
         const completedAt = new Date(this.now()).toISOString()
         await this.runs.saveStep(workflow.storeId, { key, runId, nodeId: node.id, sequence, status: 'COMPLETED', input: redact(context), output: redact(output), errorMessage: null, startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)) })
         context = { ...context, ...output }; sequence += 1; nodeId = next(node, output)

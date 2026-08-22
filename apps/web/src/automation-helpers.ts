@@ -121,6 +121,7 @@ export function friendlyNodeLabel(node: NodeLike): string {
   if (node.type === 'condition') return 'Check something'
   if (node.type === 'filter') return 'Only continue if'
   if (node.type === 'wait') return 'Wait for time'
+  if (node.type === 'exit') return 'End the automation'
   if (node.type === 'ai') return friendlyAiLabel(String(node.config.operation ?? ''))
   return friendlyActionLabel(node)
 }
@@ -150,6 +151,9 @@ export function friendlyNodeSummary(node: NodeLike): string {
   }
   if (node.type === 'ai') {
     return 'Uses AI to help with this step (Commander plan)'
+  }
+  if (node.type === 'exit') {
+    return 'Stops the automation here — no further steps run'
   }
   const action = String(node.config.action ?? '')
   if (action === 'email') return 'Sends an email to the customer'

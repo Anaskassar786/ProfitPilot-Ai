@@ -633,3 +633,114 @@ describe('AI Command strategic advisor overhaul', () => {
     expect(['up', 'down', 'flat']).toContain(data.trend)
   })
 })
+
+/* ── QA 2026-08-22: failure detail forwarding, format constraints, Hindi ── */
+
+function failedAction(overrides: Partial<AiCommandActionRecord> = {}): AiCommandActionRecord {
+  return {
+    id: 'a1',
+    storeId: tenant,
+    conversationId: null,
+    actionType: 'CREATE_DISCOUNT',
+    actionParams: {},
+    actionPreview: null,
+    merchantApproved: true,
+    approvedAt: null,
+    executionStatus: 'FAILED',
+    executionResult: null,
+    errorDetails: null,
+    rollbackAvailable: false,
+    rollbackDeadline: null,
+    rolledBackAt: null,
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+describe('summarizeActionResult failure detail forwarding (SC-2)', () => {
+  it('forwards the Shopify userError message from errorDetails instead of the generic fallback', () => {
+    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Discount code is already taken.', reason: 'GRAPHQL_USER_ERRORS' } }))
+    expect(summary).toContain('Discount code is already taken.')
+    expect(summary).not.toContain('The backend did not confirm success.')
+  })
+
+  it('falls back to executionResult.message when errorDetails is absent', () => {
+    const summary = summarizeActionResult(failedAction({ executionResult: { message: 'Shopify rejected the discount: endsAt must be in the future.' } }))
+    expect(summary).toContain('endsAt must be in the future')
+    expect(summary).not.toContain('The backend did not confirm success.')
+  })
+
+  it('surfaces scope failures as re-authorize guidance', () => {
+    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Shopify rejected the discount request because the app is missing the write_discounts permission. Re-authorize or re-install ProfitPilot from the Shopify App Store, then try again.', reason: 'MISSING_WRITE_DISCOUNTS_SCOPE' } }))
+    expect(summary).toContain('write_discounts')
+    expect(summary).toContain('Re-authorize or re-install')
+  })
+
+  it('uses the generic fallback only when nothing specific was recorded', () => {
+    expect(summarizeActionResult(failedAction())).toContain('The backend did not confirm success.')
+  })
+})
+
+import { actionFailureDetails, buildConstrainedFormatPrompt, hasStrictFormatConstraints, parseFormatConstraints, serializeToolOutcomes } from './command.js'
+
+describe('parseFormatConstraints (Bug #6)', () => {
+  it('detects strict yes/no constraints', () => {
+    expect(parseFormatConstraints('Is my store healthy? Answer only yes or no').yesNo).toBe(true)
+    expect(parseFormatConstraints('reply in yes/no please').yesNo).toBe(true)
+    expect(parseFormatConstraints('kya meri sales badh rahi hai? haan ya na mein batao').yesNo).toBe(true)
+    expect(parseFormatConstraints('How is my store doing?').yesNo).toBe(false)
+  })
+
+  it('detects short-summary and bullet-point constraints', () => {
+    expect(parseFormatConstraints('Give me a short summary of this week').shortSummary).toBe(true)
+    expect(parseFormatConstraints('Summarize revenue in one sentence').shortSummary).toBe(true)
+    expect(parseFormatConstraints('Show my top products as bullet points').bulletPoints).toBe(true)
+    expect(parseFormatConstraints('list my risks in points').bulletPoints).toBe(true)
+    expect(parseFormatConstraints('What should I do next?')).toEqual({ yesNo: false, shortSummary: false, bulletPoints: false, language: null })
+  })
+
+  it('detects Hindi and Hinglish queries', () => {
+    expect(parseFormatConstraints('मेरी सेल कैसे बढ़ाऊँ?').language).toBe('hindi')
+    expect(parseFormatConstraints('mujhe apne VIP customers dikhao').language).toBe('hinglish')
+    expect(parseFormatConstraints('Show my VIP customers').language).toBeNull()
+  })
+
+  it('marks strict constraints for the prose formatter', () => {
+    expect(hasStrictFormatConstraints(parseFormatConstraints('answer only yes or no'))).toBe(true)
+    expect(hasStrictFormatConstraints(parseFormatConstraints('tell me about my sales'))).toBe(false)
+  })
+
+  it('builds a constraint-aware formatting prompt', () => {
+    const prompt = buildConstrainedFormatPrompt(parseFormatConstraints('kya stock kam hai? answer only yes or no'), { plan: 'commander' })
+    expect(prompt).toContain('Yes')
+    expect(prompt.toLowerCase()).toContain('hinglish')
+  })
+
+  it('serializes tool outcomes for grounded LLM formatting', () => {
+    const outcomes: ToolOutcome[] = [
+      { ok: true, name: 'get_analytics', data: { revenue: 100 }, source: 'analytics', numbers: [100] },
+      { ok: false, name: 'search_orders', error: 'No orders synced', source: 'search_orders' },
+    ]
+    const serialized = serializeToolOutcomes(outcomes)
+    expect(serialized).toContain('revenue')
+    expect(serialized).toContain('No orders synced')
+  })
+})
+
+describe('buildSystemPrompt language & constraint guidance', () => {
+  it('includes Hindi/Hinglish comprehension and strict-format rules', () => {
+    const prompt = buildSystemPrompt({ storeId: tenant, plan: 'commander', actionsEnabled: true })
+    expect(prompt).toContain('Hinglish')
+    expect(prompt).toContain('answer only yes or no')
+  })
+})
+
+describe('actionFailureDetails', () => {
+  it('prefers errorDetails.message, then reasons, then result.message', () => {
+    expect(actionFailureDetails(failedAction({ errorDetails: { message: 'specific' } }))).toBe('specific')
+    expect(actionFailureDetails(failedAction({ errorDetails: { reasons: ['one', 'two'] } }))).toBe('one; two')
+    expect(actionFailureDetails(failedAction({ executionResult: { message: 'from result' } }))).toBe('from result')
+    expect(actionFailureDetails(failedAction())).toBe('The backend did not confirm success.')
+  })
+})

@@ -11,7 +11,7 @@ export const MAX_WAIT_MS = 30 * 24 * 60 * 60 * 1_000
 
 export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number]
 export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number]
-export type WorkflowNodeType = 'trigger' | 'condition' | 'action' | 'wait' | 'filter' | 'ai'
+export type WorkflowNodeType = 'trigger' | 'condition' | 'action' | 'wait' | 'filter' | 'ai' | 'exit'
 export type WorkflowTrigger = (typeof WORKFLOW_TRIGGERS)[number]
 export type WorkflowAction = (typeof WORKFLOW_ACTIONS)[number]
 export type WorkflowConfigValue = string | number | boolean | null
@@ -55,6 +55,7 @@ export function validateWorkflow(definition: WorkflowDefinition): void {
       if (typeof delayMs !== 'number' || !Number.isFinite(delayMs) || delayMs < 0 || delayMs > MAX_WAIT_MS) throw validation('Wait duration must be between 0 and 30 days', node.id)
     }
     if (node.type === 'condition' && node.next.length !== 2) throw validation('Condition nodes require YES and NO branches', node.id)
+    if (node.type === 'exit' && node.next.length !== 0) throw validation('Exit nodes must be terminal', node.id)
     if (node.type !== 'condition' && node.next.length > 1) throw validation('Only condition nodes can have multiple outgoing connections', node.id)
     if (node.type === 'ai' && typeof node.config.operation !== 'string') throw validation('AI nodes require an operation', node.id)
     validateActionSafety(node)

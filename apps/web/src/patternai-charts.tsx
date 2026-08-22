@@ -18,10 +18,63 @@
 import { Button } from './polaris-ui.js'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
+import { axisScale } from './patternai-model.js'
+import type { AxisScale } from './patternai-model.js'
 
 export type ChartPoint = Readonly<{ id: string; label: string; x: number; y: number; r?: number; tone?: string }>
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+
+/**
+ * Scatter/bubble plot geometry (QA 2026-08-22).
+ *
+ * The left gutter reserves room for tick labels AND the rotated axis title,
+ * which is anchored at the vertical CENTER of the plot area with
+ * `textAnchor="middle"` — labels like `Confidence` / `Recurrence` can no
+ * longer bleed above the SVG or collide with the card title header. Points
+ * are normalized to their actual data range instead of a fixed 0–1 canvas,
+ * and three labeled tick marks make the scale explicit on both axes.
+ */
+const SCATTER_PAD = { left: 54, right: 18, top: 16, bottom: 42 } as const
+
+type PlotScales = Readonly<{
+  x: AxisScale
+  y: AxisScale
+  px: (value: number) => number
+  py: (value: number) => number
+}>
+
+function plotScales(points: readonly ChartPoint[], width: number, height: number): PlotScales {
+  const x = axisScale(points.map((point) => point.x))
+  const y = axisScale(points.map((point) => point.y))
+  const plotW = width - SCATTER_PAD.left - SCATTER_PAD.right
+  const plotH = height - SCATTER_PAD.top - SCATTER_PAD.bottom
+  return {
+    x,
+    y,
+    px: (value) => SCATTER_PAD.left + plotW * x.normalize(value),
+    py: (value) => height - SCATTER_PAD.bottom - plotH * y.normalize(value),
+  }
+}
+
+function scatterAxisChrome({ width, height, xLabel, yLabel, scales }: { width: number; height: number; xLabel: string; yLabel: string; scales: PlotScales }): ReactNode {
+  const gutterX = 13
+  const centerY = SCATTER_PAD.top + (height - SCATTER_PAD.top - SCATTER_PAD.bottom) / 2
+  return (
+    <>
+      {axisGrid(width, height, SCATTER_PAD)}
+      {scales.x.ticks.map((tick) => (
+        <text key={`xt-${tick.label}`} className="pa-chart-tick" x={scales.px(tick.value)} y={height - SCATTER_PAD.bottom + 14} textAnchor="middle">{tick.label}</text>
+      ))}
+      {scales.y.ticks.map((tick) => (
+        <text key={`yt-${tick.label}`} className="pa-chart-tick" x={SCATTER_PAD.left - 7} y={scales.py(tick.value) + 3} textAnchor="end">{tick.label}</text>
+      ))}
+      <text className="pa-chart-axis-label" x={SCATTER_PAD.left} y={height - 8}>{xLabel}</text>
+      {/* Rotated y title: centered in the gutter, never above the SVG top. */}
+      <text className="pa-chart-axis-label pa-chart-axis-y" x={gutterX} y={centerY} textAnchor="middle" transform={`rotate(-90 ${gutterX} ${centerY})`}>{yLabel}</text>
+    </>
+  )
+}
 
 function axisGrid(width: number, height: number, pad: { left: number; right: number; top: number; bottom: number }, columns = 4, rows = 4): ReactNode {
   const lines: ReactNode[] = []
@@ -46,17 +99,13 @@ export function InsightsBubbleChart({ points, width = 560, height = 300, xLabel,
   yLabel: string
   onSelect?: (id: string) => void
 }) {
-  const pad = { left: 44, right: 18, top: 16, bottom: 34 }
-  const scaleX = (value: number) => pad.left + (width - pad.left - pad.right) * value
-  const scaleY = (value: number) => height - pad.bottom - (height - pad.top - pad.bottom) * value
+  const scales = plotScales(points, width, height)
   return (
     <svg className="pa-chart pa-bubble-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={points.length > 0 ? `${points.length} plotted signals` : 'No signals to plot'}>
-      {axisGrid(width, height, pad)}
-      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
-      <text className="pa-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
+      {scatterAxisChrome({ width, height, xLabel, yLabel, scales })}
       {points.map((point) => (
         <g key={point.id} className={`pa-bubble tone-${point.tone ?? 'violet'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
-          <circle cx={scaleX(point.x)} cy={scaleY(point.y)} r={point.r ?? 12}>
+          <circle cx={scales.px(point.x)} cy={scales.py(point.y)} r={point.r ?? 12}>
             <title>{point.label}</title>
           </circle>
         </g>
@@ -191,17 +240,13 @@ export function InsightsScatter({ points, width = 560, height = 280, xLabel, yLa
   yLabel: string
   onSelect?: (id: string) => void
 }) {
-  const pad = { left: 44, right: 18, top: 16, bottom: 34 }
-  const scaleX = (value: number) => pad.left + (width - pad.left - pad.right) * value
-  const scaleY = (value: number) => height - pad.bottom - (height - pad.top - pad.bottom) * value
+  const scales = plotScales(points, width, height)
   return (
     <svg className="pa-chart pa-scatter-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Trend signal scatter">
-      {axisGrid(width, height, pad)}
-      <text className="pa-chart-axis-label" x={pad.left} y={height - 8}>{xLabel}</text>
-      <text className="pa-chart-axis-label" x={12} y={pad.top + 4} transform={`rotate(-90 12 ${pad.top + 4})`}>{yLabel}</text>
+      {scatterAxisChrome({ width, height, xLabel, yLabel, scales })}
       {points.map((point) => (
         <g key={point.id} className={`pa-scatter-dot tone-${point.tone ?? 'cyan'}`} onClick={() => onSelect?.(point.id)} role={onSelect ? 'button' : undefined}>
-          <circle cx={scaleX(point.x)} cy={scaleY(point.y)} r={point.r ?? 5}><title>{point.label}</title></circle>
+          <circle cx={scales.px(point.x)} cy={scales.py(point.y)} r={point.r ?? 5}><title>{point.label}</title></circle>
         </g>
       ))}
       {points.length === 0 && <text className="pa-chart-empty" x={width / 2} y={height / 2} textAnchor="middle">No signals yet</text>}

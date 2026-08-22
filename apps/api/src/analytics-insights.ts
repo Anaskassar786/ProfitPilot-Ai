@@ -9,8 +9,28 @@ import type { OrderRepository, OrderView } from './orders.js'
 
 const CACHE_MS = 5 * 60_000
 const QUERY_LIMIT: Readonly<Record<PlanTier, number | null>> = { trial: 0, start: 5, growth: 20, commander: null }
+
+/**
+ * Analytics copilot persona (QA Bug #4e).
+ *
+ * The previous one-line instruction let the model narrate its own internal
+ * reasoning ("I don't have enough rows, so I will…"), which reached merchants
+ * as raw developer-style thought process. The copilot must talk like a human
+ * analyst: when the historical baseline is missing it says so warmly and
+ * honestly instead of exposing internals.
+ */
+export const ANALYTICS_COPILOT_SYSTEM_PROMPT = [
+  'You are ProfitPilot\'s analytics copilot — a warm, human e-commerce analyst advising a busy store owner.',
+  'Answer using only the aggregate store facts supplied. Never infer customers, identities, causes, or unsupported numbers.',
+  'Give one concise answer and one practical next step, in a friendly conversational tone.',
+  'If the historical baseline is missing or thin (few or no sales days synced), respond humanly and honestly — for example: "Since your store was recently connected, we are building your historical baseline. Keep syncing daily and this insight will sharpen within a couple of weeks."',
+  'Never output your internal reasoning, debugging details, data-source names, or developer-facing diagnostics. Speak to the merchant, not to yourself.',
+].join(' ')
 const GROWTH = ['product_trends', 'customer_segments', 'natural_language_insight', 'geographic_distribution', 'cohort_analysis', 'growth_opportunities', 'conversion_funnel', 'executive_summary'] as const
-const COMMANDER = ['period_comparisons', 'predictive_revenue', 'custom_ai_queries', 'executive_report', 'industry_benchmarks'] as const
+// `industry_benchmarks` was removed (QA Bug #4b): the card was a fake
+// "available when industry data is connected" placeholder with no backing
+// data source, so the entitlement no longer exists either.
+const COMMANDER = ['period_comparisons', 'predictive_revenue', 'custom_ai_queries', 'executive_report'] as const
 export type AnalyticsFeature = 'anomaly_detection' | (typeof GROWTH)[number] | (typeof COMMANDER)[number]
 export type ForecastPoint = Readonly<{ day: string; value: number; lower: number; upper: number }>
 export type ChannelMetric = Readonly<{ channel: string; revenue: number; orders: number; share: number; growth: number | null }>
@@ -145,7 +165,7 @@ export class AnalyticsInsightsService {
     if (!reserved.allowed) throw new AppError('RATE_LIMITED', 'Daily analytics query limit reached', 429)
     const snapshot = await this.analytics.read(storeId)
     const facts = aggregateFacts(snapshot)
-    const generation = await this.provider.generate('Answer using only the aggregate store facts supplied. Never infer customers, identities, causes, or unsupported numbers. Give one concise answer and one practical next step.', `Question: ${normalized}\nAggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}`)
+    const generation = await this.provider.generate(ANALYTICS_COPILOT_SYSTEM_PROMPT, `Question: ${normalized}\nAggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\nSales days of history available: ${snapshot.revenue.length}`)
     return { text: validateLanguageResponse(generation.text, facts, 0), model: generation.model, usage: { used: reserved.used, limit: QUERY_LIMIT[plan] } }
   }
 }

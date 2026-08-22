@@ -43,6 +43,11 @@ export class WorkflowRunner {
         this.ledger.put({ key, runId, nodeId: node.id, status: 'WAITING', input: redact(context), output: { resumeAt }, updatedAt: this.now() })
         return { runId, workflowId: workflow.id, storeId: workflow.storeId, status: 'WAITING', currentNodeId: node.id, resumeAt, steps }
       }
+      if (node.type === 'exit') {
+        // Terminal node: record a completed step and end the run cleanly.
+        this.ledger.put({ key, runId, nodeId: node.id, status: 'COMPLETED', input: redact(context), output: { exited: true }, updatedAt: this.now() })
+        return { runId, workflowId: workflow.id, storeId: workflow.storeId, status: 'COMPLETED', currentNodeId: null, resumeAt: null, steps }
+      }
       if (node.type === 'action') {
         const workflowAction = String(node.config.action) as WorkflowAction
         const action = policyAction(workflowAction)

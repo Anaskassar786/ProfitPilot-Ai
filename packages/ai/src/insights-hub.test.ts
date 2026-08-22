@@ -114,7 +114,9 @@ describe('insights hub environment configuration', () => {
   })
   it('falls back to the documented nemotron defaults', () => {
     const config = insightsHubEnvConfig({})
-    expect(config.models).toEqual(['nvidia/nemotron-3.5-lightning:free', 'nvidia/nemotron-3-super:free'])
+    // QA 2026-08-22: the old `nemotron-3-super:free` slug was delisted; the
+    // fallback chain now points at a live endpoint.
+    expect(config.models).toEqual(['nvidia/nemotron-3.5-lightning:free', 'nvidia/nemotron-3-super-120b-a12b:free'])
     expect(config.minConfidenceScore).toBe(0.7)
     expect(config.apiRateLimit).toBe(100)
   })

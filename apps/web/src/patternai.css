@@ -39,8 +39,8 @@
   --pa-accent-wash: rgba(139, 92, 246, 0.1);
   --pa-cyan-wash: rgba(6, 182, 212, 0.12);
 
-  /* Charts */
-  --pa-grid: rgba(148, 163, 184, 0.16);
+  /* Charts — grid raised from 0.16 so lines are clearly visible on the dark canvas. */
+  --pa-grid: rgba(148, 163, 184, 0.30);
   --pa-chart-text: rgb(148, 163, 184);
   --pa-bubble: rgba(139, 92, 246, 0.7);
   --pa-dot: rgb(34, 211, 238);
@@ -96,7 +96,8 @@
   --pa-accent-wash: rgba(124, 58, 237, 0.06);
   --pa-cyan-wash: rgba(8, 145, 178, 0.08);
 
-  --pa-grid: rgba(71, 85, 105, 0.14);
+  /* Grid raised from 0.14 so chart lines stay visible on the light canvas. */
+  --pa-grid: rgba(71, 85, 105, 0.26);
   --pa-chart-text: rgb(71, 85, 105);
   --pa-bubble: rgba(124, 58, 237, 0.72);
   --pa-dot: rgb(8, 145, 178);
@@ -779,7 +780,11 @@
 .pa-chart { width: 100%; overflow: visible; }
 .pa-chart-grid { stroke: var(--pa-grid); stroke-width: 1; }
 .pa-chart-axis-label { fill: var(--pa-chart-text); font-size: 12px; }
-.pa-chart-empty { padding: 28px; color: var(--pa-text-tertiary); font-size: 13px; text-align: center; }
+/* Rotated y-axis title lives fully inside the left gutter (see chart kit). */
+.pa-chart-axis-y { dominant-baseline: middle; }
+.pa-chart-tick { fill: var(--pa-chart-text); font-size: 10px; opacity: .9; }
+/* SVG <text> empty states must set `fill` — CSS `color` never paints SVG glyphs. */
+.pa-chart-empty { fill: var(--pa-text-tertiary); font-size: 13px; text-align: center; }
 .pa-bubble circle { fill: var(--pa-bubble); stroke: var(--pa-purple-soft); stroke-width: 1; transition: opacity 140ms ease; }
 .pa-bubble:hover circle { opacity: 0.82; }
 .pa-bubble.tone-anomaly circle { fill: rgba(245, 158, 11, 0.72); }

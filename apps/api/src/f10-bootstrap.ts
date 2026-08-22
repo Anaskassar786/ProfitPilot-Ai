@@ -32,7 +32,7 @@ import {
 
 export type StoreCoachBootstrap = Readonly<F9Bootstrap & { storeCoach: Readonly<{ service: StoreCoachService }> }>
 
-const DEFAULT_COACH_MODELS = ['nvidia/nemotron-3-ultra:free', 'nvidia/nemotron-3-super:free'] as const
+const DEFAULT_COACH_MODELS = ['nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia/nemotron-3-super-120b-a12b:free'] as const
 
 export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string | undefined>>, logger = new Logger()): StoreCoachBootstrap | null {
   const f9 = createF9Bootstrap(rawEnv, logger)

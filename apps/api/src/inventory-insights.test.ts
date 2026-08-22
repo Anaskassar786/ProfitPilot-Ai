@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiGeneration } from '@profitpilot/ai'
+import { AiUnavailableError } from '@profitpilot/ai'
 import { Logger } from '@profitpilot/logger'
 import { storeId } from '@profitpilot/types'
 import type { PlanTier, StoreId } from '@profitpilot/types'
@@ -382,7 +383,20 @@ describe('AI suggestion grounding and usage limits', () => {
   it('rejects an AI answer that introduces an unsupported number', async () => {
     const { instance } = service({ plan: 'growth', generate: provider('You have 999999 units stranded in a warehouse.') })
     const result = await instance.get(TENANT)
-    expect(insight(result, 'ai_suggestion').status).toBe('unavailable')
+    // QA 2026-08-22: a language-firewall rejection is now surfaced as a
+    // distinct "safety check failed" state, not the generic offline string.
+    const data = insight(result, 'ai_suggestion')
+    expect(data.status).toBe('safety_failed')
+    expect(String((data as { message?: string }).message)).toContain('safety check')
+  })
+
+  it('distinguishes an offline provider from a safety rejection', async () => {
+    const offline = { generate: vi.fn(async (): Promise<AiGeneration> => { throw new AiUnavailableError() }) }
+    const { instance } = service({ plan: 'growth', generate: offline })
+    const result = await instance.get(TENANT)
+    const data = insight(result, 'ai_suggestion')
+    expect(data.status).toBe('unavailable')
+    expect(String((data as { message?: string }).message)).toContain('offline or rate-limited')
   })
 
   it('counts one generation per request and stops at the Growth daily limit', async () => {

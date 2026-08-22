@@ -19,7 +19,7 @@ import type { PlanTier } from '@profitpilot/types'
 /* ── Environment configuration ─────────────────────────────────────────── */
 
 export const INSIGHTS_HUB_DEFAULT_MODEL_PRIMARY = 'nvidia/nemotron-3.5-lightning:free'
-export const INSIGHTS_HUB_DEFAULT_MODEL_FALLBACK = 'nvidia/nemotron-3-super:free'
+export const INSIGHTS_HUB_DEFAULT_MODEL_FALLBACK = 'nvidia/nemotron-3-super-120b-a12b:free'
 export const INSIGHTS_HUB_DEFAULT_RATE_LIMIT = 25
 export const INSIGHTS_HUB_DEFAULT_API_RATE_LIMIT = 100
 export const INSIGHTS_HUB_DEFAULT_MIN_CONFIDENCE = 0.7

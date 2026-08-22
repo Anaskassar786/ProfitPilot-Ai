@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AiGeneration, OpenRouterClient } from '@profitpilot/ai'
-import { planAtLeast, planDisplayName, validateLanguageResponse } from '@profitpilot/ai'
+import { generateValidatedInsight, planAtLeast, planDisplayName } from '@profitpilot/ai'
 import type { BillingRepository } from '@profitpilot/billing'
 import type { QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
@@ -206,6 +206,7 @@ export class InventoryInsightsService {
     private readonly provider: Pick<OpenRouterClient, 'generate'>,
     private readonly recordGeneration: ((storeId: StoreId, generation: AiGeneration) => void) | null = null,
     private readonly now: () => number = () => Date.now(),
+    private readonly diagnose: ((event: string, context: Readonly<Record<string, unknown>>) => void) | null = null,
   ) {}
 
   public async get(storeId: StoreId, requestedFeature?: string): Promise<InventoryInsightsResult> {
@@ -358,17 +359,22 @@ export class InventoryInsightsService {
   private async generate(storeId: StoreId, dataset: InventoryDataset, at: number, question: string): Promise<unknown> {
     const facts = groundedInventoryFacts(dataset, at)
     if (facts.length === 0) return { status: 'insufficient_data', message: 'There are not enough aggregate inventory facts to generate an answer.' }
-    try {
-      const generation = await this.provider.generate(
-        'You are ProfitPilot inventory intelligence. Use only the supplied aggregate facts. Never invent a number, product name, SKU, customer, or completed action. Never ask for product-level or customer-level detail. Keep the response to two short sentences of practical advice.',
-        `${question ? `Question with identifiers removed: ${question}` : 'Give one practical inventory action for this store.'}\n\nGrounded aggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If the evidence is insufficient, say so plainly.`,
-        { maxTokens: 180 },
-      )
-      this.recordGeneration?.(storeId, generation)
-      return { status: 'generated', text: validateLanguageResponse(generation.text, facts, 0), model: generation.model, facts: facts.map((fact) => ({ label: fact.label, value: fact.value })) }
-    } catch {
-      return { status: 'unavailable', message: 'AI inventory intelligence is temporarily unavailable. The deterministic insights above remain accurate.' }
+    // Provider outages and language-firewall rejections surface as distinct,
+    // merchant-readable states instead of one swallowed "unavailable" string.
+    const outcome = await generateValidatedInsight({
+      provider: this.provider,
+      system: 'You are ProfitPilot inventory intelligence. Use only the supplied aggregate facts. Never invent a number, product name, SKU, customer, or completed action. Never ask for product-level or customer-level detail. Keep the response to two short sentences of practical advice.',
+      user: `${question ? `Question with identifiers removed: ${question}` : 'Give one practical inventory action for this store.'}\n\nGrounded aggregate facts:\n${facts.map((fact) => `${fact.label}: ${fact.value}`).join('\n')}\n\nUse only numeric values shown above. If the evidence is insufficient, say so plainly.`,
+      evidence: facts,
+      maxTokens: 180,
+      diagnose: this.diagnose ? (event, context) => { this.diagnose?.(event, { ...context, storeId, feature: 'inventory' }) } : undefined,
+    })
+    if (outcome.status === 'generated') {
+      this.recordGeneration?.(storeId, outcome.generation)
+      return { status: 'generated', text: outcome.text, model: outcome.model, facts: facts.map((fact) => ({ label: fact.label, value: fact.value })) }
     }
+    if (outcome.status === 'safety_failed') return { status: 'safety_failed', message: outcome.message }
+    return { status: 'unavailable', message: outcome.message }
   }
 
   private async plan(storeId: StoreId): Promise<PlanTier> { return (await this.billing.get(storeId))?.plan ?? 'trial' }

@@ -75,7 +75,7 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   const resolvedKeys = resolveApiKeys(env)
   const provider = new OpenRouterClient({
     keys: resolvedKeys.keys,
-    models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
+    models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra-550b-a55b:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super-120b-a12b:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
     timeoutMs: 60_000,
     maxRetries: 1,
     temperature: 0.3,
@@ -125,7 +125,7 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
       return {
         summary: { day: summary.day, microDollars: summary.microDollars, capMicroDollars: summary.capMicroDollars, calls: summary.calls },
         executiveCalls: reportsUsed + scenariosUsed,
-        models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
+        models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra-550b-a55b:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super-120b-a12b:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
         budgetUsd: numberEnv(env, 'AI_EXECUTIVE_DAILY_BUDGET_USD', 0),
       }
     },
