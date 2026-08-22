@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Banner, Button } from './polaris-ui.js'
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -409,10 +409,16 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
   const chartRows = risk.items.filter((item) => item.days !== null).map((item) => ({ ...item, days: item.days ?? 0, short: item.label.length > 22 ? `${item.label.slice(0, 21)}…` : item.label }))
   const worst = risk.items[0] ?? null
   const colorFor = (days: number, status: string) => (status === 'out' || days <= 3 ? 'rgb(244, 63, 94)' : days <= risk.reorderWindowDays ? 'rgb(245, 158, 11)' : 'rgb(52, 211, 153)')
-  return <Widget className="stockout-widget" eyebrow="Inventory Risk" title="Stock-out risk & cover" action={risk.hasInventory ? <span className={`scope-pill ${risk.urgentCount > 0 ? 'warn' : ''}`} title="SKUs out of stock or inside the reorder window"><PackageSearch size={12} />{risk.urgentCount > 0 ? `${risk.urgentCount} need action` : 'All SKUs covered'}</span> : undefined}>
+  return <Widget className="stockout-widget" eyebrow="Inventory Risk" title="Stock-out risk & cover" action={risk.hasInventory ? <span className={`scope-pill ${risk.urgentCount > 0 ? 'warn' : ''}`} title="SKUs out of stock or inside the reorder window"><PackageSearch size={12} />{risk.urgentCount > 0 ? `${risk.urgentCount} need action` : risk.allUntracked ? 'Tracking disabled' : 'All SKUs covered'}</span> : undefined}>
     {loading ? <div className="stock-risk-loading"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line short" /></div>
       : !risk.hasInventory ? <RichEmpty icon={PackageSearch} title="Protect your bestsellers" message={risk.explanation} progress={0} goal="Sync products to measure stock cover" />
-      : <>
+      : risk.allUntracked ? (
+        <div className="risk-untracked-empty">
+          <Banner tone="warning" title="Inventory tracking is disabled">
+            <p>ProfitPilot can&rsquo;t measure stock-out risk because your products are set to &lsquo;Not tracked&rsquo; in Shopify. Enable &lsquo;Track quantity&rsquo; in your Shopify admin &rarr; Products to unlock stock-out risk analytics.</p>
+          </Banner>
+        </div>
+      ) : <>
         {chartRows.length ? <div className="chart-mid risk-chart"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart layout="vertical" data={chartRows} margin={{ top: 10, right: 22, left: 4, bottom: 4 }}>
           <CartesianGrid stroke="rgba(148,163,184,.08)" horizontal={false}/>
           <XAxis type="number" tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${Math.round(safe(value))}d`} />
@@ -448,11 +454,13 @@ export function StockoutRisk({ inventory, loading, onUpgrade }: { inventory: Inv
                 : <><b>{worst.label}</b> is flagged {worst.status === 'low' ? 'low' : 'at risk'}{worst.quantity !== null ? <> with <b>{worst.quantity}</b> units left</> : null}.</>}
             {' '}Reorder before the {risk.reorderWindowDays}-day window closes to keep the revenue you already earn.</>
           : <>No SKU is inside the {risk.reorderWindowDays}-day reorder window — stock cover is healthy across {risk.trackedCount || risk.healthyCount} tracked {(risk.trackedCount || risk.healthyCount) === 1 ? 'SKU' : 'SKUs'}.</>}</span></div>
-        {/* The Upgrade CTA appears ONLY when days-of-cover is plan-locked.
-            Commander stores and young stores without a 30-day baseline get an
-            honest "awaiting baseline" note instead of a false upsell. */}
-        {risk.coverLocked && risk.hasInventory ? <div className="risk-note"><LockKeyhole size={12} /><span>{risk.explanation}</span><Button type="button" onClick={onUpgrade}>Upgrade <ArrowUpRight size={12} /></Button></div> : null}
-        {!risk.coverAvailable && !risk.coverLocked && risk.hasInventory ? <div className="risk-note"><Clock3 size={12} /><span>{risk.explanation}</span></div> : null}
+        {/* QA Bug #4c (both PRs converged here): the Upgrade CTA renders ONLY
+            when days-of-cover is strictly plan-locked. Commander / gift
+            stores and young stores without a 30-day baseline get an honest
+            "awaiting sales history" note instead of a false upsell. */}
+        {risk.coverLocked ? <div className="risk-note"><LockKeyhole size={12} /><span>{risk.explanation}</span><Button type="button" onClick={onUpgrade}>Upgrade <ArrowUpRight size={12} /></Button></div>
+          : !risk.coverAvailable ? <div className="risk-note info" role="status"><span>{risk.coverNote}</span></div>
+          : null}
         {risk.untrackedCount > 0 ? <p className="risk-footnote">{risk.untrackedCount} SKU{risk.untrackedCount === 1 ? '' : 's'} are not tracked in Shopify, so they carry no stock signal.</p> : null}
       </>}
   </Widget>

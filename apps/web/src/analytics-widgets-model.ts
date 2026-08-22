@@ -226,17 +226,21 @@ export type StockRisk = Readonly<{
   /** False when the plan does not include days-of-cover (never guessed). */
   coverAvailable: boolean
   /**
-   * True ONLY when days-of-cover is locked behind the plan (an Upgrade CTA is
-   * appropriate). False on Commander and on young stores that simply have not
-   * collected enough sales history yet — those show an "awaiting baseline"
-   * note instead of an upgrade button.
+   * True ONLY when days of cover is strictly blocked by a lower pricing plan
+   * (the API marks every row `locked` and the current plan is below Growth).
+   * Never true for Growth/Commander merchants — including gift-code access,
+   * which resolves to the Commander plan.
    */
   coverLocked: boolean
+  /** Honest copy for the info note when cover is unavailable but NOT plan-locked. */
+  coverNote: string
   outCount: number
   lowCount: number
   healthyCount: number
   untrackedCount: number
   trackedCount: number
+  /** True when the store has SKUs but zero of them have inventory tracking enabled. */
+  allUntracked: boolean
   /** Items that will run dry inside the reorder window. */
   urgentCount: number
   /** Sum of the 30-day exposure across measurable at-risk items. */
@@ -250,6 +254,8 @@ export type StockRisk = Readonly<{
 
 const REORDER_WINDOW_DAYS = 14
 const EXPOSURE_HORIZON_DAYS = 30
+/** Days of cover unlocks at Growth; rank mirrors `apps/api` plan ordering. */
+const PLAN_RANK: Readonly<Record<InventoryPageResult['plan'], number>> = { trial: 0, start: 1, growth: 2, commander: 3 }
 
 function riskLabel(item: InventoryRowItem): string {
   const variant = item.variantTitle && item.variantTitle !== 'Default Title' ? ` · ${item.variantTitle}` : ''
@@ -265,11 +271,6 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
   const items = page?.items ?? []
   const coverAvailable = items.some((item) => item.daysOfCover.status === 'available')
   const locked = items.some((item) => item.daysOfCover.status === 'locked')
-  // The Upgrade CTA is keyed STRICTLY on a plan-locked days-of-cover status.
-  // A store on Commander (or any plan) whose days-of-cover is missing because
-  // there is not yet a 30-day sales baseline is NOT locked — it is awaiting
-  // history, and showing an Upgrade button there is a false upsell.
-  const coverLocked = locked
   const distribution = page?.distribution ?? { healthy: 0, low: 0, out: 0, untracked: 0 }
   const stats = page?.stats
 
@@ -296,20 +297,43 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
   const exposureItems = ranked.filter((item) => item.exposure !== null && item.exposure > 0)
   const urgentCount = ranked.filter((item) => item.status === 'out' || (item.days !== null && item.days <= REORDER_WINDOW_DAYS)).length
 
-  // Cover missing for a non-locked store = not enough synced sales history yet
-  // (young stores, Commander included). That is an "awaiting baseline" state,
-  // never an upsell.
-  const awaitingBaseline = items.length > 0 && !coverAvailable && !coverLocked
+  // The Upgrade CTA must never appear for a plan that already includes days of
+  // cover. `locked` alone would falsely flag Growth/Commander merchants when
+  // cover is merely short on data, so it is combined with the plan tier. Gift
+  // codes resolve to `commander`, which keeps the CTA hidden for them too.
+  const plan = page?.plan
+  const coverLocked = locked && !coverAvailable && plan !== undefined && (PLAN_RANK[plan] ?? Number.POSITIVE_INFINITY) < PLAN_RANK.growth
+
+  const trackedCount = stats?.trackedSkus ?? 0
+  const untrackedCount = distribution.untracked || stats?.untrackedSkus || 0
+  const totalSkus = stats?.totalSkus ?? 0
+  // "Inventory tracking is disabled" must only block the card when the synced
+  // catalog is 100% untracked AND Shopify delivered no live stock signal at
+  // all. A store can carry real stock data without `inventory_management` on
+  // every variant payload — inventory level rows may still exist in
+  // `sync_records` (or a variant may still ship `inventory_quantity`). In that
+  // case the metrics grid (Out of stock / Low stock / Healthy SKUs) is the
+  // truth and a blanket "disabled" warning would hide real stock-out risk.
+  // `coverage.levelRowCount` is computed from the FULL dataset server-side, so
+  // it stays reliable even though the Analytics page only fetches 50 rows.
+  const hasSyncedLevels = (page?.coverage?.levelRowCount ?? 0) > 0
+  const hasVariantQuantities = items.some((item) => item.quantitySource === 'variant_inventory_quantity' && item.quantity !== null)
+  const allUntracked = totalSkus > 0 && trackedCount === 0 && !hasSyncedLevels && !hasVariantQuantities
+
   return {
     items: ranked.slice(0, limit),
     hasInventory: items.length > 0,
     coverAvailable,
     coverLocked,
+    coverNote: coverLocked
+      ? 'Days of cover is a Growth feature. Stock counts below come straight from Shopify.'
+      : 'Awaiting sales history — days of cover needs 30 days of tracked sales per SKU. Stock counts below come straight from Shopify.',
     outCount: distribution.out || stats?.outOfStockCount || 0,
     lowCount: distribution.low || stats?.lowStockCount || 0,
     healthyCount: distribution.healthy || stats?.inStockCount || 0,
-    untrackedCount: distribution.untracked || stats?.untrackedSkus || 0,
-    trackedCount: stats?.trackedSkus ?? 0,
+    untrackedCount,
+    trackedCount,
+    allUntracked,
     urgentCount,
     exposure: exposureItems.length ? exposureItems.reduce((sum, item) => sum + (item.exposure ?? 0), 0) : null,
     exposureItems: exposureItems.length,
@@ -317,8 +341,6 @@ export function stockRisk(page: InventoryPageResult | null, limit = 6): StockRis
     reorderWindowDays: REORDER_WINDOW_DAYS,
     explanation: coverLocked
       ? 'Days of cover is a Growth feature. Stock counts below come straight from Shopify.'
-      : awaitingBaseline
-        ? 'Awaiting sales history baseline — days of cover appear once enough daily sales history has synced.'
-        : page?.coverage.explanation ?? 'Sync your Shopify products to measure stock-out risk.',
+      : page?.coverage.explanation ?? 'Sync your Shopify products to measure stock-out risk.',
   }
 }
