@@ -64,8 +64,21 @@ export function AnalyticsPage({ context, snapshot, onSync, onNavigateBilling }: 
   }
   useEffect(refresh, [context.storeId])
   const trend = useMemo(() => {
-    const points = periodTrend(snapshot, customRange ? 365 : period, insights?.forecast ?? null)
-    return customRange ? points.filter((point) => point.day >= customRange.from && point.day <= customRange.to) : points
+    if (customRange) {
+      // Build continuous axis from customRange.from → customRange.to inclusive, with zeros for missing days.
+      const from = safeDayKey(customRange.from)
+      const to = safeDayKey(customRange.to)
+      if (!from || !to) return []
+      const diff = (() => {
+        const startTime = safeDate(from)?.valueOf()
+        const endTime = safeDate(to)?.valueOf()
+        if (startTime == null || endTime == null) return 0
+        return Math.max(0, Math.floor((endTime - startTime) / 86_400_000))
+      })()
+      const customPeriod = diff + 1
+      return periodTrend(snapshot, customPeriod, insights?.forecast ?? null, { endDay: to })
+    }
+    return periodTrend(snapshot, period, insights?.forecast ?? null)
   }, [snapshot, period, customRange, insights])
   const effectiveCustomers = insights?.totalCustomers ?? customerCountFallback ?? (insights?.customerStats?.identified || (snapshot?.customerCohorts?.length ? 5 : null))
   const kpis = useMemo(() => analyticsKpis(snapshot, effectiveCustomers, insights?.customerStats), [snapshot, effectiveCustomers, insights?.customerStats])

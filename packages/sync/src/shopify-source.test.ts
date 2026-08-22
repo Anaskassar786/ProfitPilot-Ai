@@ -62,7 +62,7 @@ const orderNode = {
   email: 'customer@example.com',
   phone: null,
   displayFinancialStatus: 'PAID',
-  fulfillmentStatus: 'FULFILLED',
+  displayFulfillmentStatus: 'FULFILLED',
   currencyCode: 'USD',
   presentmentCurrencyCode: 'USD',
   totalPriceSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } },
@@ -75,16 +75,23 @@ const orderNode = {
   currentTotalDiscountsSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   totalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   currentTotalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
-  customer: { id: 'gid://shopify/Customer/555', email: 'customer@example.com', phone: null, firstName: 'Ada', lastName: 'Lovelace', createdAt: '2026-01-01T00:00:00Z' },
+  customer: {
+    id: 'gid://shopify/Customer/555',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    createdAt: '2026-01-01T00:00:00Z',
+    defaultEmailAddress: { emailAddress: 'customer@example.com' },
+    defaultPhoneNumber: { phoneNumber: null },
+  },
   lineItems: { edges: [{ node: { id: 'gid://shopify/LineItem/7', title: 'Mug', variantTitle: 'Default Title', sku: 'MUG', quantity: 2, originalUnitPriceSet: { shopMoney: { amount: '9.50', currencyCode: 'USD' } }, totalDiscountSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } }, product: { id: 'gid://shopify/Product/8429887141223' }, variant: { id: 'gid://shopify/ProductVariant/45' } } }] },
-  shippingAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: null },
+  shippingAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCodeV2: 'GB', phone: null },
   billingAddress: null,
-  transactions: { edges: [{ node: { id: 'gid://shopify/OrderTransaction/501', kind: 'SALE', status: 'SUCCESS', amountSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } }, createdAt: '2026-08-01T10:05:00Z', processedAt: '2026-08-01T10:05:00Z', gateway: 'shop_payments', parentTransaction: null } }] },
+  // 2026-07: transactions is a list, not a connection
+  transactions: [{ id: 'gid://shopify/OrderTransaction/501', kind: 'SALE', status: 'SUCCESS', amountSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } }, createdAt: '2026-08-01T10:05:00Z', processedAt: '2026-08-01T10:05:00Z', gateway: 'shop_payments', parentTransaction: null }],
 }
 
 const customerNode = {
   id: 'gid://shopify/Customer/555',
-  email: 'customer@example.com',
   firstName: 'Ada',
   lastName: 'Lovelace',
   createdAt: '2026-01-01T00:00:00Z',
@@ -94,10 +101,10 @@ const customerNode = {
   numberOfOrders: '3',
   amountSpent: { amount: '150.00', currencyCode: 'USD' },
   lastOrder: { id: 'gid://shopify/Order/1001', name: '#1001' },
+  defaultEmailAddress: { emailAddress: 'customer@example.com', marketingState: 'SUBSCRIBED' },
   defaultPhoneNumber: { phoneNumber: '+15551234567' },
-  emailMarketingConsent: { marketingState: 'SUBSCRIBED' },
-  defaultAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: '+15551234567' },
-  addresses: { edges: [{ node: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: '+15551234567' } }] },
+  defaultAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCodeV2: 'GB', phone: '+15551234567' },
+  addressesV2: { edges: [{ node: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCodeV2: 'GB', phone: '+15551234567' } }] },
 }
 
 describe('Shopify GraphQL sync source', () => {
@@ -216,4 +223,33 @@ describe('Shopify GraphQL sync source', () => {
   })
 
   it('rejects invalid page sizes', () => expect(() => new ShopifyGraphqlSyncSource(async () => new ShopifyClient('demo.myshopify.com', 'token'), 251)).toThrow('between'))
+
+  it('uses only valid Admin GraphQL fields for 2026-07 orders/customers', async () => {
+    const { source, requests } = graphqlSource({ data: { orders: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    await source.fetchPage(storeId('s'), 'orders', null)
+    const orderQuery = requests[0]?.query ?? ''
+    // Must use displayFulfillmentStatus, not legacy fulfillmentStatus
+    expect(orderQuery).toContain('displayFulfillmentStatus')
+    expect(orderQuery).not.toMatch(/\bfulfillmentStatus\b/)
+    // transactions is a list, not a connection — must not have first: or edges inside transactions
+    expect(orderQuery).not.toMatch(/transactions\s*\(\s*first/)
+    expect(orderQuery).toMatch(/transactions\s*\{/)
+    // Customer must use addressesV2 and defaultEmailAddress, not deprecated addresses/email/emailMarketingConsent
+    const { source: customerSource, requests: customerRequests } = graphqlSource({ data: { customers: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    await customerSource.fetchPage(storeId('s'), 'customers', null)
+    const customerQuery = customerRequests[0]?.query ?? ''
+    expect(customerQuery).toContain('addressesV2')
+    expect(customerQuery).toContain('defaultEmailAddress')
+    // Deprecated fields should not appear as top-level Customer fields
+    // (allow them inside nested address selections where they are valid)
+    expect(customerQuery).not.toMatch(/customers\(.*\)\s*\{\s*edges\s*\{\s*node\s*\{[^}]*\bemail\b/)
+    expect(customerQuery).not.toMatch(/emailMarketingConsent/)
+    // MailingAddress should use countryCodeV2, not deprecated countryCode alone
+    expect(customerQuery).toContain('countryCodeV2')
+  })
+
+  it('logs full GraphQL error body on failure', async () => {
+    const { source } = graphqlSource({ data: null, errors: [{ message: 'Field fulfillmentStatus is not defined', locations: [{ line: 1, column: 1 }], path: ['orders'] }] })
+    await expect(source.fetchPage(storeId('s'), 'orders', null)).rejects.toThrow('fulfillmentStatus')
+  })
 })

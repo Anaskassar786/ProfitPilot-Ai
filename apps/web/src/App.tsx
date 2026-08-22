@@ -231,7 +231,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
 type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; devOnly?: boolean }>
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
-const syncModules = ['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'] as const
+const syncModules = ['products', 'orders', 'customers', 'inventory', 'collections', 'discounts'] as const
 type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; status: 'syncing' | 'succeeded' | 'failed'; detail: string }>
 
 type WorkspaceData = Readonly<{ analytics: AnalyticsSnapshot | null; catalog: readonly CatalogProduct[]; agents: readonly AgentStatus[]; recommendations: readonly Recommendation[]; inventory: InventoryPageResult | null; loadState: LoadState; error: string | null }>
@@ -742,7 +742,7 @@ export default function App() {
           ? { module, status: 'succeeded', detail: `${report.result.records} records · ${report.result.pages} pages` }
           : { module, status: 'failed', detail: report.error.message }
       }))
-      showToast(result.failed.length > 0 ? `Sync all finished: ${result.succeeded.length} succeeded, ${result.failed.length} failed.` : 'Sync all finished successfully for all 8 modules.', result.failed.length > 0 ? 'warning' : 'success')
+      showToast(result.failed.length > 0 ? `Sync all finished: ${result.succeeded.length} succeeded, ${result.failed.length} failed.` : `Sync all finished successfully for all ${syncModules.length} modules.`, result.failed.length > 0 ? 'warning' : 'success')
       await loadData()
     } catch (error: unknown) {
       const message = errorMessage(error)
