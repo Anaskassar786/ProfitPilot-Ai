@@ -441,6 +441,9 @@
 .risk-note svg { flex: none; }
 .risk-note span { flex: 1; }
 .risk-note button { padding: 4px 9px; color: rgb(237, 233, 254); border: 1px solid rgba(139,92,246,.35); border-radius: 99px; background: rgba(139,92,246,.2); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+/* Informational (never upsell) variant: cover is short on data, not plan-gated. */
+.risk-note.info { color: rgb(147, 197, 253); border-color: rgba(56,189,248,.18); background: rgba(56,189,248,.06); }
+.risk-untracked-empty { padding: 18px 14px 14px; }
 .risk-footnote { margin: 0 17px 14px; color: var(--text-tertiary); font-size: 10.5px; }
 
 /* Light theme parity */
@@ -460,6 +463,8 @@
 .light-mode .revenue-trend.pacing .insight-strip { color: rgb(55, 65, 81) !important; background: rgb(239, 246, 255) !important; border-color: rgb(191, 219, 254) !important; }
 .app-shell.light-mode .risk-note,
 .light-mode .risk-note { color: rgb(91, 33, 182) !important; background: rgb(245, 243, 255) !important; border-color: rgb(221, 214, 254) !important; }
+.app-shell.light-mode .risk-note.info,
+.light-mode .risk-note.info { color: rgb(30, 64, 175) !important; background: rgb(239, 246, 255) !important; border-color: rgb(191, 219, 254) !important; }
 .app-shell.light-mode .risk-note button,
 .light-mode .risk-note button { color: rgb(255, 255, 255) !important; background: rgb(124, 58, 237) !important; border-color: rgb(124, 58, 237) !important; }
 .app-shell.light-mode .risk-row small,

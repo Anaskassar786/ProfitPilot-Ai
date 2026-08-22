@@ -78,13 +78,24 @@ function insightsFixture(overrides: Record<string, unknown> = {}) {
 
 describe('analytics defensive model helpers used by UI', () => {
   it('KPI sparklines stay safe with 0, 1, and 2 points', () => {
+    // No rows → no sparkline at all (never a fabricated zero run).
     expect(analyticsKpis(emptySnapshot, null)[0]?.sparkline).toEqual([])
-    expect(analyticsKpis({
+    // With sales, the sparkline is the continuous 28-day window ending today,
+    // with explicit 0 on missing days — sparse rows must still surface their
+    // real revenue and never introduce NaN.
+    const one = analyticsKpis({
       ...emptySnapshot,
       revenue: [{ storeId: 's', day: '2026-08-16', grossRevenue: 10, discounts: 0, orderCount: 1 }],
       orders: [{ storeId: 's', day: '2026-08-16', orderCount: 1, fulfilledCount: 1, cancelledCount: 0, averageOrderValue: 10 }],
-    }, null)[0]?.sparkline).toHaveLength(1)
-    expect(analyticsKpis(twoOrderSnapshot, null)[0]?.sparkline).toHaveLength(2)
+    }, null)[0]?.sparkline ?? []
+    expect(one).toHaveLength(28)
+    expect(one).toContain(10)
+    expect(one.every(Number.isFinite)).toBe(true)
+    const two = analyticsKpis(twoOrderSnapshot, null)[0]?.sparkline ?? []
+    expect(two).toHaveLength(28)
+    expect(two).toContain(100)
+    expect(two).toContain(50)
+    expect(two.every(Number.isFinite)).toBe(true)
   })
 })
 
@@ -156,12 +167,14 @@ describe('analytics page low-data rendering', () => {
     if (!container) throw new Error('missing root')
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(Boundary, null, createElement(AnalyticsPage as never, {
-        context: { storeId: 's', shop: 'test.myshopify.com' },
-        snapshot,
-        onSync: async () => {},
-        onNavigateBilling: () => {},
-      })))
+      root.render(createElement(Boundary, null, createElement(AppProvider, { i18n: enTranslations as never },
+        createElement(AnalyticsPage as never, {
+          context: { storeId: 's', shop: 'test.myshopify.com' },
+          snapshot,
+          onSync: async () => {},
+          onNavigateBilling: () => {},
+        }),
+      )))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 80)) })
     return { dom, container }

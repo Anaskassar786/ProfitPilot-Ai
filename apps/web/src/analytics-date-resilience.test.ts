@@ -19,6 +19,8 @@ import { createElement, Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { JSDOM } from 'jsdom'
 import { describe, expect, it, vi, afterEach } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { analyticsKpis, periodTrend } from './analytics-model.js'
 import type { AnalyticsSnapshot } from './model.js'
 
@@ -88,7 +90,8 @@ function insightsFixture(overrides: Record<string, unknown> = {}) {
 
 describe('analytics model tolerates production date shapes', () => {
   it('normalises full ISO timestamps into day keys for the trend series', () => {
-    const points = periodTrend(productionShapedSnapshot, 7, null)
+    // Pin the window end so the test stays deterministic as real time advances.
+    const points = periodTrend(productionShapedSnapshot, 7, null, { endDay: '2026-08-16' })
     expect(points).toHaveLength(7)
     for (const point of points) expect(point.day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     // Revenue must still be matched to the right day despite the ISO input.
@@ -239,10 +242,12 @@ describe('analytics page survives every hostile date payload', () => {
     if (!container) throw new Error('missing root')
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(Boundary, null, createElement(AnalyticsPage as never, {
-        context: { storeId: 's', shop: 'test.myshopify.com' },
-        snapshot, onSync: async () => {}, onNavigateBilling: () => {},
-      })))
+      root.render(createElement(Boundary, null, createElement(AppProvider, { i18n: enTranslations as never },
+        createElement(AnalyticsPage as never, {
+          context: { storeId: 's', shop: 'test.myshopify.com' },
+          snapshot, onSync: async () => {}, onNavigateBilling: () => {},
+        }),
+      )))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 80)) })
     return { dom, container }
@@ -367,6 +372,10 @@ describe('section error boundary isolates a crashing child', () => {
       ['Node', dom.window.Node], ['Element', dom.window.Element], ['ResizeObserver', RO],
     ] as const) Object.defineProperty(globalThis, key, { configurable: true, value })
     ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    Object.defineProperty(dom.window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false } }),
+    })
 
     const { createRoot } = await import('react-dom/client')
     const { act } = await import('react')
@@ -379,9 +388,11 @@ describe('section error boundary isolates a crashing child', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await act(async () => {
-      root.render(createElement('div', null,
-        createElement(AnalyticsSectionBoundary as never, { label: 'exploding section' }, createElement(Exploding)),
-        createElement('p', { 'data-sibling': 'true' }, 'sibling still rendered'),
+      root.render(createElement(AppProvider, { i18n: enTranslations as never },
+        createElement('div', null,
+          createElement(AnalyticsSectionBoundary as never, { label: 'exploding section' }, createElement(Exploding)),
+          createElement('p', { 'data-sibling': 'true' }, 'sibling still rendered'),
+        ),
       ))
     })
 
