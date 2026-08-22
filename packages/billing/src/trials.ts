@@ -352,6 +352,22 @@ export class PostgresTrialGiftStore {
     return cancelled
   }
 
+  /**
+   * Lists ACTIVE trials expiring within `withinMs` across every store — the
+   * source for the worker's hourly trial-expiry nudge tick. Mirrors the
+   * `TrialAndGiftLedger.expiringTrials` contract so the in-memory ledger (tests)
+   * and this Postgres store are interchangeable.
+   */
+  public async expiringTrials(now = Date.now(), withinMs = 24 * 60 * 60 * 1000): Promise<readonly TrialRecord[]> {
+    const result = await this.executor.query<TrialRow>(
+      `SELECT shop_id, started_at, expires_at, consumed, state
+       FROM trials
+       WHERE state = 'ACTIVE' AND expires_at > to_timestamp($1 / 1000.0) AND expires_at <= to_timestamp($2 / 1000.0)`,
+      [now, now + withinMs],
+    )
+    return result.rows.map(mapTrial)
+  }
+
   public async seedDefaultCodes(codes: readonly GiftCode[] = DEFAULT_GIFT_CODES): Promise<void> {
     for (const gift of codes) {
       await this.executor.query(

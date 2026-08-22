@@ -52,9 +52,12 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
       repository,
       trials: giftStore,
       funnel,
-      // Phase 1: mock local plan upgrades by default so the Billing UI can be
-      // tested end-to-end without Shopify Billing. Flip via BILLING_MOCK_CHARGES=false.
-      mockCharges: env.BILLING_MOCK_CHARGES?.trim().toLowerCase() !== 'false',
+      // Mock charges are opt-in for local/partner-test environments only and
+      // are completely unreachable in production. `mockCharges` is false in
+      // production regardless of BILLING_MOCK_CHARGES, and the route ignores
+      // the `body.mock`/`body.devMock` flags when `isProduction` is set.
+      mockCharges: env.NODE_ENV !== 'production' && env.BILLING_MOCK_CHARGES?.trim().toLowerCase() === 'true',
+      isProduction: env.NODE_ENV === 'production',
       createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
       verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, plan && interval ? { plan, interval } : undefined),
       usage: async (shopId) => usage(f4.database, shopId, giftStore),

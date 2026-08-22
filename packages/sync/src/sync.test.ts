@@ -13,7 +13,7 @@ function policy(): StoreRequestPolicy {
 }
 
 describe('sync foundation', () => {
-  it('defines all eight sync modules', () => expect(SYNC_MODULES).toHaveLength(8))
+  it('defines all six sync modules', () => expect(SYNC_MODULES).toHaveLength(6))
   it('creates a deterministic sync plan', () => expect(createSyncPlan().map((item) => item.module)).toEqual([...SYNC_MODULES]))
   it('starts a checkpoint at version one', async () => {
     const checkpoint = await new CheckpointLedger().save({ storeId: store, module: 'products', cursor: 'c1', updatedAt: 100 }, null)

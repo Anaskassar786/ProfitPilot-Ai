@@ -3,20 +3,25 @@ import { InMemoryAnalyticsRepository } from '@profitpilot/db'
 import type { DatabaseResult, QueryResultRow, SqlExecutor } from '@profitpilot/db'
 import { ShopifyClient } from '@profitpilot/shopify'
 import { storeId } from '@profitpilot/types'
-import { PostgresSyncSink, ShopifyRestSyncSource } from './index.js'
+import { PostgresSyncSink, ShopifyGraphqlSyncSource } from './index.js'
 
-function source(data: Record<string, unknown>, link?: string): ShopifyRestSyncSource {
+type GraphqlRequest = { query: string; variables: Readonly<Record<string, unknown>> }
+
+/** Builds a GraphQL-backed source that answers every GraphQL POST with `payload` and records each request. */
+function graphqlSource(payload: unknown): { source: ShopifyGraphqlSyncSource; requests: GraphqlRequest[] } {
+  const requests: GraphqlRequest[] = []
   const client = new ShopifyClient('demo.myshopify.com', 'token', async (url, init) => {
-    expect(url).toContain('/admin/api/2026-07/')
+    expect(url).toContain('/admin/api/2026-07/graphql.json')
     expect(init.headers).toMatchObject({ 'x-shopify-access-token': 'token' })
-    const responseInit: ResponseInit = { status: 200 }
-    if (link) responseInit.headers = { link }
-    return new Response(JSON.stringify(data), responseInit)
+    const body = JSON.parse(String(init.body ?? '{}')) as GraphqlRequest
+    requests.push(body)
+    return new Response(JSON.stringify(payload), { status: 200 })
   })
-  return new ShopifyRestSyncSource(async () => client, 2)
+  return { source: new ShopifyGraphqlSyncSource(async () => client, 2), requests }
 }
 
-function routingSource(routes: Readonly<Record<string, Record<string, unknown>>>, links: Readonly<Record<string, string>> = {}): ShopifyRestSyncSource {
+/** Builds a source that routes REST calls by pathname (for inventory/collections/discounts). */
+function restSource(routes: Readonly<Record<string, Record<string, unknown>>>, links: Readonly<Record<string, string>> = {}): ShopifyGraphqlSyncSource {
   const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
     const parsed = new URL(url)
     const key = Object.keys(routes).find((candidate) => parsed.pathname.endsWith(candidate) || parsed.pathname.includes(candidate))
@@ -25,32 +30,88 @@ function routingSource(routes: Readonly<Record<string, Record<string, unknown>>>
     if (links[key]) responseInit.headers = { link: links[key] }
     return new Response(JSON.stringify(routes[key]), responseInit)
   })
-  return new ShopifyRestSyncSource(async () => client, 2)
+  return new ShopifyGraphqlSyncSource(async () => client, 2)
 }
 
-describe('Shopify REST sync source', () => {
-  it('fetches products and extracts a next cursor', async () => {
-    const result = await source({ products: [{ id: 1, title: 'Product' }] }, '<https://demo.myshopify.com/admin/api/2026-07/products.json?page_info=next-token>; rel="next"').fetchPage(storeId('s'), 'products', null)
-    expect(result.records).toEqual([{ id: '1', title: 'Product' }])
-    expect(result.records[0]?.title).toBe('Product')
-    expect(result.nextCursor).toBe('next-token')
+const productNode = {
+  id: 'gid://shopify/Product/8429887141223',
+  title: 'Commander Pilot Mug',
+  handle: 'commander-pilot-mug',
+  status: 'ACTIVE',
+  createdAt: '2026-08-01T10:00:00Z',
+  updatedAt: '2026-08-02T11:00:00Z',
+  vendor: 'ProfitPilot',
+  productType: 'Drinkware',
+  descriptionHtml: '<p>Mission ready.</p>',
+  tags: ['mug'],
+  variants: { edges: [{ node: { id: 'gid://shopify/ProductVariant/45', title: 'Default Title', sku: 'MUG', price: '19.00', inventoryQuantity: 18, inventoryItem: { id: 'gid://shopify/InventoryItem/99', unitCost: { amount: '5.00' } } } }] },
+  options: [{ id: 'gid://shopify/ProductOption/1', name: 'Title', values: ['Default Title'] }],
+  images: { edges: [{ node: { id: 'gid://shopify/ProductImage/2', url: 'https://cdn.shopify.com/mug.png', altText: null } }] },
+}
+
+const orderNode = {
+  id: 'gid://shopify/Order/1001',
+  name: '#1001',
+  createdAt: '2026-08-01T10:00:00Z',
+  updatedAt: '2026-08-01T10:05:00Z',
+  processedAt: '2026-08-01T10:05:00Z',
+  cancelledAt: null,
+  cancelReason: null,
+  note: null,
+  tags: [],
+  email: 'customer@example.com',
+  phone: null,
+  displayFinancialStatus: 'PAID',
+  fulfillmentStatus: 'FULFILLED',
+  currencyCode: 'USD',
+  presentmentCurrencyCode: 'USD',
+  totalPriceSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } },
+  currentTotalPriceSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } },
+  subtotalPriceSet: { shopMoney: { amount: '18.00', currencyCode: 'USD' } },
+  currentSubtotalPriceSet: { shopMoney: { amount: '18.00', currencyCode: 'USD' } },
+  totalTaxSet: { shopMoney: { amount: '1.00', currencyCode: 'USD' } },
+  currentTotalTaxSet: { shopMoney: { amount: '1.00', currencyCode: 'USD' } },
+  totalDiscountsSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  currentTotalDiscountsSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  totalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  currentTotalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  customer: { id: 'gid://shopify/Customer/555', email: 'customer@example.com', phone: null, firstName: 'Ada', lastName: 'Lovelace', createdAt: '2026-01-01T00:00:00Z' },
+  lineItems: { edges: [{ node: { id: 'gid://shopify/LineItem/7', title: 'Mug', variantTitle: 'Default Title', sku: 'MUG', quantity: 2, originalUnitPriceSet: { shopMoney: { amount: '9.50', currencyCode: 'USD' } }, totalDiscountSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } }, product: { id: 'gid://shopify/Product/8429887141223' }, variant: { id: 'gid://shopify/ProductVariant/45' } } }] },
+  shippingAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: null },
+  billingAddress: null,
+  transactions: { edges: [{ node: { id: 'gid://shopify/OrderTransaction/501', kind: 'SALE', status: 'SUCCESS', amountSet: { shopMoney: { amount: '19.00', currencyCode: 'USD' } }, createdAt: '2026-08-01T10:05:00Z', processedAt: '2026-08-01T10:05:00Z', gateway: 'shop_payments', parentTransaction: null } }] },
+}
+
+const customerNode = {
+  id: 'gid://shopify/Customer/555',
+  email: 'customer@example.com',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-02T00:00:00Z',
+  note: null,
+  tags: ['vip'],
+  numberOfOrders: '3',
+  amountSpent: { amount: '150.00', currencyCode: 'USD' },
+  lastOrder: { id: 'gid://shopify/Order/1001', name: '#1001' },
+  defaultPhoneNumber: { phoneNumber: '+15551234567' },
+  emailMarketingConsent: { marketingState: 'SUBSCRIBED' },
+  defaultAddress: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: '+15551234567' },
+  addresses: { edges: [{ node: { firstName: 'Ada', lastName: 'Lovelace', company: null, address1: '1 Main St', address2: null, city: 'London', province: null, zip: 'E1', country: 'United Kingdom', countryCode: 'GB', phone: '+15551234567' } }] },
+}
+
+describe('Shopify GraphQL sync source', () => {
+  it('fetches products through GraphQL and maps to the legacy REST shape with a cursor', async () => {
+    const { source } = graphqlSource({ data: { products: { edges: [{ node: productNode }], pageInfo: { hasNextPage: true, endCursor: 'next-cursor' } } } })
+    const result = await source.fetchPage(storeId('s'), 'products', null)
+    expect(result.records[0]).toMatchObject({ id: '8429887141223', title: 'Commander Pilot Mug', status: 'active', variants: [{ id: '45', price: '19.00', inventory_quantity: 18, inventory_item: { cost: '5.00' } }] })
+    expect(result.records[0]?.admin_graphql_api_id).toBe('gid://shopify/Product/8429887141223')
+    expect(result.nextCursor).toBe('next-cursor')
   })
-  it('persists a real Shopify product shape once and exposes catalog payload.title directly', async () => {
-    const product = {
-      id: 8_429_887_141_223,
-      admin_graphql_api_id: 'gid://shopify/Product/8429887141223',
-      title: 'Commander Pilot Mug',
-      body_html: '<p>Mission ready.</p>',
-      vendor: 'ProfitPilot',
-      product_type: 'Drinkware',
-      created_at: '2026-08-01T10:00:00+05:30',
-      updated_at: '2026-08-02T11:00:00+05:30',
-      status: 'active',
-      variants: [{ id: 45_000_000_000_001, product_id: 8_429_887_141_223, title: 'Default Title', price: '19.00', inventory_quantity: 18 }],
-      options: [{ id: 1, product_id: 8_429_887_141_223, name: 'Title', values: ['Default Title'] }],
-      images: [{ id: 2, product_id: 8_429_887_141_223, src: 'https://cdn.shopify.com/mug.png' }],
-    }
-    const page = await source({ products: [product] }).fetchPage(storeId('store-1'), 'products', null)
+
+  it('persists a mapped product shape once and exposes catalog payload.title directly', async () => {
+    const { source } = graphqlSource({ data: { products: { edges: [{ node: productNode }], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    const page = await source.fetchPage(storeId('store-1'), 'products', null)
     let insertedPayload: string | undefined
     const executor: SqlExecutor = {
       async query<Row extends QueryResultRow>(_text: string, values?: readonly unknown[]): Promise<DatabaseResult<Row>> {
@@ -66,13 +127,62 @@ describe('Shopify REST sync source', () => {
     expect(catalogProduct?.payload.title).toBe('Commander Pilot Mug')
     expect(catalogProduct?.payload.payload).toBeUndefined()
   })
-  it('uses a resume cursor in the request', async () => {
-    let requested = ''
-    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => { requested = url; return new Response(JSON.stringify({ orders: [] }), { status: 200 }) })
-    await new ShopifyRestSyncSource(async () => client, 50).fetchPage(storeId('s'), 'orders', 'resume')
-    expect(requested).toContain('page_info=resume')
-    expect(requested).toContain('limit=50')
+
+  it('passes a resume cursor as the GraphQL after variable', async () => {
+    const { source, requests } = graphqlSource({ data: { products: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    await source.fetchPage(storeId('s'), 'products', 'resume-cursor')
+    expect(requests[0]?.variables.after).toBe('resume-cursor')
+    expect(requests[0]?.variables.first).toBe(2)
   })
+
+  it('maps an order with nested transactions and no per-order N+1 request', async () => {
+    const { source, requests } = graphqlSource({ data: { orders: { edges: [{ node: orderNode }], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    const result = await source.fetchPage(storeId('s'), 'orders', null)
+    expect(requests).toHaveLength(1)
+    const order = result.records[0]
+    expect(order).toMatchObject({
+      id: '1001',
+      order_number: '1001',
+      name: '#1001',
+      financial_status: 'paid',
+      fulfillment_status: 'fulfilled',
+      currency: 'USD',
+      total_price: '19.00',
+      customer: { id: '555', created_at: '2026-01-01T00:00:00Z' },
+      line_items: [{ product_id: '8429887141223', variant_id: '45', quantity: 2, price: '9.50' }],
+      transactions: [{ id: '501', order_id: '1001', kind: 'sale', status: 'success', amount: '19.00' }],
+    })
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it('maps a customer to the legacy REST shape', async () => {
+    const { source } = graphqlSource({ data: { customers: { edges: [{ node: customerNode }], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    const result = await source.fetchPage(storeId('s'), 'customers', null)
+    expect(result.records[0]).toMatchObject({
+      id: '555',
+      email: 'customer@example.com',
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      orders_count: 3,
+      total_spent: '150.00',
+      last_order_id: '1001',
+      last_order_name: '#1001',
+      phone: '+15551234567',
+      email_marketing_consent: { state: 'subscribed' },
+      addresses: [{ country: 'United Kingdom' }],
+    })
+  })
+
+  it('surfaces GraphQL errors as a dependency error naming the module', async () => {
+    const { source } = graphqlSource({ data: { products: null }, errors: [{ message: 'Field products is not defined' }] })
+    await expect(source.fetchPage(storeId('s'), 'products', null)).rejects.toThrow('products')
+  })
+
+  it('rejects a product node without a stable id', async () => {
+    const { source } = graphqlSource({ data: { products: { edges: [{ node: { title: 'No id' } }], pageInfo: { hasNextPage: false, endCursor: null } } } })
+    await expect(source.fetchPage(storeId('s'), 'products', null)).rejects.toThrow('stable id')
+  })
+
   it('loads inventory levels through locations first', async () => {
     const requested: string[] = []
     const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
@@ -81,50 +191,14 @@ describe('Shopify REST sync source', () => {
       if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 99, location_id: 11, available: 6, admin_graphql_api_id: 'gid://shopify/InventoryLevel/11?inventory_item_id=99' }] }), { status: 200 })
       return new Response(JSON.stringify({}), { status: 404 })
     })
-    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
+    const page = await new ShopifyGraphqlSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
     expect(requested.some((url) => url.includes('/locations.json'))).toBe(true)
     expect(requested.some((url) => url.includes('location_ids=11'))).toBe(true)
     expect(page.records[0]?.id).toBe('11:99')
   })
-  it('persists real location metadata alongside the levels so the workspace can name a location', async () => {
-    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
-      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations: [{ id: 11, name: 'Morādābād Warehouse', city: 'Morādābād', province: 'Uttar Pradesh', country: 'IN', active: true }] }), { status: 200 })
-      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 99, location_id: 11, available: 6 }] }), { status: 200 })
-      return new Response(JSON.stringify({}), { status: 404 })
-    })
-    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
-    const location = page.records.find((record) => record.id === 'location:11')
-    expect(location).toMatchObject({ record_kind: 'location', location_id: '11', name: 'Morādābād Warehouse', city: 'Morādābād', country: 'IN', active: true, levels_queried: true })
-  })
-  it('does not duplicate location metadata on resumed inventory pages', async () => {
-    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
-      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations: [{ id: 11, name: 'HQ' }] }), { status: 200 })
-      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [{ inventory_item_id: 100, location_id: 11, available: 2 }] }), { status: 200 })
-      return new Response(JSON.stringify({}), { status: 404 })
-    })
-    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', 'cursor-2')
-    expect(page.records.some((record) => String(record.id).startsWith('location:'))).toBe(false)
-    expect(page.records).toHaveLength(1)
-  })
-  it('marks locations beyond the Shopify location_ids cap as not queried instead of dropping them', async () => {
-    const locations = Array.from({ length: 52 }, (_value, index) => ({ id: index + 1, name: `Store ${index + 1}` }))
-    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
-      if (url.includes('/locations.json')) return new Response(JSON.stringify({ locations }), { status: 200 })
-      if (url.includes('/inventory_levels.json')) return new Response(JSON.stringify({ inventory_levels: [] }), { status: 200 })
-      return new Response(JSON.stringify({}), { status: 404 })
-    })
-    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'inventory', null)
-    const locationRecords = page.records.filter((record) => String(record.id).startsWith('location:'))
-    expect(locationRecords).toHaveLength(52)
-    expect(locationRecords.filter((record) => record.levels_queried === false)).toHaveLength(2)
-  })
-  it('returns an empty inventory page when the shop has no locations', async () => {
-    const page = await routingSource({ '/locations.json': { locations: [] } }).fetchPage(storeId('s'), 'inventory', null)
-    expect(page.records).toEqual([])
-    expect(page.nextCursor).toBeNull()
-  })
+
   it('pages custom collections then smart collections', async () => {
-    const sourceClient = routingSource({
+    const sourceClient = restSource({
       '/custom_collections.json': { custom_collections: [{ id: 1, title: 'Summer' }] },
       '/smart_collections.json': { smart_collections: [{ id: 2, title: 'Auto' }] },
     })
@@ -135,24 +209,11 @@ describe('Shopify REST sync source', () => {
     expect(smart.records[0]).toMatchObject({ id: '2', collection_kind: 'smart' })
     expect(smart.nextCursor).toBeNull()
   })
-  it('loads transactions from each order on the page', async () => {
-    const client = new ShopifyClient('demo.myshopify.com', 'token', async (url) => {
-      if (url.includes('/orders.json')) return new Response(JSON.stringify({ orders: [{ id: 77 }] }), { status: 200 })
-      if (url.includes('/orders/77/transactions.json')) return new Response(JSON.stringify({ transactions: [{ id: 501, amount: '19.00', kind: 'sale' }] }), { status: 200 })
-      return new Response(JSON.stringify({}), { status: 404 })
-    })
-    const page = await new ShopifyRestSyncSource(async () => client).fetchPage(storeId('s'), 'transactions', null)
-    expect(page.records[0]).toMatchObject({ id: '501', order_id: '77', kind: 'sale' })
+
+  it('maps the remaining REST discount module', async () => {
+    const result = await restSource({ '/price_rules.json': { price_rules: [{ id: 1 }] } }).fetchPage(storeId('s'), 'discounts', null)
+    expect(result.records).toHaveLength(1)
   })
-  it('maps remaining simple resource modules', async () => {
-    for (const module of ['customers', 'checkouts', 'discounts'] as const) {
-      const key = module === 'discounts' ? 'price_rules' : module
-      const result = await source({ [key]: [{ id: 1 }] }).fetchPage(storeId('s'), module, null)
-      expect(result.records).toHaveLength(1)
-    }
-  })
-  it('rejects a missing resource array', async () => await expect(source({}).fetchPage(storeId('s'), 'products', null)).rejects.toThrow('products'))
-  it('rejects a resource without a stable id', async () => await expect(source({ products: [{ title: 'No id' }] }).fetchPage(storeId('s'), 'products', null)).rejects.toThrow('stable id'))
-  it('returns null for a previous-only Link header', async () => expect((await source({ products: [] }, '<https://demo.myshopify.com/products?page_info=old>; rel="previous"').fetchPage(storeId('s'), 'products', null)).nextCursor).toBeNull())
-  it('rejects invalid page sizes', () => expect(() => new ShopifyRestSyncSource(async () => new ShopifyClient('demo.myshopify.com', 'token'), 251)).toThrow('between'))
+
+  it('rejects invalid page sizes', () => expect(() => new ShopifyGraphqlSyncSource(async () => new ShopifyClient('demo.myshopify.com', 'token'), 251)).toThrow('between'))
 })

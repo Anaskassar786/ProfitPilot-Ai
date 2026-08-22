@@ -17,34 +17,24 @@ export const LOCATION_RECORD_PREFIX = 'location:'
 
 type ShopifyLocation = Readonly<{ id: string; name: string | null; city: string | null; province: string | null; country: string | null; active: boolean | null; legacy: boolean | null }>
 
-const RESOURCE_PATHS: Readonly<Record<SyncModule, string>> = {
-  products: '/products.json',
-  orders: `/orders.json?status=${['a', 'n', 'y'].join('')}`,
-  customers: '/customers.json',
-  inventory: '/inventory_levels.json',
-  checkouts: '/checkouts.json',
-  collections: '/custom_collections.json',
-  discounts: '/price_rules.json',
-  transactions: '/orders.json',
-}
-
-const RESPONSE_KEYS: Readonly<Record<SyncModule, string>> = {
-  products: 'products',
-  orders: 'orders',
-  customers: 'customers',
-  inventory: 'inventory_levels',
-  checkouts: 'checkouts',
-  collections: 'custom_collections',
-  discounts: 'price_rules',
-  transactions: 'orders',
-}
-
-export class ShopifyRestSyncSource implements SyncSource {
+/**
+ * Products, orders, and customers are synced through the Shopify GraphQL Admin
+ * API (cursor-paginated with `after`). Inventory, collections, and discounts
+ * remain on their REST endpoints because Shopify has no lossless GraphQL
+ * equivalent for inventory levels (`/inventory_levels.json`) and the legacy
+ * price-rules resource (`/price_rules.json`) is still the only source that
+ * exposes legacy discount rules.
+ *
+ * GraphQL nodes are mapped back to the legacy REST field names (snake_case,
+ * numeric ids) so `sync_records`, `catalog_products`, analytics, GDPR redact,
+ * and the rule-engine snapshot keep working without any downstream change.
+ */
+export class ShopifyGraphqlSyncSource implements SyncSource {
   private readonly clients: ShopifyClientFactory
   private readonly pageSize: number
 
   public constructor(clients: ShopifyClientFactory, pageSize = 250) {
-    if (pageSize < 1 || pageSize > 250) throw new RangeError('Shopify REST page size must be between 1 and 250')
+    if (pageSize < 1 || pageSize > 250) throw new RangeError('Shopify GraphQL page size must be between 1 and 250')
     this.clients = clients
     this.pageSize = pageSize
   }
@@ -53,13 +43,58 @@ export class ShopifyRestSyncSource implements SyncSource {
     const client = await this.clients(storeId)
     if (module === 'inventory') return this.fetchInventory(client, cursor)
     if (module === 'collections') return this.fetchCollections(client, cursor)
-    if (module === 'transactions') return this.fetchTransactions(client, cursor)
-    return this.fetchSimple(client, module, cursor)
+    if (module === 'discounts') return this.fetchSimpleRest(client, '/price_rules.json', 'price_rules', 'discounts', cursor)
+    return this.fetchGraphql(client, module, cursor)
   }
 
-  private async fetchSimple(client: ShopifyClient, module: SyncModule, cursor: string | null): Promise<SyncPage> {
-    const response = await this.request(client, this.path(RESOURCE_PATHS[module], cursor), module)
-    return { records: recordsFrom(response.data, RESPONSE_KEYS[module], module), nextCursor: parseNextCursor(response.headers.link ?? null) }
+  // ──────────────────────────────────────────────────────────────────────────
+  // GraphQL modules: products, orders, customers
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private async fetchGraphql(client: ShopifyClient, module: 'products' | 'orders' | 'customers', cursor: string | null): Promise<SyncPage> {
+    const definition = GRAPHQL_MODULES[module]
+    const data = await this.graphql(client, definition.query, { first: this.pageSize, after: cursor ?? null }, module)
+    const connection = record(data[definition.connectionKey])
+    const edges = array(connection?.edges)
+    const records = edges.flatMap((edge) => {
+      const node = record(record(edge)?.node)
+      if (!node) return []
+      const mapped = definition.map(node)
+      if (mapped.id === undefined || mapped.id === null || String(mapped.id).trim() === '') {
+        throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} resource is missing a stable id`, 502, { module })
+      }
+      return [mapped]
+    })
+    const pageInfo = record(connection?.pageInfo)
+    const nextCursor = pageInfo?.hasNextPage === true ? nullableString(pageInfo.endCursor) : null
+    return { records, nextCursor }
+  }
+
+  private async graphql(client: ShopifyClient, query: string, variables: Readonly<Record<string, unknown>>, module: SyncModule): Promise<Readonly<Record<string, unknown>>> {
+    let body: GraphqlBody
+    try {
+      const response = await client.request<GraphqlBody>({ path: '/graphql.json', method: 'POST', body: JSON.stringify({ query, variables }) })
+      body = response.data
+    } catch (error: unknown) {
+      if (error instanceof ShopifyApiError && (error.status === 401 || error.status === 403)) {
+        throw new AppError('DEPENDENCY_ERROR', `Shopify denied the ${module} sync (${error.status}). Reinstall the app so it can request the required access scopes.`, error.status === 401 ? 401 : 403, { module, upstreamStatus: error.status })
+      }
+      throw error
+    }
+    const errors = array(body.errors).map((item) => record(item)?.message).filter((message): message is string => typeof message === 'string')
+    if (errors.length > 0) throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync failed: ${errors.join('; ')}`, 502, { module })
+    const data = record(body.data)
+    if (!data) throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync response did not contain data`, 502, { module })
+    return data
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // REST modules: inventory, collections, discounts
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private async fetchSimpleRest(client: ShopifyClient, path: string, key: string, module: SyncModule, cursor: string | null): Promise<SyncPage> {
+    const response = await this.request(client, this.path(path, cursor), module)
+    return { records: recordsFrom(response.data, key, module), nextCursor: parseNextCursor(response.headers.link ?? null) }
   }
 
   /**
@@ -69,8 +104,8 @@ export class ShopifyRestSyncSource implements SyncSource {
    * The location resources are persisted alongside the levels (once, on the
    * first page) under a `location:` record id so the workspace can render a
    * real location name instead of a bare Shopify id. Shopify has no
-   * `/locations` sync module, and adding one would change the eight-module
-   * sync-all contract, so the inventory module carries both record kinds.
+   * `/locations` sync module, and adding one would change the module contract,
+   * so the inventory module carries both record kinds.
    */
   private async fetchInventory(client: ShopifyClient, cursor: string | null): Promise<SyncPage> {
     const locations = await this.locations(client)
@@ -105,34 +140,6 @@ export class ShopifyRestSyncSource implements SyncSource {
     if (next) return { records, nextCursor: `${parsed.kind}:${next}` }
     if (parsed.kind === 'custom') return { records, nextCursor: 'smart:' }
     return { records, nextCursor: null }
-  }
-
-  /**
-   * Transactions live under each order. Page a compact order list, then load
-   * /orders/{id}/transactions.json for that page.
-   */
-  private async fetchTransactions(client: ShopifyClient, cursor: string | null): Promise<SyncPage> {
-    const orderLimit = Math.min(25, this.pageSize)
-    const ordersPath = cursor
-      ? `/orders.json?limit=${orderLimit}&page_info=${encodeURIComponent(cursor)}`
-      : `/orders.json?status=any&fields=id,admin_graphql_api_id&limit=${orderLimit}`
-    const orders = await this.request(client, ordersPath, 'transactions')
-    const orderRecords = arrayField(orders.data, 'orders')
-    const records: SyncRecord[] = []
-    for (const order of orderRecords) {
-      const orderId = order.id ?? order.admin_graphql_api_id
-      if (typeof orderId !== 'string' && typeof orderId !== 'number') continue
-      try {
-        const txn = await this.request(client, `/orders/${encodeURIComponent(String(orderId))}/transactions.json`, 'transactions')
-        for (const record of recordsFrom(txn.data, 'transactions', 'transactions')) {
-          records.push({ ...record, order_id: String(orderId) })
-        }
-      } catch (error: unknown) {
-        if (error instanceof ShopifyApiError && (error.status === 404 || error.status === 403)) continue
-        throw error
-      }
-    }
-    return { records, nextCursor: parseNextCursor(orders.headers.link ?? null) }
   }
 
   /**
@@ -173,6 +180,318 @@ export class ShopifyRestSyncSource implements SyncSource {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// GraphQL queries + node → legacy-shape mappers
+// ────────────────────────────────────────────────────────────────────────────
+
+type GraphqlBody = Readonly<{ data?: unknown; errors?: readonly unknown[] }>
+
+type GraphqlModule = Readonly<{ query: string; connectionKey: string; map: (node: Readonly<Record<string, unknown>>) => SyncRecord }>
+
+const PRODUCTS_QUERY = `query ProfitPilotProducts($first: Int!, $after: String) {
+  products(first: $first, after: $after) {
+    edges { node {
+      id title handle status createdAt updatedAt vendor productType descriptionHtml tags
+      variants(first: 250) { edges { node {
+        id title sku price inventoryQuantity
+        inventoryItem { id unitCost { amount } }
+      } } }
+      options { id name values }
+      images(first: 10) { edges { node { id url altText } } }
+    } }
+    pageInfo { hasNextPage endCursor }
+  }
+}`
+
+const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
+  orders(first: $first, after: $after) {
+    edges { node {
+      id name createdAt updatedAt processedAt cancelledAt cancelReason note tags email phone
+      displayFinancialStatus fulfillmentStatus currencyCode presentmentCurrencyCode
+      totalPriceSet { shopMoney { amount currencyCode } }
+      currentTotalPriceSet { shopMoney { amount currencyCode } }
+      subtotalPriceSet { shopMoney { amount currencyCode } }
+      currentSubtotalPriceSet { shopMoney { amount currencyCode } }
+      totalTaxSet { shopMoney { amount currencyCode } }
+      currentTotalTaxSet { shopMoney { amount currencyCode } }
+      totalDiscountsSet { shopMoney { amount currencyCode } }
+      currentTotalDiscountsSet { shopMoney { amount currencyCode } }
+      totalShippingPriceSet { shopMoney { amount currencyCode } }
+      currentTotalShippingPriceSet { shopMoney { amount currencyCode } }
+      customer { id email phone firstName lastName createdAt }
+      lineItems(first: 50) { edges { node {
+        id title variantTitle sku quantity
+        originalUnitPriceSet { shopMoney { amount currencyCode } }
+        totalDiscountSet { shopMoney { amount currencyCode } }
+        product { id }
+        variant { id }
+      } } }
+      shippingAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
+      billingAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
+      transactions(first: 50) { edges { node {
+        id kind status createdAt processedAt gateway
+        amountSet { shopMoney { amount currencyCode } }
+        parentTransaction { id }
+      } } }
+    } }
+    pageInfo { hasNextPage endCursor }
+  }
+}`
+
+const CUSTOMERS_QUERY = `query ProfitPilotCustomers($first: Int!, $after: String) {
+  customers(first: $first, after: $after) {
+    edges { node {
+      id email firstName lastName createdAt updatedAt note tags
+      numberOfOrders
+      amountSpent { amount currencyCode }
+      lastOrder { id name }
+      defaultPhoneNumber { phoneNumber }
+      emailMarketingConsent { marketingState }
+      defaultAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
+      addresses(first: 10) { edges { node { firstName lastName company address1 address2 city province zip country countryCode phone } } }
+    } }
+    pageInfo { hasNextPage endCursor }
+  }
+}`
+
+const GRAPHQL_MODULES: Readonly<Record<'products' | 'orders' | 'customers', GraphqlModule>> = {
+  products: { query: PRODUCTS_QUERY, connectionKey: 'products', map: mapGraphqlProduct },
+  orders: { query: ORDERS_QUERY, connectionKey: 'orders', map: mapGraphqlOrder },
+  customers: { query: CUSTOMERS_QUERY, connectionKey: 'customers', map: mapGraphqlCustomer },
+}
+
+/** Maps a GraphQL Product node to the legacy REST product shape. */
+export function mapGraphqlProduct(node: Readonly<Record<string, unknown>>): SyncRecord {
+  const productId = gidNumber(node.id) ?? ''
+  return {
+    id: productId,
+    admin_graphql_api_id: nullableString(node.id),
+    title: nullableString(node.title),
+    handle: nullableString(node.handle),
+    status: nullableString(node.status)?.toLowerCase() ?? null,
+    created_at: nullableString(node.createdAt),
+    updated_at: nullableString(node.updatedAt),
+    vendor: nullableString(node.vendor),
+    product_type: nullableString(node.productType),
+    body_html: nullableString(node.descriptionHtml),
+    tags: array(node.tags),
+    variants: connectionNodes(node.variants).map((variant) => mapGraphqlVariant(variant, productId)),
+    options: array(node.options).map((option) => {
+      const raw = record(option) ?? {}
+      return { id: gidNumber(raw.id), product_id: productId, name: nullableString(raw.name), values: array(raw.values) }
+    }),
+    images: connectionNodes(node.images).map((image) => {
+      const raw = record(image) ?? {}
+      return { id: gidNumber(raw.id), product_id: productId, src: nullableString(raw.url), alt: nullableString(raw.altText) }
+    }),
+  }
+}
+
+function mapGraphqlVariant(node: Readonly<Record<string, unknown>>, productId: string): SyncRecord {
+  const inventoryItem = record(node.inventoryItem)
+  const unitCost = record(inventoryItem?.unitCost)
+  return {
+    id: gidNumber(node.id),
+    product_id: productId,
+    title: nullableString(node.title),
+    sku: nullableString(node.sku),
+    price: nullableString(node.price),
+    inventory_quantity: numberOrNull(node.inventoryQuantity),
+    inventory_item: {
+      id: gidNumber(inventoryItem?.id),
+      cost: nullableString(unitCost?.amount),
+    },
+  }
+}
+
+/** Maps a GraphQL Order node to the legacy REST order shape, with nested transactions. */
+export function mapGraphqlOrder(node: Readonly<Record<string, unknown>>): SyncRecord {
+  const orderId = gidNumber(node.id) ?? ''
+  const customer = record(node.customer)
+  return {
+    id: orderId,
+    admin_graphql_api_id: nullableString(node.id),
+    order_number: parseOrderNumber(nullableString(node.name)),
+    name: nullableString(node.name),
+    created_at: nullableString(node.createdAt),
+    updated_at: nullableString(node.updatedAt),
+    processed_at: nullableString(node.processedAt),
+    cancelled_at: nullableString(node.cancelledAt),
+    cancel_reason: nullableString(node.cancelReason)?.toLowerCase() ?? null,
+    note: nullableString(node.note),
+    tags: array(node.tags),
+    email: nullableString(node.email),
+    phone: nullableString(node.phone),
+    financial_status: nullableString(node.displayFinancialStatus)?.toLowerCase() ?? null,
+    fulfillment_status: mapFulfillmentStatus(node.fulfillmentStatus),
+    currency: nullableString(node.currencyCode),
+    presentment_currency: nullableString(node.presentmentCurrencyCode),
+    total_price: moneyAmount(node.totalPriceSet),
+    current_total_price: moneyAmount(node.currentTotalPriceSet),
+    subtotal_price: moneyAmount(node.subtotalPriceSet),
+    current_subtotal_price: moneyAmount(node.currentSubtotalPriceSet),
+    total_tax: moneyAmount(node.totalTaxSet),
+    current_total_tax: moneyAmount(node.currentTotalTaxSet),
+    total_discounts: moneyAmount(node.totalDiscountsSet),
+    current_total_discounts: moneyAmount(node.currentTotalDiscountsSet),
+    total_shipping_price_set: moneySet(node.totalShippingPriceSet),
+    current_total_shipping_price_set: moneySet(node.currentTotalShippingPriceSet),
+    customer: customer
+      ? {
+          id: gidNumber(customer.id),
+          email: nullableString(customer.email),
+          phone: nullableString(customer.phone),
+          first_name: nullableString(customer.firstName),
+          last_name: nullableString(customer.lastName),
+          created_at: nullableString(customer.createdAt),
+        }
+      : null,
+    line_items: connectionNodes(node.lineItems).map((line) => mapGraphqlLineItem(record(line) ?? {})),
+    shipping_address: mapAddress(record(node.shippingAddress)),
+    billing_address: mapAddress(record(node.billingAddress)),
+    transactions: connectionNodes(node.transactions).map((transaction) => mapGraphqlTransaction(record(transaction) ?? {}, orderId)),
+  }
+}
+
+function mapGraphqlLineItem(node: Readonly<Record<string, unknown>>): SyncRecord {
+  const product = record(node.product)
+  const variant = record(node.variant)
+  return {
+    id: gidNumber(node.id),
+    title: nullableString(node.title),
+    variant_title: nullableString(node.variantTitle),
+    sku: nullableString(node.sku),
+    quantity: numberOrNull(node.quantity) ?? 0,
+    price: moneyAmount(node.originalUnitPriceSet),
+    total_discount: moneyAmount(node.totalDiscountSet),
+    product_id: product?.id ? gidNumber(product.id) : null,
+    variant_id: variant?.id ? gidNumber(variant.id) : null,
+  }
+}
+
+function mapGraphqlTransaction(node: Readonly<Record<string, unknown>>, orderId: string): SyncRecord {
+  const parent = record(node.parentTransaction)
+  return {
+    id: gidNumber(node.id),
+    order_id: orderId,
+    kind: nullableString(node.kind)?.toLowerCase() ?? null,
+    status: nullableString(node.status)?.toLowerCase() ?? null,
+    amount: moneyAmount(node.amountSet),
+    currency: moneyCurrency(node.amountSet),
+    created_at: nullableString(node.createdAt),
+    processed_at: nullableString(node.processedAt),
+    gateway: nullableString(node.gateway),
+    parent_id: parent?.id ? gidNumber(parent.id) : null,
+  }
+}
+
+/** Maps a GraphQL Customer node to the legacy REST customer shape. */
+export function mapGraphqlCustomer(node: Readonly<Record<string, unknown>>): SyncRecord {
+  const amountSpent = record(node.amountSpent)
+  const amount = nullableString(amountSpent?.amount)
+  const currencyCode = nullableString(amountSpent?.currencyCode)
+  const lastOrder = record(node.lastOrder)
+  const consent = record(node.emailMarketingConsent)
+  const phone = record(node.defaultPhoneNumber)
+  return {
+    id: gidNumber(node.id) ?? '',
+    admin_graphql_api_id: nullableString(node.id),
+    email: nullableString(node.email),
+    phone: nullableString(phone?.phoneNumber),
+    first_name: nullableString(node.firstName),
+    last_name: nullableString(node.lastName),
+    created_at: nullableString(node.createdAt),
+    updated_at: nullableString(node.updatedAt),
+    note: nullableString(node.note),
+    tags: array(node.tags),
+    orders_count: numberOrNull(node.numberOfOrders),
+    total_spent: amount,
+    amountSpent: { amount, currencyCode },
+    last_order_id: lastOrder?.id ? gidNumber(lastOrder.id) : null,
+    last_order_name: nullableString(lastOrder?.name),
+    default_address: mapAddress(record(node.defaultAddress)),
+    addresses: connectionNodes(node.addresses).map((address) => mapAddress(record(address) ?? {})),
+    email_marketing_consent: consent ? { state: nullableString(consent.marketingState)?.toLowerCase() ?? null } : null,
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Shared mapping helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Extracts the numeric id from a GraphQL `gid://shopify/Type/123` id. */
+function gidNumber(value: unknown): string | null {
+  if (typeof value === 'number') return String(value)
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const match = /^gid:\/\/shopify\/[^/]+\/(\d+)$/.exec(trimmed)
+  return match?.[1] ?? trimmed
+}
+
+/** Returns the numeric order number from a Shopify order name such as `#1001`. */
+function parseOrderNumber(name: string | null): string | null {
+  if (!name) return null
+  const match = /^#?(\d+)$/.exec(name.trim())
+  return match?.[1] ?? null
+}
+
+/** Maps the GraphQL `OrderFulfillmentStatus` enum to the legacy REST value. */
+function mapFulfillmentStatus(value: unknown): string | null {
+  const normalized = nullableString(value)?.toLowerCase() ?? null
+  if (!normalized) return null
+  if (normalized === 'pending_fulfillment') return 'pending'
+  return normalized
+}
+
+function mapAddress(node: Readonly<Record<string, unknown>> | null): SyncRecord | null {
+  if (!node) return null
+  return {
+    first_name: nullableString(node.firstName),
+    last_name: nullableString(node.lastName),
+    company: nullableString(node.company),
+    address1: nullableString(node.address1),
+    address2: nullableString(node.address2),
+    city: nullableString(node.city),
+    province: nullableString(node.province),
+    zip: nullableString(node.zip),
+    country: nullableString(node.country),
+    country_code: nullableString(node.countryCode),
+    phone: nullableString(node.phone),
+  }
+}
+
+function moneyAmount(set: unknown): string | null {
+  const bag = record(set)
+  const shop = record(bag?.shopMoney)
+  return nullableString(shop?.amount)
+}
+
+function moneyCurrency(set: unknown): string | null {
+  const bag = record(set)
+  const shop = record(bag?.shopMoney)
+  return nullableString(shop?.currencyCode)
+}
+
+function moneySet(set: unknown): SyncRecord | null {
+  const bag = record(set)
+  const shop = record(bag?.shopMoney)
+  if (!shop) return null
+  return { shop_money: { amount: nullableString(shop.amount), currency_code: nullableString(shop.currencyCode) } }
+}
+
+function connectionNodes(value: unknown): readonly Readonly<Record<string, unknown>>[] {
+  const connection = record(value)
+  return array(connection?.edges).flatMap((edge) => {
+    const node = record(record(edge)?.node)
+    return node ? [node] : []
+  })
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// REST record helpers (shared with the remaining REST modules)
+// ────────────────────────────────────────────────────────────────────────────
+
 function recordsFrom(data: Readonly<Record<string, unknown>>, key: string, module: SyncModule): SyncRecord[] {
   const raw = data[key]
   if (!Array.isArray(raw)) throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} response did not contain ${key}`, 502, { module, key })
@@ -207,6 +526,36 @@ function parseNextCursor(link: string | null): string | null {
   const match = next.match(/<([^>]+)>/)
   if (!match?.[1]) return null
   return new URL(match[1]).searchParams.get('page_info')
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Low-level value helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+function record(value: unknown): Readonly<Record<string, unknown>> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Readonly<Record<string, unknown>> : null
+}
+
+function array(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function nullableString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? trimmed : null
+  }
+  if (typeof value === 'number') return String(value)
+  return null
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

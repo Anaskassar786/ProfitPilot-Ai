@@ -141,6 +141,12 @@ importers:
       '@profitpilot/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@profitpilot/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@profitpilot/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@profitpilot/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -150,6 +156,9 @@ importers:
       '@profitpilot/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@profitpilot/shopify':
+        specifier: workspace:*
+        version: link:../../packages/shopify
       '@profitpilot/types':
         specifier: workspace:*
         version: link:../../packages/types

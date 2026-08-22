@@ -10,11 +10,16 @@ Use `pnpm generate:shopify` after the Railway secret variables are loaded. The g
 - **Secondary category:** Marketing and merchandising (select only if the current Shopify review scope permits it)
 - **Pricing:** Start, Growth, and Commander plans are shown by the live billing service. Do not publish a price that differs from the billing configuration.
 - **Support email:** Read from `SUPPORT_EMAIL` in the deployment environment.
-- **Privacy policy:** `/legal/privacy`
-- **Terms:** `/legal/terms`
-- **Security:** `/legal/security`
-- **Cookie policy:** `/legal/cookies`
-- **Data processing addendum:** `/legal/dpa`
+- **Support URL:** `https://<app-host>/support` (override with `SUPPORT_URL`). The Partner Dashboard requires an absolute HTTPS support URL, not a bare email address.
+- **Privacy policy:** `https://<app-host>/legal/privacy`
+- **Terms:** `https://<app-host>/legal/terms`
+- **Security:** `https://<app-host>/legal/security`
+- **Cookie policy:** `https://<app-host>/legal/cookies`
+- **Data processing addendum:** `https://<app-host>/legal/dpa`
+
+`appListingMetadata()` in `apps/api/src/app-store-assets.ts` resolves all of the above
+to absolute HTTPS URLs from `SHOPIFY_APP_URL` (falling back to `APP_URL`), so the
+submitted listing links can never be relative or accidentally point at a wrong host.
 
 ## Description template
 

@@ -44,9 +44,26 @@ describe('F7 Shopify App Store assets', () => {
   it('publishes screenshot specs and an honest listing template', () => {
     expect(APP_STORE_SCREENSHOT_SPECS).toHaveLength(4)
     expect(APP_STORE_SCREENSHOT_SPECS.every((spec) => spec.width === 1600 && spec.height === 1000 && spec.format === 'PNG')).toBe(true)
-    const listing = appListingMetadata()
+    const listing = appListingMetadata({ SHOPIFY_APP_URL: 'https://app.example.com/' })
     expect(listing.description).toContain('does not invent store numbers')
-    expect(listing.complianceLinks).toContain('/legal/dpa')
+    expect(listing.complianceLinks).toContain('https://app.example.com/legal/dpa')
+  })
+
+  it('resolves absolute HTTPS legal and support URLs from the app host', () => {
+    const listing = appListingMetadata({ SHOPIFY_APP_URL: 'https://profitpilot-ai-production.up.railway.app', SUPPORT_EMAIL: 'support@example.com' })
+    expect(listing.privacyPolicyUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/privacy')
+    expect(listing.termsOfServiceUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/terms')
+    expect(listing.securityPolicyUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/security')
+    expect(listing.cookiePolicyUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/cookies')
+    expect(listing.dataProcessingAddendumUrl).toBe('https://profitpilot-ai-production.up.railway.app/legal/dpa')
+    expect(listing.supportUrl).toBe('https://profitpilot-ai-production.up.railway.app/support')
+    expect(listing.supportEmail).toBe('support@example.com')
+    expect(listing.complianceLinks.every((url) => url.startsWith('https://'))).toBe(true)
+  })
+
+  it('honors an explicit SUPPORT_URL override', () => {
+    const listing = appListingMetadata({ SHOPIFY_APP_URL: 'https://app.example.com', SUPPORT_URL: 'https://help.profitpilot.example/contact' })
+    expect(listing.supportUrl).toBe('https://help.profitpilot.example/contact')
   })
 })
 

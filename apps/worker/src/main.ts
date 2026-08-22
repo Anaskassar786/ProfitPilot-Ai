@@ -3,6 +3,7 @@ import { InMemoryQueue, UpstashQueue } from '@profitpilot/queue'
 import { WorkerRuntime } from './worker.js'
 import { createWorkerHealthServer } from './health.js'
 import { createInsightsDiscoveryRunner } from './insights-discovery-job.js'
+import { createBillingJobs } from './billing-job.js'
 
 const logger = loggerFromEnv(process.env)
 
@@ -42,10 +43,31 @@ const insightsDiscovery = createInsightsDiscoveryRunner({
   log: (message, context) => logger.info(message, context ?? {}),
 })
 
+// Billing background jobs (daily charge reconciliation + hourly trial nudges).
+// Best-effort: null when the worker lacks DATABASE_URL/ENCRYPTION_KEY.
+const billingJobs = createBillingJobs(process.env, logger)
+if (!billingJobs) {
+  logger.info('Billing background jobs disabled (DATABASE_URL/ENCRYPTION_KEY not configured)')
+}
+
 const runtime = new WorkerRuntime(
   queue,
   async (job) => {
-    if (job.type === 'report_tick' || job.type === 'billing_reconcile' || job.type === 'trial_nudge' || job.type === 'sync') {
+    if (job.type === 'billing_reconcile') {
+      if (!billingJobs) return
+      const result = await billingJobs.reconcile()
+      logger.info('Billing charge reconciliation completed', { jobId: String(job.id), ...result })
+      return
+    }
+    if (job.type === 'trial_nudge') {
+      if (!billingJobs) return
+      const expiring = await billingJobs.nudge()
+      if (expiring.length > 0) logger.info('Trial expiry nudge found expiring trials', { jobId: String(job.id), count: expiring.length })
+      return
+    }
+    // `report_tick` and `sync` are not worker responsibilities (reports run via
+    // the queue handler above; sync is API-driven over /sync). Skip them.
+    if (job.type === 'report_tick' || job.type === 'sync') {
       return
     }
     if ((await insightsDiscovery.handle(job)) === 'handled') {
@@ -85,8 +107,42 @@ logger.info('ProfitPilot worker started', {
 const intervalRaw = Number(process.env.REPORT_TICK_INTERVAL_MS ?? '3600000')
 const intervalMs = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : 3_600_000
 
+// Hourly trial nudge + daily charge reconciliation run on the worker's own
+// clock (nothing else enqueues those job types). The day/hour guards keep the
+// runs idempotent if a `billing_reconcile`/`trial_nudge` queue job also lands.
+let lastNudgeHour: number | null = null
+let lastReconcileDay: string | null = null
+
+const billingTick = async (now = Date.now()): Promise<void> => {
+  if (!billingJobs) return
+  const date = new Date(now)
+  const hour = date.getUTCHours()
+  const dayKey = date.toISOString().slice(0, 10)
+
+  if (hour !== lastNudgeHour) {
+    lastNudgeHour = hour
+    try {
+      const expiring = await billingJobs.nudge()
+      if (expiring.length > 0) logger.info('Trial expiry nudge found expiring trials', { count: expiring.length })
+    } catch (error: unknown) {
+      logger.error('Trial expiry nudge failed', { reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  if (dayKey !== lastReconcileDay) {
+    lastReconcileDay = dayKey
+    try {
+      const result = await billingJobs.reconcile()
+      logger.info('Billing charge reconciliation completed', { ...result })
+    } catch (error: unknown) {
+      logger.error('Billing charge reconciliation failed', { reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+}
+
 const tick = async (): Promise<void> => {
   const outcome = await runtime.tick()
+  await billingTick()
   state.current = {
     ...state.current,
     lastTickAt: Date.now(),

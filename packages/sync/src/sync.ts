@@ -4,7 +4,12 @@ import type { Logger } from '@profitpilot/logger'
 import type { TenantVersionedCache } from '@profitpilot/cache'
 import type { StoreRequestPolicy } from './rate.js'
 
-export const SYNC_MODULES = ['products', 'orders', 'customers', 'inventory', 'checkouts', 'collections', 'discounts', 'transactions'] as const
+// Checkouts are no longer synced: Shopify shut down the REST Checkout API in
+// 2025, so the module could never return data and only produced dependency
+// errors. Transactions are no longer a standalone module either — they are
+// fetched inside the nested GraphQL `orders { transactions(first: 50) }`
+// connection (see shopify-source.ts), eliminating the per-order N+1 REST loop.
+export const SYNC_MODULES = ['products', 'orders', 'customers', 'inventory', 'collections', 'discounts'] as const
 export type SyncModule = (typeof SYNC_MODULES)[number]
 export type SyncScalar = string | number | boolean | null
 /** A normalized Shopify resource. Nested arrays/objects remain intact. */

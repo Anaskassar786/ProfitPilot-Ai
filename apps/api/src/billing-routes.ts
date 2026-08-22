@@ -32,6 +32,8 @@ export type BillingRouteDependencies = Readonly<{
   ensureTrial?: (shopId: string) => Promise<TrialRecord>
   /** When true, POST /billing/charge updates local subscription only (Phase 1 testing). */
   mockCharges?: boolean
+  /** When true (production), `body.mock` / `body.devMock` are ignored entirely. */
+  isProduction?: boolean
 }>
 
 export function createBillingRouter(dependencies: BillingRouteDependencies): Router {
@@ -91,7 +93,10 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
         throw new AppError('VALIDATION_ERROR', 'plan, interval, and returnUrl are required', 400)
       }
 
-      const useMock = dependencies.mockCharges === true || body.mock === true || body.devMock === true
+      // Mock charges must be unreachable in production. The request body can
+      // request the mock path only in non-production environments; production
+      // ignores `mock` / `devMock` and always hits the real Shopify Billing API.
+      const useMock = dependencies.mockCharges === true || (dependencies.isProduction !== true && (body.mock === true || body.devMock === true))
       if (useMock) {
         const interval = body.interval
         const planTier = body.plan === 'START' ? 'start' : body.plan === 'GROWTH' ? 'growth' : 'commander'

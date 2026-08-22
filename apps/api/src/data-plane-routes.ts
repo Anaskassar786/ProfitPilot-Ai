@@ -38,7 +38,7 @@ export function createDataPlaneRouter(dependencies: DataPlaneDependencies): Rout
     }
   })
 
-  /** Runs all eight Shopify modules sequentially so rate limits and checkpoints remain predictable. */
+  /** Runs all Shopify modules sequentially so rate limits and checkpoints remain predictable. */
   router.post('/sync/all', async (request, response, next) => {
     try {
       const body = request.body as unknown
