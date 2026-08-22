@@ -45,7 +45,7 @@ function sessionToken(overrides: Readonly<Record<string, unknown>> = {}): string
 
 function dataPlane(analytics: () => Promise<AnalyticsSnapshot> = async () => ({ revenue: [], orders: [], productSales: [], customerCohorts: [] })) {
   return {
-    sync: { runModule: async (tenant: ReturnType<typeof storeId>, module: 'products' | 'orders' | 'customers' | 'inventory' | 'checkouts' | 'collections' | 'discounts' | 'transactions') => ({ storeId: tenant, module, pages: 1, records: 0, cursor: null, resumedFrom: null }) },
+    sync: { runModule: async (tenant: ReturnType<typeof storeId>, module: 'products' | 'orders' | 'customers' | 'inventory' | 'collections' | 'discounts') => ({ storeId: tenant, module, pages: 1, records: 0, cursor: null, resumedFrom: null }) },
     analytics: { read: async () => analytics(), readCatalog: async () => [] },
   }
 }

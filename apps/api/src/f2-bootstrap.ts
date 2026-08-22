@@ -2,7 +2,7 @@ import { TenantVersionedCache, UpstashCacheStore } from '@profitpilot/cache'
 import { AppError } from '@profitpilot/types'
 import { PostgresAnalyticsRepository, PostgresStoreDirectory } from '@profitpilot/db'
 import { ShopifyClient } from '@profitpilot/shopify'
-import { AdaptiveRateController, PostgresCheckpointStore, PostgresSyncSink, ShopifyRestSyncSource, StoreCircuitRegistry, StoreRequestPolicy, SyncEngine } from '@profitpilot/sync'
+import { AdaptiveRateController, PostgresCheckpointStore, PostgresSyncSink, ShopifyGraphqlSyncSource, StoreCircuitRegistry, StoreRequestPolicy, SyncEngine } from '@profitpilot/sync'
 import { Logger } from '@profitpilot/logger'
 import type { DataPlaneDependencies } from './data-plane-routes.js'
 import { createF1Bootstrap } from './bootstrap.js'
@@ -17,7 +17,7 @@ export function createF2Bootstrap(env: Readonly<Record<string, string | undefine
   const analytics = new PostgresAnalyticsRepository(f1.database)
   const directory = new PostgresStoreDirectory(f1.database)
   const logger = new Logger()
-  const source = new ShopifyRestSyncSource(async (storeId) => {
+  const source = new ShopifyGraphqlSyncSource(async (storeId) => {
     const connection = await directory.get(storeId)
     if (!connection) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404, { storeId })
     const token = await f1.tokenVault.get(connection.shopDomain)

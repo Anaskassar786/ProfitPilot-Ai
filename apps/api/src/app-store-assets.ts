@@ -106,13 +106,51 @@ export function renderShopifyAppToml(config: ShopifyAppTomlConfig): string {
   return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[webhooks.privacy]\ncustomer_data_request_url = "${tomlEscape(privacyWebhookUrl)}"\ncustomer_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\nshop_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\n\n[[webhooks.subscriptions]]\ntopics = ["app/uninstalled"]\nuri = "/shopify/webhooks"\n`
 }
 
-export function appListingMetadata(): Readonly<{ name: string; tagline: string; category: string; description: string; complianceLinks: readonly string[] }> {
+export type AppListingMetadata = Readonly<{
+  name: string
+  tagline: string
+  category: string
+  description: string
+  supportEmail: string
+  supportUrl: string
+  privacyPolicyUrl: string
+  termsOfServiceUrl: string
+  securityPolicyUrl: string
+  cookiePolicyUrl: string
+  dataProcessingAddendumUrl: string
+  complianceLinks: readonly string[]
+}>
+
+/**
+ * Listing metadata with absolute HTTPS URLs. The Shopify Partner Dashboard
+ * requires absolute policy/support URLs, so every legal link is resolved
+ * against the configured app host (`SHOPIFY_APP_URL`, falling back to
+ * `APP_URL`). `SUPPORT_URL` may override the support destination (defaults to
+ * `<app host>/support`); `SUPPORT_EMAIL` stays available for email footers.
+ */
+export function appListingMetadata(env: Readonly<Record<string, string | undefined>> = process.env): AppListingMetadata {
+  const appUrl = (env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || 'https://app.example.com').replace(/\/+$/, '')
+  const supportUrl = (env.SUPPORT_URL?.trim() || `${appUrl}/support`).replace(/\/+$/, '')
+  const supportEmail = env.SUPPORT_EMAIL?.trim() || ''
+  const legalPath = (path: string): string => `${appUrl}${path}`
+  const privacyPolicyUrl = legalPath('/legal/privacy')
+  const termsOfServiceUrl = legalPath('/legal/terms')
+  const securityPolicyUrl = legalPath('/legal/security')
+  const cookiePolicyUrl = legalPath('/legal/cookies')
+  const dataProcessingAddendumUrl = legalPath('/legal/dpa')
   return {
     name: 'ProfitPilot',
     tagline: 'A review-first AI employee for Shopify operations.',
     category: 'Store management',
     description: 'ProfitPilot monitors authorized Shopify data, explains deterministic opportunities, requests merchant approval, executes approved workflows, and measures outcomes. It does not invent store numbers and it minimizes customer personal data before optional language-model explanations.',
-    complianceLinks: ['/legal/privacy', '/legal/terms', '/legal/security', '/legal/cookies', '/legal/dpa'],
+    supportEmail,
+    supportUrl,
+    privacyPolicyUrl,
+    termsOfServiceUrl,
+    securityPolicyUrl,
+    cookiePolicyUrl,
+    dataProcessingAddendumUrl,
+    complianceLinks: [privacyPolicyUrl, termsOfServiceUrl, securityPolicyUrl, cookiePolicyUrl, dataProcessingAddendumUrl],
   }
 }
 
