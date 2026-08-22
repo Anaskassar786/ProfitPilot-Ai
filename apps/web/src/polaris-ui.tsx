@@ -264,7 +264,7 @@ export function AppBridgeProvider({
 
 export const NAV_DESTINATIONS: readonly Readonly<{ label: string; destination: string; section: string }>[] = [
   { label: 'Dashboard', destination: '/', section: 'dashboard' },
-  { label: 'AI Command Center', destination: '/command', section: 'command-center' },
+  { label: 'AI Center', destination: '/command', section: 'command-center' },
   { label: 'Recommendations', destination: '/recommendations', section: 'recommendations' },
   { label: 'Automation', destination: '/automation', section: 'automation' },
   { label: 'Products', destination: '/products', section: 'products' },

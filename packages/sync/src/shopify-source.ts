@@ -242,7 +242,7 @@ const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
       totalDiscountsSet { shopMoney { amount currencyCode } }
       currentTotalDiscountsSet { shopMoney { amount currencyCode } }
       totalShippingPriceSet { shopMoney { amount currencyCode } }
-      currentTotalShippingPriceSet { shopMoney { amount currencyCode } }
+      currentShippingPriceSet { shopMoney { amount currencyCode } }
       customer {
         id firstName lastName createdAt
         defaultEmailAddress { emailAddress }
@@ -364,7 +364,7 @@ export function mapGraphqlOrder(node: Readonly<Record<string, unknown>>): SyncRe
     total_discounts: moneyAmount(node.totalDiscountsSet),
     current_total_discounts: moneyAmount(node.currentTotalDiscountsSet),
     total_shipping_price_set: moneySet(node.totalShippingPriceSet),
-    current_total_shipping_price_set: moneySet(node.currentTotalShippingPriceSet),
+    current_total_shipping_price_set: moneySet(node.currentShippingPriceSet),
     customer: customer
       ? {
           id: gidNumber(customer.id),

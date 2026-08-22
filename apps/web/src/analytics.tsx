@@ -190,14 +190,13 @@ function KpiTooltip({ active, payload, format, label, total }: { active?: boolea
 }
 
 /**
- * Revenue momentum — cumulative pacing view.
+ * Revenue momentum — daily discrete plot.
  *
- * Instead of repeating the daily bar-and-line shape used by Orders & AOV, this
- * chart answers the question merchants actually ask mid-period: "am I ahead of
- * last period, and where do I land if nothing changes?" Every series is real —
- * banked revenue, the previous period's running total on the same elapsed days,
- * and the AI forecast continuation. No series is drawn when its source is
- * missing.
+ * Each day is drawn as its own revenue value (never a running total), so a
+ * zero-sale day physically drops the line to $0 — matching the "Volume & Value"
+ * chart beside it. The dashed previous-period line plots the same calendar
+ * days one period earlier, and the AI forecast continues the daily series into
+ * the future. No series is drawn when its source is missing.
  */
 export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonly TrendPoint[]; period: AnalyticsPeriod; setPeriod: (period: AnalyticsPeriod) => void }) {
   const pacing = useMemo(() => revenuePacing(trend), [trend])
@@ -216,10 +215,9 @@ export function RevenueTrendChart({ trend, period, setPeriod }: { trend: readonl
         <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false} minTickGap={32}/>
         <YAxis tickFormatter={compactMoney} tick={{ fill:'rgb(114, 129, 151)', fontSize:9 }} axisLine={false} tickLine={false}/>
         <Tooltip content={<PacingTooltip/>} cursor={{ stroke:'rgb(71, 85, 105)', strokeDasharray:'3 3' }}/>
-        {pacing.previousTotal !== null && pacing.previousTotal > 0 && <ReferenceLine y={pacing.previousTotal} stroke="rgb(100, 116, 139)" strokeDasharray="2 6" strokeWidth={1} label={{ position: 'insideTopLeft', offset: 6, content: <PeakLabel value={`Last period close ${money(pacing.previousTotal)}`} /> }} />}
-        <Line type="monotone" dataKey="previousCumulative" name="Previous" stroke="rgb(100, 116, 139)" strokeDasharray="5 6" strokeWidth={1.8} dot={false} connectNulls/>
-        <Area type="monotone" dataKey="projected" name="AI forecast" stroke="rgb(167, 139, 250)" strokeWidth={2} strokeDasharray="5 5" fill="url(#pacingProjection)" dot={false} connectNulls/>
-        <Area type="monotone" dataKey="cumulative" name="Current" stroke="rgb(96, 165, 250)" strokeWidth={2.6} fill="url(#pacingFill)" dot={false} activeDot={{ r:4.5, strokeWidth:2.5, fill:'rgb(255, 255, 255)', stroke:'rgb(96, 165, 250)' }}/>
+        <Line type="monotone" dataKey="previous" name="Previous" stroke="rgb(100, 116, 139)" strokeDasharray="5 6" strokeWidth={1.8} dot={false} connectNulls/>
+        <Area type="monotone" dataKey="forecast" name="AI forecast" stroke="rgb(167, 139, 250)" strokeWidth={2} strokeDasharray="5 5" fill="url(#pacingProjection)" dot={false} connectNulls/>
+        <Area type="monotone" dataKey="revenue" name="Current" stroke="rgb(96, 165, 250)" strokeWidth={2.6} fill="url(#pacingFill)" dot={false} activeDot={{ r:4.5, strokeWidth:2.5, fill:'rgb(255, 255, 255)', stroke:'rgb(96, 165, 250)' }}/>
         {peak && <ReferenceLine x={peak.day} stroke="rgb(245, 158, 11)" strokeDasharray="5 5" strokeWidth={1.2} label={{ position: 'top', offset: 8, content: <PeakLabel value={`Peak day ${money(peak.revenue)}`} /> }} />}
       </ComposedChart></ResponsiveContainer></div>
       <div className="chart-caption">
@@ -762,27 +760,24 @@ function PeakLabel({ value, x = 0 }: { value: string; x?: number }) {
   return <g className="rev-peak-label" transform={`translate(${x}, 14)`}><circle r={2.5} /><text x={6} y={-5}>{value}</text></g>
 }
 
-/** Pacing tooltip: banked-to-date, that day's revenue, and the previous-period pace. */
-function PacingTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: { day: string; cumulative: number | null; previousCumulative: number | null; projected: number | null; revenue: number; forecast: number | null } }>; label?: string }) {
+/** Pacing tooltip: that day's daily revenue (0 on no-sale days) plus the previous-period day. */
+function PacingTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: { day: string; revenue: number; previous: number | null; forecast: number | null } }>; label?: string }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
   if (!point) return null
-  const banked = point.cumulative
-  const previous = point.previousCumulative
-  const delta = banked !== null && previous !== null && previous > 0 ? ((banked - previous) / previous) * 100 : null
+  const revenue = point.revenue
+  const previous = point.previous
+  const delta = previous !== null && previous > 0 ? ((revenue - previous) / previous) * 100 : null
   return (
     <div className="analytics-tooltip revenue-tooltip">
       <div className="tooltip-primary-value">
-        <span>{banked !== null ? 'Banked to date' : 'Projected to date'}</span>
-        <strong>{money(banked ?? point.projected ?? 0)}</strong>
+        <span>Revenue</span>
+        <strong>{money(revenue)}</strong>
       </div>
       <time className="tooltip-date">{formatDateLabel(label ?? point.day)}</time>
       <div className="tooltip-metrics">
-        {point.revenue > 0 && (
-          <div className="tooltip-row"><i style={{ background: 'rgb(37, 99, 235)' }} /><span>That day</span><strong>{money(point.revenue)}</strong></div>
-        )}
         {previous !== null && previous > 0 && (
-          <div className="tooltip-row"><i style={{ background: 'rgb(100, 116, 139)' }} /><span>Previous pace</span><strong>{money(previous)}</strong></div>
+          <div className="tooltip-row"><i style={{ background: 'rgb(100, 116, 139)' }} /><span>Previous period</span><strong>{money(previous)}</strong></div>
         )}
         {delta !== null && (
           <div className="tooltip-row"><i style={{ background: delta >= 0 ? 'rgb(52, 211, 153)' : 'rgb(251, 113, 133)' }} /><span>vs previous</span><strong className={delta >= 0 ? 'positive' : 'negative'}>{delta >= 0 ? '+' : ''}{delta.toFixed(1)}%</strong></div>

@@ -43,9 +43,23 @@ describe('revenuePacing', () => {
     expect(pacing.runRate).toBe(100)
     expect(pacing.projectedClose).toBe(420)
     expect(pacing.peak).toEqual({ day: day(2), revenue: 150 })
-    // The forecast row continues from the last banked total, never from zero.
-    expect(pacing.rows.at(-2)?.projected).toBe(300)
-    expect(pacing.rows.at(-1)?.cumulative).toBeNull()
+    // Daily rows carry per-day values (not running totals), so zero-sale days drop to $0.
+    expect(pacing.rows.at(-2)?.revenue).toBe(50)
+    expect(pacing.rows.at(-2)?.previous).toBe(30)
+    expect(pacing.rows.at(-1)?.revenue).toBe(0)
+    expect(pacing.rows.at(-1)?.forecast).toBe(120)
+  })
+
+  it('keeps daily rows at $0 on zero-sale days so the momentum line drops', () => {
+    const pacing = revenuePacing([
+      point({ day: day(4), revenue: 200 }),
+      point({ day: day(3), revenue: 0 }),
+      point({ day: day(2), revenue: 0 }),
+      point({ day: day(1), revenue: 120 }),
+    ])
+    expect(pacing.hasData).toBe(true)
+    expect(pacing.rows.map((row) => row.revenue)).toEqual([200, 0, 0, 120])
+    expect(pacing.total).toBe(320)
   })
 
   it('reports no pace when the previous period has no comparable revenue', () => {

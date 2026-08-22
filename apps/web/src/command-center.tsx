@@ -1217,7 +1217,7 @@ export function AgentDetailDrawer({ agent, tab, onTab, storeId, rules, plan, onC
 
 export function CommandCenterSkeleton() {
   return (
-    <div className="cc-workspace" aria-busy="true" aria-label="Loading AI Command Center">
+    <div className="cc-workspace" aria-busy="true" aria-label="Loading AI Center">
       <div className="cc-hero">{[0, 1, 2, 3].map((index) => <div key={index} className="cc-kpi cc-skeleton" />)}</div>
       <div className="cc-skeleton-section">
         <div className="cc-skeleton-heading" />

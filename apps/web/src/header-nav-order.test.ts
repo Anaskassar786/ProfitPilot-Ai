@@ -15,7 +15,7 @@ const EXPECTED: readonly Readonly<{ label: string; page: string }>[] = [
   { label: 'Customers', page: 'customers' },
   { label: 'Inventory', page: 'inventory' },
   { label: 'Analytics', page: 'analytics' },
-  { label: 'AI Command Center', page: 'command-center' },
+  { label: 'AI Center', page: 'command-center' },
   { label: 'AI Commander', page: 'ai-command' },
   { label: 'Recommendations', page: 'recommendations' },
   { label: 'GrowthIQ', page: 'ai-executive' },

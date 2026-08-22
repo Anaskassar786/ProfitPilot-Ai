@@ -155,7 +155,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
   {
     label: 'AI employee',
     items: [
-      { id: 'command-center', label: 'AI Command Center', icon: Bot },
+      { id: 'command-center', label: 'AI Center', icon: Bot },
       { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
       { id: 'automation', label: 'Automation', icon: Workflow },
       { id: 'ai-command', label: 'AI Commander', icon: AiCommandIcon },
@@ -207,7 +207,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   customers: { title: 'Customers', description: 'Customer data stays tenant-scoped and minimized by default.', icon: Users },
   inventory: { title: 'Inventory', description: 'Inventory levels and days-of-cover from your Shopify store.', icon: Box },
   analytics: { title: 'Analytics', description: 'AI-powered insights into your store performance.', icon: LineChart },
-  'command-center': { title: 'AI Command Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
+  'command-center': { title: 'AI Center', description: 'Your AI workforce, always working for you. Every insight backed by real data — never invented.', icon: Bot },
   recommendations: { title: 'Recommendations', description: 'Your AI team has been watching your store. Review opportunities and take action.', icon: Sparkles },
   'ai-growth-command': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
   'store-coach': { title: 'Store Coach', description: 'Daily huddles, goals, and chat grounded in your real store data.', icon: GraduationCap },
@@ -250,7 +250,7 @@ const HEADER_NAV: ReadonlyArray<Readonly<{ label: string; page: SectionId }>> = 
   { label: 'Customers', page: 'customers' },
   { label: 'Inventory', page: 'inventory' },
   { label: 'Analytics', page: 'analytics' },
-  { label: 'AI Command Center', page: 'command-center' },
+  { label: 'AI Center', page: 'command-center' },
   { label: 'AI Commander', page: 'ai-command' },
   { label: 'Recommendations', page: 'recommendations' },
   { label: 'GrowthIQ', page: 'ai-executive' },
@@ -1087,7 +1087,7 @@ function ProductsPage({ context, catalog, analytics, onSync }: { context: Worksp
 function EmptyDataPage({ page, context, onSync }: { page: SectionId; context: WorkspaceContext; onSync: (module: string) => Promise<void> }) { const meta = pageMeta[page]; const Icon = meta.icon; return <PageLayout eyebrow="Store data" title={meta.title} description={meta.description}><EmptyState icon={Icon} title={`No ${meta.title.toLowerCase()} data yet`} description={context.storeId ? 'This section is wired to the foundation and will render once its source module has real rows.' : 'Connect Shopify first. ProfitPilot does not ship demo records.'} action={context.storeId ? `Sync ${meta.title}` : 'Connect Shopify'} onAction={() => void onSync(page)} /></PageLayout> }
 
 function CommandCenterPage({ context, onToast, onNavigate }: { context: WorkspaceContext; onToast: (message: string, kind?: ToastKind) => void; onNavigate: (page: string) => void }) {
-  return <PageLayout eyebrow="AI employee" title="AI Command Center" description="Your AI workforce, always working for you. Every insight backed by real data — never invented.">
+  return <PageLayout eyebrow="AI employee" title="AI Center" description="Your AI workforce, always working for you. Every insight backed by real data — never invented.">
     <CommandCenterWorkspace context={context} onToast={onToast} onNavigate={onNavigate} />
   </PageLayout>
 }
