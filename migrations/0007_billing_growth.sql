@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS billing_audit (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-INSERT INTO gift_codes (code, max_uses) VALUES ('KASSAR786', 100), ('AFRIDI786', 10000) ON CONFLICT (code) DO NOTHING;
+-- Gift codes are NOT seeded here: real codes are configuration, not source.
+-- The API seeds env-configured codes at boot (GIFT_CODE_SEQUENCE_1/2 via
+-- PostgresTrialGiftStore.seedDefaultCodes), so no secrets live in the repo.
 
 ALTER TABLE billing_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_charges ENABLE ROW LEVEL SECURITY;

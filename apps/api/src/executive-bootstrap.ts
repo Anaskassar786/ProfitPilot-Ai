@@ -108,7 +108,16 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
     email,
     pdf: { enabled: pdfEnabled, store: pdfStore, whiteLabel: () => ({ brandName: null, logoText: null, primaryColor: null, footerText: null }) },
     shopName: async (storeId: StoreId) => (await f9.storeDirectory.get(storeId))?.shopDomain ?? null,
-    appUrl: () => env.APP_URL?.trim() || 'http://localhost:3000',
+    // Resolve the public app host from configuration. The localhost fallback
+    // is explicitly development-only: production boot fails in main.ts when
+    // neither SHOPIFY_APP_URL nor APP_URL is configured, so a hardcoded
+    // localhost URL can never leak into production links.
+    appUrl: () => {
+      const configured = env.APP_URL?.trim() || env.SHOPIFY_APP_URL?.trim()
+      if (configured) return configured
+      if (env.NODE_ENV === 'development' || !env.NODE_ENV) return 'http://localhost:3000'
+      throw new Error('APP_URL (or SHOPIFY_APP_URL) must be configured outside development')
+    },
     recordCost: async () => undefined,
     now: () => Date.now(),
   }

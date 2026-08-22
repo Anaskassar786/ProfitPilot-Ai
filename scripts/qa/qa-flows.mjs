@@ -29,7 +29,9 @@ const results = [];
   await pg0.connect();
   await pg0.query('DELETE FROM gift_redemptions WHERE shop_id = $1', [B]);
   await pg0.query("UPDATE billing_subscriptions SET state='TRIAL_ACTIVE', plan='trial', interval='MONTHLY', charge_id=NULL WHERE shop_id IN ($1, $2)", [A, B]);
-  await pg0.query('UPDATE gift_codes SET uses = GREATEST(uses - 1, 0) WHERE code = $1', ['KASSAR786']);
+  // The primary gift code comes from the environment — never hardcode it.
+  const QA_GIFT_CODE = (process.env.GIFT_CODE_SEQUENCE_1 || process.env.GIFT_CODE_1 || '').trim().toUpperCase();
+  if (QA_GIFT_CODE) await pg0.query('UPDATE gift_codes SET uses = GREATEST(uses - 1, 0) WHERE code = $1', [QA_GIFT_CODE]);
   await pg0.query('DELETE FROM store_coach_goals WHERE store_id IN ($1, $2)', [A, B]);
   await pg0.query('DELETE FROM workflows WHERE store_id IN ($1, $2)', [A, B]);
   await pg0.end();
@@ -182,9 +184,14 @@ await call('merchant email save', '/settings/merchant-email', {
 // ── 12. GIFT / REDEEM (on empty store B) ⭐ ─────────────────────────────────
 await call('gift: empty input rejected', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: {}, expect: (s) => s === 400 });
 await call('gift: invalid code', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: { code: 'NOT-A-REAL-CODE' }, expect: (s) => s === 400 || s === 404 });
-await call('gift: valid code', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: { code: 'KASSAR786' }, expect: (s, t) => s === 201 && has(t, 'expiresAt') });
-await call('gift: already redeemed', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: { code: 'KASSAR786' }, expect: (s) => s === 409 || s === 400 });
-await call('gift: billing state after redeem', '/billing', { shopParam: true, storeId: B, expect: (s, t) => s === 200 && has(t, 'commander') });
+const QA_GIFT_CODE = (process.env.GIFT_CODE_SEQUENCE_1 || process.env.GIFT_CODE_1 || '').trim().toUpperCase();
+if (QA_GIFT_CODE) {
+  await call('gift: valid code', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: { code: QA_GIFT_CODE }, expect: (s, t) => s === 201 && has(t, 'expiresAt') });
+  await call('gift: already redeemed', '/billing/gift', { method: 'POST', shopParam: true, storeId: B, body: { code: QA_GIFT_CODE }, expect: (s) => s === 409 || s === 400 });
+  await call('gift: billing state after redeem', '/billing', { shopParam: true, storeId: B, expect: (s, t) => s === 200 && has(t, 'commander') });
+} else {
+  console.log('gift: valid-code flows SKIPPED — set GIFT_CODE_SEQUENCE_1 to exercise redemption');
+}
 
 // expired code
 const pg = new Client({ connectionString: 'postgresql://postgres:postgres@127.0.0.1:5433/postgres' });

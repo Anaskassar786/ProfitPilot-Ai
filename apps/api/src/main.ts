@@ -45,6 +45,27 @@ const main = async (): Promise<void> => {
     if (process.env.NODE_ENV === 'production') throw new Error(`Web app build is missing: ${webIndexPath}`)
   }
 
+  // P1 launch guards (App Store audit):
+  // 1. A production deploy without a configured app URL would serve
+  //    placeholder legal/support links — refuse to boot instead.
+  // 2. localhost/127.0.0.1 in security-relevant configuration must never
+  //    reach production; warn loudly so an operator catches it.
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.SHOPIFY_APP_URL?.trim() && !process.env.APP_URL?.trim()) {
+      throw new Error('SHOPIFY_APP_URL (or APP_URL) must be set in production: listing metadata, legal pages, and webhook URIs depend on it')
+    }
+    const securitySensitive: ReadonlyArray<readonly [string, string | undefined]> = [
+      ['APP_URL', process.env.APP_URL],
+      ['SHOPIFY_APP_URL', process.env.SHOPIFY_APP_URL],
+      ['SHOPIFY_REDIRECT_URI', process.env.SHOPIFY_REDIRECT_URI],
+      ['SHOPIFY_PRIVACY_WEBHOOK_URL', process.env.SHOPIFY_PRIVACY_WEBHOOK_URL],
+      ['CORS_ALLOWED_ORIGINS', process.env.CORS_ALLOWED_ORIGINS],
+    ]
+    for (const [key, value] of securitySensitive) {
+      if (value && /localhost|127\.0\.0\.1/i.test(value)) logger.warn('localhost found in security-relevant production configuration', { key, value })
+    }
+  }
+
   const bootstrap = createStoreCoachBootstrap(process.env, logger)
   // Production deploys must apply pending SQL (0022 GrowthIQ, 0023 Store
   // Coach, …) or the new pages 500 with "relation does not exist". Operators

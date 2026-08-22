@@ -29,6 +29,10 @@ describe('tenant Shopify store directory', () => {
     expect(connection).toEqual({ storeId: 'store-1', shopDomain: 'demo.myshopify.com' })
     expect(queries[0]).toContain('INSERT INTO stores')
     expect(queries[0]).toContain('ON CONFLICT (shop_domain)')
+    // Reinstall recovery: the conflict branch must reactivate the store and
+    // clear the uninstall marker, or a reinstalled shop stays UNINSTALLED.
+    expect(queries[0]).toContain(`status = 'ACTIVE'`)
+    expect(queries[0]).toContain('uninstalled_at = NULL')
     expect(values[0]).toEqual(['demo.myshopify.com'])
     await expect(directory.upsertByShopDomain('')).rejects.toThrow('shop domain')
   })

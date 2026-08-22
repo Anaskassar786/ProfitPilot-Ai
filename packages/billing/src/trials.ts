@@ -15,15 +15,43 @@ export const GIFT_ALREADY_REDEEMED = 'A gift code has already been redeemed for 
 export const USE_PRIMARY_PROMO_FIRST = 'Please use the active primary promotion code first'
 
 /**
- * DEFAULT_GIFT_CODES — primary/secondary ordering.
- * `sequence` encodes the redemption order: `KASSAR786` (sequence 1) is the
- * active primary code, and `AFRIDI786` (sequence 2) is secondary — valid ONLY
- * once the primary has reached its usage cap or been marked inactive/expired.
+ * Gift codes are NEVER hardcoded in source. They are supplied via environment
+ * variables and read at boot:
+ *
+ *   GIFT_CODE_SEQUENCE_1 — the active primary code (sequence 1)
+ *   GIFT_CODE_SEQUENCE_2 — the secondary code (sequence 2), valid ONLY once
+ *                          the primary has reached its usage cap or been
+ *                          marked inactive/expired
+ *
+ * Legacy GIFT_CODE_1 / GIFT_CODE_2 names are honored for existing
+ * deployments. When nothing is configured the registry is empty and gift
+ * redemption is effectively disabled (every code is "invalid or exhausted").
  */
-export const DEFAULT_GIFT_CODES: readonly GiftCode[] = [
-  { code: 'KASSAR786', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 1 },
-  { code: 'AFRIDI786', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 2 },
-]
+const GIFT_CODE_SLOT_DEFAULTS = [
+  { sequence: 1, maxUses: 100 },
+  { sequence: 2, maxUses: 10_000 },
+] as const
+
+export function giftCodesFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): readonly GiftCode[] {
+  const codes: GiftCode[] = []
+  for (const slot of GIFT_CODE_SLOT_DEFAULTS) {
+    const raw = env[`GIFT_CODE_SEQUENCE_${slot.sequence}`] ?? env[`GIFT_CODE_${slot.sequence}`]
+    const code = raw?.trim().toUpperCase()
+    if (!code || code === 'YOUR_CODE_HERE') continue
+    // Boot-time validation: a malformed code would be unredeemable and is a
+    // configuration mistake, so fail fast instead of silently seeding it.
+    if (!/^[A-Z0-9_-]{4,64}$/.test(code)) throw new Error(`GIFT_CODE_SEQUENCE_${slot.sequence} is invalid: use 4-64 letters, digits, hyphens, or underscores`)
+    const maxUses = positiveNumber(env[`GIFT_CODE_SEQUENCE_${slot.sequence}_MAX_USES`] ?? env[`GIFT_CODE_${slot.sequence}_MAX_USES`], slot.maxUses)
+    const active = (env[`GIFT_CODE_SEQUENCE_${slot.sequence}_ACTIVE`] ?? env[`GIFT_CODE_${slot.sequence}_ACTIVE`]) !== 'false'
+    codes.push({ code, maxUses, uses: 0, active, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: slot.sequence })
+  }
+  return codes
+}
+
+function positiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = value?.trim() ? Number(value) : fallback
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
 
 /** QA (2026-08-20): distinct "expired" errors instead of lumping expired and
  *  unknown codes into one message. */
@@ -65,8 +93,8 @@ export function expiredGiftRevert(record: BillingRecord | null, trial: TrialReco
  * Sequencing enforcement (GA 2026-08-22).
  *
  * A gift code is only redeemable while every *earlier* (lower `sequence`)
- * code is no longer available. `KASSAR786` (sequence 1) is the active primary;
- * `AFRIDI786` (sequence 2) is secondary and is rejected with a 400
+ * code is no longer available. the sequence-1 code is the active primary;
+ * the sequence-2 code is secondary and is rejected with a 400
  * (`USE_PRIMARY_PROMO_FIRST`) while the primary is still active and has
  * capacity.
  */
@@ -88,7 +116,7 @@ export function assertGiftSequence(gifts: Iterable<GiftCode>, target: GiftCode, 
 export class TrialAndGiftLedger {
   private readonly trials = new Map<string, TrialRecord>()
   private readonly gifts: Map<string, GiftCode>
-  public constructor(codes: readonly GiftCode[] = DEFAULT_GIFT_CODES) {
+  public constructor(codes: readonly GiftCode[] = giftCodesFromEnv()) {
     this.gifts = new Map(codes.map((code) => [code.code.trim().toUpperCase(), { ...code, code: code.code.trim().toUpperCase() }]))
   }
   private readonly redemptions = new Map<string, GiftRedemption>()
@@ -128,8 +156,8 @@ export class TrialAndGiftLedger {
     const invalid = giftCodeError(gift, now)
     if (invalid) throw invalid
     const activeGift = gift as GiftCode
-    // Sequencing: a secondary code (AFRIDI786) is only valid once the primary
-    // (KASSAR786) is exhausted/inactive.
+    // Sequencing: the secondary code (sequence 2) is only valid once the
+    // primary (sequence 1) is exhausted/inactive.
     assertGiftSequence(this.gifts.values(), activeGift, now)
     const trial = this.trials.get(shopId) ?? null
     if (trial?.consumed) throw new AppError('CONFLICT', 'Trial or gift access was already consumed', 409)
@@ -230,7 +258,7 @@ export class PostgresTrialGiftStore {
   private readonly cache: TrialAndGiftLedger
   private giftKillSwitch = false
 
-  public constructor(executor: SqlExecutor, seedCodes: readonly GiftCode[] = DEFAULT_GIFT_CODES) {
+  public constructor(executor: SqlExecutor, seedCodes: readonly GiftCode[] = giftCodesFromEnv()) {
     this.executor = executor
     this.cache = new TrialAndGiftLedger(seedCodes)
   }
@@ -442,7 +470,7 @@ export class PostgresTrialGiftStore {
     return result.rows.map(mapTrial)
   }
 
-  public async seedDefaultCodes(codes: readonly GiftCode[] = DEFAULT_GIFT_CODES): Promise<void> {
+  public async seedDefaultCodes(codes: readonly GiftCode[] = giftCodesFromEnv()): Promise<void> {
     for (const gift of codes) {
       await this.executor.query(
         `INSERT INTO gift_codes (code, max_uses, uses, active, duration_days, access_level, sequence)

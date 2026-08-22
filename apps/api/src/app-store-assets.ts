@@ -127,11 +127,22 @@ export function shopifyAppConfigFromEnv(env: Readonly<Record<string, string | un
   return { clientId, name: env.SHOPIFY_APP_NAME?.trim() || 'ProfitPilot', applicationUrl, redirectUrls: [callback], scopes, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2026-07', privacyWebhookUrl }
 }
 
+/** Mandatory Shopify GDPR compliance topics. The TOML `compliance_topics`
+ *  subscription is the ONLY registration channel for these: the Partner
+ *  Dashboard has no UI for them and the Admin API cannot subscribe to them. */
+export const PROFITPILOT_COMPLIANCE_TOPICS = ['customers/data_request', 'customers/redact', 'shop/redact'] as const
+
 export function renderShopifyAppToml(config: ShopifyAppTomlConfig): string {
   const redirects = config.redirectUrls.map((url) => `  "${tomlEscape(url)}"`).join(',\n')
-  const privacyWebhookUrl = config.privacyWebhookUrl
+  // The Shopify CLI rejects relative webhook URIs, so both subscription
+  // blocks use the absolute https URL derived from the app host.
+  const webhookUrl = config.privacyWebhookUrl
   const webhookTopics = PROFITPILOT_WEBHOOK_TOPICS.map((topic) => `"${tomlEscape(topic)}"`).join(', ')
-  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[webhooks.privacy]\ncustomer_data_request_url = "${tomlEscape(privacyWebhookUrl)}"\ncustomer_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\nshop_deletion_url = "${tomlEscape(privacyWebhookUrl)}"\n\n[[webhooks.subscriptions]]\ntopics = [${webhookTopics}]\nuri = "/shopify/webhooks"\n`
+  const complianceTopics = PROFITPILOT_COMPLIANCE_TOPICS.map((topic) => `"${tomlEscape(topic)}"`).join(', ')
+  // Regular `topics` and GDPR `compliance_topics` must live in SEPARATE
+  // [[webhooks.subscriptions]] blocks — the CLI schema does not allow mixing
+  // them, and the obsolete [webhooks.privacy] table no longer exists.
+  return `client_id = "${tomlEscape(config.clientId)}"\nname = "${tomlEscape(config.name)}"\napplication_url = "${tomlEscape(config.applicationUrl)}"\nembedded = true\n\n[build]\nautomatically_update_urls_on_dev = true\n\n[auth]\nredirect_urls = [\n${redirects}\n]\n\n[access_scopes]\nscopes = "${tomlEscape(config.scopes.join(','))}"\n\n[webhooks]\napi_version = "${tomlEscape(config.apiVersion)}"\n\n[[webhooks.subscriptions]]\ntopics = [${webhookTopics}]\nuri = "${tomlEscape(webhookUrl)}"\n\n[[webhooks.subscriptions]]\ncompliance_topics = [${complianceTopics}]\nuri = "${tomlEscape(webhookUrl)}"\n`
 }
 
 export type AppListingMetadata = Readonly<{
@@ -157,7 +168,18 @@ export type AppListingMetadata = Readonly<{
  * `<app host>/support`); `SUPPORT_EMAIL` stays available for email footers.
  */
 export function appListingMetadata(env: Readonly<Record<string, string | undefined>> = process.env): AppListingMetadata {
-  const appUrl = (env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || 'https://app.example.com').replace(/\/+$/, '')
+  const configured = env.SHOPIFY_APP_URL?.trim() || env.APP_URL?.trim() || ''
+  // Never fall back to a fake production host: broken privacy/terms/support
+  // links are an App Store rejection. Production refuses to serve listing
+  // metadata without a configured app URL; development gets a clearly-marked
+  // local URL plus a warning.
+  if (!configured && (env.NODE_ENV?.trim() || 'development') === 'production') {
+    throw new Error('SHOPIFY_APP_URL (or APP_URL) must be configured in production — app listing legal/support URLs cannot be generated without it')
+  }
+  // Dev-only notice. This module must stay dependency-free (see header note),
+  // so it uses process.emitWarning instead of @profitpilot/logger.
+  if (!configured) process.emitWarning('SHOPIFY_APP_URL/APP_URL is not set; using the development placeholder https://localhost:3000 for listing URLs', { code: 'PROFITPILOT_APP_URL_UNSET' })
+  const appUrl = (configured || 'https://localhost:3000').replace(/\/+$/, '')
   const supportUrl = (env.SUPPORT_URL?.trim() || `${appUrl}/support`).replace(/\/+$/, '')
   const supportEmail = env.SUPPORT_EMAIL?.trim() || ''
   const legalPath = (path: string): string => `${appUrl}${path}`

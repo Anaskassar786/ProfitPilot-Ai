@@ -23,11 +23,13 @@ scopes = "read_products,read_orders,read_customers,read_inventory,read_locations
 [webhooks]
 api_version = "2026-07"
 
-[webhooks.privacy]
-customer_data_request_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
-customer_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
-shop_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
-
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled", "orders/create", "orders/updated", "customers/create", "customers/update", "products/update", "inventory_levels/update"]
-uri = "/shopify/webhooks"
+uri = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
+
+# Mandatory GDPR compliance webhooks. The TOML is the ONLY registration
+# channel for these topics — keep them in their own subscription block
+# (never mixed with regular `topics`) and always use an absolute https URI.
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"

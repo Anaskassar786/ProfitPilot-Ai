@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { Logger } from '@profitpilot/logger'
+
+/** Fallback structured logger for provider failures when no logger is wired. */
+const fallbackLogger = new Logger()
 
 /**
  * Default OpenRouter fallback chain (verified active 2026-08-22).
@@ -316,7 +320,9 @@ function usageFromPayload(usage: Record<string, unknown>): AiUsage {
 
 function defaultFailureLogger(failure: ProviderFailureTelemetry): void {
   if (process.env.NODE_ENV === 'test') return
-  console.warn(JSON.stringify({ level: 'warn', message: 'OpenRouter provider failure', context: { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId } }))
+  // Structured logger, no response bodies: only error codes, timing, and the
+  // OpenRouter request id are recorded (never prompt or completion content).
+  fallbackLogger.warn('OpenRouter provider failure', { model: failure.model, status_code: failure.statusCode ?? null, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId ?? null })
 }
 function unique(values: readonly string[]): readonly string[] { return [...new Set(values)] }
 function numberValue(value: unknown): number { return typeof value === 'number' && Number.isFinite(value) ? value : 0 }

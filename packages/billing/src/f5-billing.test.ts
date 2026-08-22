@@ -3,7 +3,8 @@ import { PLAN_ENTITLEMENT_LIMITS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE,
 import { assertAccess, UpgradeRequiredError, accessGate, limitForPlan } from './entitlements.js'
 import { AdminStepUpSessions, FunnelLedger, FUNNEL_MILESTONES, calculateRoi, lockPrice, priceForRenewal } from './growth.js'
 import { agentsForPlanCount, PLAN_DEFINITIONS, entitlementsFor, planFor, priceFor } from './plans.js'
-import { TrialAndGiftLedger, expiredGiftRevert, subscriptionForTrial } from './trials.js'
+import { TrialAndGiftLedger, expiredGiftRevert, giftCodesFromEnv, subscriptionForTrial } from './trials.js'
+import type { GiftCode } from './trials.js'
 import type { Subscription } from './billing.js'
 
 const active: Subscription = { storeId: 's', plan: 'growth', state: 'ACTIVE_MONTHLY', currentPeriodEnd: null, version: 0 }
@@ -97,26 +98,49 @@ describe('Entitlement meter audit — sync caps (PR)', () => {
   })
 })
 
+// Gift codes are configuration, never source: tests build their own fixture
+// registry the same way production builds one from GIFT_CODE_SEQUENCE_1/2.
+const TEST_GIFT_CODES: readonly GiftCode[] = [
+  { code: 'PRIMARY-TEST', maxUses: 100, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 1 },
+  { code: 'SECONDARY-TEST', maxUses: 10_000, uses: 0, active: true, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 2 },
+]
+const giftLedger = () => new TrialAndGiftLedger(TEST_GIFT_CODES)
+
+describe('gift codes from environment (no hardcoded codes)', () => {
+  it('returns an empty registry when nothing is configured', () => expect(giftCodesFromEnv({})).toEqual([]))
+  it('builds primary and secondary codes from GIFT_CODE_SEQUENCE_1/2', () => {
+    const codes = giftCodesFromEnv({ GIFT_CODE_SEQUENCE_1: 'alpha786', GIFT_CODE_SEQUENCE_2: 'beta786', GIFT_CODE_SEQUENCE_2_MAX_USES: '50' })
+    expect(codes).toHaveLength(2)
+    expect(codes[0]).toMatchObject({ code: 'ALPHA786', sequence: 1, maxUses: 100, active: true })
+    expect(codes[1]).toMatchObject({ code: 'BETA786', sequence: 2, maxUses: 50 })
+  })
+  it('honors legacy GIFT_CODE_1/2 names and skips placeholder values', () => {
+    expect(giftCodesFromEnv({ GIFT_CODE_1: 'legacy99' })[0]?.code).toBe('LEGACY99')
+    expect(giftCodesFromEnv({ GIFT_CODE_SEQUENCE_1: 'your_code_here' })).toEqual([])
+  })
+  it('rejects malformed codes at boot', () => expect(() => giftCodesFromEnv({ GIFT_CODE_SEQUENCE_1: 'no spaces!' })).toThrow('invalid'))
+})
+
 describe('trial and gift redemption', () => {
   it('returns null for a shop without a trial', () => expect(new TrialAndGiftLedger().trial('missing')).toBeNull())
   it('tracks one limited trial for a shop id', () => { const ledger = new TrialAndGiftLedger(); const first = ledger.startTrial('s', 100); expect(ledger.startTrial('s', 200)).toEqual(first); expect(subscriptionForTrial('s', first, 200).state).toBe('TRIAL_LIMITED') })
   it('expires trials after fourteen days', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); expect(ledger.trial('s', 100 + 14 * 86_400_000)?.state).toBe('EXPIRED') })
   it('finds trials for an hourly nudge window', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100, 1); expect(ledger.expiringTrials(100, 86_400_000)).toHaveLength(1) })
-  it('redeems a gift for Commander for the full duration', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'KASSAR786', 200); expect(redemption.code).toBe('KASSAR786'); expect(redemption.expiresAt).toBe(200 + 3 * 86_400_000) })
-  it('forfeits the trial permanently when a gift is redeemed (no trial days after the gift)', () => { const ledger = new TrialAndGiftLedger(); const original = ledger.startTrial('s', 100); ledger.redeemGift('s', 'KASSAR786', 200); const forfeited = ledger.trial('s', 1_000); expect(forfeited?.trialForfeited).toBe(true); expect(forfeited?.consumed).toBe(true); expect(forfeited?.startedAt).toBe(original.startedAt) })
+  it('redeems a gift for Commander for the full duration', () => { const ledger = giftLedger(); ledger.startTrial('s', 100); const redemption = ledger.redeemGift('s', 'PRIMARY-TEST', 200); expect(redemption.code).toBe('PRIMARY-TEST'); expect(redemption.expiresAt).toBe(200 + 3 * 86_400_000) })
+  it('forfeits the trial permanently when a gift is redeemed (no trial days after the gift)', () => { const ledger = giftLedger(); const original = ledger.startTrial('s', 100); ledger.redeemGift('s', 'PRIMARY-TEST', 200); const forfeited = ledger.trial('s', 1_000); expect(forfeited?.trialForfeited).toBe(true); expect(forfeited?.consumed).toBe(true); expect(forfeited?.startedAt).toBe(original.startedAt) })
   it('cancels the trial only on an explicit upgrade', () => { const ledger = new TrialAndGiftLedger(); ledger.startTrial('s', 100); const cancelled = ledger.cancelTrial('s'); expect(cancelled?.state).toBe('CANCELLED'); expect(cancelled?.consumed).toBe(true) })
-  it('prevents a store from redeeming twice', () => { const ledger = new TrialAndGiftLedger(); ledger.redeemGift('s', 'KASSAR786'); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('A gift code has already been redeemed for this store') })
-  it('blocks a secondary code while the primary is still active', () => { const ledger = new TrialAndGiftLedger(); expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('primary promotion code') })
+  it('prevents a store from redeeming twice', () => { const ledger = giftLedger(); ledger.redeemGift('s', 'PRIMARY-TEST'); expect(() => ledger.redeemGift('s', 'SECONDARY-TEST')).toThrow('A gift code has already been redeemed for this store') })
+  it('blocks a secondary code while the primary is still active', () => { const ledger = giftLedger(); expect(() => ledger.redeemGift('s', 'SECONDARY-TEST')).toThrow('primary promotion code') })
   it('allows the secondary code once the primary is exhausted', () => {
-    const ledger = new TrialAndGiftLedger()
-    for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786')
-    expect(ledger.gift('KASSAR786')?.active).toBe(false)
-    const redemption = ledger.redeemGift('z', 'AFRIDI786')
-    expect(redemption.code).toBe('AFRIDI786')
+    const ledger = giftLedger()
+    for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'PRIMARY-TEST')
+    expect(ledger.gift('PRIMARY-TEST')?.active).toBe(false)
+    const redemption = ledger.redeemGift('z', 'SECONDARY-TEST')
+    expect(redemption.code).toBe('SECONDARY-TEST')
   })
-  it('auto-deactivates an exhausted code', () => { const ledger = new TrialAndGiftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786'); expect(ledger.gift('KASSAR786')?.active).toBe(false) })
-  it('supports an admin kill switch', () => { const ledger = new TrialAndGiftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'KASSAR786')).toThrow('disabled') })
-  it('rejects invalid codes', () => expect(() => new TrialAndGiftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))
+  it('auto-deactivates an exhausted code', () => { const ledger = giftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'PRIMARY-TEST'); expect(ledger.gift('PRIMARY-TEST')?.active).toBe(false) })
+  it('supports an admin kill switch', () => { const ledger = giftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'PRIMARY-TEST')).toThrow('disabled') })
+  it('rejects invalid codes', () => expect(() => giftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))
 })
 
 describe('gift expiry revert (expiredGiftRevert)', () => {

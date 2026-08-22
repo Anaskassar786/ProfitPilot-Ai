@@ -108,6 +108,10 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     ...splitCsv(env.CORS_ALLOWED_ORIGINS),
     nonEmpty(env.APP_URL),
     nonEmpty(env.SHOPIFY_APP_URL),
+    // Development-only origins: the Vite dev server. The explicit environment
+    // guard means these can NEVER be appended in production; main.ts
+    // additionally warns at startup if localhost appears in any
+    // security-relevant production configuration (e.g. CORS_ALLOWED_ORIGINS).
     ...(environment === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
   ])
   const requireAuthentication = env.SECURITY_REQUIRE_AUTH === 'true' || (environment === 'production' && env.SECURITY_REQUIRE_AUTH !== 'false')
@@ -123,6 +127,9 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
 }
 
 export function defaultSecurityOptions(): SecurityOptions {
+  // Development/test-only defaults (environment is hardcoded to
+  // 'development'): production always goes through securityOptionsFromEnv,
+  // which never includes these localhost origins.
   return {
     environment: 'development',
     allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
