@@ -1197,6 +1197,7 @@ function humanizeBillingStatus(account: import('./model.js').BillingAccount | nu
     if (sub.state === 'GIFT_ACCESS_UNLIMITED') return { label: 'Gift Access', tone: 'purple', planName: 'Commander' }
     if (sub.state.startsWith('ACTIVE')) return { label: 'Active', tone: 'green', planName }
     if (sub.state === 'TRIAL_LIMITED') return { label: 'Free Trial', tone: 'amber', planName: 'Trial' }
+    if (sub.state === 'TRIAL_EXPIRED') return { label: 'Trial expired', tone: 'neutral', planName: 'Trial' }
     if (sub.state === 'SUSPENDED' || sub.state === 'PAST_DUE') return { label: 'Attention needed', tone: 'amber', planName }
     if (sub.state === 'CANCELLED') return { label: 'Cancelled', tone: 'neutral', planName }
     return { label: sub.state.replaceAll('_', ' '), tone: 'neutral', planName }

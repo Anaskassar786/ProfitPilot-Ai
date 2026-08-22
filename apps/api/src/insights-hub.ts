@@ -1165,7 +1165,7 @@ export class InsightsHubService {
   private async assertSubscriptionLive(storeId: StoreId): Promise<void> {
     if (!this.deps.billingState) return
     const state = await this.deps.billingState(storeId)
-    if (state === 'PAST_DUE' || state === 'SUSPENDED' || state === 'CANCELLED' || state === 'PENDING_CONFIRMATION') {
+    if (state === 'PAST_DUE' || state === 'SUSPENDED' || state === 'CANCELLED' || state === 'PENDING_CONFIRMATION' || state === 'TRIAL_EXPIRED') {
       throw new AppError('PAYMENT_REQUIRED', 'Your trial or subscription is not active. Upgrade Plan to continue using PatternAI.', 402, { reason: 'SUBSCRIPTION_REQUIRED', cta: 'Upgrade Plan', upgradePath: '/billing' })
     }
   }

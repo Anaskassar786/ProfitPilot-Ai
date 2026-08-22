@@ -4,6 +4,7 @@ import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
 import type { BillingRepository, BillingInterval, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
 import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, expiredGiftRevert } from '@profitpilot/billing'
+import { assertGiftSingleUse } from './gift-codes.js'
 
 /**
  * Trial / gift surface used by billing routes.
@@ -167,6 +168,9 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       if (before && (before.state === 'ACTIVE_MONTHLY' || before.state === 'ACTIVE_ANNUAL')) {
         throw new AppError('CONFLICT', 'Your store already has an active paid plan — promo codes apply to stores on the free trial.', 409, { shopId, reason: 'PAID_PLAN_ACTIVE' })
       }
+      // Single-use limit pre-flight (fast 400): a store can redeem at most ONE
+      // gift code in its lifetime. `redeemGift` re-asserts this atomically.
+      await assertGiftSingleUse(dependencies.trials, shopId)
       const redemption = await Promise.resolve(dependencies.trials.redeemGift(shopId, body.code))
       const existing = await dependencies.repository.get(shopId)
       await dependencies.repository.put({
