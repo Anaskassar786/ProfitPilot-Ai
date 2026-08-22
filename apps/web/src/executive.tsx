@@ -521,7 +521,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                 <div key={risk.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, border: '1px solid var(--exec-border)', background: 'var(--exec-surface-2)' }}>
                   <ExecutiveStatusPill status={risk.severity} />
                   <span style={{ fontSize: 12, color: 'var(--exec-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.title}</span>
-                  <span style={{ fontSize: 11, color: 'var(--exec-muted)', whiteSpace: 'nowrap' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--exec-muted)', whiteSpace: 'nowrap' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
                 </div>
               ))}
             </div>
@@ -568,7 +568,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                 <div>
                   <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 15, fontWeight: 700, color: 'var(--exec-heading)' }}>{roadmap.title}</strong>
-                  <div style={{ fontSize: 11.5, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
                 </div>
                 <span className="exec-pill gold"><i />{Math.round(roadmap.currentProgress * 100)}%</span>
               </div>
@@ -579,7 +579,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                     <ExecutiveStatusPill status={milestone.status === 'COMPLETE' ? 'COMPLETE' : milestone.status === 'CURRENT' ? 'CURRENT' : 'PENDING'} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{milestone.title}</strong>
-                      <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
+                      <span style={{ display: 'block', fontSize: 12, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
                     </div>
                   </div>
                 ))}
@@ -605,7 +605,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                   <ExecutiveStatusPill status={decision.qualityRating} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{decision.title}</strong>
-                    <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
                   </div>
                 </div>
               ))}

@@ -782,7 +782,7 @@
 .pa-chart-axis-label { fill: var(--pa-chart-text); font-size: 12px; }
 /* Rotated y-axis title lives fully inside the left gutter (see chart kit). */
 .pa-chart-axis-y { dominant-baseline: middle; }
-.pa-chart-tick { fill: var(--pa-chart-text); font-size: 10px; opacity: .9; }
+.pa-chart-tick { fill: var(--pa-chart-text); font-size: 12px; opacity: .9; }
 /* SVG <text> empty states must set `fill` — CSS `color` never paints SVG glyphs. */
 .pa-chart-empty { fill: var(--pa-text-tertiary); font-size: 13px; text-align: center; }
 .pa-bubble circle { fill: var(--pa-bubble); stroke: var(--pa-purple-soft); stroke-width: 1; transition: opacity 140ms ease; }

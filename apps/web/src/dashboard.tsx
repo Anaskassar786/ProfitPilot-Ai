@@ -363,7 +363,7 @@ export function DashboardLayout(props: DashboardLayoutProps) {
                       <div className="ai-weekly-chart">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <RechartsBarChart data={weeklyComparison} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-                            <XAxis dataKey="label" tick={{ fill: 'var(--text-tertiary)', fontSize: 9 }} axisLine={false} tickLine={false} interval={0} />
+                            <XAxis dataKey="label" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} interval={0} />
                             <Tooltip content={<WeeklyTooltip />} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
                             <Bar dataKey="current" name="This week" fill="rgb(59, 130, 246)" radius={[2, 2, 0, 0]} maxBarSize={10} />
                             <Bar dataKey="previous" name="Last week" fill="rgb(156, 163, 175)" fillOpacity={0.5} radius={[2, 2, 0, 0]} maxBarSize={10} />
@@ -513,8 +513,8 @@ function RevenueBarChart({ data }: { data: BarChartPoint[] }) {
       <ResponsiveContainer width="100%" height={260}>
         <RechartsBarChart data={chartData} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={{ stroke: GRID_COLOR }} tickLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fill: TEXT_COLOR, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => value >= 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value}`} />
+          <XAxis dataKey="label" tick={{ fill: TEXT_COLOR, fontSize: 12 }} axisLine={{ stroke: GRID_COLOR }} tickLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fill: TEXT_COLOR, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => value >= 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value}`} />
           <Tooltip content={BarTooltip as any} cursor={{ fill: 'rgba(59,130,246,.06)' }} />
           <Bar dataKey="plotted" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={true} animationDuration={400}>
             {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.isEmpty ? BAR_EMPTY_COLOR : entry.isCurrent ? BAR_CURRENT_COLOR : BAR_COLOR} opacity={entry.isEmpty ? 0.18 : entry.isCurrent ? 1 : 0.7} />)}

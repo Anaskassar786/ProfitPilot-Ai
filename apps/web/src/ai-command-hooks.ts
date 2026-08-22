@@ -34,6 +34,7 @@ import type {
   AiCommandSavedCommand,
   AiCommandUsage,
 } from './ai-command-model.js'
+import { merchantSafeAiCommandError } from './ai-command-model.js'
 
 type ToastFn = (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
 
@@ -168,13 +169,13 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
         } catch (second: unknown) {
           const message = isAbortError(second) && timedOut
             ? 'This command took longer than 30 seconds. Please try again.'
-            : second instanceof Error ? second.message : 'AI Command could not answer.'
+            : merchantSafeAiCommandError(second instanceof Error ? second.message : '')
           setError(message)
           if (/limit|upgrade plan/i.test(message)) setLimitReached(true)
           onToast(message, 'error')
         }
       } else {
-        const message = failure instanceof Error ? failure.message : 'AI Command could not answer.'
+        const message = merchantSafeAiCommandError(failure instanceof Error ? failure.message : '')
         setError(message)
         if (/limit|upgrade plan/i.test(message) || failure instanceof ApiClientError && failure.status === 402) setLimitReached(true)
         setConversation(previous)

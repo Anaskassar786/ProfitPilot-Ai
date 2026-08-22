@@ -375,6 +375,20 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export const AI_COMMAND_UNAVAILABLE_MESSAGE = 'AI is temporarily unavailable. Please try again in a moment.'
+
+/** Defense-in-depth: never render provider/DB exception text to merchants. */
+export function merchantSafeAiCommandError(message: string): string {
+  const trimmed = message.trim()
+  if (!trimmed) return AI_COMMAND_UNAVAILABLE_MESSAGE
+  if (trimmed === AI_COMMAND_UNAVAILABLE_MESSAGE) return trimmed
+  if (/this command took longer than 30 seconds/i.test(trimmed)) return trimmed
+  if (/command cancelled/i.test(trimmed)) return trimmed
+  if (/upgrade plan|monthly limit|daily limit/i.test(trimmed) && trimmed.length < 220) return trimmed
+  if (/text is required|2,000/i.test(trimmed)) return trimmed
+  return AI_COMMAND_UNAVAILABLE_MESSAGE
+}
+
 export function searchConversations(conversations: readonly AiCommandConversation[], query: string): readonly AiCommandConversation[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return conversations

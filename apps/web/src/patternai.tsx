@@ -872,7 +872,7 @@ function SignalQualityKpi({ discoveries }: { discoveries: readonly InsightDiscov
           {summary.strongest && (
             <p className="pa-kpi-foot">Strongest: <strong>{summary.strongest.title}</strong> · {confidencePercent(summary.strongest.confidence)}%</p>
           )}
-          <p className="pa-muted" style={{ fontSize: '11px' }}>High means ≥70% confidence — these are the signals worth acting on first.</p>
+          <p className="pa-muted" style={{ fontSize: '12px' }}>High means ≥70% confidence — these are the signals worth acting on first.</p>
         </>
       )}
     </div>
@@ -907,7 +907,7 @@ function ActionBacklogKpi({ discoveries, funnel, onReview }: { discoveries: read
             <Button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</Button>
           )}
           {summary.newCount === 0 && summary.total > 0 && (
-            <p className="pa-muted" style={{ fontSize: '11px' }}>Saved discoveries remain available from the Saved status filter.</p>
+            <p className="pa-muted" style={{ fontSize: '12px' }}>Saved discoveries remain available from the Saved status filter.</p>
           )}
         </>
       )}

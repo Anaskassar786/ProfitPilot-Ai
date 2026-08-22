@@ -51,6 +51,19 @@ export const APP_SUBSCRIPTION_QUERY = `query AppSubscription($id: ID!) {
   }
 }`
 
+/** Admin GraphQL shop probe — replaces legacy REST `/shop.json` plan lookups. */
+export const SHOP_PROBE_QUERY = `query ShopProbe {
+  shop {
+    name
+    myshopifyDomain
+    plan {
+      displayName
+      partnerDevelopment
+      shopifyPlus
+    }
+  }
+}`
+
 export class ShopifyBillingError extends Error {
   public readonly status: number
   /** Field-level validation errors Shopify returned with a 422, if any. */
@@ -165,10 +178,14 @@ export class ShopifyBillingClient {
   }
 
   private async shopIsNonBillable(): Promise<boolean> {
-    const payload = await this.request('/shop.json?fields=plan_name,plan_display_name')
-    if (!isRecord(payload) || !isRecord(payload.shop)) return true
-    const planName = typeof payload.shop.plan_name === 'string' ? payload.shop.plan_name.toLowerCase() : ''
-    return planName === '' || NON_BILLABLE_SHOPIFY_PLANS.includes(planName)
+    const payload = await this.graphql(SHOP_PROBE_QUERY, {})
+    const data = isRecord(payload) && isRecord(payload.data) ? payload.data : payload
+    if (!isRecord(data) || !isRecord(data.shop)) return true
+    const plan = isRecord(data.shop.plan) ? data.shop.plan : null
+    if (plan?.partnerDevelopment === true) return true
+    const displayName = typeof plan?.displayName === 'string' ? plan.displayName : ''
+    const slug = shopifyPlanSlugFromDisplayName(displayName)
+    return slug === '' || NON_BILLABLE_SHOPIFY_PLANS.includes(slug)
   }
 
   private async graphql(query: string, variables: Readonly<Record<string, unknown>>): Promise<unknown> {
@@ -367,3 +384,28 @@ function statusValue(value: unknown): ChargeStatus {
 function stringValue(value: unknown): string { return typeof value === 'string' ? value : '' }
 function numberValue(value: unknown): number { return typeof value === 'number' ? value : 0 }
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+
+/** Maps GraphQL `shop.plan.displayName` onto the REST-era plan slugs consumers already check. */
+export function shopifyPlanSlugFromDisplayName(displayName: string): string {
+  const slug = displayName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const aliases: Readonly<Record<string, string>> = {
+    developer_preview: 'development',
+    partner_test: 'partner_test',
+    shopify_plus_partner_sandbox: 'plus_partner_sandbox',
+    plus_partner_sandbox: 'plus_partner_sandbox',
+    staff_business: 'staff_business',
+    staff: 'staff',
+    trial: 'trial',
+    development: 'development',
+    affiliate: 'affiliate',
+    frozen: 'frozen',
+    cancelled: 'cancelled',
+    canceled: 'cancelled',
+    paused: 'paused',
+    pause_and_build: 'paused',
+    dev_preview: 'dev_preview',
+    plus: 'shopify_plus',
+    shopify_plus: 'shopify_plus',
+  }
+  return aliases[slug] ?? slug
+}
