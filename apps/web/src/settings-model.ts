@@ -285,7 +285,6 @@ export function formatSecurityDate(value: number | string | null | undefined): s
 export function ownerDisplayName(shop: string | null): string {
   if (!shop) return 'Store owner'
   const handle = shop.trim().toLowerCase().replace(/\.myshopify\.com$/, '')
-  if (handle === 'commander-pilot' || handle === 'commander_pilot') return 'Commander Pilot'
   const words = handle.split(/[-_]+/).filter(Boolean).slice(0, 3)
   if (words.length === 0) return 'Store owner'
   return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')

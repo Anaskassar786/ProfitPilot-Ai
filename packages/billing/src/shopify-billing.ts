@@ -12,7 +12,7 @@ export type BillingTransport = (url: string, init: RequestInit) => Promise<Respo
  *
  * Shopify rejects a live (`test: false`) recurring charge on a development
  * store with `422 Unprocessable Entity` — that is exactly the failure seen on
- * commander-pilot.myshopify.com after PR #14.
+ * the development store after PR #14.
  */
 export type BillingTestMode = boolean | 'auto'
 

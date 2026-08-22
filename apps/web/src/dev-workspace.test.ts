@@ -4,7 +4,7 @@ import { isDeveloperWorkspaceWith } from './dev-workspace.js'
 
 const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 
-describe('developer workspace gate (Admin Ops / Phase 2 reminders)', () => {
+describe('developer workspace gate (Admin Ops)', () => {
   it('is NOT a developer workspace for a regular merchant in a production build', () => {
     expect(isDeveloperWorkspaceWith({ DEV: false }, { shop: 'merchant-store.myshopify.com' })).toBe(false)
     expect(isDeveloperWorkspaceWith({}, { shop: 'merchant-store.myshopify.com' })).toBe(false)
@@ -48,10 +48,9 @@ describe('sidebar navigation cleanup', () => {
     expect(appSource).not.toContain('WandSparkles')
   })
 
-  it('shows the dev-only amber Phase 2 dot on Billing with the pending-checkout tooltip', () => {
-    expect(appSource).toContain('nav-dev-dot')
-    expect(appSource).toContain('Real Shopify Checkout pending (Phase 2)')
-    expect(appSource).toMatch(/item\.id === 'billing' && devWorkspace/)
+  it('carries no dev-mode badges or pending-checkout tooltips in the nav', () => {
+    expect(appSource).not.toContain('nav-dev-dot')
+    expect(appSource).not.toContain('Real Shopify Checkout pending (Phase 2)')
   })
 
   it('renders a professional connection card instead of dev jargon', () => {
@@ -61,8 +60,9 @@ describe('sidebar navigation cleanup', () => {
     expect(appSource).not.toContain('Store context ready')
   })
 
-  it('keeps the Billing page dev note gated behind the developer workspace check', () => {
-    expect(appSource).toMatch(/devWorkspace && !devNoteDismissed/)
-    expect(appSource).toContain('Billing is currently in mock mode. Phase 2 (Real Shopify Checkout) is pending.')
+  it('removes the mock-billing dev note entirely from the Billing page', () => {
+    expect(appSource).not.toContain('billing-dev-note')
+    expect(appSource).not.toContain('Billing is currently in mock mode. Phase 2 (Real Shopify Checkout) is pending.')
+    expect(appSource).not.toContain('devNoteDismissed')
   })
 })

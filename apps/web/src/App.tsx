@@ -10,7 +10,6 @@ type SectionIcon = LucideIcon | ((props: Readonly<{ size?: number | string; clas
 import {
   Activity,
   AlertCircle,
-  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
@@ -862,7 +861,7 @@ function Sidebar({ activePage, collapsed, mobileOpen, context, syncHealth, onNav
       <div className="brand-row"><RichButton className="brand-lockup" onClick={() => onNavigate('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><span /></span>{!collapsed && <span className="brand-name">Profit<span>Pilot</span></span>}</RichButton><Button className="sidebar-collapse" onClick={onCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</Button><Button className="mobile-close" onClick={onClose} aria-label="Close navigation"><X size={18} /></Button></div>
       {!collapsed ? <RichButton className="workspace-switcher" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding}><span className={`workspace-avatar ${context.storeId ? 'connected' : ''}`}>{context.storeId ? 'ON' : '—'}</span><span className="workspace-copy"><strong>{context.shop ?? 'No Shopify store'}</strong><small>{context.storeId ? 'Shopify connected' : 'Connect a store to begin'}</small></span><ChevronDown size={15} /></RichButton> : <RichButton className="workspace-switcher compact" onClick={context.storeId ? () => onNavigate('settings') : onOnboarding} aria-label="Open store context"><span className="workspace-avatar">{context.storeId ? 'ON' : '—'}</span></RichButton>}
       {!collapsed && <RichButton className="command-trigger search-workspace" onClick={onOpenCommand}><Search size={15} /><span>Search workspace</span><kbd>⌘ K</kbd></RichButton>}
-      <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; const showBillingDevDot = item.id === 'billing' && devWorkspace; return <RichButton key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}{!collapsed && showBillingDevDot && <span className="nav-dev-dot" role="img" aria-label="Real Shopify Checkout pending (Phase 2)" title="Real Shopify Checkout pending (Phase 2)" />}</RichButton> })}</div>)}</nav>
+      <nav className="side-nav" aria-label="Primary navigation">{visibleNavGroups(devWorkspace).map((group) => <div className="nav-group" key={group.label}>{!collapsed && <div className="nav-group-label">{group.label}</div>}{group.items.map((item) => { const Icon = item.icon; return <RichButton key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => onNavigate(item.id)} title={collapsed ? item.label : undefined}><Icon size={17} strokeWidth={activePage === item.id ? 2.25 : 1.8} />{!collapsed && <span>{item.label}</span>}</RichButton> })}</div>)}</nav>
       <div className="sidebar-footer">{!collapsed && (context.storeId ? (() => {
         // QA (2026-08-20): the status line used to claim "Synced · All systems
         // active" for any connected store, even one that had never synced.
@@ -1303,10 +1302,6 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const [roiPeriod, setRoiPeriod] = useState<'this_month' | 'last_month' | 'all_time'>('this_month')
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [loading, setLoading] = useState(false)
-  // Phase 2 developer reminder — never rendered for regular merchants.
-  const devWorkspace = isDeveloperWorkspace(context)
-  const [devNoteDismissed, setDevNoteDismissed] = useState(() => { try { return window.localStorage.getItem('pp-billing-phase2-note-dismissed') === '1' } catch { return false } })
-  const dismissDevNote = () => { setDevNoteDismissed(true); try { window.localStorage.setItem('pp-billing-phase2-note-dismissed', '1') } catch { /* storage unavailable — dismiss for this session only */ } }
 
   const reload = async () => {
     if (!context.storeId) return
@@ -1421,13 +1416,6 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
         </Button>
       }
     >
-      {devWorkspace && !devNoteDismissed && (
-        <div className="billing-dev-note" role="note">
-          <AlertTriangle size={14} aria-hidden />
-          <span><strong>DEV NOTE:</strong> Billing is currently in mock mode. Phase 2 (Real Shopify Checkout) is pending.</span>
-          <Button type="button" onClick={dismissDevNote} aria-label="Dismiss developer note"><X size={13} /></Button>
-        </div>
-      )}
       {giftExpired && (
         <Banner tone="warning" title="Gift access ended — upgrade to keep Commander features">
           <p>Your promo-code access to Commander has ended. Basic trial features remain available until you choose Start, Growth, or Commander.</p>

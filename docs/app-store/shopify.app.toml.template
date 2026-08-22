@@ -29,5 +29,5 @@ customer_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
 shop_deletion_url = "https://REPLACE_WITH_APP_HOST/shopify/webhooks"
 
 [[webhooks.subscriptions]]
-topics = ["app/uninstalled"]
+topics = ["app/uninstalled", "orders/create", "orders/updated", "customers/create", "customers/update", "products/update", "inventory_levels/update"]
 uri = "/shopify/webhooks"

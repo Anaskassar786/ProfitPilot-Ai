@@ -2,8 +2,8 @@
  * Developer / app-owner workspace detection.
  *
  * ProfitPilot ships a single bundle to every merchant, so operator-only
- * surfaces (Admin Ops, Phase 2 dev reminders, mock-billing notes) must be
- * gated at render time. A workspace counts as a developer workspace when:
+ * surfaces (Admin Ops) must be gated at render time. A workspace counts as a
+ * developer workspace when:
  *
  *   1. The bundle is a Vite dev build (`import.meta.env.DEV`), i.e. local
  *      development — never true for the production bundle merchants load; or

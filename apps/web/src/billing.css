@@ -1,41 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * Billing page redesign (Phase 1) — readable 14px+ typography, SaaS polish.
+ * Billing page — readable 14px+ typography, SaaS polish.
  * Scoped under .billing-v2 so legacy utility classes stay untouched.
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Dev-only Phase 2 reminder banner (never rendered for merchants) ─────── */
-.billing-dev-note {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 16px;
-  padding: 9px 12px;
-  color: rgb(252, 211, 77);
-  border: 1px solid rgba(245, 158, 11, 0.32);
-  border-radius: var(--radius-md);
-  background: rgba(245, 158, 11, 0.08);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-.billing-dev-note > svg { flex: 0 0 auto; color: rgb(245, 158, 11); }
-.billing-dev-note span { flex: 1; }
-.billing-dev-note strong { font-weight: 700; }
-.billing-dev-note button {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  color: inherit;
-  border-radius: 6px;
-  background: transparent;
-  opacity: 0.75;
-}
-.billing-dev-note button:hover { background: rgba(245, 158, 11, 0.14); opacity: 1; }
-.light-mode .billing-dev-note { color: rgb(146, 64, 14); border-color: rgba(217, 119, 6, 0.3); background: rgb(255, 251, 235); }
-.light-mode .billing-dev-note > svg { color: rgb(217, 119, 6); }
-.light-mode .billing-dev-note button:hover { background: rgba(217, 119, 6, 0.12); }
 
 .billing-v2 {
   display: flex;
