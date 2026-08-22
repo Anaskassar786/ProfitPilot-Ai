@@ -106,7 +106,7 @@ export function pageSpokenName(page: string): string {
   if (page === 'ai-command') return 'AI Command'
   if (page === 'ai-executive') return 'GrowthIQ'
   if (page === 'store-coach') return 'Store Coach'
-  if (page === 'command-center') return 'AI Command Center'
+  if (page === 'command-center') return 'AI Center'
   return page.replace(/-/g, ' ')
 }
 

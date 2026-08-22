@@ -21,13 +21,11 @@ const finite = (value: unknown, fallback = 0): number => {
 
 export type PacingRow = Readonly<{
   day: string
-  /** Running total of real synced revenue; null on future/forecast days. */
-  cumulative: number | null
-  /** Running total of the previous comparable period; null when no baseline. */
-  previousCumulative: number | null
-  /** Running total continued with the AI forecast; null on historical days. */
-  projected: number | null
+  /** Daily revenue for this day (0 on no-sale days so the line drops to $0). */
   revenue: number
+  /** Daily revenue of the comparable previous-period day; null when no baseline. */
+  previous: number | null
+  /** Daily AI forecast for this day; null on historical days. */
   forecast: number | null
 }>
 
@@ -54,7 +52,9 @@ export type RevenuePacing = Readonly<{
 }>
 
 /**
- * Turns the daily trend into a cumulative "pacing" view: how much the store has
+ * Builds the daily "momentum" rows (the chart's discrete plot — every day is
+ * its own revenue value, so zero-sale days visibly drop to $0) while also
+ * computing the summary figures the card still narrates: how much the store has
  * banked so far versus the same elapsed point of the previous period, plus the
  * projected close of the current period.
  */
@@ -86,17 +86,11 @@ export function revenuePacing(trend: readonly TrendPoint[]): RevenuePacing {
       if (revenue > 0) { hasData = true; if (!peak || revenue > peak.revenue) peak = { day, revenue } }
       lastRealDay = day
       previousToDate = hasPrevious ? previousRunning : null
-      rows.push({ day, cumulative: running, previousCumulative: hasPrevious ? previousRunning : null, projected: null, revenue, forecast: null })
+      rows.push({ day, revenue, previous: hasPrevious ? previous : null, forecast: null })
     } else {
-      // First forecast row anchors to the last real cumulative so the dashed
-      // projection continues the solid line instead of floating.
-      if (!seenForecast) {
-        seenForecast = true
-        const anchor = rows.at(-1)
-        if (anchor) rows[rows.length - 1] = { ...anchor, projected: anchor.cumulative }
-      }
+      seenForecast = true
       projected += forecast
-      rows.push({ day, cumulative: null, previousCumulative: hasPrevious ? previousRunning : null, projected, revenue: 0, forecast })
+      rows.push({ day, revenue: 0, previous: hasPrevious ? previous : null, forecast })
     }
   }
 

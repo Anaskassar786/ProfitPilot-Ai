@@ -74,7 +74,7 @@ const orderNode = {
   totalDiscountsSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   currentTotalDiscountsSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   totalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
-  currentTotalShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  currentShippingPriceSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   customer: {
     id: 'gid://shopify/Customer/555',
     firstName: 'Ada',
@@ -231,6 +231,11 @@ describe('Shopify GraphQL sync source', () => {
     // Must use displayFulfillmentStatus, not legacy fulfillmentStatus
     expect(orderQuery).toContain('displayFulfillmentStatus')
     expect(orderQuery).not.toMatch(/\bfulfillmentStatus\b/)
+    // GraphQL exposes the current shipping total as `currentShippingPriceSet`
+    // (the REST `current_total_shipping_price_set` has no `Total` in the
+    // field name — `currentTotalShippingPriceSet` is not a valid Order field).
+    expect(orderQuery).toContain('currentShippingPriceSet')
+    expect(orderQuery).not.toContain('currentTotalShippingPriceSet')
     // transactions is a list, not a connection — must not have first: or edges inside transactions
     expect(orderQuery).not.toMatch(/transactions\s*\(\s*first/)
     expect(orderQuery).toMatch(/transactions\s*\{/)

@@ -36,7 +36,7 @@ describe('App Bridge navigation chrome', () => {
     expect(html).toContain('data-pp-app-bridge-nav')
     expect(html).toContain('rel="home"')
     expect(html).toContain('Dashboard')
-    expect(html).toContain('AI Command Center')
+    expect(html).toContain('AI Center')
     expect(html).toContain('Recommendations')
     expect(html).toContain('Automation')
     expect(html).toContain('href="/ai-growth-command/coach"')
