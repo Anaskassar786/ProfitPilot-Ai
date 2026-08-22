@@ -31,9 +31,57 @@ const emptySnapshot: AnalyticsSnapshot = {
 
 describe('analytics model', () => {
   it('fills missing chart periods with honest zero values', () => {
-    const points = periodTrend(twoOrderSnapshot, 7, null)
+    // Deterministic: end at latest sale day 2026-08-16 so the 7-day window is 2026-08-10..2026-08-16
+    const points = periodTrend(twoOrderSnapshot, 7, null, { endDay: '2026-08-16' })
     expect(points).toHaveLength(7)
     expect(points.find((point) => point.day === '2026-08-15')?.revenue).toBe(0)
+    expect(points.find((point) => point.day === '2026-08-14')?.revenue).toBe(100)
+    expect(points.find((point) => point.day === '2026-08-16')?.revenue).toBe(300)
+  })
+
+  it('fills zero days for trailing no-sale period up to today/custom end', () => {
+    // Orders only on day 1 and day 4 in a 5-day range → zeros on 2,3,5
+    const snapshot: AnalyticsSnapshot = {
+      revenue: [
+        { storeId: 's', day: '2026-08-01', grossRevenue: 100, discounts: 0, orderCount: 1 },
+        { storeId: 's', day: '2026-08-04', grossRevenue: 200, discounts: 0, orderCount: 2 },
+      ],
+      orders: [
+        { storeId: 's', day: '2026-08-01', orderCount: 1, fulfilledCount: 1, cancelledCount: 0, averageOrderValue: 100 },
+        { storeId: 's', day: '2026-08-04', orderCount: 2, fulfilledCount: 2, cancelledCount: 0, averageOrderValue: 100 },
+      ],
+      productSales: [],
+      customerCohorts: [],
+    }
+    const points = periodTrend(snapshot, 5, null, { endDay: '2026-08-05' })
+    expect(points).toHaveLength(5)
+    expect(points.map((p) => p.day)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05'])
+    expect(points[1]?.revenue).toBe(0)
+    expect(points[1]?.orders).toBe(0)
+    expect(points[2]?.revenue).toBe(0)
+    expect(points[4]?.revenue).toBe(0)
+    expect(points[0]?.revenue).toBe(100)
+    expect(points[3]?.revenue).toBe(200)
+  })
+
+  it('last two days zero when store has no sales for consecutive days', () => {
+    // Simulates Aug 19 last sale, Aug 20-21 zero
+    const snapshot: AnalyticsSnapshot = {
+      revenue: [{ storeId: 's', day: '2026-08-19', grossRevenue: 500, discounts: 0, orderCount: 5 }],
+      orders: [{ storeId: 's', day: '2026-08-19', orderCount: 5, fulfilledCount: 5, cancelledCount: 0, averageOrderValue: 100 }],
+      productSales: [],
+      customerCohorts: [],
+    }
+    const points = periodTrend(snapshot, 3, null, { endDay: '2026-08-21' })
+    expect(points).toHaveLength(3)
+    expect(points[0]?.day).toBe('2026-08-19')
+    expect(points[0]?.revenue).toBe(500)
+    expect(points[1]?.day).toBe('2026-08-20')
+    expect(points[1]?.revenue).toBe(0)
+    expect(points[1]?.orders).toBe(0)
+    expect(points[2]?.day).toBe('2026-08-21')
+    expect(points[2]?.revenue).toBe(0)
+    expect(points[2]?.orders).toBe(0)
   })
 
   it('derives real KPI totals and AOV', () => {
@@ -65,8 +113,10 @@ describe('analytics model', () => {
       expect(kpi.change === null || Number.isFinite(kpi.change)).toBe(true)
       expect(String(kpi.change)).not.toContain('NaN')
     }
-    expect(kpis[0]?.sparkline).toEqual([50])
-    const trend = periodTrend(oneOrderSnapshot, 7, null)
+    // Sparkline now includes zeros for trailing days up to today, so it is longer than 1 and contains the real value
+    expect(kpis[0]?.sparkline.length).toBeGreaterThanOrEqual(1)
+    expect(kpis[0]?.sparkline).toContain(50)
+    const trend = periodTrend(oneOrderSnapshot, 7, null, { endDay: '2026-08-16' })
     expect(trend).toHaveLength(7)
     expect(trend.every((point) => Number.isFinite(point.revenue))).toBe(true)
   })
@@ -104,7 +154,7 @@ describe('analytics model', () => {
       message: 'ok',
       points: [{ day: '2026-08-17', value: 10, lower: 5, upper: 15 }],
       standardDeviation: 1,
-    })
+    }, { endDay: '2026-08-16' })
     expect(withForecast.some((point) => point.day === '2026-08-17' && point.forecast === 10)).toBe(true)
 
     const insufficient = periodTrend(twoOrderSnapshot, 7, {
@@ -112,7 +162,7 @@ describe('analytics model', () => {
       message: 'need more',
       points: [{ day: '2026-08-17', value: 10, lower: 5, upper: 15 }],
       standardDeviation: 0,
-    })
+    }, { endDay: '2026-08-16' })
     expect(insufficient.some((point) => point.day === '2026-08-17')).toBe(false)
   })
 })

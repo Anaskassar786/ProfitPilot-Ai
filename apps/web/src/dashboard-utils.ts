@@ -443,6 +443,8 @@ export function aggregateByCategory(
 
 /**
  * Build a calendar month grid from daily revenue data.
+ * Past days with no sales are explicit 0 so the merchant sees the drop,
+ * not a blank that looks like missing data. Future days stay null.
  */
 export function buildCalendarMonth(
   snapshot: AnalyticsSnapshot | null,
@@ -456,6 +458,7 @@ export function buildCalendarMonth(
     }
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10)
   const daysInMonth = new Date(year, month, 0).getDate()
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
 
@@ -475,7 +478,10 @@ export function buildCalendarMonth(
   let total = 0
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const value = revenueByDay.get(dateStr) ?? null
+    const hasRow = revenueByDay.has(dateStr)
+    const raw = revenueByDay.get(dateStr)
+    // Past or today with no row → explicit 0, future → null
+    const value = hasRow ? raw ?? 0 : dateStr <= todayStr ? 0 : null
     if (value !== null) total += value
     days.push({
       date: dateStr,

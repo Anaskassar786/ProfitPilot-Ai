@@ -81,10 +81,35 @@ export class ShopifyGraphqlSyncSource implements SyncSource {
       }
       throw error
     }
-    const errors = array(body.errors).map((item) => record(item)?.message).filter((message): message is string => typeof message === 'string')
-    if (errors.length > 0) throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync failed: ${errors.join('; ')}`, 502, { module })
+    const rawErrors = array(body.errors)
+    const messages = rawErrors.map((item) => record(item)?.message).filter((message): message is string => typeof message === 'string')
+    if (messages.length > 0 || rawErrors.length > 0) {
+      // Log the full GraphQL error body for future debugging instead of only the truncated message.
+      const full = (() => {
+        try {
+          return JSON.stringify(body.errors)
+        } catch {
+          return String(body.errors)
+        }
+      })()
+      // eslint-disable-next-line no-console
+      console.error(`[shopify-sync] GraphQL ${module} errors`, { errors: body.errors, variables })
+      const joined = messages.length > 0 ? messages.join('; ') : full
+      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync failed: ${joined}`, 502, { module, graphqlFull: full.slice(0, 2000) })
+    }
     const data = record(body.data)
-    if (!data) throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync response did not contain data`, 502, { module })
+    if (!data) {
+      const full = (() => {
+        try {
+          return JSON.stringify(body)
+        } catch {
+          return String(body)
+        }
+      })()
+      // eslint-disable-next-line no-console
+      console.error(`[shopify-sync] GraphQL ${module} missing data`, { body, variables })
+      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync response did not contain data: ${full}`, 502, { module, graphqlFull: full.slice(0, 2000) })
+    }
     return data
   }
 
@@ -207,7 +232,7 @@ const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
   orders(first: $first, after: $after) {
     edges { node {
       id name createdAt updatedAt processedAt cancelledAt cancelReason note tags email phone
-      displayFinancialStatus fulfillmentStatus currencyCode presentmentCurrencyCode
+      displayFinancialStatus displayFulfillmentStatus currencyCode presentmentCurrencyCode
       totalPriceSet { shopMoney { amount currencyCode } }
       currentTotalPriceSet { shopMoney { amount currencyCode } }
       subtotalPriceSet { shopMoney { amount currencyCode } }
@@ -218,7 +243,11 @@ const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
       currentTotalDiscountsSet { shopMoney { amount currencyCode } }
       totalShippingPriceSet { shopMoney { amount currencyCode } }
       currentTotalShippingPriceSet { shopMoney { amount currencyCode } }
-      customer { id email phone firstName lastName createdAt }
+      customer {
+        id firstName lastName createdAt
+        defaultEmailAddress { emailAddress }
+        defaultPhoneNumber { phoneNumber }
+      }
       lineItems(first: 50) { edges { node {
         id title variantTitle sku quantity
         originalUnitPriceSet { shopMoney { amount currencyCode } }
@@ -226,13 +255,13 @@ const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
         product { id }
         variant { id }
       } } }
-      shippingAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
-      billingAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
-      transactions(first: 50) { edges { node {
+      shippingAddress { firstName lastName company address1 address2 city province zip country countryCodeV2 phone }
+      billingAddress { firstName lastName company address1 address2 city province zip country countryCodeV2 phone }
+      transactions {
         id kind status createdAt processedAt gateway
         amountSet { shopMoney { amount currencyCode } }
         parentTransaction { id }
-      } } }
+      }
     } }
     pageInfo { hasNextPage endCursor }
   }
@@ -241,14 +270,14 @@ const ORDERS_QUERY = `query ProfitPilotOrders($first: Int!, $after: String) {
 const CUSTOMERS_QUERY = `query ProfitPilotCustomers($first: Int!, $after: String) {
   customers(first: $first, after: $after) {
     edges { node {
-      id email firstName lastName createdAt updatedAt note tags
+      id firstName lastName createdAt updatedAt note tags
       numberOfOrders
       amountSpent { amount currencyCode }
       lastOrder { id name }
+      defaultEmailAddress { emailAddress marketingState }
       defaultPhoneNumber { phoneNumber }
-      emailMarketingConsent { marketingState }
-      defaultAddress { firstName lastName company address1 address2 city province zip country countryCode phone }
-      addresses(first: 10) { edges { node { firstName lastName company address1 address2 city province zip country countryCode phone } } }
+      defaultAddress { firstName lastName company address1 address2 city province zip country countryCodeV2 phone }
+      addressesV2(first: 10) { edges { node { firstName lastName company address1 address2 city province zip country countryCodeV2 phone } } }
     } }
     pageInfo { hasNextPage endCursor }
   }
@@ -323,7 +352,7 @@ export function mapGraphqlOrder(node: Readonly<Record<string, unknown>>): SyncRe
     email: nullableString(node.email),
     phone: nullableString(node.phone),
     financial_status: nullableString(node.displayFinancialStatus)?.toLowerCase() ?? null,
-    fulfillment_status: mapFulfillmentStatus(node.fulfillmentStatus),
+    fulfillment_status: mapFulfillmentStatus(node.displayFulfillmentStatus ?? node.fulfillmentStatus),
     currency: nullableString(node.currencyCode),
     presentment_currency: nullableString(node.presentmentCurrencyCode),
     total_price: moneyAmount(node.totalPriceSet),
@@ -339,8 +368,8 @@ export function mapGraphqlOrder(node: Readonly<Record<string, unknown>>): SyncRe
     customer: customer
       ? {
           id: gidNumber(customer.id),
-          email: nullableString(customer.email),
-          phone: nullableString(customer.phone),
+          email: customerEmail(customer),
+          phone: customerPhone(customer),
           first_name: nullableString(customer.firstName),
           last_name: nullableString(customer.lastName),
           created_at: nullableString(customer.createdAt),
@@ -349,8 +378,30 @@ export function mapGraphqlOrder(node: Readonly<Record<string, unknown>>): SyncRe
     line_items: connectionNodes(node.lineItems).map((line) => mapGraphqlLineItem(record(line) ?? {})),
     shipping_address: mapAddress(record(node.shippingAddress)),
     billing_address: mapAddress(record(node.billingAddress)),
-    transactions: connectionNodes(node.transactions).map((transaction) => mapGraphqlTransaction(record(transaction) ?? {}, orderId)),
+    transactions: transactionNodes(node.transactions).map((transaction) => mapGraphqlTransaction(record(transaction) ?? {}, orderId)),
   }
+}
+
+function customerEmail(node: Readonly<Record<string, unknown>>): string | null {
+  // New Admin API: defaultEmailAddress { emailAddress }, legacy: email
+  const direct = nullableString(node.email)
+  if (direct) return direct
+  const emailAddress = record(node.defaultEmailAddress)
+  return nullableString(emailAddress?.emailAddress)
+}
+
+function customerPhone(node: Readonly<Record<string, unknown>>): string | null {
+  const direct = nullableString(node.phone)
+  if (direct) return direct
+  const phone = record(node.defaultPhoneNumber)
+  return nullableString(phone?.phoneNumber)
+}
+
+function transactionNodes(value: unknown): readonly Readonly<Record<string, unknown>>[] {
+  // Order.transactions is a list [OrderTransaction!]! in 2026-07, not a connection.
+  // Support both shapes for backward compatibility with tests/mocks.
+  if (Array.isArray(value)) return value.filter(isRecord)
+  return connectionNodes(value)
 }
 
 function mapGraphqlLineItem(node: Readonly<Record<string, unknown>>): SyncRecord {
@@ -391,12 +442,18 @@ export function mapGraphqlCustomer(node: Readonly<Record<string, unknown>>): Syn
   const amount = nullableString(amountSpent?.amount)
   const currencyCode = nullableString(amountSpent?.currencyCode)
   const lastOrder = record(node.lastOrder)
-  const consent = record(node.emailMarketingConsent)
   const phone = record(node.defaultPhoneNumber)
+  const emailAddress = record(node.defaultEmailAddress)
+  // New API uses defaultEmailAddress.marketingState, legacy used emailMarketingConsent.marketingState
+  const legacyConsent = record(node.emailMarketingConsent)
+  const marketingState = emailAddress?.marketingState ?? legacyConsent?.marketingState ?? null
+  // Support both addresses (deprecated) and addressesV2 (current)
+  const addressesConnection = node.addressesV2 ?? node.addresses
+  const email = nullableString(node.email) ?? nullableString(emailAddress?.emailAddress)
   return {
     id: gidNumber(node.id) ?? '',
     admin_graphql_api_id: nullableString(node.id),
-    email: nullableString(node.email),
+    email,
     phone: nullableString(phone?.phoneNumber),
     first_name: nullableString(node.firstName),
     last_name: nullableString(node.lastName),
@@ -410,8 +467,8 @@ export function mapGraphqlCustomer(node: Readonly<Record<string, unknown>>): Syn
     last_order_id: lastOrder?.id ? gidNumber(lastOrder.id) : null,
     last_order_name: nullableString(lastOrder?.name),
     default_address: mapAddress(record(node.defaultAddress)),
-    addresses: connectionNodes(node.addresses).map((address) => mapAddress(record(address) ?? {})),
-    email_marketing_consent: consent ? { state: nullableString(consent.marketingState)?.toLowerCase() ?? null } : null,
+    addresses: connectionNodes(addressesConnection).map((address) => mapAddress(record(address) ?? {})),
+    email_marketing_consent: marketingState ? { state: nullableString(marketingState)?.toLowerCase() ?? null } : null,
   }
 }
 
@@ -456,7 +513,7 @@ function mapAddress(node: Readonly<Record<string, unknown>> | null): SyncRecord 
     province: nullableString(node.province),
     zip: nullableString(node.zip),
     country: nullableString(node.country),
-    country_code: nullableString(node.countryCode),
+    country_code: nullableString(node.countryCodeV2) ?? nullableString(node.countryCode),
     phone: nullableString(node.phone),
   }
 }

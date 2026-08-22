@@ -156,7 +156,11 @@ export type RevenueLeakage = Readonly<{
  * fabrication.
  */
 export function revenueLeakage(snapshot: AnalyticsSnapshot | null, days: readonly string[]): RevenueLeakage {
-  const scope = new Set(days.map((day) => safeDayKey(day) ?? day))
+  // `days` is the continuous axis from periodTrend (now includes zero days).
+  // Build a map of real revenue/discounts, then emit a row for EVERY day in the scope
+  // with explicit 0 so the chart visibly drops on zero-sale days.
+  const normalizedScope = days.map((day) => safeDayKey(day) ?? day).filter((d): d is string => Boolean(d)).sort()
+  const scope = new Set(normalizedScope)
   const byDay = new Map<string, { collected: number; discounts: number }>()
   for (const row of snapshot?.revenue ?? []) {
     const day = safeDayKey(row?.day)
@@ -176,12 +180,11 @@ export function revenueLeakage(snapshot: AnalyticsSnapshot | null, days: readonl
     fulfilledOrders += finite(row.fulfilledCount)
   }
 
-  const rows: LeakageRow[] = [...byDay.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([day, value]) => {
-      const merchandise = value.collected + value.discounts
-      return { day, collected: value.collected, discounts: value.discounts, discountRate: merchandise > 0 ? (value.discounts / merchandise) * 100 : null }
-    })
+  const rows: LeakageRow[] = (scope.size > 0 ? normalizedScope : [...byDay.keys()].sort()).map((day) => {
+    const value = byDay.get(day) ?? { collected: 0, discounts: 0 }
+    const merchandise = value.collected + value.discounts
+    return { day, collected: value.collected, discounts: value.discounts, discountRate: merchandise > 0 ? (value.discounts / merchandise) * 100 : null }
+  })
 
   const collected = rows.reduce((sum, row) => sum + row.collected, 0)
   const discounts = rows.reduce((sum, row) => sum + row.discounts, 0)
