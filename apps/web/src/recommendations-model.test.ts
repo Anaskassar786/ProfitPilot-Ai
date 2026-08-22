@@ -200,8 +200,8 @@ describe('greeting helpers', () => {
     expect(shopDisplayName('acme.myshopify.com')).toBe('Acme')
     expect(shopDisplayName(null)).toBeNull()
   })
-  it('drops the ProfitPilot "pilot" brand suffix from the greeting name', () => {
-    expect(shopDisplayName('commander-pilot.myshopify.com')).toBe('Commander')
+  it('derives the greeting name purely from the shop domain', () => {
+    expect(shopDisplayName('commander-pilot.myshopify.com')).toBe('Commander Pilot')
     expect(shopDisplayName('commander.myshopify.com')).toBe('Commander')
     expect(shopDisplayName('pilot.myshopify.com')).toBe('Pilot')
     expect(shopDisplayName('acme.myshopify.com')).toBe('Acme')

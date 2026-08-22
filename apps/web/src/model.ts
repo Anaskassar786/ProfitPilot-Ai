@@ -136,8 +136,9 @@ function nonEmpty(value: string | null): string | null {
 
 /**
  * Format a Shopify shop domain into a human-friendly display name.
- * e.g. "commander-pilot.myshopify.com" => "Commander Pilot"
- * Frontend-only per Q2 — no backend change.
+ * e.g. "anas-apparel.myshopify.com" => "Anas Apparel"
+ * The name resolves purely from the workspace shop domain — no demo-store
+ * special cases are hardcoded.
  */
 export function formatStoreDisplayName(domain: string | null): string | null {
   if (!domain) return null
@@ -146,15 +147,8 @@ export function formatStoreDisplayName(domain: string | null): string | null {
   // Strip .myshopify.com suffix
   const withoutSuffix = trimmed.replace(/\.myshopify\.com$/, '')
   if (!withoutSuffix) return null
-  if (withoutSuffix === 'commander-pilot' || withoutSuffix === 'commander_pilot') return 'Commander'
   // Replace hyphens/underscores with spaces, split, Title Case each word
-  const words = withoutSuffix
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .filter((word) => word.toLowerCase() !== 'pilot')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+  const words = withoutSuffix.split(/[-_]+/).filter(Boolean)
   if (words.length === 0) return null
-  const formatted = words.join(' ')
-  if (formatted === 'Commander Pilot') return 'Commander'
-  return formatted
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
 }

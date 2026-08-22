@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { PROFITPILOT_SHOPIFY_SCOPES, missingShopifyScopes, shopifyAppConfigFromEnv, renderShopifyAppToml } from '../apps/api/src/app-store-assets.ts'
+import { PROFITPILOT_SHOPIFY_SCOPES, PROFITPILOT_WEBHOOK_TOPICS, missingShopifyScopes, shopifyAppConfigFromEnv, renderShopifyAppToml } from '../apps/api/src/app-store-assets.ts'
 
 // Production base URL used for the mandatory Shopify GDPR privacy webhooks.
 // The default derives the privacy webhook URL from the configured app host;
@@ -24,3 +24,4 @@ if (config.scopes.length > PROFITPILOT_SHOPIFY_SCOPES.length) {
   process.stdout.write(`Note: SHOPIFY_SCOPES added extra scopes beyond the ${PROFITPILOT_SHOPIFY_SCOPES.length} required by ProfitPilot.\n`)
 }
 process.stdout.write(`Privacy webhooks: ${config.privacyWebhookUrl}\n`)
+process.stdout.write(`Webhook subscriptions (${PROFITPILOT_WEBHOOK_TOPICS.length}): ${PROFITPILOT_WEBHOOK_TOPICS.join(',')}\n`)

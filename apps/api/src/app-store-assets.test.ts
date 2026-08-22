@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { APP_STORE_SCREENSHOT_SPECS, PROFITPILOT_SHOPIFY_SCOPES, PROFITPILOT_SHOPIFY_SCOPES_CSV, appListingMetadata, missingShopifyScopes, parseShopifyScopes, renderShopifyAppToml, shopifyAppConfigFromEnv } from './app-store-assets.js'
+import { APP_STORE_SCREENSHOT_SPECS, PROFITPILOT_SHOPIFY_SCOPES, PROFITPILOT_SHOPIFY_SCOPES_CSV, PROFITPILOT_WEBHOOK_TOPICS, appListingMetadata, missingShopifyScopes, parseShopifyScopes, renderShopifyAppToml, shopifyAppConfigFromEnv } from './app-store-assets.js'
 
 const REPO_ROOT = new URL('../../../', import.meta.url)
 
@@ -21,9 +21,24 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain('customer_data_request_url = "https://app.example/shopify/webhooks"')
     expect(toml).toContain('customer_deletion_url = "https://app.example/shopify/webhooks"')
     expect(toml).toContain('shop_deletion_url = "https://app.example/shopify/webhooks"')
-    expect(toml).toContain('topics = ["app/uninstalled"]')
+    expect(toml).toContain('topics = ["app/uninstalled", "orders/create", "orders/updated", "customers/create", "customers/update", "products/update", "inventory_levels/update"]')
     expect(toml).toContain('uri = "/shopify/webhooks"')
     expect(toml).not.toContain('client_secret')
+  })
+
+  it('subscribes every automation webhook topic and never deprecated checkout/cart topics', () => {
+    const config = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example' })
+    const toml = renderShopifyAppToml(config)
+    for (const topic of PROFITPILOT_WEBHOOK_TOPICS) {
+      expect(toml).toContain(topic)
+    }
+    expect(PROFITPILOT_WEBHOOK_TOPICS).toContain('app/uninstalled')
+    for (const required of ['orders/create', 'orders/updated', 'customers/create', 'customers/update', 'products/update', 'inventory_levels/update']) {
+      expect(PROFITPILOT_WEBHOOK_TOPICS).toContain(required)
+    }
+    expect(PROFITPILOT_WEBHOOK_TOPICS.some((topic) => topic.startsWith('checkouts/') || topic.startsWith('carts/'))).toBe(false)
+    expect(toml).not.toMatch(/checkouts\//)
+    expect(toml).not.toMatch(/carts\//)
   })
 
   it('uses APP_URL fallback and validates generator inputs', () => {
@@ -114,5 +129,11 @@ describe('Shopify scope registry', () => {
 
     const templateScopes = /^scopes\s*=\s*"(.*)"$/m.exec(repoFile('docs/app-store/shopify.app.toml.template'))?.[1]
     expect(templateScopes).toBe(PROFITPILOT_SHOPIFY_SCOPES_CSV)
+  })
+
+  it('keeps the shopify.app.toml template webhook subscriptions identical to the registry', () => {
+    const templateTopics = /^topics\s*=\s*\[(.*)\]$/m.exec(repoFile('docs/app-store/shopify.app.toml.template'))?.[1]
+    const parsed = templateTopics ? [...templateTopics.matchAll(/"([^"]+)"/g)].map((match) => match[1]) : []
+    expect(parsed).toEqual([...PROFITPILOT_WEBHOOK_TOPICS])
   })
 })
