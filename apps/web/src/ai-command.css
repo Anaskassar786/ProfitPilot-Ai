@@ -697,7 +697,7 @@
 }
 .aic-template-copy strong { font-size: 13px; font-weight: 700; color: var(--aic-text); }
 .aic-template-copy small {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--aic-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1408,7 +1408,7 @@
 .aic-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .aic-group > span {
   color: var(--aic-text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .05em;
@@ -1450,7 +1450,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--aic-text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: normal;
   border-left: 2px solid var(--aic-accent-border);
   padding-left: 6px;
@@ -1630,7 +1630,7 @@
   white-space: nowrap;
 }
 .aic-recent small {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--aic-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1652,7 +1652,7 @@
   border-radius: 10px;
   background: var(--aic-panel-2);
 }
-.aic-value-stat span { font-size: 11.5px; color: var(--aic-text-muted); }
+.aic-value-stat span { font-size: 12px; color: var(--aic-text-muted); }
 .aic-value-stat strong { font-size: 19px; font-weight: 800; color: var(--aic-text); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .aic-value-stat.estimate { border-color: var(--aic-accent-border); background: var(--aic-accent-soft); }
 .aic-value-stat.estimate strong { color: var(--aic-accent); }
@@ -2030,7 +2030,7 @@
 }
 .aic-activity-day.empty strong { color: var(--aic-text-muted); }
 .aic-activity-day small {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--aic-text-muted);
   text-transform: uppercase;
   letter-spacing: .03em;
@@ -2098,12 +2098,12 @@
 .aic-insights-grid button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .aic-insights-grid small { color: var(--aic-text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
 .aic-insights-grid strong { overflow: hidden; text-overflow: ellipsis; color: var(--aic-text); font-size: 15px; white-space: nowrap; }
-.aic-insights-grid em { color: var(--aic-text-muted); font-size: 10.5px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aic-insights-grid em { color: var(--aic-text-muted); font-size: 12px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aic-popular-compact { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .aic-popular-compact button {
   display: inline-flex; align-items: center; gap: 7px; min-width: 0; padding: 9px 10px;
   border: 1px solid var(--aic-border); border-radius: 9px; background: var(--aic-panel-2);
-  color: var(--aic-text-secondary); font: inherit; font-size: 11.5px; font-weight: 650; cursor: pointer;
+  color: var(--aic-text-secondary); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
   transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 .aic-popular-compact button:hover:not(:disabled) { background: var(--aic-accent-soft); border-color: var(--aic-accent-border); color: var(--aic-text); }
@@ -2115,7 +2115,7 @@
 }
 .aic-tip-icon { font-size: 19px; }
 .aic-daily-tip strong { color: var(--aic-text); font-size: 12px; }
-.aic-daily-tip p { margin: 2px 0 0; color: var(--aic-text-secondary); font-size: 11.5px; line-height: 1.4; }
+.aic-daily-tip p { margin: 2px 0 0; color: var(--aic-text-secondary); font-size: 12px; line-height: 1.4; }
 .aic-daily-tip button { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; border: 0; border-radius: 8px; background: rgb(202, 138, 4); color: rgb(255, 255, 255); font-weight: 750; cursor: pointer; white-space: nowrap; }
 @media (max-width: 900px) {
   .aic-insights-grid, .aic-popular-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2155,10 +2155,10 @@
 .aic-ring-inner strong.size-sm { font-size: 18px; }
 .aic-ring-inner strong.size-xs { font-size: 14px; }
 .aic-ring-inner small {
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.25;
 }
-.aic-ring-inner small.size-sm { font-size: 9.5px; }
+.aic-ring-inner small.size-sm { font-size: 10px; }
 .aic-ring-inner small.size-xs { font-size: 12px; }
 
 
@@ -2180,7 +2180,7 @@
   border: 1px solid var(--aic-border-soft);
   background: var(--aic-panel-2);
   color: var(--aic-text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: .01em;
 }
@@ -2297,7 +2297,7 @@
   flex: 0 0 auto;
   margin-top: 1px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--aic-accent);
   background: var(--aic-accent-soft);

@@ -6,7 +6,10 @@ import {
   firstAssistantAnswer,
   groupConversations,
   hoursUntilDailyReset,
+  humanizeSource,
   isAiCommandHash,
+  merchantSafeAiCommandError,
+  AI_COMMAND_UNAVAILABLE_MESSAGE,
   isCampaignsHash,
   lastUserQuestion,
   parseSseBlocks,
@@ -117,5 +120,12 @@ describe('AI Command frontend model', () => {
     expect(quickCommandCategory({ id: 'c', label: 'Stock', command: 'Low stock inventory', kind: 'info' })).toBe('products')
     expect(quickCommandCategory({ id: 'd', label: 'Grow', command: 'Help me increase sales', kind: 'info' })).toBe('growth')
     expect(quickCommandCategory({ id: 'e', label: 'Email', command: 'Send email', kind: 'action' })).toBe('actions')
+  })
+
+  it('never surfaces raw AI source labels or stream exception text', () => {
+    expect(humanizeSource('analytics_revenue_daily')).toBe('📊 Live Analytics Sync')
+    expect(merchantSafeAiCommandError('relation "analytics_revenue_daily" does not exist')).toBe(AI_COMMAND_UNAVAILABLE_MESSAGE)
+    expect(merchantSafeAiCommandError('Upgrade Plan to keep asking.')).toContain('Upgrade Plan')
+    expect(merchantSafeAiCommandError('OpenRouter 500 Internal Server Error')).toBe(AI_COMMAND_UNAVAILABLE_MESSAGE)
   })
 })

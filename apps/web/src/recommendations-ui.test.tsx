@@ -13,7 +13,6 @@ import {
   RecommendationCard,
   RejectReasonSheet,
   RuleDetailModal,
-  SampleRecommendationPreview,
   Tip,
 } from './recommendations.js'
 import { usageState } from './recommendations-model.js'
@@ -163,10 +162,13 @@ describe('KPI hero', () => {
 describe('empty states', () => {
   it('first-run state is compact, action-oriented, and educational', () => {
     const html = renderWithAppProvider(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
-    expect(html).toContain('find your growth opportunities!')
+    expect(html).toContain('No recommendations yet')
+    expect(html).toContain('ProfitPilot analyzes your synced store data')
     expect(html).toContain('Discover Opportunities')
     expect(html).toContain('How it works')
     expect(html).not.toContain('Your AI team is ready to work')
+    expect(html).not.toContain('$1,240')
+    expect(html).not.toContain('Sample Preview')
   })
   it('rule cards carry icons, descriptions, and data-source badges', () => {
     const html = renderWithAppProvider(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
@@ -202,33 +204,13 @@ describe('empty states', () => {
   })
 })
 
-describe('sample recommendation preview', () => {
-  it('is clearly labeled SAMPLE and disables its actions with a tooltip', () => {
-    const html = renderWithAppProvider(createElement(SampleRecommendationPreview))
-    expect(html).toContain('Sample')
-    expect(html).toContain('not your data')
-    expect((html.match(/disabled=""|disabled/g) ?? []).length).toBeGreaterThanOrEqual(2)
-    expect(html).toContain('This is a preview — discover opportunities to get real recommendations')
-    expect(html).toContain('$1,240')
-    expect(html).toContain('Revenue at risk')
-  })
-  it('shows a prominent SAMPLE PREVIEW badge with a clear explanation', () => {
-    const html = renderWithAppProvider(createElement(SampleRecommendationPreview))
-    // Prominent amber badge — never ambiguous
-    expect(html).toContain('recs-sample-badge')
-    expect(html).toContain('Sample Preview')
-    expect(html).toContain('recs-sample-banner')
-    // The explanation names what to do next
-    expect(html).toContain('Discover Opportunities')
-    expect(html).toContain('recs-sample-explanation')
-    // A reinforcement note explains the disabled state
-    expect(html).toContain('recs-sample-note')
-    expect(html).toContain('these buttons will be active')
-  })
-  it('disables actions and exposes a screen-reader-friendly aria-label', () => {
-    const html = renderWithAppProvider(createElement(SampleRecommendationPreview))
-    expect(html).toContain('aria-label="Skip This — preview only, action unavailable"')
-    expect(html).toContain('aria-label="Approve — preview only, action unavailable"')
+describe('first-run honesty', () => {
+  it('does not invent sample recommendation metrics', () => {
+    const html = renderWithAppProvider(createElement(FirstRunState, { onAnalyze: noop, analyzing: false, onHow: noop, onInspectRule: noop, hasRun: false }))
+    expect(html).not.toContain('Everyday Hoodie')
+    expect(html).not.toContain('$1,240')
+    expect(html).not.toContain('62%')
+    expect(html).not.toContain('Sample Preview')
   })
 })
 
@@ -438,7 +420,6 @@ describe('insights sidebar', () => {
   it('marks plan-locked agents without implying a different upgrade destination', () => {
     const html = renderWithAppProvider(createElement(InsightsSidebar, { summary: summary(), plan: 'trial', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
     // Trial unlocks 2 agents; the other five show their required plan chip
-    expect(html).toContain('recs-agent-row-plan')
     expect(html).toContain('Commander')
     expect(html).not.toContain('Upgrade to')
   })
@@ -458,12 +439,13 @@ describe('insights sidebar', () => {
     const empty = summary({ byAgent: [], byRule: [], recentDecisions: [], generatedTrend: [], total: 0, counts: { PENDING: 0, APPROVED: 0, REJECTED: 0, EXECUTED: 0, FAILED: 0, EXPIRED: 0 } })
     const html = renderWithAppProvider(createElement(InsightsSidebar, { summary: empty, plan: 'growth', onFilterAgent: noop, onInspectRule: noop, onUpgrade: noop }))
     expect(html).toContain('No recommendations yet — your team reports here after the first look.')
-    expect(html).toContain('See sample activity')
-    expect(html).toContain('30 days ago')
+    expect(html).toContain('Your timeline fills in as your AI team works')
+    expect(html).not.toContain('See sample activity')
     expect(html).toContain('We alert you when something important happens')
     expect(html).toContain('Approve or skip recommendations to build history')
-    expect(html).toContain('Sample')
-    expect(html).toContain('>0<') // zero triggers shown per rule
+    expect(html).not.toContain('Everyday Hoodie')
+    expect(html).toContain('Stockout Alerts')
+    expect(html).toMatch(/Stockout Alerts0|🚨 Stockout Alerts0/)
   })
 })
 
