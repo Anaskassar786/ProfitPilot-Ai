@@ -2,7 +2,7 @@ import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresStoreDirectory, withTenantContext } from '@profitpilot/db'
 import { AppError, storeId } from '@profitpilot/types'
 import { Logger } from '@profitpilot/logger'
-import { AdminStepUpSessions, agentsForPlanCount, calculateRoi, DEFAULT_GIFT_CODES, expiredGiftRevert, FunnelLedger, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
+import { AdminStepUpSessions, agentsForPlanCount, calculateRoi, expiredGiftRevert, FunnelLedger, giftCodesFromEnv, limitForPlan, PostgresBillingRepository, PostgresTrialGiftStore, ShopifyBillingClient } from '@profitpilot/billing'
 import type { TrialRecord } from '@profitpilot/billing'
 import { PostgresTokenRecordStore, TokenVault } from '@profitpilot/shopify'
 import type { QueryResultRow } from '@profitpilot/db'
@@ -24,17 +24,22 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
   if (!f4) return null
   const directory = new PostgresStoreDirectory(f4.database)
   const vault = new TokenVault(AesGcmCipher.fromHex(requiredEnv(env, 'ENCRYPTION_KEY')), new PostgresTokenRecordStore(f4.database))
-  const giftStore = new PostgresTrialGiftStore(f4.database, giftCodesFromEnv(env))
+  const logger = new Logger()
+  // Gift codes come from GIFT_CODE_SEQUENCE_1/2 env vars (validated at boot
+  // in giftCodesFromEnv) — nothing is hardcoded in source. An empty registry
+  // simply means every redemption attempt fails as "invalid or exhausted".
+  const giftCodes = giftCodesFromEnv(env)
+  if (giftCodes.length === 0) logger.warn('No gift codes configured (GIFT_CODE_SEQUENCE_1/GIFT_CODE_SEQUENCE_2 unset) — gift redemption is disabled')
+  const giftStore = new PostgresTrialGiftStore(f4.database, giftCodes)
   // Every entitlement read flows through this decorator: an expired gift
   // reverts the store to TRIAL_EXPIRED (or its still-valid trial) at read
   // time, not only when GET /billing happens to be called.
   const repository = new ExpiringGiftBillingRepository(new PostgresBillingRepository(f4.database), giftStore)
-  // Best-effort seed so KASSAR786 / AFRIDI786 (or env overrides) exist even if
-  // the migration seed was wiped. Failures are non-fatal at boot.
-  void giftStore.seedDefaultCodes(giftCodesFromEnv(env)).catch(() => undefined)
+  // Best-effort seed so the env-configured codes exist even if the database
+  // seed was wiped. Failures are non-fatal at boot.
+  void giftStore.seedDefaultCodes(giftCodes).catch(() => undefined)
   const funnel = new FunnelLedger()
   const stepUp = new AdminStepUpSessions(15)
-  const logger = new Logger()
   const billingClient = async (shopId: string): Promise<ShopifyBillingClient> => {
     const connection = await directory.get(storeId(shopId))
     if (!connection) throw new AppError('NOT_FOUND', 'Shopify store is not registered', 404, { storeId: shopId })
@@ -245,14 +250,11 @@ function billingTestMode(env: Readonly<Record<string, string | undefined>>): boo
   return 'auto'
 }
 
-function giftCodesFromEnv(env: Readonly<Record<string, string | undefined>>) {
-  return DEFAULT_GIFT_CODES.map((defaultCode, index) => {
-    const slot = String(index + 1)
-    return { ...defaultCode, code: env[`GIFT_CODE_${slot}`]?.trim() || defaultCode.code, maxUses: numberEnv(env, `GIFT_CODE_${slot}_MAX_USES`, defaultCode.maxUses), active: env[`GIFT_CODE_${slot}_ACTIVE`] !== 'false' }
-  })
-}
+// Gift codes are read from the environment by @profitpilot/billing
+// (GIFT_CODE_SEQUENCE_1 / GIFT_CODE_SEQUENCE_2, with legacy GIFT_CODE_1/2
+// fallbacks). No codes are hardcoded in source; giftCodesFromEnv validates
+// the configured values at boot and returns an empty registry when unset.
 
-function numberEnv(env: Readonly<Record<string, string | undefined>>, key: string, fallback: number): number { const value = env[key]; const parsed = value?.trim() ? Number(value) : fallback; return Number.isFinite(parsed) ? parsed : fallback }
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: string): string { const value = env[key]?.trim(); if (!value) throw new Error(`Missing required environment variable ${key}`); return value }
 
 // Re-export for tests that previously imported the private ensureTrial helper shape.

@@ -97,6 +97,8 @@ export function HelpSupportPage({
     })
   }
 
+  // Refresh tickets only when the store changes: refresh is recreated every
+  // render, so listing it as a dependency would refetch in a loop.
   useEffect(() => { refresh() }, [context.storeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

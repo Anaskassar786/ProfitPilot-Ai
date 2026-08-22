@@ -171,6 +171,9 @@ importers:
       '@profitpilot/db':
         specifier: workspace:*
         version: link:../db
+      '@profitpilot/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@profitpilot/types':
         specifier: workspace:*
         version: link:../types

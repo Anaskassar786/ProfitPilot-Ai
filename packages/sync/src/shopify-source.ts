@@ -1,4 +1,5 @@
 import { ShopifyApiError, ShopifyClient } from '@profitpilot/shopify'
+import { Logger } from '@profitpilot/logger'
 import { AppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import type { SyncModule, SyncPage, SyncRecord, SyncSource } from './sync.js'
@@ -32,11 +33,13 @@ type ShopifyLocation = Readonly<{ id: string; name: string | null; city: string 
 export class ShopifyGraphqlSyncSource implements SyncSource {
   private readonly clients: ShopifyClientFactory
   private readonly pageSize: number
+  private readonly logger: Logger
 
-  public constructor(clients: ShopifyClientFactory, pageSize = 250) {
+  public constructor(clients: ShopifyClientFactory, pageSize = 250, logger: Logger = new Logger()) {
     if (pageSize < 1 || pageSize > 250) throw new RangeError('Shopify GraphQL page size must be between 1 and 250')
     this.clients = clients
     this.pageSize = pageSize
+    this.logger = logger
   }
 
   public async fetchPage(storeId: StoreId, module: SyncModule, cursor: string | null): Promise<SyncPage> {
@@ -84,31 +87,22 @@ export class ShopifyGraphqlSyncSource implements SyncSource {
     const rawErrors = array(body.errors)
     const messages = rawErrors.map((item) => record(item)?.message).filter((message): message is string => typeof message === 'string')
     if (messages.length > 0 || rawErrors.length > 0) {
-      // Log the full GraphQL error body for future debugging instead of only the truncated message.
-      const full = (() => {
-        try {
-          return JSON.stringify(body.errors)
-        } catch {
-          return String(body.errors)
-        }
-      })()
-      // eslint-disable-next-line no-console
-      console.error(`[shopify-sync] GraphQL ${module} errors`, { errors: body.errors, variables })
-      const joined = messages.length > 0 ? messages.join('; ') : full
-      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync failed: ${joined}`, 502, { module, graphqlFull: full.slice(0, 2000) })
+      // PII safety: never log the GraphQL response body or query variables —
+      // they can contain merchant customer data (emails, names, addresses).
+      // Only structured error codes and messages from Shopify's error array
+      // are logged/thrown; those describe the API failure, not store records.
+      const errorCodes = rawErrors
+        .map((item) => record(record(item)?.extensions)?.code)
+        .filter((code): code is string => typeof code === 'string')
+      this.logger.error('Shopify GraphQL sync errors', { module, errorCount: rawErrors.length, errorCodes, messages: messages.slice(0, 5) })
+      const joined = messages.length > 0 ? messages.join('; ') : `${rawErrors.length} unstructured GraphQL error(s)`
+      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync failed: ${joined}`, 502, { module, errorCodes: errorCodes.join(',') })
     }
     const data = record(body.data)
     if (!data) {
-      const full = (() => {
-        try {
-          return JSON.stringify(body)
-        } catch {
-          return String(body)
-        }
-      })()
-      // eslint-disable-next-line no-console
-      console.error(`[shopify-sync] GraphQL ${module} missing data`, { body, variables })
-      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync response did not contain data: ${full}`, 502, { module, graphqlFull: full.slice(0, 2000) })
+      // Same PII rule: log the shape of the failure, never the body itself.
+      this.logger.error('Shopify GraphQL sync response missing data', { module, bodyKeys: Object.keys(body) })
+      throw new AppError('DEPENDENCY_ERROR', `Shopify ${module} sync response did not contain data`, 502, { module })
     }
     return data
   }

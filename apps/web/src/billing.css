@@ -700,6 +700,26 @@
   font-size: 17px;
 }
 
+/* Trial-forfeiture acknowledgment (P1 disclosure): checkbox row under the
+   warning banner in the Gift Access card. */
+.billing-gift-ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.billing-gift-ack input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: #f59e0b;
+  cursor: pointer;
+}
+
 .billing-gift-form {
   display: flex;
   align-items: center;

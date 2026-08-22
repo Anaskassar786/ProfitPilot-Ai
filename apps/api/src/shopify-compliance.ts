@@ -212,31 +212,18 @@ export class ShopifyComplianceService {
    * public apps to revoke tokens and invalidate sessions without waiting for
    * the 48-hour shop/redact.
    *
-   * This handler is idempotent: if the store is already UNINSTALLED, it returns
-   * silently (200 OK) without errors.
+   * This handler is idempotent: if the store is already UNINSTALLED, it
+   * returns silently (200 OK) without errors. Token revocation happens here;
+   * the store-status update (status='UNINSTALLED', uninstalled_at) is applied
+   * via finalize() to avoid a circular dependency on the uninstall repository.
    */
-  public async handleUninstall(event: WebhookEvent): Promise<void> {
-    const payload = compliancePayload(event.rawBody)
-    const shopDomain = stringValue(payload.shop_domain) ?? stringValue(payload.shopDomain)
-    if (!shopDomain) throw new AppError('VALIDATION_ERROR', 'Shopify app/uninstalled payload is missing shop_domain', 400)
-
-    // Token revocation: immediately invalidate the access token. This prevents
-    // any further API calls using the stored token.
-    await this.tokens.remove(shopDomain)
-
-    // The uninstall repository is injected via finalize() to avoid circular
-    // dependencies. See handle() dispatch below.
-    void event // Mark as intentionally unused when no uninstallRepo
-  }
-
   public async handle(event: WebhookEvent): Promise<void> {
     if (event.topic === 'app/uninstalled') {
-      // app/uninstalled is handled by handleUninstall, which revokes tokens.
-      // Store status update is handled via finalize() below.
       const payload = compliancePayload(event.rawBody)
       const shopDomain = stringValue(payload.shop_domain) ?? stringValue(payload.shopDomain)
       if (!shopDomain) throw new AppError('VALIDATION_ERROR', 'Shopify app/uninstalled payload is missing shop_domain', 400)
-      // Token revocation happens immediately in this handler
+      // Token revocation: immediately invalidate the access token. This
+      // prevents any further API calls using the stored token.
       await this.tokens.remove(shopDomain)
       return
     }

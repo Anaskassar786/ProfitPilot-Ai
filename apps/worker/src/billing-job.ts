@@ -1,5 +1,5 @@
 import type { ChargeLedger, LocalCharge, ReconcileResult, TrialRecord } from '@profitpilot/billing'
-import { DEFAULT_GIFT_CODES, PostgresChargeLedger, PostgresTrialGiftStore, ShopifyBillingClient, reconcileCharges } from '@profitpilot/billing'
+import { giftCodesFromEnv, PostgresChargeLedger, PostgresTrialGiftStore, ShopifyBillingClient, reconcileCharges } from '@profitpilot/billing'
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { PostgresDatabase, PostgresStoreDirectory, databaseConfigFromEnv } from '@profitpilot/db'
 import type { Logger } from '@profitpilot/logger'
@@ -60,22 +60,4 @@ function billingTestMode(env: Readonly<Record<string, string | undefined>>): boo
   if (value === 'true') return true
   if (value === 'false') return false
   return 'auto'
-}
-
-function giftCodesFromEnv(env: Readonly<Record<string, string | undefined>>) {
-  return DEFAULT_GIFT_CODES.map((defaultCode, index) => {
-    const slot = String(index + 1)
-    return {
-      ...defaultCode,
-      code: env[`GIFT_CODE_${slot}`]?.trim() || defaultCode.code,
-      maxUses: numberEnv(env, `GIFT_CODE_${slot}_MAX_USES`, defaultCode.maxUses),
-      active: env[`GIFT_CODE_${slot}_ACTIVE`] !== 'false',
-    }
-  })
-}
-
-function numberEnv(env: Readonly<Record<string, string | undefined>>, key: string, fallback: number): number {
-  const value = env[key]
-  const parsed = value?.trim() ? Number(value) : fallback
-  return Number.isFinite(parsed) ? parsed : fallback
 }

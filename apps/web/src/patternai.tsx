@@ -210,6 +210,8 @@ function useResource<T>(load: (() => Promise<T>) | null, deps: readonly unknown[
         setState({ status: 'error', data: null, upgradeRequired, message })
       })
     return () => { cancelled = true }
+    // `deps` is a caller-supplied dynamic array spread into the dependency
+    // list; the static analyzer cannot verify it, but it is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce, ...deps])
   const reload = useCallback(() => setNonce((value) => value + 1), [])
