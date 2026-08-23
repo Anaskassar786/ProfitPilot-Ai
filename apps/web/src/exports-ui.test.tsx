@@ -233,7 +233,8 @@ describe('page load', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     await act(async () => {
-      root!.render(createElement(ExportsWorkspace, { context: { storeId: 'exports-test', shop: null }, onToast: () => undefined, onNavigateBilling: () => undefined }))
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
+      root!.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(ExportsWorkspace, { context: { storeId: 'exports-test', shop: null }, onToast: () => undefined, onNavigateBilling: () => undefined })))
     })
     expect(document.querySelector('.dx-skeleton')).not.toBeNull()
     expect(document.querySelectorAll('.dx-card')).toHaveLength(0)
@@ -292,7 +293,9 @@ describe('export cards', () => {
     const orders = cardFor('orders')
     expect(orders.textContent).toContain('No rows yet')
     const button = buttonIn(orders, /Nothing to export yet/)
-    expect(button.disabled).toBe(true)
+    // Polaris buttons soft-disable (aria-disabled + click suppression), not the
+    // native attribute.
+    expect(button.getAttribute('aria-disabled')).toBe('true')
   })
 })
 
@@ -369,7 +372,8 @@ describe('plan gating', () => {
     await mountWorkspace()
     const revenue = cardFor('revenue')
     expect(revenue.querySelector('.dx-download')).toBeNull()
-    expect(revenue.querySelector('.upgrade-plan-cta')?.textContent).toContain('Upgrade Plan')
+    // Shared CTA renders the wrapping span class `.upgrade-plan-button-wrap`.
+    expect(revenue.querySelector('.upgrade-plan-button-wrap')?.textContent).toContain('Upgrade Plan')
     expect(revenue.textContent).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
   })
 
@@ -377,7 +381,7 @@ describe('plan gating', () => {
     const navigations: string[] = []
     mockBackend({ plan: 'trial' })
     await mountWorkspace([], navigations)
-    await act(async () => { cardFor('revenue').querySelector<HTMLButtonElement>('.upgrade-plan-cta')?.click() })
+    await act(async () => { cardFor('revenue').querySelector<HTMLButtonElement>('.upgrade-plan-button-wrap button')?.click() })
     expect(navigations).toEqual(['billing'])
   })
 
@@ -392,7 +396,7 @@ describe('plan gating', () => {
     mockBackend({ plan: 'commander' })
     await mountWorkspace()
     expect(document.querySelectorAll('.dx-card.is-locked')).toHaveLength(0)
-    expect(document.querySelectorAll('.upgrade-plan-cta')).toHaveLength(0)
+    expect(document.querySelectorAll('.upgrade-plan-button-wrap')).toHaveLength(0)
   })
 })
 
@@ -404,7 +408,7 @@ describe('plan banner', () => {
     expect(banner?.textContent).toContain('Trial')
     expect(banner?.textContent).toContain('Exports this month: 1/3')
     expect(banner?.textContent).toContain('2 exports left this month')
-    expect(banner?.querySelector('.upgrade-plan-cta')?.textContent).toContain('Upgrade Plan')
+    expect(banner?.querySelector('.upgrade-plan-button-wrap')?.textContent).toContain('Upgrade Plan')
   })
 
   it('warns without shaming once the month is used up', async () => {

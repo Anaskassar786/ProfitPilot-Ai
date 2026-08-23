@@ -8,6 +8,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { analyticsKpis, periodTrend } from './analytics-model.js'
 import { AnalyticsHero, RevenueTrendChart, OrdersAOVCorrelation, SalesByChannel, CategoryDistribution } from './analytics.js'
 import { InventoryStatsGrid, InventoryHealthCard, StockDistributionChart, InventoryValueSummary } from './inventory.js'
@@ -90,7 +92,13 @@ const catalog = [
   { productId: 'p3', payload: { title: 'Oakley Goggles', product_type: 'Accessories' } },
 ]
 
-const shell = (light: boolean, children: unknown) => <div className={light ? 'app-shell light-mode' : 'app-shell'}>{children as never}</div>
+// main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+// Polaris-powered components render the same way under test.
+const shell = (light: boolean, children: unknown) => (
+  <AppProvider i18n={enTranslations as never}>
+    <div className={light ? 'app-shell light-mode' : 'app-shell'}>{children as never}</div>
+  </AppProvider>
+)
 
 describe('PR #42 final-polish smoke (both themes)', () => {
   it('renders the premium Analytics KPI cards with growth, comparison and pending states', () => {

@@ -1,12 +1,21 @@
 import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { AiCommandPage } from './ai-command-page.js'
 import { AiCommandWorkspace, PostChatActivity } from './ai-command.js'
 import type { AiCommandUsage } from './ai-command-model.js'
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ * Polaris-powered components render the same way under test. */
+function renderWithAppProvider(element: ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
 
 const context = { storeId: 'store-1', shop: 'demo.myshopify.com' }
 const toast = vi.fn()
@@ -17,7 +26,7 @@ const billing = vi.fn()
 
 describe('AI Command fixes (duplicate title)', () => {
   it('renders the AI Command title exactly once (no duplicated page header)', () => {
-    const html = renderToStaticMarkup(createElement(AiCommandPage, { context, onToast: toast, onNavigateBilling: billing }))
+    const html = renderWithAppProvider(createElement(AiCommandPage, { context, onToast: toast, onNavigateBilling: billing }))
     // The workspace sub-header is the only "AI Command" heading now.
     expect(html.match(/<h2>AI Command<\/h2>/g)?.length).toBe(1)
     // The old page-level duplicate <h1> header is gone.
@@ -26,7 +35,7 @@ describe('AI Command fixes (duplicate title)', () => {
   })
 
   it('keeps a single "Universal command center" eyebrow above the title', () => {
-    const html = renderToStaticMarkup(createElement(AiCommandWorkspace, { context, plan: 'trial', onToast: toast, onNavigateBilling: billing }))
+    const html = renderWithAppProvider(createElement(AiCommandWorkspace, { context, plan: 'trial', onToast: toast, onNavigateBilling: billing }))
     expect(html).toContain('Universal command center')
     expect(html).toContain('aic-eyebrow')
     expect(html).toContain('One command controls everything')
@@ -41,7 +50,7 @@ describe('AI Command fixes (empty space / activity timeline)', () => {
   ]
 
   it('renders contextual follow-ups, live-data empty states, popular commands, and a daily tip', () => {
-    const html = renderToStaticMarkup(createElement(PostChatActivity, { usageHistory: history, now, lastCommand: 'Show low stock products', onPrompt: vi.fn() }))
+    const html = renderWithAppProvider(createElement(PostChatActivity, { usageHistory: history, now, lastCommand: 'Show low stock products', onPrompt: vi.fn() }))
     expect(html).toContain('Continue exploring')
     expect(html).toContain('Show products to reorder')
     expect(html).toContain('Quick insights')
@@ -51,7 +60,7 @@ describe('AI Command fixes (empty space / activity timeline)', () => {
   })
 
   it('renders a unique 7-day command activity timeline from real usage (no fake data)', () => {
-    const html = renderToStaticMarkup(createElement(PostChatActivity, { usageHistory: history, now, onPrompt: vi.fn() }))
+    const html = renderWithAppProvider(createElement(PostChatActivity, { usageHistory: history, now, onPrompt: vi.fn() }))
     expect(html).toContain('Your Command Activity')
     expect(html).toContain('Last 7 days')
     // Seven days are always shown; only real values are counted.
@@ -67,7 +76,7 @@ describe('AI Command fixes (empty space / activity timeline)', () => {
       { ...history[0]!, commandsUsed: 20 },
       { ...history[1]!, commandsUsed: 15 },
     ]
-    const html = renderToStaticMarkup(createElement(PostChatActivity, { usageHistory: busy, now, onPrompt: vi.fn() }))
+    const html = renderWithAppProvider(createElement(PostChatActivity, { usageHistory: busy, now, onPrompt: vi.fn() }))
     expect(html).toContain('Total: 35 commands')
     expect(html).toContain('Time saved: ~1.8h')
   })

@@ -391,6 +391,14 @@ const INSTRUCTIONAL_TOPICS: readonly Readonly<{ topic: string; pattern: RegExp }
 ]
 
 /**
+ * Store-data terms that turn a "what is / how much" question into a live data
+ * lookup rather than app-usage guidance. "What is my revenue this month?" must
+ * be answered from real analytics (INTENT B), never with the generic
+ * instructional help card.
+ */
+const DATA_LOOKUP_SIGNALS = /\b(?:revenue|sales?|orders?|aov|average order value|customers?|products?|inventory|stock|analytics|metrics?|profit(?:s|ability)?|margin|refunds?|earnings|income|payouts?|best[ -]?sellers?|conversion|purchases?|spend|sold)\b/i
+
+/**
  * Detects instructional / how-to questions (INTENT C). Returns a topic key or
  * null. Requires an explicit "how/what/explain/set up" phrasing so plain
  * lookups such as "Show automation status" still route to live data.
@@ -402,6 +410,10 @@ export function detectInstructionalIntent(query: string): string | null {
   for (const entry of INSTRUCTIONAL_TOPICS) {
     if (entry.pattern.test(text)) return entry.topic
   }
+  // A "what is / how much / how many" question about measurable store data is
+  // a lookup, not guidance — fall through so the tools path answers it with
+  // real numbers (e.g. "What is my revenue this month?" → get_analytics).
+  if (DATA_LOOKUP_SIGNALS.test(text)) return null
   return 'generic'
 }
 

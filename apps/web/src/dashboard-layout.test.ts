@@ -68,7 +68,10 @@ describe('dashboard layout (PR #23)', () => {
     const html = render()
     expect(html).toContain('aria-label="Previous month"')
     expect(html).toContain('aria-label="Next month"')
-    expect(html).toContain('cal-month-label')
+    // The month label button keeps its "jump to current month" behaviour and
+    // renders the active month name (custom CSS className was replaced by
+    // Polaris button chrome during the Polaris migration).
+    expect(html).toContain('Jump to current month')
     expect(html).toContain('cal-total-block')
     expect(html).toContain('Total revenue')
   })

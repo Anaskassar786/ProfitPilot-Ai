@@ -202,14 +202,17 @@ async function click(element: Element): Promise<void> {
 async function mount(items: readonly RecommendationView[], usage = 7): Promise<InteractiveHarness> {
   const harness = installInteractiveFetch(items, usage)
   const { RecommendationsWorkspace } = await import('./recommendations.js')
+  const { AppProvider } = await import('@shopify/polaris')
+  const enTranslations = (await import('@shopify/polaris/locales/en.json')).default
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(StrictMode, null, createElement(RecommendationsWorkspace, {
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
+    root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(RecommendationsWorkspace, {
       context: { shop: 'snowboard.myshopify.com', storeId },
       onToast,
       onNavigateBilling: onBilling,
       onNavigateSection: onNavigate,
-    } as never)))
+    } as never))))
   })
   await settle()
   return harness
@@ -229,6 +232,15 @@ function cardContaining(text: string): HTMLElement {
 
 beforeAll(() => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/dashboard?shop=snowboard.myshopify.com' })
+  // Polaris reads window.matchMedia at module load; the fresh JSDOM window
+  // lacks it (the setup file stubs the vitest jsdom window, not this one).
+  Object.defineProperty(dom.window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false, media: query, onchange: null,
+      addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false },
+    }),
+  })
   Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window })
   Object.defineProperty(globalThis, 'document', { configurable: true, value: dom.window.document })
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.window.navigator })
@@ -248,6 +260,10 @@ afterAll(() => { dom.window.close() })
 beforeEach(() => {
   if (root) { act(() => root?.unmount()); root = null }
   container.innerHTML = ''
+  // Reset the location so a previous test's evidence-drawer hash (#r=…) never
+  // leaks into this test's mount and triggers the "link could not be found"
+  // deep-link fallback.
+  dom.window.history.pushState({}, '', '/dashboard?shop=snowboard.myshopify.com')
   onToast = vi.fn()
   onBilling = vi.fn()
   onNavigate = vi.fn()

@@ -84,7 +84,7 @@ export function computeExecutiveVitalSigns(snapshot: StoreSnapshot, analytics: A
   const inventory = inventoryTurnover(snapshot, analytics)
   const cash = cashConversion(analytics)
   const diversity = productDiversity(analytics)
-  const velocity = orderVelocity(analytics)
+  const velocity = orderVelocity(analytics, now)
   const acquisition = customerAcquisition(snapshot, last30)
 
   return [
@@ -289,7 +289,7 @@ export function detectExecutiveRisks(snapshot: StoreSnapshot, analytics: Analyti
     })
   }
 
-  const competition = competitionSignal(snapshot, analytics)
+  const competition = competitionSignal(snapshot, analytics, now)
   if (competition !== null) {
     risks.push({
       riskType: 'COMPETITION',
@@ -356,7 +356,7 @@ export function identifyExecutiveOpportunities(snapshot: StoreSnapshot, analytic
     })
   }
 
-  const momentum = risingMomentum(snapshot, analytics)
+  const momentum = risingMomentum(snapshot, analytics, now)
   if (momentum.length > 0) {
     const annualImpact = momentum.reduce((sum, item) => sum + item.extraMonthly * 12, 0)
     opportunities.push({
@@ -776,9 +776,9 @@ function productDiversity(analytics: AnalyticsSnapshot): Readonly<{ value: numbe
   return { value: hhi, status, trend: hhi <= 0.4 ? 'up' : 'down', productsWithSales: share.distinctProducts }
 }
 
-function orderVelocity(analytics: AnalyticsSnapshot): Readonly<{ value: number | null; status: VitalSignStatus; trend: ExecutiveVitalSign['trend']; last30dOrders: number; previous30dOrders: number }> {
-  const last30 = sinceDays(Date.now(), 30)
-  const prev30 = sinceDays(Date.now(), 60)
+function orderVelocity(analytics: AnalyticsSnapshot, now: number): Readonly<{ value: number | null; status: VitalSignStatus; trend: ExecutiveVitalSign['trend']; last30dOrders: number; previous30dOrders: number }> {
+  const last30 = sinceDays(now, 30)
+  const prev30 = sinceDays(now, 60)
   const last = analytics.orders.filter((row) => dayLabel(row.day) >= last30).reduce((sum, row) => sum + row.orderCount, 0)
   const previous = analytics.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30).reduce((sum, row) => sum + row.orderCount, 0)
   const growth = growthRate(last, previous)
@@ -867,9 +867,9 @@ function stockoutExposure(snapshot: StoreSnapshot): Readonly<{ count: number; mo
   return { count: exposed.length, monthlyRevenueAtRisk }
 }
 
-function competitionSignal(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): Readonly<{ orderChange: number; aovChange: number; orderShortfall: number; aov: number }> | null {
-  const last30 = sinceDays(Date.now(), 30)
-  const prev30 = sinceDays(Date.now(), 60)
+function competitionSignal(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot, now: number): Readonly<{ orderChange: number; aovChange: number; orderShortfall: number; aov: number }> | null {
+  const last30 = sinceDays(now, 30)
+  const prev30 = sinceDays(now, 60)
   const last = analytics.orders.filter((row) => dayLabel(row.day) >= last30)
   const previous = analytics.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30)
   const lastOrders = last.reduce((sum, row) => sum + row.orderCount, 0)
@@ -904,9 +904,9 @@ function crossSellOpportunity(snapshot: StoreSnapshot, analytics: AnalyticsSnaps
   return { annualImpact, pairs: pairs.map((pair) => ({ label: pair.productId })) }
 }
 
-function risingMomentum(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): readonly Readonly<{ title: string; extraMonthly: number }>[] {
-  const last30 = sinceDays(Date.now(), 30)
-  const prev30 = sinceDays(Date.now(), 60)
+function risingMomentum(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot, now: number): readonly Readonly<{ title: string; extraMonthly: number }>[] {
+  const last30 = sinceDays(now, 30)
+  const prev30 = sinceDays(now, 60)
   const windows = new Map<string, { last: number; previous: number }>()
   for (const row of analytics.productSales) {
     const entry = windows.get(row.productId) ?? { last: 0, previous: 0 }

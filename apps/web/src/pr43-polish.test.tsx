@@ -10,6 +10,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { periodTrend } from './analytics-model.js'
 import { RevenueTrendChart } from './analytics.js'
 import { InventoryHealthCard } from './inventory.js'
@@ -19,7 +21,9 @@ import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
 
-const shell = (light: boolean, children: unknown) => <div className={appShellClass(light)}>{children as never}</div>
+// main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+// Polaris-powered components render the same way under test.
+const shell = (light: boolean, children: unknown) => <AppProvider i18n={enTranslations as never}><div className={appShellClass(light)}>{children as never}</div></AppProvider>
 function appShellClass(light: boolean): string { return light ? 'app-shell light-mode' : 'app-shell' }
 
 // Latest order: 2026-08-14. Refunds in the trailing 30 days (o3, o4) total
@@ -51,13 +55,13 @@ describe('PR #43 professional polish (both themes)', () => {
   })
 
   it('Cancellation card: healthy, monitor and high thresholds map to the right status bars', () => {
-    const healthy = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(1, 100) }))
+    const healthy = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CancellationRateCard, { insight: cancellation(1, 100) })))
     expect(healthy).toContain('Healthy cancellation rate')
     expect(healthy).toContain('rate-status-bar good')
-    const monitor = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(4, 100) }))
+    const monitor = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CancellationRateCard, { insight: cancellation(4, 100) })))
     expect(monitor).toContain('Monitor cancellation trends')
     expect(monitor).toContain('rate-status-bar watch')
-    const high = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(12, 100) }))
+    const high = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CancellationRateCard, { insight: cancellation(12, 100) })))
     expect(high).toContain('High cancellation rate — review orders')
     expect(high).toContain('rate-status-bar attention')
   })
@@ -73,10 +77,10 @@ describe('PR #43 professional polish (both themes)', () => {
   })
 
   it('Fulfillment card: 100% and 0% states use the correct status bars', () => {
-    const allDone = renderToStaticMarkup(createElement(FulfillmentRateCard, { insight: fulfillment(6, 6) }))
+    const allDone = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(FulfillmentRateCard, { insight: fulfillment(6, 6) })))
     expect(allDone).toContain('All orders fulfilled')
     expect(allDone).toContain('rate-status-bar good')
-    const noneDone = renderToStaticMarkup(createElement(FulfillmentRateCard, { insight: fulfillment(0, 6) }))
+    const noneDone = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(FulfillmentRateCard, { insight: fulfillment(0, 6) })))
     expect(noneDone).toContain('Attention — orders need fulfillment')
     expect(noneDone).toContain('rate-status-bar attention')
   })
@@ -129,7 +133,7 @@ describe('PR #43 professional polish (both themes)', () => {
       ],
       health: { score: 90, grade: 'A', label: 'Excellent', tone: 'healthy' as const, components: [], excluded: [] },
     }
-    const html = renderToStaticMarkup(createElement(InventoryHealthCard, { data: page, loading: false }))
+    const html = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(InventoryHealthCard, { data: page, loading: false })))
     expect(html).toContain('All items healthy')
     expect(html).not.toContain('Out of stock')
   })

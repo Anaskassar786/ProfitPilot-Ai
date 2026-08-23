@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { UsageMeterRow, visibleMeters } from './App.js'
@@ -71,7 +72,7 @@ describe('Billing — UsageMeterRow', () => {
   })
 
   it('never shows the fair-use hint on non-Commander tiers even at huge volumes', () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithAppProvider(
       <UsageMeterRow meter={meter({ feature: 'orders_sync_month', used: 9_999, limit: 5_000 })} plan="growth" />,
     )
     expect(html).not.toContain('fair use applies')
@@ -83,7 +84,7 @@ describe('Billing — UsageMeterRow', () => {
   })
 
   it('shows the upgrade link only when the meter is at or above 100% of a limited cap', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 300, limit: 300 })} plan="growth" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 300, limit: 300 })} plan="growth" />)
     expect(html).toContain('Upgrade for higher limits')
   })
 })

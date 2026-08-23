@@ -13,7 +13,7 @@
  * "Upgrade Plan" CTA; trial explores through clearly labelled samples.
  */
 
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -380,11 +380,19 @@ export function SampleBadge() {
 export function RatingStars({ value, onRate, disabled = false }: { value: number | null; onRate?: (rating: number) => void; disabled?: boolean }) {
   return (
     <span className="pa-stars" role={onRate ? 'radiogroup' : undefined} aria-label="Rate this insight">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Button key={star} className={`pa-star ${value !== null && star <= value ? 'lit' : ''}`} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
-          <Star size={13} fill={value !== null && star <= value ? 'currentColor' : 'none'} />
-        </Button>
-      ))}
+      {[1, 2, 3, 4, 5].map((star) => {
+        const lit = value !== null && star <= value
+        // Polaris Button drops custom className, so the "lit" state is conveyed
+        // through the pressed affordance (aria-pressed + pressed styling). The
+        // amber tint below keeps the legacy .pa-star.lit color cue alive.
+        return (
+          <span key={star} className={`pa-star ${lit ? 'lit' : ''}`}>
+            <Button aria-pressed={lit} disabled={disabled || !onRate} onClick={() => onRate?.(star)} aria-label={`${star} star${star === 1 ? '' : 's'}`}>
+              <Star size={13} />
+            </Button>
+          </span>
+        )
+      })}
     </span>
   )
 }
@@ -668,7 +676,10 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
                 const active = route.tab === tab || (route.tab === 'discoveries' && tab === 'overview')
                 const badge = navBadgeCount(tab, overview)
                 return (
-                  <Button
+                  // RichButton keeps the composite content (icon + label + count
+                  // badge + lock cue) intact — the plain Button shim flattens
+                  // children to a single icon + text label.
+                  <RichButton
                     key={tab}
                     className={`pa-nav-item ${active ? 'active' : ''} ${locked ? 'locked' : ''}`}
                     onClick={() => go(tab)}
@@ -679,7 +690,7 @@ export function PatternAiWorkspace({ context, catalog = [], onToast, onNavigateB
                     <span>{insightsTabLabel(tab)}</span>
                     {badge !== null && badge > 0 && <span className="pa-nav-badge">{formatInsightNumber(badge)}</span>}
                     {locked && <Lock size={11} className="pa-nav-lock" />}
-                  </Button>
+                  </RichButton>
                 )
               })}
             </div>
@@ -794,7 +805,9 @@ export function CategorySignalBreakdown({ impact, activeCategory = 'ALL', onSele
         const count = counts.get(category) ?? 0
         const share = impact.total > 0 ? Math.round((count / impact.total) * 100) : 0
         return (
-          <Button
+          // RichButton preserves the composite card content (head/count/meter
+          // /share) — the plain Button shim flattens children to icon + text.
+          <RichButton
             key={category}
             type="button"
             className={`pa-category-signal tone-${category.toLowerCase()} ${activeCategory === category ? 'active' : ''} ${count === 0 ? 'empty' : ''}`}
@@ -806,7 +819,7 @@ export function CategorySignalBreakdown({ impact, activeCategory = 'ALL', onSele
             <span className="pa-category-signal-count">{formatInsightNumber(count)} signal{count === 1 ? '' : 's'}</span>
             <span className="pa-category-signal-meter"><span style={{ width: `${share}%` }} /></span>
             <span className="pa-category-signal-share">{share}%</span>
-          </Button>
+          </RichButton>
         )
       })}
     </div>
@@ -1261,7 +1274,7 @@ export function ExploreFurther({ go, storeId, overview, plan }: {
         {destinations.map(({ tab, icon: Icon, feature, blurb, viz }) => {
           const locked = !unlocked(feature)
           return (
-            <Button key={tab} className={`pa-explore-card ${locked ? 'locked' : ''}`} onClick={() => go(tab)} title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}>
+            <RichButton key={tab} className={`pa-explore-card ${locked ? 'locked' : ''}`} onClick={() => go(tab)} title={locked ? 'Locked on your current plan — Upgrade Plan to open this section' : insightsTabPurpose(tab)}>
               <span className="pa-explore-head">
                 <span className="pa-explore-icon"><Icon size={15} /></span>
                 <strong>{insightsTabLabel(tab)}</strong>
@@ -1271,7 +1284,7 @@ export function ExploreFurther({ go, storeId, overview, plan }: {
               <p>{blurb}</p>
               {locked && <span className="pa-explore-locked-note"><Lock size={10} /> Opens with a plan upgrade</span>}
               <span className="pa-explore-go">Open <ArrowRight size={12} /></span>
-            </Button>
+            </RichButton>
           )
         })}
       </div>
@@ -2321,7 +2334,9 @@ function ToggleRow({ label, hint, checked, disabled, onChange }: { label: string
   return (
     <div className="pa-toggle-row">
       <div><strong>{label}</strong><small>{hint}</small></div>
-      <Button className={`pa-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></Button>
+      {/* RichButton: the switch is a composite styled control; the plain Button
+          shim would flatten it and drop role/aria-checked. */}
+      <RichButton className={`pa-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></RichButton>
     </div>
   )
 }

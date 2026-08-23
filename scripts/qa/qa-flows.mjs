@@ -2,7 +2,7 @@
 // (gift redeem, mock upgrade, recommendations lifecycle, automation CRUD,
 // store coach, AI command, reports, exports, support, settings).
 // Output: flows.json (full) + summary lines on stdout.
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { Client } from 'pg';
 
 
@@ -25,13 +25,25 @@ const results = [];
 // one-per-store, goals are plan-capped, etc. — leftovers from earlier runs
 // must not mask real behavior).
 {
+  // NOTE: PostgresTrialGiftStore keeps a process-level redemption/trial cache
+  // inside the API. After a full DB reset the API must be restarted (or it
+  // will answer from cache) — `scripts/qa/qa-reset.sh` + an API restart is the
+  // reliable loop.
   const pg0 = new Client({ connectionString: 'postgresql://postgres:postgres@127.0.0.1:5433/postgres' });
   await pg0.connect();
-  await pg0.query('DELETE FROM gift_redemptions WHERE shop_id = $1', [B]);
+  await pg0.query('DELETE FROM gift_redemptions WHERE shop_id IN ($1, $2)', [A, B]);
   await pg0.query("UPDATE billing_subscriptions SET state='TRIAL_ACTIVE', plan='trial', interval='MONTHLY', charge_id=NULL WHERE shop_id IN ($1, $2)", [A, B]);
-  await pg0.query('UPDATE gift_codes SET uses = GREATEST(uses - 1, 0) WHERE code = $1', ['KASSAR786']);
+  // The strict single-use check also consults trials.consumed/trial_forfeited
+  // ("Trial or gift access was already consumed"), so a gift-redemption reset
+  // must restore the trial rows too or later runs can never redeem again.
+  await pg0.query("UPDATE trials SET consumed=false, state='ACTIVE', trial_forfeited=false, expires_at = now() + interval '10 days' WHERE shop_id IN ($1, $2)", [A, B]);
+  await pg0.query("UPDATE gift_codes SET uses = 0, active = true WHERE code IN ('KASSAR786', 'AFRIDI786')", []);
   await pg0.query('DELETE FROM store_coach_goals WHERE store_id IN ($1, $2)', [A, B]);
   await pg0.query('DELETE FROM workflows WHERE store_id IN ($1, $2)', [A, B]);
+  // Usage meters accumulate across runs (trial: 10 recommendations / 3 exports
+  // per month) and would make repeat runs hit plan walls instead of testing
+  // the flow. Reset them so every run exercises the happy path.
+  await pg0.query('DELETE FROM billing_usage WHERE shop_id IN ($1, $2)', [A, B]);
   await pg0.end();
 }
 async function call(name, path, { method = 'GET', body, storeId = A, timeout = 60000, expect, shopParam = false } = {}) {
@@ -221,6 +233,7 @@ await pg2.connect();
 await pg2.query("UPDATE billing_subscriptions SET state='TRIAL_ACTIVE', plan='trial', interval='MONTHLY' WHERE shop_id=$1", [A]);
 await pg2.end();
 
+mkdirSync('scripts/qa/results', { recursive: true });
 writeFileSync('scripts/qa/results/flows.json', JSON.stringify(results, null, 2));
 const failed = results.filter((r) => !r.pass);
 console.log(`\nFLOW RESULTS: total=${results.length} failed=${failed.length}`);

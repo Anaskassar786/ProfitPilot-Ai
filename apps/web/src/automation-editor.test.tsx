@@ -13,6 +13,8 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { WorkflowEditor } from './WorkflowEditor.js'
 import type { AutomationUsage, WorkflowNode, WorkflowRecord } from './automation-model.js'
 
@@ -158,7 +160,10 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
   document.body.appendChild(container)
   const renderEditor = (): void => {
     root?.render(
-      <StrictMode>
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here
+      // so Polaris-powered components render the same way under test.
+      <AppProvider i18n={enTranslations as never}>
+        <StrictMode>
         <WorkflowEditor
           storeId="s1"
           workflow={store.workflow}
@@ -174,7 +179,8 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
             else toasts.push({ message })
           }}
         />
-      </StrictMode>,
+        </StrictMode>
+      </AppProvider>,
     )
   }
   await act(async () => {
@@ -310,7 +316,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       ],
     })
     const container = await mount(store)
-    const trash = container.querySelector('.simple-step .danger') as HTMLButtonElement
+    // The Polaris Button shim maps the legacy `danger` class to a critical tone
+    // (not a DOM class), so locate the control by its accessible name instead.
+    const trash = container.querySelector('.simple-step [aria-label="Remove step"]') as HTMLButtonElement
     expect(trash).toBeTruthy()
     await click(trash)
     // After remove, only the trigger remains (Configure for trigger is still

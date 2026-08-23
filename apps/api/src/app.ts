@@ -26,7 +26,7 @@ import { launchControlMiddleware, createF9Router } from './f9.js'
 import type { F9RouteDependencies } from './f9.js'
 import { createF8Router } from './f8-routes.js'
 import type { CopilotRouteDependencies, ForecastRouteDependencies, JarvisRouteDependencies, ReportRouteDependencies } from './f8-routes.js'
-import { isApiPath, mountAutomationSpaFallback, mountWebApp } from './web-app.js'
+import { isApiPath, mountClientRouteFallback, mountWebApp } from './web-app.js'
 import { embeddedEntryMiddleware } from './embedded-entry.js'
 import type { EmbeddedEntryDependencies } from './embedded-entry.js'
 import { createOrderRouter } from './order-routes.js'
@@ -77,11 +77,20 @@ export function createApi(dependencies: ApiDependencies): Express {
   app.use(apiOnly(tenantContextMiddleware(security.requireAuthentication)))
   app.use(apiOnly(csrfMiddleware(security.csrfSecret)))
 
-  // Automation deep links share their prefix with the JSON API, so the app
-  // shell must be served here — before the routers — for browser navigations
-  // only (Accept: text/html). API clients never request HTML, so the JSON
-  // endpoints below keep answering exactly as before.
-  mountAutomationSpaFallback(app, dependencies.webDistPath)
+  // Shopify managed installation never calls /shopify/callback: the embedded
+  // app load IS the install signal. This runs before the SPA/client-route
+  // fallbacks so the stores row exists and the session cookie is set on the
+  // very first frame — including direct loads at client routes like /orders
+  // or /billing (id_token/HMAC verified; every other request passes through).
+  if (dependencies.embeddedEntry) app.use(embeddedEntryMiddleware({ ...dependencies.embeddedEntry, logger: dependencies.logger }))
+
+  // Client-side routes share several prefixes with the JSON API (/orders,
+  // /billing, /settings, /automation, …), so the app shell must be served
+  // here — before the routers — for browser navigations only
+  // (GET/HEAD + Accept: text/html + exact client path). API clients never
+  // request HTML, so the JSON endpoints below keep answering exactly as
+  // before, and unknown API URLs still 404 as JSON.
+  mountClientRouteFallback(app, dependencies.webDistPath)
 
   // API routes must be registered before the static server and SPA fallback so
   // neither a real endpoint nor an unknown API URL can return index.html.
@@ -122,11 +131,6 @@ export function createApi(dependencies: ApiDependencies): Express {
     const readiness = await evaluateReadiness(dependencies.readinessChecks)
     response.status(readiness.ok ? 200 : 503).json(success(readiness, requestId(String(response.getHeader('x-request-id') ?? 'ready'))))
   })
-
-  // Shopify managed installation never calls /shopify/callback: the embedded
-  // app load IS the install signal. This runs before the SPA is served so the
-  // stores row exists and the session cookie is set on the very first frame.
-  if (dependencies.embeddedEntry) app.use(embeddedEntryMiddleware({ ...dependencies.embeddedEntry, logger: dependencies.logger }))
 
   // Express 5 no longer accepts app.get('*'). A terminal app.use handler is the
   // equivalent safe SPA fallback and mountWebApp restricts it to GET/HEAD web

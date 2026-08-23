@@ -5,7 +5,7 @@ import { verifyEmbeddedRequest } from '@profitpilot/shopify'
 import type { OfflineTokenResult, SessionTokenConfig } from '@profitpilot/shopify'
 import { missingShopifyScopes } from './app-store-assets.js'
 import { setSessionCookie } from './cookies.js'
-import { isApiPath } from './web-app.js'
+import { isApiPath, isClientRoutePath } from './web-app.js'
 
 export type EmbeddedTokenExchange = Readonly<{
   hasAccessToken(shop: string): Promise<boolean>
@@ -151,7 +151,11 @@ async function registerTenant(
 /** Shopify app-load browser navigations only: never assets or API routes. */
 function isEmbeddedNavigation(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false
-  if (isApiPath(request.path)) return false
+  // Client-side routes (/orders, /billing, /settings, …) share prefixes with
+  // the JSON API but ARE app navigations — Shopify can load the embedded app
+  // directly at them, and that load is the managed-installation signal that
+  // registers the tenant and sets the session cookie.
+  if (isApiPath(request.path) && !isClientRoutePath(request.path)) return false
   return !/\.[a-zA-Z0-9]+$/.test(request.path)
 }
 

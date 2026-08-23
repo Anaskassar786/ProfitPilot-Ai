@@ -6,7 +6,7 @@
  * "Upgrade Plan" (never a plan name), educational empty states, and
  * elegant skeleton loaders. Theme-adaptive via the tokens in executive.css.
  */
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from './icons.js'
@@ -245,7 +245,9 @@ export function GrowthIqPlanPanel({ plan, onUpgrade, defaultExpanded = false }: 
           ? <span className="gq-plan-note">{unlocked.length} features active · all GrowthIQ features unlocked</span>
           : <span className="gq-plan-note">{unlocked.length} features active · {locked.length} more available</span>}
         <span className="gq-plan-head-actions">
-          <Button
+          {/* RichButton: the .gq-plan-toggle styles (flex row, nowrap) plus the
+              icon+label content must survive; the plain Button shim drops both. */}
+          <RichButton
             type="button"
             className="text-button gq-plan-toggle"
             onClick={() => setExpanded((value) => !value)}
@@ -253,7 +255,7 @@ export function GrowthIqPlanPanel({ plan, onUpgrade, defaultExpanded = false }: 
             aria-controls="gq-plan-details"
           >
             {expanded ? <>Hide details <ChevronUp size={14} /></> : <>Show details <ChevronDown size={14} /></>}
-          </Button>
+          </RichButton>
           {!isCommander && <UpgradePlanButton plan={plan} onUpgrade={onUpgrade} />}
         </span>
       </div>

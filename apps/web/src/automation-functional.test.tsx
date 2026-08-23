@@ -387,8 +387,12 @@ describe('Automation page — header, banner, navigation', () => {
     const create = button(container, 'Create Automation')
     expect(create).toBeTruthy()
     // Limit reached → create is disabled with an explanatory tooltip.
-    expect(create.disabled).toBe(true)
-    expect(create.title).toContain('upgrade')
+    // Polaris buttons soft-disable (aria-disabled + click suppression) rather
+    // than using the native attribute, and `title` becomes the aria-label.
+    expect(create.getAttribute('aria-disabled')).toBe('true')
+    expect(create.getAttribute('aria-label')).toContain('upgrade')
+    await click(create)
+    expect(container.textContent).not.toContain('Create New Automation')
   })
 
   it('opens and closes the How it works modal without errors', async () => {
@@ -533,7 +537,9 @@ describe('Automation page — featured templates (all 8 cards)', () => {
     setup()
     const container = await mount()
     const cards = Array.from(container.querySelectorAll('.template-card'))
-    const iconClass = (card: Element) => (card.querySelector('.template-icon svg') as SVGElement).className.baseVal
+    // Polaris icons all share the same svg class; the distinguishing feature is
+    // the rendered glyph (path data), which is what makes each icon recognizable.
+    const iconClass = (card: Element) => (card.querySelector('.template-icon svg') as SVGElement).innerHTML
     const byCategory = new Map<string, Set<string>>()
     for (const card of cards) {
       const category = card.querySelector('.template-category')?.textContent ?? ''
@@ -678,12 +684,16 @@ describe('Automation page — Your Automations section', () => {
   it('category dropdown filters cards', async () => {
     setup({ workflows: [workflowRecord('wf-1', { category: 'Marketing', name: 'Cart saver' }), workflowRecord('wf-2', { category: 'Operations', name: 'Ops alert' })] })
     const container = await mount()
-    const trigger = container.querySelector<HTMLButtonElement>('.category-dropdown .custom-select-trigger')
-    expect(trigger).toBeTruthy()
-    await click(trigger as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.category-dropdown [role="option"]')).find((entry) => entry.textContent?.includes('Sales & Growth'))
-    expect(option).toBeTruthy()
-    await click(option as HTMLElement)
+    // CustomSelect is now a native Polaris <select>: drive it with a change event.
+    const select = Array.from(container.querySelectorAll('select')).find((entry) => entry.getAttribute('aria-label') === 'Filter by category')
+      ?? Array.from(container.querySelectorAll('select')).find((entry) => Array.from(entry.options).some((opt) => opt.textContent?.includes('Sales & Growth')))
+    expect(select).toBeTruthy()
+    await act(async () => {
+      ;(select as HTMLSelectElement).value = 'Marketing'
+      select!.dispatchEvent(new window.Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    await flush()
     expect(container.querySelectorAll('.workflow-card')).toHaveLength(1)
     expect(container.textContent).toContain('Cart saver')
   })
@@ -691,10 +701,15 @@ describe('Automation page — Your Automations section', () => {
   it('sort dropdown reorders cards', async () => {
     setup({ workflows: [workflowRecord('wf-1', { name: 'Zulu' }), workflowRecord('wf-2', { name: 'Alpha' })] })
     const container = await mount()
-    const trigger = container.querySelector<HTMLButtonElement>('.last-run-dropdown .custom-select-trigger')
-    await click(trigger as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.last-run-dropdown [role="option"]')).find((entry) => entry.textContent?.includes('Name'))
-    await click(option as HTMLElement)
+    const select = Array.from(container.querySelectorAll('select')).find((entry) => entry.getAttribute('aria-label') === 'Sort automations')
+      ?? Array.from(container.querySelectorAll('select')).find((entry) => Array.from(entry.options).some((opt) => opt.textContent === 'Success rate'))
+    expect(select).toBeTruthy()
+    await act(async () => {
+      ;(select as HTMLSelectElement).value = 'name'
+      select!.dispatchEvent(new window.Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    await flush()
     const names = Array.from(container.querySelectorAll('.workflow-name')).map((node) => node.textContent)
     expect(names).toEqual(['Alpha', 'Zulu'])
   })
@@ -942,8 +957,10 @@ describe('Automation page — states, resilience, and accessibility', () => {
     const container = await mount()
     await click(button(container, 'Create Automation'))
     expect(container.textContent).toContain('Create New Automation')
-    const submit = container.querySelector('.create-workflow-modal .automation-primary') as HTMLButtonElement
-    expect(submit.disabled).toBe(true)
+    // Polaris soft-disables via aria-disabled + click suppression (not the
+    // native attribute); locate the primary action by its visible label.
+    const submit = button(container, 'Continue →')
+    expect(submit.getAttribute('aria-disabled')).toBe('true')
     await click(button(container, 'Cancel'))
     expect(container.querySelector('.create-workflow-modal')).toBeNull()
     await click(button(container, 'Create Automation'))
@@ -952,12 +969,19 @@ describe('Automation page — states, resilience, and accessibility', () => {
     await act(async () => {
       setInput(nameInput as HTMLInputElement, 'My new automation')
     })
-    const templateSelect = container.querySelector<HTMLButtonElement>('.create-template-select .custom-select-trigger')
-    await click(templateSelect as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.create-template-select [role="option"]')).find((entry) => entry.textContent?.includes('Welcome New Customer'))
-    await click(option as HTMLElement)
-    const submitAgain = container.querySelector('.create-workflow-modal .automation-primary') as HTMLButtonElement
-    expect(submitAgain.disabled).toBe(false)
+    // The template picker is now a native Polaris <select> — change it directly.
+    const templateSelect = Array.from(container.querySelectorAll('.create-workflow-modal select')).find((entry) =>
+      Array.from(entry.options).some((opt) => opt.textContent?.includes('Welcome New Customer')),
+    ) as HTMLSelectElement | undefined
+    expect(templateSelect).toBeTruthy()
+    await act(async () => {
+      (templateSelect as HTMLSelectElement).value = 'welcome-customer'
+      templateSelect!.dispatchEvent(new window.Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    await flush()
+    const submitAgain = button(container, 'Continue →')
+    expect(submitAgain.getAttribute('aria-disabled')).toBe('false')
     await click(submitAgain)
     expect(window.location.pathname).toBe('/automation/workflows/installed-welcome-customer')
     expect(toasts.some((toast) => toast.includes('Template installed'))).toBe(true)

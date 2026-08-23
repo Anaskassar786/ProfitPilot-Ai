@@ -216,11 +216,16 @@ describe('ticket creation (FIX 5)', () => {
     await click('New ticket')
     expect(document.querySelector('.support-form-card')?.textContent).toContain('CREATE SUPPORT TICKET')
 
-    // Category via the shared custom listbox.
-    await act(async () => { findButton('General Question')?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    const billingOption = [...document.querySelectorAll('[role="option"]')].find((option) => option.textContent?.includes('Billing & Plans'))
+    // Category picker is now a native Polaris <select> — drive a change event.
+    const categorySelect = [...document.querySelectorAll('select')].find((select) =>
+      [...select.options].some((option) => option.textContent?.includes('Billing & Plans')))
+    expect(categorySelect).toBeTruthy()
+    const billingOption = [...(categorySelect as HTMLSelectElement).options].find((option) => option.textContent?.includes('Billing & Plans'))
     expect(billingOption).toBeTruthy()
-    await act(async () => { billingOption!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {
+      (categorySelect as HTMLSelectElement).value = billingOption!.value
+      categorySelect!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
 
     // Priority: High (blocking issue).
     await click('High')

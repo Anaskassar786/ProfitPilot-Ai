@@ -117,14 +117,26 @@ import {
   XIcon,
 } from '@shopify/polaris-icons'
 
-export type IconProps = Readonly<{ size?: number | string; className?: string; strokeWidth?: number; fill?: string; color?: string; style?: CSSProperties }>
+export type IconProps = Readonly<{ size?: number | string; className?: string; strokeWidth?: number; fill?: string; color?: string; style?: CSSProperties; 'aria-label'?: string }>
 export type LucideIcon = (props: IconProps) => ReactElement
 
 function wrap(source: ComponentType): LucideIcon {
-  function Wrapped({ size = 20, className, style }: IconProps): ReactElement {
+  function Wrapped({ size = 20, className, style, 'aria-label': ariaLabel }: IconProps): ReactElement {
     const px = typeof size === 'number' ? size : Number.parseInt(String(size), 10) || 20
     const box: CSSProperties = { display: 'inline-flex', width: px, height: px, verticalAlign: 'middle', ...style }
-    return <span className={`pp-icon ${className ?? ''}`.trim()} style={box} aria-hidden><Icon source={source as never} /></span>
+    // Decorative by default (aria-hidden). When a caller supplies an
+    // aria-label the icon carries meaning (e.g. the guest-avatar "Customer
+    // name unavailable" fallback) and must be announced: expose it with
+    // role="img" + the label instead of hiding it from assistive tech.
+    return (
+      <span
+        className={`pp-icon ${className ?? ''}`.trim()}
+        style={box}
+        {...(ariaLabel ? { role: 'img', 'aria-label': ariaLabel } : { 'aria-hidden': true })}
+      >
+        <Icon source={source as never} />
+      </span>
+    )
   }
   return Wrapped
 }

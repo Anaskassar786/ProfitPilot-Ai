@@ -4,6 +4,8 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { QaChartBoard } from './qa-board.js'
 import { QA_AREAS, QA_BUGS, QA_FAKE_AUDIT } from './qa-data.js'
 
@@ -53,7 +55,8 @@ describe('QA Chart Board', () => {
     document.body.appendChild(host)
     root = createRoot(host)
     await act(async () => {
-      root?.render(createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: null, shop: null } })))
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
+      root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: null, shop: null } }))))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
 
@@ -80,7 +83,7 @@ describe('QA Chart Board', () => {
     document.body.appendChild(host)
     root = createRoot(host)
     await act(async () => {
-      root?.render(createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: 'store-1', shop: 'qa-store.myshopify.com' } })))
+      root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: 'store-1', shop: 'qa-store.myshopify.com' } }))))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
 

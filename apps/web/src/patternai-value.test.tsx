@@ -339,7 +339,9 @@ describe('value panels', () => {
   it('reports no money in play when the engine attached no impact', () => {
     const summary = discoveryImpactSummary([discovery({ impactEstimate: null })])
     expect(summary.moneyInPlay).toBeNull()
-    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('')
+    // AppProvider always emits its portals container; the contract is that a
+    // null amount renders no money-in-play markup of its own.
+    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).not.toContain('pa-money-inplay')
   })
   it('builds the strength ladder from readiness have/need pairs only', () => {
     const rows = patternStrengthRows(readiness)

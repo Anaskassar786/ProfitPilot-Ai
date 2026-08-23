@@ -12,6 +12,8 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { ApprovalInbox } from './ApprovalInbox.js'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -26,7 +28,8 @@ const mount = async (): Promise<HTMLElement> => {
   container = node
   root = createRoot(node)
   await act(async () => {
-    root?.render(createElement(StrictMode, null, createElement(ApprovalInbox, { storeId: 's-1', onBack: () => {}, onToast: (message, kind) => { if (kind) toasts.push({ message, kind }); else toasts.push({ message }) } })))
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
+    root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(ApprovalInbox, { storeId: 's-1', onBack: () => {}, onToast: (message, kind) => { if (kind) toasts.push({ message, kind }); else toasts.push({ message }) } }))))
   })
   return node
 }

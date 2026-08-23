@@ -673,10 +673,13 @@ export function CreateAutomationModal({
         {mode === 'template' ? (
           <label>
             Template
+            {/* Polaris Select prepends its own value:'' placeholder option, so
+                an explicit value:'' option here would render two key="" options
+                (React duplicate-key warning + a selectable empty row). */}
             <CustomSelect
               className="automation-custom-select create-template-select"
               value={templateId}
-              options={[{ value: '', label: 'Choose a template' }, ...available.map((template) => ({ value: template.id, label: template.name }))]}
+              options={available.map((template) => ({ value: template.id, label: template.name }))}
               onChange={setTemplateId}
               ariaLabel="Automation template"
               placeholder="Choose a template"

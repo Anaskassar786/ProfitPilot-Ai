@@ -114,6 +114,15 @@ describe('trial and gift redemption', () => {
     const redemption = ledger.redeemGift('z', 'AFRIDI786')
     expect(redemption.code).toBe('AFRIDI786')
   })
+  it('an inactive custom code at the primary sequence never shadows the live primary', () => {
+    // Regression: an expired/inactive admin-seeded code sharing sequence 1
+    // used to be picked as "the primary" and — being unavailable — disabled
+    // the guard, so AFRIDI786 redeemed while KASSAR786 was still active.
+    const ledger = new TrialAndGiftLedger()
+    ledger.hydrateGift({ code: 'EXPIREDQA', maxUses: 10, uses: 0, active: false, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 1 })
+    expect(() => ledger.redeemGift('s', 'AFRIDI786')).toThrow('primary promotion code')
+    expect(ledger.redeemGift('s2', 'KASSAR786').code).toBe('KASSAR786')
+  })
   it('auto-deactivates an exhausted code', () => { const ledger = new TrialAndGiftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'KASSAR786'); expect(ledger.gift('KASSAR786')?.active).toBe(false) })
   it('supports an admin kill switch', () => { const ledger = new TrialAndGiftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'KASSAR786')).toThrow('disabled') })
   it('rejects invalid codes', () => expect(() => new TrialAndGiftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))

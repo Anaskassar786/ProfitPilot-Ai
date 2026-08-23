@@ -151,7 +151,8 @@ describe('Store Coach — honest controls', () => {
       impactValue: 1200, impactCurrency: 'USD', impactLabel: 'revenue at risk', timeEstimateMinutes: 15,
       actionType: 'navigate', actionPayload: {}, status: 'PENDING', expiresAt: null,
     }
-    const html = renderToStaticMarkup(createElement(PriorityCard, { priority, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
+    const html = renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(PriorityCard, { priority, busy: false, onComplete: () => undefined, onDismiss: () => undefined })))
     // "Take Action" implied the app performed the task; it only records completion.
     expect(html).toContain('Mark as done')
     expect(html).not.toContain('Take Action')

@@ -89,7 +89,10 @@ describe('plan messaging', () => {
   })
   it('LockedPanel renders nothing when the feature is unlocked', () => {
     const html = renderWithAppProvider(createElement(InsightsLockedPanel, { feature: 'trends', plan: 'trial', overview: null, onNavigateBilling: noop }))
-    expect(html).toBe('')
+    // AppProvider always emits its portals container; the contract is that the
+    // panel itself contributes no markup when the feature is unlocked.
+    expect(html).not.toContain('pa-locked')
+    expect(html).not.toContain('Upgrade Plan')
   })
   it('UpgradeCta button says exactly Upgrade Plan', () => {
     const html = renderWithAppProvider(createElement(InsightsUpgradeCta, { onNavigateBilling: noop }))
@@ -131,7 +134,10 @@ describe('supporting atoms', () => {
   it('RatingStars renders five stars and reflects values', () => {
     const html = renderWithAppProvider(createElement(RatingStars, { value: 3, onRate: noop }))
     expect((html.match(/type="button"/g) ?? []).length).toBeGreaterThanOrEqual(5)
-    expect(html).toContain('lit')
+    // A 3-star rating marks stars 1-3 as lit (aria-pressed) and leaves 4-5 unlit.
+    expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(3)
+    expect((html.match(/aria-pressed="false"/g) ?? []).length).toBe(2)
+    expect(html).toContain('aria-label="5 stars"')
   })
   it('MarkdownLite renders structure without scripts', () => {
     const html = renderWithAppProvider(createElement(MarkdownLite, { markdown: '## Study\n\n- one\n- two\n\n**Bold** claim <script>alert(1)</script>' }))

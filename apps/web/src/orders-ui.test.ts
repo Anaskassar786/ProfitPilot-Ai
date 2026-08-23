@@ -2,15 +2,22 @@ import './jsdom-polaris-setup.js'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { describe, expect, it, vi } from 'vitest'
 import { OrdersEmptyState, PlanLockedFeature } from './orders.js'
 import { initials, insightByFeature, lockedInsightByFeature, orderStatusLabel, paymentStatusLabel } from './orders-model.js'
 import type { OrderInsightsResult } from './orders-model.js'
 import { EXPORT_DATASET_DEFINITIONS } from '@profitpilot/types'
 
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it so
+ *  Polaris components render outside the app shell in SSR markup tests. */
+const renderWithPolaris = (element: import('react').ReactElement): string =>
+  renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+
 describe('Orders UI regressions', () => {
   it('renders a graceful empty state without invented order rows', () => {
-    const html = renderToStaticMarkup(createElement(OrdersEmptyState, { title: 'No synced orders yet', description: 'No demo records will be inserted.', action: 'Sync orders', onAction: vi.fn(), compact: true }))
+    const html = renderWithPolaris(createElement(OrdersEmptyState, { title: 'No synced orders yet', description: 'No demo records will be inserted.', action: 'Sync orders', onAction: vi.fn(), compact: true }))
     expect(html).toContain('No synced orders yet')
     expect(html).toContain('No demo records will be inserted.')
     expect(html).not.toContain('Customer 1')
@@ -18,7 +25,7 @@ describe('Orders UI regressions', () => {
   })
 
   it('renders reusable locked metadata with the exact upgrade CTA', () => {
-    const html = renderToStaticMarkup(createElement(PlanLockedFeature, { featureName: 'Peak Order Times', requiredPlan: 'growth', onUpgrade: vi.fn(), children: createElement('span', null, 'masked') }))
+    const html = renderWithPolaris(createElement(PlanLockedFeature, { featureName: 'Peak Order Times', requiredPlan: 'growth', onUpgrade: vi.fn(), children: createElement('span', null, 'masked') }))
     expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('Peak Order Times')
     expect(html).toContain('plan-locked-blur')

@@ -1,6 +1,8 @@
 import './jsdom-polaris-setup.js'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { describe, expect, it, vi } from 'vitest'
 import {
   AISuggestionCard,
@@ -30,9 +32,14 @@ function locked(feature: string, name: string, plan: 'growth' | 'commander'): In
 
 const noop = vi.fn()
 
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it so
+ *  Polaris components render outside the app shell in SSR markup tests. */
+const renderWithPolaris = (element: import('react').ReactElement): string =>
+  renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+
 describe('Dead stock card', () => {
   it('renders real frozen products and the stuck value', () => {
-    const html = renderToStaticMarkup(createElement(DeadStockCard, {
+    const html = renderWithPolaris(createElement(DeadStockCard, {
       insights: withFeature('dead_stock', { status: 'available', items: [{ productId: '7003', title: 'Frozen Item', value: 1000, currency: 'INR', quantity: 40 }], totalStuckValue: 1000, currency: 'INR', windowDays: 90, message: '1 product held stock' }),
       onUpgrade: noop,
     }))
@@ -42,18 +49,18 @@ describe('Dead stock card', () => {
   })
 
   it('frames a clean store positively rather than showing an empty list', () => {
-    const html = renderToStaticMarkup(createElement(DeadStockCard, { insights: withFeature('dead_stock', { status: 'available', items: [], totalStuckValue: null, windowDays: 90, message: 'All items moving well — every stocked product sold in this window.' }), onUpgrade: noop }))
+    const html = renderWithPolaris(createElement(DeadStockCard, { insights: withFeature('dead_stock', { status: 'available', items: [], totalStuckValue: null, windowDays: 90, message: 'All items moving well — every stocked product sold in this window.' }), onUpgrade: noop }))
     expect(html).toContain('All items moving well')
   })
 
   it('shows the honest awaiting state instead of inventing dead stock', () => {
-    const html = renderToStaticMarkup(createElement(DeadStockCard, { insights: withFeature('dead_stock', { status: 'insufficient_data', message: 'Awaiting 28 more days of sales history (2 of 30 recorded).' }), onUpgrade: noop }))
+    const html = renderWithPolaris(createElement(DeadStockCard, { insights: withFeature('dead_stock', { status: 'insufficient_data', message: 'Awaiting 28 more days of sales history (2 of 30 recorded).' }), onUpgrade: noop }))
     expect(html).toContain('Awaiting 28 more days of sales history')
     expect(html).not.toMatch(/\d+ frozen/)
   })
 
   it('renders the locked upgrade CTA for Trial and Start', () => {
-    const html = renderToStaticMarkup(createElement(DeadStockCard, { insights: locked('dead_stock', 'Dead Stock Detector', 'growth'), onUpgrade: noop }))
+    const html = renderWithPolaris(createElement(DeadStockCard, { insights: locked('dead_stock', 'Dead Stock Detector', 'growth'), onUpgrade: noop }))
     expect(html).toContain('Dead Stock Detector')
     expect(html).toContain('Upgrade to unlock')
     expect(html).toContain('plan-locked-blur')
@@ -62,7 +69,7 @@ describe('Dead stock card', () => {
 
 describe('Reorder, overstock, and turnover cards', () => {
   it('lists reorder quantities from the API', () => {
-    const html = renderToStaticMarkup(createElement(ReorderRecommendationsCard, {
+    const html = renderWithPolaris(createElement(ReorderRecommendationsCard, {
       insights: withFeature('reorder_recommendations', { status: 'available', items: [{ productId: '7001', title: 'Fast Mover', suggestedQuantity: 88, currentStock: 20 }], leadTimeDays: 14, message: '1 product' }),
       onUpgrade: noop,
     }))
@@ -72,11 +79,11 @@ describe('Reorder, overstock, and turnover cards', () => {
   })
 
   it('says stock is healthy when nothing needs a reorder', () => {
-    expect(renderToStaticMarkup(createElement(ReorderRecommendationsCard, { insights: withFeature('reorder_recommendations', { status: 'available', items: [], message: 'Stock levels healthy — nothing is at or below its reorder point.' }), onUpgrade: noop }))).toContain('Stock levels healthy')
+    expect(renderWithPolaris(createElement(ReorderRecommendationsCard, { insights: withFeature('reorder_recommendations', { status: 'available', items: [], message: 'Stock levels healthy — nothing is at or below its reorder point.' }), onUpgrade: noop }))).toContain('Stock levels healthy')
   })
 
   it('quantifies overstock and suggests a promotion', () => {
-    const html = renderToStaticMarkup(createElement(OverstockAlertsCard, {
+    const html = renderWithPolaris(createElement(OverstockAlertsCard, {
       insights: withFeature('overstock_alerts', { status: 'available', items: [{ productId: '7002', title: 'Slow Mover', excessUnits: 493, excessValue: 19_720 }], totalExcessValue: 19_720, currency: 'INR', message: '1 product' }),
       onUpgrade: noop,
     }))
@@ -87,11 +94,11 @@ describe('Reorder, overstock, and turnover cards', () => {
   })
 
   it('reports no excess inventory positively', () => {
-    expect(renderToStaticMarkup(createElement(OverstockAlertsCard, { insights: withFeature('overstock_alerts', { status: 'available', items: [], message: 'No excess inventory detected — nothing carries more than 90 days of cover.' }), onUpgrade: noop }))).toContain('No excess inventory detected')
+    expect(renderWithPolaris(createElement(OverstockAlertsCard, { insights: withFeature('overstock_alerts', { status: 'available', items: [], message: 'No excess inventory detected — nothing carries more than 90 days of cover.' }), onUpgrade: noop }))).toContain('No excess inventory detected')
   })
 
   it('splits turnover into fast, medium, and slow movers', () => {
-    const html = renderToStaticMarkup(createElement(StockTurnoverCard, {
+    const html = renderWithPolaris(createElement(StockTurnoverCard, {
       insights: withFeature('stock_turnover', { status: 'available', fast: 1, medium: 0, slow: 2, windowDays: 120, topMovers: [{ productId: '7001', title: 'Fast Mover', turnover: 54.75 }], slowMovers: [{ productId: '7002', title: 'Slow Mover', turnover: 0.04 }] }),
       onUpgrade: noop,
     }))
@@ -104,23 +111,23 @@ describe('Reorder, overstock, and turnover cards', () => {
 
 describe('AI suggestion card', () => {
   it('renders the grounded model text with the PII disclosure', () => {
-    const html = renderToStaticMarkup(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'generated', text: 'You have 3 items overstocked. Consider running a promotion.', model: 'free/model' }), onUpgrade: noop }))
+    const html = renderWithPolaris(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'generated', text: 'You have 3 items overstocked. Consider running a promotion.', model: 'free/model' }), onUpgrade: noop }))
     expect(html).toContain('You have 3 items overstocked')
     expect(html).toContain('no product names, customers, or orders are sent to the model')
   })
 
   it('states that AI is unavailable rather than fabricating advice', () => {
-    expect(renderToStaticMarkup(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'unavailable', message: 'AI inventory intelligence is temporarily unavailable.' }), onUpgrade: noop }))).toContain('temporarily unavailable')
+    expect(renderWithPolaris(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'unavailable', message: 'AI inventory intelligence is temporarily unavailable.' }), onUpgrade: noop }))).toContain('temporarily unavailable')
   })
 
   it('reports the daily limit honestly', () => {
-    expect(renderToStaticMarkup(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'limit_reached', message: 'Daily AI limit reached. Upgrade your plan or try again tomorrow.' }), onUpgrade: noop }))).toContain('Daily AI limit reached')
+    expect(renderWithPolaris(createElement(AISuggestionCard, { insights: withFeature('ai_suggestion', { status: 'limit_reached', message: 'Daily AI limit reached. Upgrade your plan or try again tomorrow.' }), onUpgrade: noop }))).toContain('Daily AI limit reached')
   })
 })
 
 describe('Commander cards', () => {
   it('shows predicted reorder dates with a confidence level', () => {
-    const html = renderToStaticMarkup(createElement(PredictiveRestockingCard, {
+    const html = renderWithPolaris(createElement(PredictiveRestockingCard, {
       insights: withFeature('predictive_restocking', { status: 'available', method: 'velocity_trend_projection', items: [{ productId: '7001', title: 'Fast Mover', predictedReorderDate: '2026-08-20', confidence: 'high' }] }),
       onUpgrade: noop,
     }))
@@ -129,16 +136,16 @@ describe('Commander cards', () => {
   })
 
   it('keeps predictive restocking locked for Growth with a Commander CTA', () => {
-    const html = renderToStaticMarkup(createElement(PredictiveRestockingCard, { insights: locked('predictive_restocking', 'Predictive Restocking', 'commander'), onUpgrade: noop }))
+    const html = renderWithPolaris(createElement(PredictiveRestockingCard, { insights: locked('predictive_restocking', 'Predictive Restocking', 'commander'), onUpgrade: noop }))
     expect(html).toContain('Upgrade to Commander to unlock')
   })
 
   it('explains that seasonality needs twelve months of snapshots', () => {
-    expect(renderToStaticMarkup(createElement(SeasonalTrendsCard, { insights: withFeature('seasonal_trends', { status: 'insufficient_data', message: 'Available after 12 months of data.' }), onUpgrade: noop }))).toContain('Available after 12 months of data')
+    expect(renderWithPolaris(createElement(SeasonalTrendsCard, { insights: withFeature('seasonal_trends', { status: 'insufficient_data', message: 'Available after 12 months of data.' }), onUpgrade: noop }))).toContain('Available after 12 months of data')
   })
 
   it('presents auto-reorder as manual review only', () => {
-    const html = renderToStaticMarkup(createElement(AutoReorderCard, {
+    const html = renderWithPolaris(createElement(AutoReorderCard, {
       storeId: 'store-1',
       insights: withFeature('auto_reorder', { status: 'available', execution: 'manual_review_only', autonomous: false, items: [{ productId: '7001', title: 'Fast Mover', suggestedQuantity: 88 }], message: '1 product ready for your review.' }),
       onUpgrade: noop,
@@ -153,13 +160,13 @@ describe('Commander cards', () => {
 
 describe('Historical inventory chart', () => {
   it('locks the chart below Growth', () => {
-    const html = renderToStaticMarkup(createElement(HistoricalInventoryChart, { storeId: 'store-1', insights: locked('stock_history', 'Stock History Chart', 'growth'), onUpgrade: noop, onToast: noop }))
+    const html = renderWithPolaris(createElement(HistoricalInventoryChart, { storeId: 'store-1', insights: locked('stock_history', 'Stock History Chart', 'growth'), onUpgrade: noop, onToast: noop }))
     expect(html).toContain('Stock History Chart')
     expect(html).toContain('Upgrade to unlock')
   })
 
   it('explains the empty chart before any snapshot exists', () => {
-    const html = renderToStaticMarkup(createElement(HistoricalInventoryChart, { storeId: 'store-1', insights: withFeature('stock_history', { status: 'insufficient_data' }), onUpgrade: noop, onToast: noop }))
+    const html = renderWithPolaris(createElement(HistoricalInventoryChart, { storeId: 'store-1', insights: withFeature('stock_history', { status: 'insufficient_data' }), onUpgrade: noop, onToast: noop }))
     expect(html).toContain('Building your inventory history')
     expect(html).toContain('Stock history range')
   })

@@ -508,7 +508,9 @@ describe('plan gating on a trial store', () => {
     expect(text()).toContain('Upgrade Plan')
     expect(text()).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
     expect(document.querySelectorAll('.pa-nav-item.locked').length).toBeGreaterThan(3)
-    expect(navItem('Customer personas')?.getAttribute('title')).toContain('Upgrade Plan')
+    // The rich-content button maps `title` to an accessible label (aria-label),
+    // so locked sections announce the upgrade path to assistive tech.
+    expect(navItem('Customer personas')?.getAttribute('aria-label')).toContain('Upgrade Plan')
   })
 
   it('opens every locked sub-page as an aspirational preview with a billing CTA', async () => {

@@ -1,13 +1,22 @@
 import './jsdom-polaris-setup.js'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { JarvisNavIcon, JarvisWorkspace } from './jarvis-page.js'
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ * Polaris-powered components render the same way under test. */
+function renderWithAppProvider(element: ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
 
 describe('Jarvis workspace page', () => {
   it('centers the speaking orb and keeps chat out of the page', () => {
-    const html = renderToStaticMarkup(createElement(JarvisWorkspace, {
+    const html = renderWithAppProvider(createElement(JarvisWorkspace, {
       context: { storeId: 'store-1', shop: 'demo.myshopify.com' },
       onListen: vi.fn(),
     }))

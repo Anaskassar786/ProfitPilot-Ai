@@ -542,7 +542,10 @@ function EditorInner({
                   const Icon = item.icon
                   const locked = item.kind === 'ai' && !commander
                   return (
-                    <Button
+                    // RichButton: composite content (icon + label + lock badge) and
+                    // the draggable/onDragStart attributes must survive; the plain
+                    // Button shim flattens children and drops drag handlers.
+                    <RichButton
                       draggable={!locked}
                       title={item.summary}
                       onDragStart={(event) => event.dataTransfer.setData('application/profitpilot-node', JSON.stringify(item))}
@@ -553,7 +556,7 @@ function EditorInner({
                       <Icon size={16} />
                       <span>{item.label}</span>
                       {locked && <ShieldCheck size={13} />}
-                    </Button>
+                    </RichButton>
                   )
                 })}
               </section>
@@ -830,14 +833,16 @@ function LibraryModal({
                   const Icon = entry.icon
                   const locked = entry.kind === 'ai' && !commander
                   return (
-                    <Button key={entry.subtype} className={locked ? 'locked' : ''} onClick={() => onPick(entry)} disabled={locked}>
+                    // RichButton: composite content (icon, label, summary, lock badge)
+                    // would be flattened by the plain Button shim.
+                    <RichButton key={entry.subtype} className={locked ? 'locked' : ''} onClick={() => onPick(entry)} disabled={locked}>
                       <Icon size={17} />
                       <span>
                         <strong>{entry.label}</strong>
                         <small>{entry.summary}</small>
                       </span>
                       {locked && <em>Commander only</em>}
-                    </Button>
+                    </RichButton>
                   )
                 })}
               </div>
