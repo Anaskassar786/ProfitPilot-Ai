@@ -184,7 +184,15 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
   const ask = async () => {
     if (!question.trim()) return
     setAsking(true)
-    try { const response = await fetchOrderInsights(storeId, { feature: 'custom_ai_queries', question }); setCustomInsight(insightByFeature(response, 'custom_ai_queries')); setQuestion('') } catch (reason: unknown) { onToast(errorText(reason), 'error') } finally { setAsking(false) }
+    try {
+      const response = await fetchOrderInsights(storeId, { feature: 'custom_ai_queries', question })
+      const answer = insightByFeature(response, 'custom_ai_queries')
+      setCustomInsight(answer)
+      // Only clear the input on a successful generation so the merchant can
+      // retry a question that hit an outage or the daily limit (BUG-2).
+      const status = isInsightData(answer?.data) ? answer?.data.status : null
+      if (status === 'generated') setQuestion('')
+    } catch (reason: unknown) { onToast(errorText(reason), 'error') } finally { setAsking(false) }
   }
 
   return <section className={`card orders-insights ${collapsed ? 'collapsed' : ''}`}>
@@ -212,7 +220,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <CommanderCapability title="Auto-action suggestions" icon={<Bot size={15} />} insight={available('auto_action_suggestions')} locked={locked('auto_action_suggestions')} onUpgrade={onNavigateBilling} />
           <CommanderCapability title="Custom AI queries" icon={<ShoppingBag size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
         </div>
-        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
+        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && question.trim() && !asking) void ask() }} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
       </>}
     </div>}
   </section>
@@ -463,7 +471,18 @@ function CommanderCapability({ title, icon, insight, locked, onUpgrade }: { titl
   const summary = data.status === 'ready' ? 'Ready for a grounded question' : data.status === 'insufficient_data' ? text(data.message) : Array.isArray(data.alerts) ? `${data.alerts.length} alert${data.alerts.length === 1 ? '' : 's'}` : Array.isArray(data.suggestions) ? `${data.suggestions.length} review suggestion${data.suggestions.length === 1 ? '' : 's'}` : 'Unlocked'
   return <article className="commander-capability"><span>{icon}</span><div><strong>{title}</strong><small>{summary}</small></div></article>
 }
-function CustomQueryAnswer({ insight }: { insight: ReturnType<typeof insightByFeature> }) { const data = record(insight?.data); return data.status === 'generated' && text(data.text) ? <p className="custom-query-answer"><ShoppingBag size={13} />{text(data.text)}</p> : null }
+export function CustomQueryAnswer({ insight }: { insight: ReturnType<typeof insightByFeature> }) {
+  const data = record(insight?.data)
+  // Every backend state renders honest feedback — a swallowed null here made
+  // "Ask order intelligence" look broken whenever the answer was anything but
+  // a successful generation (BUG-2).
+  if (data.status === 'generated' && text(data.text)) return <p className="custom-query-answer"><ShoppingBag size={13} />{text(data.text)}</p>
+  if (data.status === 'unavailable') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'AI is temporarily unavailable. Your data is safe — try again in a moment.'}</p>
+  if (data.status === 'safety_failed') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'The AI answer failed a safety check and was withheld. Try rephrasing your question.'}</p>
+  if (data.status === 'limit_reached') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'Daily AI limit reached — upgrade or try again tomorrow.'}</p>
+  if (data.status === 'insufficient_data') return <p className="custom-query-answer" role="status"><Clock3 size={13} />{text(data.message) ?? 'Not enough orders yet — ask again after at least 5 real orders sync.'}</p>
+  return null
+}
 function InsightMask({ compact = false }: { compact?: boolean }) { return <span className={`insight-mask ${compact ? 'compact' : ''}`}><i /><i /><i /></span> }
 function InsightUnavailable({ message = 'Insights available after more orders.' }: { message?: string | null }) { return <div className="insight-unavailable"><span>—</span><small>{message ?? 'Insight unavailable'}</small></div> }
 function InsightsSkeleton() { return <div className="insights-skeleton">{[1, 2, 3, 4, 5, 6].map((value) => <span key={value} />)}</div> }

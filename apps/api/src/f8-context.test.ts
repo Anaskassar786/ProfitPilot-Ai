@@ -36,7 +36,7 @@ describe('F8 real data context adapter', () => {
     expect(byKey.get('aov')?.value).toBe(57.75)
     expect(byKey.get('aov_display')?.value).toBe('$58')
     expect(byKey.get('catalog_count')?.value).toBe(1)
-    // Mirrors the dashboard health formula: 35 + 25 (revenue) + 20 (orders) + 10 (catalog).
+    // Mirrors the dashboard health formula (recency-aware): 20 base + 25 (7d revenue) + 20 (7d orders) + 10 (30d revenue) + 5 (30d orders) + 10 (catalog).
     expect(byKey.get('health_score')?.value).toBe(90)
     expect(byKey.get('health_label')?.value).toBe('A+ · Healthy')
     expect(byKey.get('pending_recommendations')?.value).toBe(1)
@@ -84,6 +84,18 @@ describe('F8 real data context adapter', () => {
     expect(evidence.currency).toBe('USD')
     // Money formatting must not throw for the bad currency and must render USD.
     expect(evidence.facts.find((fact) => fact.key === 'revenue_display')?.value).toBe('$189')
+  })
+
+  it('caps the Jarvis health score when the store has no sales in the last 7 days (BUG-1)', async () => {
+    // Same 2024-05 snapshot, but "now" is far in the future — the data is stale.
+    const staleNow = Date.parse('2026-08-23T12:00:00Z')
+    const staleProvider = new F8ContextProvider({ analytics: { read: async () => analytics, readCatalog: async () => catalog }, recommendations: { list: async () => recommendations } }, () => staleNow)
+    const evidence = await staleProvider.get('store-1' as never, 'dashboard')
+    const health = evidence.facts.find((fact) => fact.key === 'health_score')
+    expect(typeof health?.value).toBe('number')
+    expect(health?.value as number).toBeLessThan(60)
+    expect(health?.value as number).toBeLessThanOrEqual(30)
+    expect(String(evidence.facts.find((fact) => fact.key === 'health_label')?.value)).not.toContain('Healthy')
   })
 
   it('survives all three evidence sources being unavailable (cold cache / cold start)', async () => {

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { describe, expect, it, vi } from 'vitest'
-import { OrdersEmptyState, PlanLockedFeature } from './orders.js'
+import { CustomQueryAnswer, OrdersEmptyState, PlanLockedFeature } from './orders.js'
 import { initials, insightByFeature, lockedInsightByFeature, orderStatusLabel, paymentStatusLabel } from './orders-model.js'
 import type { OrderInsightsResult } from './orders-model.js'
 import { EXPORT_DATASET_DEFINITIONS } from '@profitpilot/types'
@@ -56,6 +56,27 @@ describe('Orders UI regressions', () => {
     expect(EXPORT_DATASET_DEFINITIONS.orders.description).toBe('Daily order summaries from your Shopify sync.')
     const source = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('Daily aggregate export')
+  })
+
+  // BUG-2 regression: "Ask order intelligence" used to render nothing at all
+  // for every non-generated backend state, so the button looked broken.
+  it('renders honest feedback for every custom AI query outcome', () => {
+    const answerFor = (data: Record<string, unknown>) => renderWithAppProvider(createElement(CustomQueryAnswer, { insight: { feature: 'custom_ai_queries', name: 'Custom AI Queries', data } }))
+    expect(answerFor({ status: 'generated', text: 'Fulfilment is strong.' })).toContain('Fulfilment is strong.')
+    expect(answerFor({ status: 'unavailable', message: 'AI provider outage.' })).toContain('AI provider outage.')
+    expect(answerFor({ status: 'unavailable' })).toContain('temporarily unavailable')
+    expect(answerFor({ status: 'safety_failed' })).toContain('safety check')
+    expect(answerFor({ status: 'limit_reached' })).toContain('Daily AI limit reached')
+    expect(answerFor({ status: 'insufficient_data' })).toContain('Not enough orders yet')
+    // The idle "ready" state stays quiet — no invented answer.
+    expect(answerFor({ status: 'ready', answer: null })).not.toContain('custom-query-answer')
+  })
+
+  it('only clears the question box after a successful generation', () => {
+    const source = readFileSync(new URL('./orders.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("if (status === 'generated') setQuestion('')")
+    // Enter submits the question — not just the send button.
+    expect(source).toContain("event.key === 'Enter'")
   })
 })
 

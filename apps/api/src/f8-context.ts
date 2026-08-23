@@ -54,7 +54,7 @@ export class F8ContextProvider implements JarvisEvidenceProvider, CopilotEvidenc
     const totalOrders = sum(orders)
     const aov = totalRevenue !== null && totalOrders !== null && totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : null
     const newCustomers = newCustomerCount(analytics.customerCohorts)
-    const health = storeHealth(totalRevenue, totalOrders, analytics.productSales.length, catalog.length, analytics.customerCohorts.length)
+    const health = storeHealth(analytics, catalog.length, this.now())
     const base: CopilotFact[] = [
       fact('data_freshness', 'Data freshness', analytics.revenue.length > 0 ? analytics.revenue.at(-1)?.day ?? null : null, 'analytics_revenue_daily'),
       fact('revenue_total', 'Revenue in available closed rows', totalRevenue, 'analytics_revenue_daily'),
@@ -161,17 +161,31 @@ function newCustomerCount(cohorts: CohortRows): number | null {
   return rows.length > 0 ? sum(rows.map((row) => row.customerCount)) : null
 }
 
-/** Mirrors the dashboard's storeHealthView so Jarvis and the UI agree. */
-function storeHealth(revenue: number | null, orders: number | null, productSalesRows: number, catalogCount: number, cohortRows: number): Readonly<{ score: number | null; label: string }> {
-  if (revenue === null && orders === null) return { score: null, label: 'No data' }
-  let score = 35
-  if ((revenue ?? 0) > 0) score += 25
-  if ((orders ?? 0) > 0) score += 20
-  if (productSalesRows > 0 || catalogCount > 0) score += 10
-  if (cohortRows > 0) score += 10
+/** Mirrors the dashboard's storeHealthView so Jarvis and the UI agree.
+ * Recency-aware: zero orders/revenue in the last 7 days caps the score at 45
+ * (30 when the last 30 days are silent too) — stale stores never read "Healthy". */
+function storeHealth(analytics: import('@profitpilot/db').AnalyticsSnapshot, catalogCount: number, nowMs: number): Readonly<{ score: number | null; label: string }> {
+  if (analytics.revenue.length === 0 && analytics.orders.length === 0) return { score: null, label: 'No data' }
+  const day7 = new Date(nowMs - 7 * 86_400_000).toISOString().slice(0, 10)
+  const day30 = new Date(nowMs - 30 * 86_400_000).toISOString().slice(0, 10)
+  const revenue7 = analytics.revenue.reduce((total, row) => total + (row.day >= day7 ? row.grossRevenue : 0), 0)
+  const orders7 = analytics.orders.reduce((total, row) => total + (row.day >= day7 ? row.orderCount : 0), 0)
+  const revenue30 = analytics.revenue.reduce((total, row) => total + (row.day >= day30 ? row.grossRevenue : 0), 0)
+  const orders30 = analytics.orders.reduce((total, row) => total + (row.day >= day30 ? row.orderCount : 0), 0)
+  let score = 20
+  if (revenue7 > 0) score += 25
+  if (orders7 > 0) score += 20
+  if (revenue30 > 0) score += 10
+  if (orders30 > 0) score += 5
+  if (analytics.productSales.length > 0 || catalogCount > 0) score += 10
+  if (analytics.customerCohorts.length > 0) score += 10
+  const stale7 = orders7 === 0 && revenue7 === 0
+  const stale30 = orders30 === 0 && revenue30 === 0
+  if (stale30) score = Math.min(score, 30)
+  else if (stale7) score = Math.min(score, 45)
   score = Math.min(100, score)
   const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D'
-  const label = score >= 75 ? 'Healthy' : score >= 50 ? 'Needs attention' : 'Critical'
+  const label = score >= 75 ? 'Healthy' : score >= 45 ? 'Needs attention' : 'Critical'
   return { score, label: `${grade} · ${label}` }
 }
 
