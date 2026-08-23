@@ -44,6 +44,7 @@ import { useAiCommandWorkspace } from './ai-command-hooks.js'
 import {
   CATEGORY_TONE,
   GROUP_LABELS,
+  SHOPIFY_PERMISSION_MESSAGE,
   cellText,
   conversationPreview,
   dailyResetCountdown,
@@ -829,6 +830,7 @@ function StructuredBlock({ data, onPrompt, onNavigateSection }: { data: NonNulla
   if (data.type === 'store_health') return <HealthBlock data={record} source={data.source} />
   if (data.type === 'growth_plan') return <GrowthPlanBlock data={record} source={data.source} onPrompt={onPrompt} />
   if (data.type === 'instructional') return <InstructionalBlock data={record} onPrompt={onPrompt} onNavigateSection={onNavigateSection} />
+  if (data.type === 'action_blocked') return <ActionBlockedBlock data={record} />
 
   const rows = tableRows(data.data)
   if (rows.length === 0) return data.source ? <SourceBadge source={data.source} /> : null
@@ -855,6 +857,52 @@ function StructuredBlock({ data, onPrompt, onNavigateSection }: { data: NonNulla
   )
 }
 
+/**
+ * Rendered when Shopify refuses an action for lack of an OAuth scope (HTTP
+ * 401/403 or GraphQL ACCESS_DENIED). The merchant never sees the raw transport
+ * error; they get the standard permission sentence plus a one-click
+ * re-authorize handoff to `/shopify/install?shop=...`, which restarts OAuth
+ * with the app's current (updated) scope list.
+ */
+export function ActionBlockedBlock({ data }: { data: Record<string, unknown> }) {
+  const message = typeof data.message === 'string' && data.message.trim()
+    ? data.message.trim()
+    : typeof data.reason === 'string' && data.reason.trim()
+      ? data.reason.trim()
+      : SHOPIFY_PERMISSION_MESSAGE
+  const missingScope = typeof data.missingScope === 'string' && data.missingScope.trim() ? data.missingScope.trim() : null
+  const reauthorizeUrl = typeof data.reauthorizeUrl === 'string' && data.reauthorizeUrl.trim() ? data.reauthorizeUrl.trim() : null
+  return (
+    <div className="aic-blocked-card" role="alert">
+      <div className="aic-blocked-head">
+        <Lock size={14} />
+        <strong>Additional Shopify permissions required</strong>
+      </div>
+      <p className="aic-blocked-copy">{message}</p>
+      {missingScope && <p className="aic-blocked-scope">Missing permission: <code>{missingScope}</code></p>}
+      <div className="aic-blocked-actions">
+        <Button className="button primary" onClick={() => { startReauthorize(reauthorizeUrl) }}>
+          Re-authorize ProfitPilot <ArrowUpRight size={14} />
+        </Button>
+      </div>
+      <p className="aic-blocked-hint">Nothing was changed in your store. After re-authorizing, run the command again.</p>
+    </div>
+  )
+}
+
+/**
+ * Hands the browser to the Shopify OAuth restart. Mirrors the install handoff
+ * in OnboardingModal: inside the admin iframe the top-level window must
+ * navigate, because replacing the embedded frame would break the admin.
+ */
+export function startReauthorize(url: string | null): void {
+  const target = url ?? '/shopify/install'
+  let embedded = false
+  try { embedded = window.top !== window.self } catch { embedded = true }
+  if (embedded) window.open(target, '_top', 'noopener')
+  else window.location.assign(target)
+}
+
 /** Clean, enterprise-SaaS attribution chip — never a raw database label. */
 function SourceBadge({ source }: { source: string | undefined }) {
   const badge = humanizeSource(source)
@@ -872,6 +920,7 @@ const STRUCTURED_LABELS: Readonly<Record<string, string>> = {
   workflow_list: 'Automations',
   action_preview: 'Action preview',
   action_result: 'Action result',
+  action_blocked: 'Permission required',
   growth_plan: 'Growth plan',
   instructional: 'How-to guide',
 }

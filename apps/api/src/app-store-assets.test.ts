@@ -103,6 +103,7 @@ describe('Shopify scope registry', () => {
       'read_products',
       'read_orders',
       'read_customers',
+      'write_customers',
       'read_inventory',
       'read_locations',
       'read_discounts',
@@ -111,6 +112,8 @@ describe('Shopify scope registry', () => {
     ])
     // discountCodeBasicCreate / discountCodeDeactivate are 403 without this one.
     expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('write_discounts')
+    // Customer tag / note write-backs (PUT /customers/{id}.json) are 403 without this one.
+    expect(PROFITPILOT_SHOPIFY_SCOPES).toContain('write_customers')
     // The GraphQL discount mutations no longer rely on the legacy REST scope.
     expect(PROFITPILOT_SHOPIFY_SCOPES).not.toContain('write_price_rules')
     // The REST discounts sync still reads legacy price rules.
@@ -121,7 +124,7 @@ describe('Shopify scope registry', () => {
     const base = { SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example' }
     for (const env of [base, { ...base, SHOPIFY_SCOPES: '   ' }, { ...base, SHOPIFY_SCOPES: 'read_products,read_price_rules' }]) {
       const config = shopifyAppConfigFromEnv(env)
-      expect(config.scopes).toHaveLength(8)
+      expect(config.scopes).toHaveLength(9)
       expect(missingShopifyScopes(config.scopes)).toEqual([])
       expect(renderShopifyAppToml(config)).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
     }
@@ -134,7 +137,9 @@ describe('Shopify scope registry', () => {
 
   it('reports the scopes an installation is missing', () => {
     expect(missingShopifyScopes(PROFITPILOT_SHOPIFY_SCOPES_CSV)).toEqual([])
-    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,read_price_rules')).toEqual(['write_discounts'])
+    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,read_price_rules')).toEqual(['write_customers', 'write_discounts'])
+    // The exact drift a store installed before write_customers shipped reports.
+    expect(missingShopifyScopes('read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,write_discounts,read_price_rules')).toEqual(['write_customers'])
     expect(missingShopifyScopes([])).toEqual([...PROFITPILOT_SHOPIFY_SCOPES])
   })
 

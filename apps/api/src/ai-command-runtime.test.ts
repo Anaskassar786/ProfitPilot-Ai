@@ -148,6 +148,7 @@ import { ProductionCommandActions } from './ai-command-runtime.js'
 import type { AiCommandActionRecord } from '@profitpilot/ai'
 import type { TokenVault } from '@profitpilot/shopify'
 import type { StoreDirectory } from '@profitpilot/db'
+import { SHOPIFY_PERMISSION_MESSAGE } from './shopify-permission-errors.js'
 
 function shopifyDeps(scopes: readonly string[] | null, graphql: { status: number; body: unknown }) {
   const realFetch = globalThis.fetch
@@ -223,8 +224,29 @@ describe('ProductionCommandActions discount execution (SC-2)', () => {
       const result = await actions.execute(tenant, discountAction())
       expect(result.status).toBe('FAILED')
       expect((result.errorDetails as { reason: string }).reason).toBe('MISSING_WRITE_DISCOUNTS_SCOPE')
+      expect((result.errorDetails as { message: string }).message).toContain(SHOPIFY_PERMISSION_MESSAGE)
       expect((result.errorDetails as { message: string }).message).toContain('write_discounts')
-      expect((result.errorDetails as { message: string }).message).toContain('Re-authorize or re-install')
+      expect((result.errorDetails as { missingScope: string }).missingScope).toBe('write_discounts')
+      // The merchant gets a one-click way back into OAuth, not a dead end.
+      expect((result.errorDetails as { reauthorizeUrl: string }).reauthorizeUrl).toBe('/shopify/install?shop=test-shop.myshopify.com')
+      expect((result.errorDetails as { message: string }).message).not.toContain('Shopify API request failed with')
+    } finally { restore() }
+  })
+
+  it('reports a GraphQL ACCESS_DENIED body (HTTP 200) as a missing scope, not a generic failure', async () => {
+    // Shopify answers 200 + top-level `errors` when GraphQL rejects on scope,
+    // so the HTTP-status path never fires and the body must be inspected.
+    const restore = shopifyDeps(['read_products'], {
+      status: 200,
+      body: { errors: [{ message: 'Access denied for discountCodeBasicCreate field.', extensions: { code: 'ACCESS_DENIED', requiredAccess: 'write_discounts' } }] },
+    })
+    try {
+      const actions = new ProductionCommandActions({ shopify: { directory: shopifyDepsDirectory(), tokens: shopifyDepsTokens() } })
+      const result = await actions.execute(tenant, discountAction())
+      expect(result.status).toBe('FAILED')
+      expect((result.errorDetails as { reason: string }).reason).toBe('MISSING_WRITE_DISCOUNTS_SCOPE')
+      expect((result.errorDetails as { message: string }).message).toContain(SHOPIFY_PERMISSION_MESSAGE)
+      expect((result.errorDetails as { message: string }).message).not.toContain('Access denied for discountCodeBasicCreate')
     } finally { restore() }
   })
 
@@ -235,7 +257,9 @@ describe('ProductionCommandActions discount execution (SC-2)', () => {
       const check = await actions.preflight!(tenant, 'CREATE_DISCOUNT')
       expect(check.ok).toBe(false)
       expect(check.missingScope).toBe('write_discounts')
-      expect(check.reason).toContain('Re-authorize or re-install')
+      expect(check.reason).toContain(SHOPIFY_PERMISSION_MESSAGE)
+      expect(check.reason).toContain('write_discounts')
+      expect(check.reauthorizeUrl).toBe('/shopify/install?shop=test-shop.myshopify.com')
     } finally { restore() }
   })
 
@@ -257,6 +281,71 @@ describe('ProductionCommandActions discount execution (SC-2)', () => {
     } finally { restore() }
   })
 })
+
+describe('ProductionCommandActions customer tagging permissions (write_customers)', () => {
+  it('never leaks the raw "<customerId> — Shopify API request failed with 403" string', async () => {
+    const restore = shopifyDeps(['read_products', 'read_customers'], { status: 403, body: { errors: 'Access denied' } })
+    try {
+      const actions = new ProductionCommandActions({ shopify: { directory: shopifyDepsDirectory(), tokens: shopifyDepsTokens() } })
+      const result = await actions.execute(tenant, tagAction())
+      expect(result.status).toBe('FAILED')
+      const details = result.errorDetails as { message: string; reason: string; missingScope: string; reauthorizeUrl: string }
+      expect(details.reason).toBe('MISSING_WRITE_CUSTOMERS_SCOPE')
+      expect(details.missingScope).toBe('write_customers')
+      expect(details.message).toContain(SHOPIFY_PERMISSION_MESSAGE)
+      expect(details.reauthorizeUrl).toBe('/shopify/install?shop=test-shop.myshopify.com')
+      // The bug reported from the dev store: the customer id and transport
+      // string must never reach the merchant.
+      expect(details.message).not.toContain('9414254756053')
+      expect(details.message).not.toContain('Shopify API request failed with 403')
+      expect(JSON.stringify(result.result)).not.toContain('Shopify API request failed with 403')
+      // A permission failure is not undoable — nothing was written.
+      expect(result.rollbackAvailable).toBe(false)
+    } finally { restore() }
+  })
+
+  it('preflight blocks tagging when the live token lacks write_customers', async () => {
+    const restore = shopifyDeps(['read_products', 'read_customers'], { status: 200, body: {} })
+    try {
+      const actions = new ProductionCommandActions({ shopify: { directory: shopifyDepsDirectory(), tokens: shopifyDepsTokens() } })
+      const check = await actions.preflight!(tenant, 'TAG_CUSTOMER')
+      expect(check.ok).toBe(false)
+      expect(check.missingScope).toBe('write_customers')
+      expect(check.reason).toContain(SHOPIFY_PERMISSION_MESSAGE)
+      expect(check.reauthorizeUrl).toBe('/shopify/install?shop=test-shop.myshopify.com')
+    } finally { restore() }
+  })
+
+  it('preflight passes tagging once write_customers is granted', async () => {
+    const restore = shopifyDeps(['read_customers', 'write_customers'], { status: 200, body: {} })
+    try {
+      const actions = new ProductionCommandActions({ shopify: { directory: shopifyDepsDirectory(), tokens: shopifyDepsTokens() } })
+      expect((await actions.preflight!(tenant, 'TAG_CUSTOMER')).ok).toBe(true)
+    } finally { restore() }
+  })
+
+  it('preflight ignores unrelated missing scopes for the action being run', async () => {
+    // A store missing only write_discounts must still be allowed to tag.
+    const restore = shopifyDeps(['read_customers', 'write_customers'], { status: 200, body: {} })
+    try {
+      const actions = new ProductionCommandActions({ shopify: { directory: shopifyDepsDirectory(), tokens: shopifyDepsTokens() } })
+      expect((await actions.preflight!(tenant, 'TAG_CUSTOMER')).ok).toBe(true)
+      expect((await actions.preflight!(tenant, 'CREATE_DISCOUNT')).ok).toBe(false)
+      // Non-Shopify actions are never gated on a scope probe.
+      expect((await actions.preflight!(tenant, 'CREATE_WORKFLOW')).ok).toBe(true)
+      expect((await actions.preflight!(tenant, 'SEND_EMAIL')).ok).toBe(true)
+    } finally { restore() }
+  })
+})
+
+function tagAction(): AiCommandActionRecord {
+  return {
+    ...discountAction(),
+    id: 'act-tag-1',
+    actionType: 'TAG_CUSTOMER',
+    actionParams: { customer_ids: ['9414254756053'], tags: ['new-buyer'], action: 'add' },
+  } as AiCommandActionRecord
+}
 
 function shopifyDepsDirectory(): StoreDirectory {
   return {

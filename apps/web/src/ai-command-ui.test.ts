@@ -1,8 +1,9 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { AiCommandWorkspace } from './ai-command.js'
+import { ActionBlockedBlock, AiCommandWorkspace, startReauthorize } from './ai-command.js'
 import { AiCommandMark } from './ai-command-logo.js'
+import { SHOPIFY_PERMISSION_MESSAGE } from './ai-command-model.js'
 import type { AiCommandConversation } from './ai-command-model.js'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
@@ -112,5 +113,58 @@ describe('AI Command UI', () => {
     // text rather than hardcoding anything in the component.
     expect(conversation.messages.some((message) => message.content === 'What is my revenue today?')).toBe(true)
     expect(conversation.messages.some((message) => message.content.includes('$500'))).toBe(true)
+  })
+})
+
+describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
+  it('renders the standard permission copy and a re-authorize CTA instead of the raw Shopify error', () => {
+    const html = renderWithAppProvider(createElement(ActionBlockedBlock, {
+      data: {
+        actionType: 'TAG_CUSTOMER',
+        missingScope: 'write_customers',
+        message: `${SHOPIFY_PERMISSION_MESSAGE} Missing permission: write_customers.`,
+        reauthorizeUrl: '/shopify/install?shop=demo.myshopify.com',
+      },
+    }))
+    expect(html).toContain('Additional Shopify permissions required')
+    expect(html).toContain('Please re-authorize or reinstall ProfitPilot from Shopify Admin')
+    expect(html).toContain('write_customers')
+    expect(html).toContain('Re-authorize ProfitPilot')
+    expect(html).toContain('Nothing was changed in your store.')
+    // The raw transport string and the internal customer id never render.
+    expect(html).not.toContain('Shopify API request failed with 403')
+    expect(html).not.toContain('9414254756053')
+  })
+
+  it('falls back to the shared permission copy when the payload carries no message', () => {
+    const html = renderWithAppProvider(createElement(ActionBlockedBlock, { data: {} }))
+    expect(html).toContain(SHOPIFY_PERMISSION_MESSAGE.replace('⚠️ ', ''))
+    expect(html).toContain('Re-authorize ProfitPilot')
+  })
+
+  it('re-authorize hands the install URL to the top-level window (embedded) or navigates directly (standalone)', () => {
+    // This suite runs in the node environment, so `window` is stubbed rather
+    // than mutated: only the two branches of the OAuth handoff are asserted.
+    const globals = globalThis as { window?: unknown }
+    const original = globals.window
+    try {
+      const open = vi.fn()
+      const assign = vi.fn()
+      // Embedded: window.top !== window.self, so the top frame must navigate.
+      globals.window = { top: { name: 'top' }, self: { name: 'self' }, open, location: { assign } }
+      startReauthorize('/shopify/install?shop=demo.myshopify.com')
+      expect(open).toHaveBeenCalledWith('/shopify/install?shop=demo.myshopify.com', '_top', 'noopener')
+      expect(assign).not.toHaveBeenCalled()
+
+      // Standalone: a plain same-window navigation.
+      const frame = { name: 'same' }
+      globals.window = { top: frame, self: frame, open, location: { assign } }
+      startReauthorize('/shopify/install?shop=demo.myshopify.com')
+      expect(assign).toHaveBeenCalledWith('/shopify/install?shop=demo.myshopify.com')
+      expect(open).toHaveBeenCalledTimes(1)
+    } finally {
+      if (original === undefined) delete globals.window
+      else globals.window = original
+    }
   })
 })
