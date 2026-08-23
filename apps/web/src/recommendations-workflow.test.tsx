@@ -110,7 +110,7 @@ describe('Recommendations workspace — runtime flow', () => {
     installFetchMock({ summary: emptySummary(), items: [], analyze: {} })
     await mountWorkspace()
     const text = container.textContent ?? ''
-    expect(text).toContain("Let's find your growth opportunities!")
+    expect(text).toContain('Here are opportunities to grow your business — review and take action.')
     expect(text).toContain('Discover Opportunities')
     expect(text).toContain('Revenue opportunity pending')
     expect(text).toContain('No pending recommendations yet')
@@ -118,18 +118,22 @@ describe('Recommendations workspace — runtime flow', () => {
     expect(container.querySelectorAll('.recs-tip [role="tooltip"]').length).toBe(5)
     expect(text).toContain('What happens after you click')
     expect(text).toContain('Analyzes: Products')
-    expect(text).toContain('Sample')
+    // Honesty over filler: the empty state promises an all-clear instead of
+    // invented sample recommendations.
+    expect(text).toContain('We never invent a recommendation.')
     // Tabs carry explanatory tips; search/sort placeholders were clarified
     const tabs = [...container.querySelectorAll('.recs-tab')]
     expect(tabs).toHaveLength(5)
     for (const tab of tabs) expect(tab.getAttribute('data-tip')?.length ?? 0).toBeGreaterThan(10)
     expect((container.querySelector('.recs-search input') as HTMLInputElement).placeholder).toBe('Search by title, product, customer, or rule…')
     expect(container.querySelector('.recs-sort-wrap')?.getAttribute('data-tip')).toContain('ranks this list')
-    // Sidebar education: all seven agents listed with zero pending
-    const roster = [...container.querySelectorAll('.recs-agent-row')]
+    // Sidebar education: all six agents listed with zero pending. The Polaris
+    // Button shim consumes the consumer `className`, so `.recs-agent-row`
+    // never reaches the DOM — the rows are the roster's direct buttons.
+    const roster = [...container.querySelectorAll('.recs-agent-roster > button')]
     expect(roster).toHaveLength(6)
     expect(text).toContain('No recommendations yet — your team reports here after the first look.')
-    expect(text).toContain('See sample activity')
+    expect(text).toContain('Your Activity Timeline')
   })
 
   it('runs the full analysis flow: progress modal → rich health-check panel', async () => {

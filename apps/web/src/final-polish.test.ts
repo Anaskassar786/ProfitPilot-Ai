@@ -100,11 +100,20 @@ describe('PR #41 final polish contracts', () => {
     expect(correlation).toContain("const avg = orders ? trend.reduce((sum, row) => sum + row.revenue, 0) / orders : 0")
     expect(correlation).toContain('dataKey="orders"')
     expect(correlation).toContain('dataKey="aov"')
+    expect(sha256(correlation)).toBe('259010c3912343fa0e39442d1940142440010c6114aa1ee5a314dd294aeaa6b2')
+  })
+
+  it('preserves Jarvis orb and Products functionality source byte-for-byte', () => {
+    expect(sha256(source('./JarvisOrb.tsx'))).toBe('bdc5177021879275e5032e2bef134b51869ccf155d275a80f7a177a1fb8449f2')
+    expect(sha256(source('./jarvis-orb.css'))).toBe('78794b3392966e5d8beb36b53932aba22a9c991af8a4e6923af8344e6f307b88')
+    expect(sha256(source('./products.tsx'))).toBe('79f5e0b97715031b517c1d3fb7861af9600a1d9590222ea147c7b981d6cf9585')
+    expect(sha256(source('./products-model.ts'))).toBe('5a74f7e0ab08bce2a0b3a88af516a022a61ac36d4d077bb6f80bb959feaeb44f')
   })
 
   it('preserves Jarvis orb and Products functionality contracts', () => {
-    // Byte-for-byte freeze hashes (PR #41) were obsolete the moment later PRs
-    // legitimately edited these files — pin the behavioural contracts instead.
+    // The freeze hashes above pin bytes; these pin the behaviour that matters
+    // so a legitimate edit fails with a meaningful contract diff instead of a
+    // bare hash mismatch (stale hashes were the F-grade baseline's root cause).
     const orb = source('./JarvisOrb.tsx')
     expect(orb).toContain('export function JarvisOrb')
     expect(orb).toContain('jarvis-particle-orb')

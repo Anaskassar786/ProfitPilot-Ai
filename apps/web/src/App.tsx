@@ -109,6 +109,7 @@ import {
 } from './model.js'
 import type { ChartPeriod } from './model.js'
 import { greetingForHour } from './recommendations-model.js'
+import { useModalDialog } from './modal-a11y.js'
 import { DashboardLayout } from './dashboard.js'
 import { CommandCenterWorkspace } from './command-center.js'
 import { ProductsWorkspace } from './products.js'
@@ -133,11 +134,11 @@ import { SettingsPage } from './settings.js'
 import { SETTINGS_EVENT, readWorkspaceSettings } from './settings-model.js'
 
 /* ═══════════════════════════════════════════════════════════════════════
- * 🛑 Jarvis TEMPORARILY REMOVED from product navigation (Aug 2026).
- *    To restore: uncomment the `jarvis` item below in the 'AI employee'
- *    group and add its entry back in `pageMeta` & `PageRouter`.
- *    All existing Jarvis code, components, routes, APIs, and logic
- *    remain preserved — nothing was deleted.
+ * TODO(jarvis): re-enable when voice is ready.
+ * Jarvis is temporarily removed from product navigation (Aug 2026). To
+ * restore: uncomment the `jarvis` nav item below, the hash-routing lines,
+ * and the JarvisExperience mount — all marked with "TODO(jarvis)". All
+ * Jarvis code, components, routes, and APIs remain preserved.
  * ═══════════════════════════════════════════════════════════════════════ */
 const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
   {
@@ -158,7 +159,7 @@ const navGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }>
       { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
       { id: 'automation', label: 'Automation', icon: Workflow },
       { id: 'ai-command', label: 'AI Commander', icon: AiCommandIcon },
-      /* 🛑 Jarvis nav item temporarily removed — restore when Jarvis returns */
+      /* TODO(jarvis): re-enable when voice is ready */
       // { id: 'jarvis', label: 'Jarvis', icon: JarvisNavIcon },
     ],
   },
@@ -198,7 +199,7 @@ function visibleNavGroups(devWorkspace: boolean): ReadonlyArray<{ label: string;
     .filter((group) => group.items.length > 0)
 }
 
-/* 🛑 Jarvis pageMeta entry temporarily removed — restore when Jarvis returns */
+/* TODO(jarvis): the `jarvis` pageMeta entry below is kept for type safety only */
 const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description: string; icon: SectionIcon }>>> = {
   dashboard: { title: 'Dashboard', description: 'A clear view of the store data ProfitPilot is receiving.', icon: LayoutDashboard },
   products: { title: 'Products', description: 'Catalog records synced from Shopify, with no invented inventory.', icon: Package },
@@ -216,7 +217,7 @@ const pageMeta: Readonly<Record<SectionId, Readonly<{ title: string; description
   campaigns: { title: 'AI Commander', description: 'Campaigns has been replaced by AI Commander.', icon: AiCommandIcon },
   copilot: { title: 'AI Commander', description: 'One command controls everything.', icon: AiCommandIcon },
   'ai-command': { title: 'AI Commander', description: 'Ask questions and approve real store actions from one command surface.', icon: AiCommandIcon },
-  /* 🛑 Jarvis page — data preserved for type safety but not rendered in UI (removed from navGroups & PageRouter) */
+  /* TODO(jarvis): re-enable when voice is ready — kept for type safety, not rendered (removed from navGroups & PageRouter) */
   jarvis: { title: 'Jarvis', description: 'Your spoken store assistant — page-aware briefings, no chat box.', icon: JarvisNavIcon },
   reports: { title: 'Business Reports', description: 'Generate professional reports from your real store data.', icon: FileBarChart },
   exports: { title: 'Data Exports', description: 'Download your real store data anytime — orders, products, activity, and revenue.', icon: Download },
@@ -316,7 +317,7 @@ export default function App() {
   // /ai-growth-command/insights* paths still resolve); its sub-tabs manage
   // their own detail segments from there.
   const [activePage, setActivePage] = useState<SectionId>(() => {
-    /* 🛑 Jarvis hash routing temporarily removed */
+    /* TODO(jarvis): re-enable when voice is ready */
     // if (window.location.hash.startsWith('#/jarvis')) return 'jarvis'
     if (window.location.hash.startsWith('#/recommendations')) return 'recommendations'
     if (hashSection(window.location.hash) !== null) return hashSection(window.location.hash)!
@@ -669,7 +670,7 @@ export default function App() {
     // not bounce back; entering it establishes the base route for deep links.
     try {
       if (next === 'recommendations') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/recommendations`)
-      /* 🛑 Jarvis hash navigation temporarily removed */
+      /* TODO(jarvis): re-enable when voice is ready */
       // else if (next === 'jarvis') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/jarvis`)
       else if (next === 'ai-command') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-command`)
       else if (next === 'ai-executive') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/ai-growth-command/growthiq`)
@@ -689,7 +690,7 @@ export default function App() {
       const onCoach = window.location.pathname.startsWith('/ai-growth-command')
       const onAutomation = window.location.pathname.startsWith('/automation')
       const onCommandCenter = window.location.pathname === '/command' || window.location.pathname.startsWith('/command/')
-      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onCommandCenter ? 'command-center' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' /* 🛑 || current === 'jarvis' */ || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' || current === 'command-center' ? 'dashboard' : current))
+      setActivePage((current) => (section !== null ? section : onCommand ? 'ai-command' : onCommandCenter ? 'command-center' : onPatternAi ? 'patternai' : onExecutive ? 'ai-executive' : onCoach ? 'store-coach' : onAutomation ? 'automation' : current === 'recommendations' || current === 'ai-command' /* TODO(jarvis): || current === 'jarvis' */ || current === 'ai-growth-command' || current === 'store-coach' || current === 'ai-executive' || current === 'patternai' || current === 'automation' || current === 'command-center' ? 'dashboard' : current))
     }
     window.addEventListener('popstate', onHashNavigation)
     window.addEventListener('hashchange', onHashNavigation)
@@ -835,9 +836,9 @@ export default function App() {
             workspaceSettings={workspacePrefs}
           /> : <div className="auth-gate"><LoadingSpinner label="Connecting your Shopify store…" /></div>}
       </main>
-      {/* 🛑 JarvisExperience temporarily removed from UI — restore when Jarvis returns */}
+      {/* TODO(jarvis): re-enable when voice is ready — JarvisExperience mount */}
       {/* <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} /> */}
-      {/* 🛑 Passive recommendation card temporarily removed — restore when Jarvis returns */}
+      {/* TODO(jarvis): re-enable when voice is ready — passive recommendation card */}
       {/* {passiveRecommendation && <PassiveRecommendationCard recommendation={passiveRecommendation} onReview={reviewPassiveRecommendation} onDismiss={dismissPassiveRecommendation} onSnooze={snoozePassiveRecommendation} />} */}
       {notificationsOpen && <NotificationDrawer recommendations={data.recommendations} unreadIds={unreadNotificationIds} onOpenRecommendation={(id) => { setReadNotificationIds((current) => new Set([...current, id])); persistReadNotifications([...readNotificationIds, id]); setNotificationsOpen(false); navigate('recommendations') }} onMarkAllRead={() => { const all = data.recommendations.filter((item) => item.status === 'PENDING').map((item) => item.id); setReadNotificationIds(new Set([...readNotificationIds, ...all])); persistReadNotifications([...readNotificationIds, ...all]) }} onClose={() => setNotificationsOpen(false)} />}
       {commandOpen && <CommandPalette devWorkspace={isDeveloperWorkspace(context)} onClose={() => setCommandOpen(false)} onNavigate={navigate} />}
@@ -956,7 +957,7 @@ function PageRouter({
   if (active === 'patternai') return <PatternAiWorkspace context={context} catalog={data.catalog} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'automation') return <AutomationWorkspace context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} />
   if (active === 'campaigns' || active === 'copilot' || active === 'ai-command') return <AiCommandPage context={context} onToast={onToast} onNavigateBilling={() => onNavigate('billing')} onNavigate={(page) => onNavigate(page as SectionId)} />
-  /* 🛑 Jarvis page route temporarily removed — restore when Jarvis returns */
+  /* TODO(jarvis): re-enable when voice is ready — Jarvis page route */
   // if (active === 'jarvis') return <PageLayout eyebrow="Spoken assistant" title="Jarvis" description="Page-aware store voice. Chat stays in AI Command."><JarvisWorkspace context={context} onListen={onOpenJarvis} onToast={onToast} workspaceSettings={workspaceSettings} /></PageLayout>
   if (active === 'reports') return <ReportsWorkspace context={context} onNavigateBilling={() => onNavigate('billing')} onToast={onToast} />
   if (active === 'admin-ops') {
@@ -1156,7 +1157,7 @@ const BILLING_FAQ: readonly Readonly<{ q: string; a: string }>[] = [
   { q: 'What does “1 store” / “3 stores” mean?', a: 'Store limit is how many of your Shopify stores you can connect under one subscription. Each merchant gets their own install. Start includes 1 store, Growth up to 3, and Commander is unlimited.' },
   { q: 'What does "Unlimited" mean on Commander?', a: `Commander is marketed as unlimited on stores, sync volume, AI commands, automations, and reports so the biggest merchants do not have to count quotas. Behind the scenes we apply a Fair Usage Policy per store so we can warn (and, in extreme cases, throttle) abusive workloads before they impact other merchants: more than ${FAIR_USE_ORDERS_30D.toLocaleString('en-US')} orders in any rolling 30 days, more than ${FAIR_USE_PRODUCTS_ACTIVE.toLocaleString('en-US')} active products, or more than ${FAIR_USE_CUSTOMERS.toLocaleString('en-US')} customers. Normal high-volume stores never hit these — the soft cap exists only to flag truly unusual usage, not to bill you extra. You will see a "High volume — fair use applies" note on the affected meter if you approach the limit.` },
   { q: 'Can I cancel or change plan anytime?', a: 'Yes. You can upgrade, downgrade, or cancel at any time. Changes take effect at the end of the current billing period. Suspended stores keep read-only access to billing and support.' },
-  { q: 'How do gift/promo codes work?', a: 'A promo code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Redemption replaces the free trial for that store.' },
+  { q: 'How do gift/promo codes work?', a: 'A promo code grants temporary Commander-level access (typically 3 days). Each store can redeem one code. Important: redeeming a code permanently forfeits your remaining 14-day free trial — this cannot be undone.' },
   { q: 'Are payments secure?', a: 'Yes. Paid subscriptions are billed securely through Shopify. ProfitPilot never stores your card details — Shopify handles checkout, invoices, and PCI compliance.' },
   { q: 'What do I get when I upgrade from Trial → Start/Growth/Commander?', a: 'Start unlocks Customer Agent, 100 AI Commands/day, and 5 automations. Growth adds Pricing Agent, 3 stores, 300 commands/day, and 20 automations. Commander unlocks all 6 agents, unlimited stores and commands, and auto-execution so AI can take store actions for you. Recovery and welcome run under Customer Agent.' },
 ]
@@ -1297,6 +1298,9 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const [roi, setRoi] = useState<import('./model.js').RoiMetrics | null>(null)
   const [giftCode, setGiftCode] = useState('')
   const [giftLoading, setGiftLoading] = useState(false)
+  // P1 disclosure: redeeming a gift permanently forfeits the 14-day trial, so
+  // the merchant must explicitly acknowledge the trade-off before redeeming.
+  const [giftForfeitAcknowledged, setGiftForfeitAcknowledged] = useState(false)
   const [upgradeLoading, setUpgradeLoading] = useState<string | null>(null)
   const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
   const [roiPeriod, setRoiPeriod] = useState<'this_month' | 'last_month' | 'all_time'>('this_month')
@@ -1378,11 +1382,18 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
 
   const redeem = async () => {
     if (!context.storeId || !giftCode.trim()) return
+    // Hard gate: never fire the irreversible trial-forfeiting redemption
+    // without the merchant's explicit acknowledgment.
+    if (!giftForfeitAcknowledged) {
+      onToast('Please confirm you understand that redeeming a gift code permanently forfeits your free trial.', 'info')
+      return
+    }
     setGiftLoading(true)
     try {
       await redeemGiftCode(context.storeId, giftCode)
       onToast('Gift access redeemed — Commander unlocked for a limited time.', 'success')
       setGiftCode('')
+      setGiftForfeitAcknowledged(false)
       await reload()
     } catch (error: unknown) {
       const raw = errorMessage(error)
@@ -1630,7 +1641,20 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
             <div className="billing-gift-copy">
               <div className="section-kicker">GIFT ACCESS</div>
               <h3>Have a gift code?</h3>
-              <p>Redeem once per store for temporary Commander access. Replaces the free trial.</p>
+              <p>Redeem once per store for temporary Commander access.</p>
+              <Banner tone="warning" title="Redeeming forfeits your free trial">
+                <p>⚠️ Redeeming this gift code will permanently forfeit your remaining 14-day free trial. This action cannot be undone. When the gift window ends, paid features lock until you choose a plan.</p>
+              </Banner>
+              <label className="billing-gift-ack">
+                <input
+                  type="checkbox"
+                  checked={giftForfeitAcknowledged}
+                  onChange={(event) => setGiftForfeitAcknowledged(event.target.checked)}
+                  disabled={giftLoading}
+                  aria-label="I understand I will lose my free trial"
+                />
+                {' '}I understand I will lose my free trial
+              </label>
             </div>
             <div className="billing-gift-form">
               <input
@@ -1640,7 +1664,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 aria-label="Gift code"
                 disabled={giftLoading}
               />
-              <Button className="button primary billing-gift-redeem" onClick={() => void redeem()} disabled={!giftCode.trim() || giftLoading}>
+              <Button className="button primary billing-gift-redeem" onClick={() => void redeem()} disabled={!giftCode.trim() || !giftForfeitAcknowledged || giftLoading}>
                 {giftLoading ? <RefreshCw size={14} className="spin" /> : <Gift size={14} />}
                 {giftLoading ? 'Redeeming…' : 'Redeem'}
               </Button>
@@ -1771,8 +1795,18 @@ function NotificationDrawer({ recommendations, unreadIds, onOpenRecommendation, 
   return <><Button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <Button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><Sparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</Button>)}{unreadCount > 0 && <Button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></Button>}</div>}<Button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></Button></aside></>
 }
 function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: boolean; onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = visibleNavGroups(devWorkspace).flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><Button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <Button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span><ChevronRight size={15} /></Button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
-function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } window.location.assign(`/shopify/install?shop=${encodeURIComponent(normalized)}`) }; return <div className="modal-overlay"><div className="modal-card onboarding-modal"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2>Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><Button className="button secondary" onClick={onClose}>Cancel</Button><Button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></Button></div></div></div> }
-function ShortcutsModal({ onClose }: { onClose: () => void }) { return <div className="modal-overlay"><div className="modal-card shortcuts-modal"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2>Move with intention.</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><Button className="button primary full-width" onClick={onClose}>Done</Button></div></div> }
+function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const dialogRef = useRef<HTMLDivElement>(null); useModalDialog(dialogRef, onClose); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } const installUrl = `/shopify/install?shop=${encodeURIComponent(normalized)}`; let embedded = false; try { embedded = window.top !== window.self } catch { embedded = true } if (embedded) { // Embedded in the Shopify admin iframe: navigating the app's own frame to
+    // the OAuth flow would replace the app and break the admin. Hand the
+    // install URL to the top-level window instead; the post-OAuth return
+    // re-enters the admin embed. window.open with `_top` is the bridge-free,
+    // user-gesture-safe way to do that from a cross-origin iframe.
+    window.open(installUrl, '_top', 'noopener')
+  } else { // Standalone top window (window.top === window.self): a plain
+    // same-window navigation to the install endpoint is the normal OAuth
+    // handoff.
+    window.location.assign(installUrl)
+  } }; return <div className="modal-overlay"><div ref={dialogRef} className="modal-card onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-modal-title"><div className="modal-icon"><ShoppingBag size={21} /></div><div className="section-kicker">SHOPIFY INSTALL</div><h2 id="onboarding-modal-title">Connect your real store</h2><p>ProfitPilot will start the signed OAuth flow. No demo workspace is created.</p><label>Shopify domain<input autoFocus value={shop} onChange={(event) => setShop(event.target.value)} placeholder="your-store.myshopify.com" /></label>{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><Button className="button secondary" onClick={onClose}>Cancel</Button><Button className="button primary" onClick={connect}>Continue to Shopify <ArrowUpRight size={14} /></Button></div></div></div> }
+function ShortcutsModal({ onClose }: { onClose: () => void }) { const dialogRef = useRef<HTMLDivElement>(null); useModalDialog(dialogRef, onClose); return <div className="modal-overlay"><div ref={dialogRef} className="modal-card shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title"><div className="modal-card-top"><div><div className="section-kicker"><Keyboard size={13} /> KEYBOARD SHORTCUTS</div><h2 id="shortcuts-modal-title">Move with intention.</h2></div><Button className="icon-button" aria-label="Close keyboard shortcuts" onClick={onClose}><X size={18} /></Button></div><Shortcut keys="⌘ K" label="Open command palette" /><Shortcut keys="?" label="Open keyboard shortcuts" /><Shortcut keys="ESC" label="Close the active drawer or modal" /><Shortcut keys="⌘ /" label="Search the current section" /><Button className="button primary full-width" onClick={onClose}>Done</Button></div></div> }
 function Shortcut({ keys, label }: { keys: string; label: string }) { return <div className="shortcut-row"><kbd>{keys}</kbd><span>{label}</span><Check size={14} /></div> }
 function readStoredStringArray(key: string): readonly string[] { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] } catch { return [] } }
 function readStoredNumberRecord(key: string): Readonly<Record<string, number>> { try { const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '{}'); if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}; return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))) } catch { return {} } }

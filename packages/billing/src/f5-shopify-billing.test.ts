@@ -1,5 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION } from './shopify-billing.js'
+import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY } from './shopify-billing.js'
+
+function isShopProbe(init: RequestInit | undefined): boolean {
+  if (!init?.body) return false
+  try {
+    const body = JSON.parse(String(init.body)) as { query?: unknown }
+    return typeof body.query === 'string' && body.query.includes('ShopProbe')
+  } catch {
+    return false
+  }
+}
+
+function shopProbeResponse(displayName: string, partnerDevelopment = false): Response {
+  return new Response(JSON.stringify({
+    data: {
+      shop: {
+        name: 'Demo',
+        myshopifyDomain: 'demo.myshopify.com',
+        plan: { displayName, partnerDevelopment, shopifyPlus: displayName.toLowerCase().includes('plus') },
+      },
+    },
+  }), { status: 200 })
+}
 
 const graphqlCreate = {
   data: {
@@ -152,24 +174,28 @@ describe('Shopify billing 422 diagnostics and payload shape', () => {
 })
 
 describe('automatic test-charge detection', () => {
-  it('forces test:true on a development store', async () => {
-    const urls: string[] = []
+  it('forces test:true on a development store via GraphQL ShopProbe', async () => {
+    const queries: string[] = []
     let body: { variables: { test: boolean } } | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (url, init) => {
-      urls.push(url)
-      if (url.includes('/shop.json')) return new Response(JSON.stringify({ shop: { plan_name: 'partner_test' } }), { status: 200 })
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+      if (isShopProbe(init)) {
+        queries.push(String((JSON.parse(String(init.body)) as { query: string }).query))
+        return shopProbeResponse('Developer Preview', true)
+      }
       body = JSON.parse(String(init.body))
       return new Response(JSON.stringify(graphqlCreate), { status: 201 })
     } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
     expect(body?.variables.test).toBe(true)
-    expect(urls.some((url) => url.includes('/shop.json'))).toBe(true)
+    expect(queries.some((query) => query.includes('ShopProbe'))).toBe(true)
+    expect(SHOP_PROBE_QUERY).toContain('displayName')
+    expect(queries.join('')).not.toContain('/shop.json')
   })
   it('allows a live charge on a paid store and caches the lookup', async () => {
     let shopLookups = 0
     let body: { variables: { test: boolean } } | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (url, init) => {
-      if (url.includes('/shop.json')) { shopLookups += 1; return new Response(JSON.stringify({ shop: { plan_name: 'shopify_plus' } }), { status: 200 }) }
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+      if (isShopProbe(init)) { shopLookups += 1; return shopProbeResponse('Shopify Plus') }
       body = JSON.parse(String(init.body))
       return new Response(JSON.stringify(graphqlCreate), { status: 201 })
     } })
@@ -180,8 +206,8 @@ describe('automatic test-charge detection', () => {
   })
   it('falls back to a test charge when the shop lookup fails', async () => {
     let body: { variables: { test: boolean } } | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (url, init) => {
-      if (url.includes('/shop.json')) return new Response('', { status: 403 })
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+      if (isShopProbe(init)) return new Response('', { status: 403 })
       body = JSON.parse(String(init.body))
       return new Response(JSON.stringify(graphqlCreate), { status: 201 })
     } })
@@ -189,9 +215,12 @@ describe('automatic test-charge detection', () => {
     expect(body?.variables.test).toBe(true)
   })
   it('never performs a shop lookup when the mode is explicit', async () => {
-    const urls: string[] = []
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (url) => { urls.push(url); return new Response(JSON.stringify(graphqlCreate), { status: 201 }) } })
+    const probes: string[] = []
+    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (_url, init) => {
+      if (isShopProbe(init)) probes.push('shop')
+      return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+    } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
-    expect(urls.some((url) => url.includes('/shop.json'))).toBe(false)
+    expect(probes).toEqual([])
   })
 })

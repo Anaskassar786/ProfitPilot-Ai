@@ -84,7 +84,7 @@ export function ExecutiveHealthPage({ context, plan, gates, onToast, onUpgrade }
                     <ExecutiveSparkline points={trends.map((point) => point.score)} width={150} height={40} />
                     <div>
                       {trends.length > 0 && <strong style={{ fontFamily: 'var(--exec-serif)', fontSize: 18, color: 'var(--exec-heading)' }}>{trends.at(-1)!.score}</strong>}
-                      <div style={{ fontSize: 10.5, color: 'var(--exec-muted)' }}>{trends.length} recorded diagnosis{trends.length === 1 ? '' : 'es'}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--exec-muted)' }}>{trends.length} recorded diagnosis{trends.length === 1 ? '' : 'es'}</div>
                     </div>
                   </div>
                 </ExecutiveSection>
@@ -106,7 +106,7 @@ export function ExecutiveHealthPage({ context, plan, gates, onToast, onUpgrade }
                         </div>
                         <span className="exec-vital-value">{vital.formattedValue}</span>
                         <ExecutiveStatusPill status={vital.status} />
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--exec-muted)', lineHeight: 1.5 }}>{vital.explanation}</p>
+                        <p style={{ margin: 0, fontSize: 12, color: 'var(--exec-muted)', lineHeight: 1.5 }}>{vital.explanation}</p>
                       </div>
                     ))}
                   </div>
@@ -132,7 +132,7 @@ export function ExecutiveHealthPage({ context, plan, gates, onToast, onUpgrade }
                         {diagnosis.prescriptions.map((prescription, index) => (
                           <tr key={prescription.title}>
                             <td><strong>{String(index + 1).padStart(2, '0')}</strong></td>
-                            <td><strong>{prescription.title}</strong><br /><span style={{ fontSize: 11.5 }}>{prescription.action}</span></td>
+                            <td><strong>{prescription.title}</strong><br /><span style={{ fontSize: 12.5 }}>{prescription.action}</span></td>
                             <td><ExecutiveStatusPill status={prescription.timeframe} tone="gold" /></td>
                           </tr>
                         ))}

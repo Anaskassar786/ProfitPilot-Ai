@@ -160,11 +160,11 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
   document.body.appendChild(container)
   const renderEditor = (): void => {
     root?.render(
-      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here
-      // so Polaris-powered components render the same way under test.
-      <AppProvider i18n={enTranslations as never}>
-        <StrictMode>
-        <WorkflowEditor
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it
+      // here so Polaris-powered components render the same way under test.
+      <StrictMode>
+        <AppProvider i18n={enTranslations as never}>
+          <WorkflowEditor
           storeId="s1"
           workflow={store.workflow}
           usage={store.usage}
@@ -178,9 +178,9 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
             if (kind) toasts.push({ message, kind })
             else toasts.push({ message })
           }}
-        />
-        </StrictMode>
-      </AppProvider>,
+          />
+        </AppProvider>
+      </StrictMode>,
     )
   }
   await act(async () => {
@@ -316,8 +316,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       ],
     })
     const container = await mount(store)
-    // The Polaris Button shim maps the legacy `danger` class to a critical tone
-    // (not a DOM class), so locate the control by its accessible name instead.
+    // The Polaris Button shim maps the legacy `danger` class to a critical
+    // tone/variant prop (not a DOM class), so the stable hook is the aria
+    // label, not the old `.danger` class.
     const trash = container.querySelector('.simple-step [aria-label="Remove step"]') as HTMLButtonElement
     expect(trash).toBeTruthy()
     await click(trash)
@@ -353,7 +354,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       b.textContent?.includes('Smart classification'),
     ) as HTMLButtonElement
     expect(aiButton).toBeTruthy()
-    expect(aiButton.className).toContain('locked')
+    // Lock affordance: the AI-Powered group advertises its Commander gate
+    // (the button shim consumes the `locked` class, so assert the badge).
+    expect(container.querySelector('.node-library')?.textContent).toContain('Commander only')
     await click(aiButton)
     expect(toasts.some((t) => t.message.includes('upgraded subscription') || t.message.includes('Upgrade'))).toBe(true)
   })

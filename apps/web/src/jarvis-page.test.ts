@@ -7,10 +7,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { JarvisNavIcon, JarvisWorkspace } from './jarvis-page.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 /** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
- * Polaris-powered components render the same way under test. */
-function renderWithAppProvider(element: ReactElement) {
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
 
@@ -41,7 +43,7 @@ describe('Jarvis workspace page', () => {
   })
 
   it('renders a compact nav mark', () => {
-    const html = renderToStaticMarkup(createElement(JarvisNavIcon, { size: 17 }))
+    const html = renderWithAppProvider(createElement(JarvisNavIcon, { size: 17 }))
     expect(html).toContain('viewBox="0 0 24 24"')
   })
 })

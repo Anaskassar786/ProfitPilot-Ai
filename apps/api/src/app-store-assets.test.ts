@@ -17,12 +17,20 @@ describe('F7 Shopify App Store assets', () => {
     expect(toml).toContain(`scopes = "${PROFITPILOT_SHOPIFY_SCOPES_CSV}"`)
     expect(config.apiVersion).toBe('2026-07')
     expect(toml).toContain('api_version = "2026-07"')
-    expect(toml).toContain('[webhooks.privacy]')
-    expect(toml).toContain('customer_data_request_url = "https://app.example/shopify/webhooks"')
-    expect(toml).toContain('customer_deletion_url = "https://app.example/shopify/webhooks"')
-    expect(toml).toContain('shop_deletion_url = "https://app.example/shopify/webhooks"')
+    // The obsolete [webhooks.privacy] table was removed from the Shopify CLI
+    // schema — compliance topics are registered via compliance_topics instead.
+    expect(toml).not.toContain('[webhooks.privacy]')
+    expect(toml).not.toContain('customer_data_request_url')
+    expect(toml).toContain('compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]')
     expect(toml).toContain('topics = ["app/uninstalled", "orders/create", "orders/updated", "customers/create", "customers/update", "products/update", "inventory_levels/update"]')
-    expect(toml).toContain('uri = "/shopify/webhooks"')
+    // Both subscription blocks (regular + compliance) must use the absolute
+    // https URI — the CLI rejects relative webhook URIs.
+    expect(toml).not.toContain('uri = "/shopify/webhooks"')
+    expect(toml.match(/uri = "https:\/\/app\.example\/shopify\/webhooks"/g)).toHaveLength(2)
+    // Regular topics and compliance_topics never share a subscription block.
+    for (const block of toml.split('[[webhooks.subscriptions]]').slice(1)) {
+      expect(block.includes('topics = [') && block.includes('compliance_topics = [') && !block.trimStart().startsWith('compliance_topics')).toBe(false)
+    }
     expect(toml).not.toContain('client_secret')
   })
 
@@ -47,13 +55,13 @@ describe('F7 Shopify App Store assets', () => {
     expect(() => shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key' })).toThrow('SHOPIFY_APP_URL')
   })
 
-  it('derives privacy webhook URLs from the app host and honors an explicit override', () => {
+  it('derives compliance webhook URLs from the app host and honors an explicit override', () => {
     const derived = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://profitpilot-ai-production.up.railway.app' })
     expect(derived.privacyWebhookUrl).toBe('https://profitpilot-ai-production.up.railway.app/shopify/webhooks')
-    expect(renderShopifyAppToml(derived)).toContain('customer_data_request_url = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
+    expect(renderShopifyAppToml(derived)).toContain('uri = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
 
     const pinned = shopifyAppConfigFromEnv({ SHOPIFY_API_KEY: 'key', SHOPIFY_APP_URL: 'https://app.example', SHOPIFY_PRIVACY_WEBHOOK_URL: 'https://profitpilot-ai-production.up.railway.app/shopify/webhooks' })
-    expect(renderShopifyAppToml(pinned)).toContain('customer_deletion_url = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
+    expect(renderShopifyAppToml(pinned)).toContain('uri = "https://profitpilot-ai-production.up.railway.app/shopify/webhooks"')
   })
 
   it('publishes screenshot specs and an honest listing template', () => {
@@ -79,6 +87,13 @@ describe('F7 Shopify App Store assets', () => {
   it('honors an explicit SUPPORT_URL override', () => {
     const listing = appListingMetadata({ SHOPIFY_APP_URL: 'https://app.example.com', SUPPORT_URL: 'https://help.profitpilot.example/contact' })
     expect(listing.supportUrl).toBe('https://help.profitpilot.example/contact')
+  })
+
+  it('refuses placeholder listing URLs in production and marks the dev fallback clearly', () => {
+    expect(() => appListingMetadata({ NODE_ENV: 'production' })).toThrow('SHOPIFY_APP_URL')
+    const dev = appListingMetadata({ NODE_ENV: 'development' })
+    expect(dev.privacyPolicyUrl).toBe('https://localhost:3000/legal/privacy')
+    expect(dev.complianceLinks.some((url) => url.includes('app.example.com'))).toBe(false)
   })
 })
 
@@ -135,5 +150,13 @@ describe('Shopify scope registry', () => {
     const templateTopics = /^topics\s*=\s*\[(.*)\]$/m.exec(repoFile('docs/app-store/shopify.app.toml.template'))?.[1]
     const parsed = templateTopics ? [...templateTopics.matchAll(/"([^"]+)"/g)].map((match) => match[1]) : []
     expect(parsed).toEqual([...PROFITPILOT_WEBHOOK_TOPICS])
+  })
+
+  it('registers GDPR compliance topics in the template with an absolute https uri', () => {
+    const template = repoFile('docs/app-store/shopify.app.toml.template')
+    expect(template).not.toContain('[webhooks.privacy]')
+    expect(template).toContain('compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]')
+    expect(template).not.toContain('uri = "/shopify/webhooks"')
+    expect(template.match(/uri = "https:\/\/REPLACE_WITH_APP_HOST\/shopify\/webhooks"/g)).toHaveLength(2)
   })
 })

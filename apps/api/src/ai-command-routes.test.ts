@@ -1,9 +1,10 @@
 import { createServer } from 'node:http'
 import { describe, expect, it } from 'vitest'
-import { storeId } from '@profitpilot/types'
+import { AppError, storeId } from '@profitpilot/types'
 import { AiCommandService, InMemoryAiCommandRepository, InMemoryCommandActions, InMemoryCommandTools } from '@profitpilot/ai'
 import { Logger } from '@profitpilot/logger'
 import { createApi } from './app.js'
+import { AI_COMMAND_STREAM_UNAVAILABLE, merchantSafeAiCommandStreamError } from './ai-command-routes.js'
 import type { AiCommandPageMetricsProvider } from './ai-command-page-metrics.js'
 
 const tenant = storeId('store-1')
@@ -190,4 +191,38 @@ describe('AI Command API', () => {
     const extra = await fetch(`${base}/ai-command/saved`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, name: 'D', commandText: 'Show revenue' }) })
     expect(extra.status).toBe(402)
   }))
+
+  it('sanitizes unexpected stream failures to a merchant-safe message', async () => {
+    const service = { chat: async () => { throw new Error('relation "analytics_revenue_daily" does not exist') } } as unknown as AiCommandService
+    const app = createApi({ logger: new Logger(), readinessChecks: [], aiCommand: { service } })
+    const server = createServer(app)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('No address')
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/ai-command/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ storeId: tenant, text: 'What is my revenue?', stream: true }),
+      })
+      const body = await response.text()
+      expect(body).toContain(AI_COMMAND_STREAM_UNAVAILABLE)
+      expect(body).not.toContain('analytics_revenue_daily')
+      expect(body).not.toContain('does not exist')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+})
+
+describe('merchantSafeAiCommandStreamError', () => {
+  it('keeps client-facing AppError copy and hides provider/DB exceptions', () => {
+    expect(merchantSafeAiCommandStreamError(new AppError('PAYMENT_REQUIRED', 'Upgrade Plan to keep asking.', 402)).message).toContain('Upgrade Plan')
+    expect(merchantSafeAiCommandStreamError(new Error('ECONNREFUSED 10.0.0.8:5432')).message).toBe(AI_COMMAND_STREAM_UNAVAILABLE)
+    expect(merchantSafeAiCommandStreamError(new Error('OpenRouter 429 rate limit'))).toEqual({
+      message: AI_COMMAND_STREAM_UNAVAILABLE,
+      status: 503,
+      code: 'AI_UNAVAILABLE',
+    })
+  })
 })

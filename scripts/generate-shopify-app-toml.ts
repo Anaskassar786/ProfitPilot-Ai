@@ -23,5 +23,5 @@ process.stdout.write(`Access scopes (${config.scopes.length}): ${config.scopes.j
 if (config.scopes.length > PROFITPILOT_SHOPIFY_SCOPES.length) {
   process.stdout.write(`Note: SHOPIFY_SCOPES added extra scopes beyond the ${PROFITPILOT_SHOPIFY_SCOPES.length} required by ProfitPilot.\n`)
 }
-process.stdout.write(`Privacy webhooks: ${config.privacyWebhookUrl}\n`)
+process.stdout.write(`Compliance webhooks (customers/data_request, customers/redact, shop/redact): ${config.privacyWebhookUrl}\n`)
 process.stdout.write(`Webhook subscriptions (${PROFITPILOT_WEBHOOK_TOPICS.length}): ${PROFITPILOT_WEBHOOK_TOPICS.join(',')}\n`)

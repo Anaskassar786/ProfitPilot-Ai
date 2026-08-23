@@ -58,6 +58,7 @@ import {
 import type { LucideIcon } from './icons.js'
 import { ApiClientError } from './api.js'
 import * as api from './api.js'
+import { useModalDialog } from './modal-a11y.js'
 import type { CatalogProduct, WorkspaceContext } from './model.js'
 import { PatternAiDiscoverGlyph, PatternAiMark } from './patternai-logo.js'
 import {
@@ -210,6 +211,8 @@ function useResource<T>(load: (() => Promise<T>) | null, deps: readonly unknown[
         setState({ status: 'error', data: null, upgradeRequired, message })
       })
     return () => { cancelled = true }
+    // `deps` is a caller-supplied dynamic array spread into the dependency
+    // list; the static analyzer cannot verify it, but it is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce, ...deps])
   const reload = useCallback(() => setNonce((value) => value + 1), [])
@@ -883,7 +886,7 @@ function SignalQualityKpi({ discoveries }: { discoveries: readonly InsightDiscov
           {summary.strongest && (
             <p className="pa-kpi-foot">Strongest: <strong>{summary.strongest.title}</strong> · {confidencePercent(summary.strongest.confidence)}%</p>
           )}
-          <p className="pa-muted" style={{ fontSize: '11px' }}>High means ≥70% confidence — these are the signals worth acting on first.</p>
+          <p className="pa-muted" style={{ fontSize: '12px' }}>High means ≥70% confidence — these are the signals worth acting on first.</p>
         </>
       )}
     </div>
@@ -918,7 +921,7 @@ function ActionBacklogKpi({ discoveries, funnel, onReview }: { discoveries: read
             <Button className="pa-button secondary compact" onClick={onReview}><Search size={12} /> Review new signals</Button>
           )}
           {summary.newCount === 0 && summary.total > 0 && (
-            <p className="pa-muted" style={{ fontSize: '11px' }}>Saved discoveries remain available from the Saved status filter.</p>
+            <p className="pa-muted" style={{ fontSize: '12px' }}>Saved discoveries remain available from the Saved status filter.</p>
           )}
         </>
       )}
@@ -2059,6 +2062,8 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
   const [searchResults, setSearchResults] = useState<readonly InsightKnowledgeEntry[] | null>(null)
   const [editor, setEditor] = useState<null | { id: string | null; title: string; content: string; tags: string }>(null)
   const [saving, setSaving] = useState(false)
+  const editorRef = useRef<HTMLDivElement>(null)
+  useModalDialog(editorRef, () => setEditor(null), editor !== null)
 
   const search = async () => {
     if (!storeId || !query.trim()) { setSearchResults(null); return }
@@ -2134,8 +2139,8 @@ function KnowledgeTab(props: TabProps & { detailId: string | null }) {
       </div>
 
       {editor && (
-        <div className="modal-overlay"><div className="modal-card pa-editor">
-          <div className="modal-card-top"><div><div className="section-kicker"><Library size={12} /> KNOWLEDGE NOTE</div><h2>{editor.id ? 'Edit note' : 'New note'}</h2></div><Button className="icon-button" onClick={() => setEditor(null)}><X size={17} /></Button></div>
+        <div className="modal-overlay"><div ref={editorRef} className="modal-card pa-editor" role="dialog" aria-modal="true" aria-label={editor.id ? 'Edit note' : 'New note'}>
+          <div className="modal-card-top"><div><div className="section-kicker"><Library size={12} /> KNOWLEDGE NOTE</div><h2>{editor.id ? 'Edit note' : 'New note'}</h2></div><Button className="icon-button" aria-label="Close note editor" onClick={() => setEditor(null)}><X size={17} /></Button></div>
           <label>Title<input value={editor.title} onChange={(event) => setEditor({ ...editor, title: event.target.value })} placeholder="What did we learn?" maxLength={180} /></label>
           <label>Note<textarea value={editor.content} onChange={(event) => setEditor({ ...editor, content: event.target.value })} placeholder="Markdown supported — headings, lists, **bold**." rows={7} /></label>
           <label>Tags (comma separated)<input value={editor.tags} onChange={(event) => setEditor({ ...editor, tags: event.target.value })} placeholder="pricing, weekends, hoodies" /></label>
@@ -2411,7 +2416,7 @@ const { data } = await res.json()`}</pre>
 import requests
 requests.get('https://your-profitpilot-host/public-api/insights/trends',
              headers={'Authorization': 'Bearer ihk_your_key'}).json()`}</pre>
-        <p className="pa-muted">OpenAPI 3.1 spec: <a href={docs.data?.specUrl ?? '/public-api/insights/openapi.json'} target="_blank" rel="noreferrer">{docs.data?.specUrl ?? '/public-api/insights/openapi.json'}</a></p>
+        <p className="pa-muted">OpenAPI 3.1 spec: <a href={docs.data?.specUrl ?? '/public-api/insights/openapi.json'} target="_blank" rel="noopener noreferrer">{docs.data?.specUrl ?? '/public-api/insights/openapi.json'}</a></p>
       </div>
     </section>
   )

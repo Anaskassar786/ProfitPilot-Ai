@@ -128,6 +128,10 @@ describe('Inventory toolbar', () => {
     expect(html).toContain('Sort by')
     expect(html).toContain('Product name')
     expect(html).toContain('aria-label="Sort inventory"')
+    // With a visible "Sort by" label Polaris uses it as the select's
+    // accessible name and drops the hidden ariaLabel (WCAG requires the
+    // visible label be part of the accessible name, so this is correct).
+    expect(html).not.toContain('aria-label="Sort inventory by"')
     expect(html).toContain('Search by product name or SKU')
     const primary = html.slice(html.indexOf('inventory-toolbar-primary'), html.indexOf('inventory-toolbar-filters'))
     expect(primary).toContain('inventory-search')
@@ -153,7 +157,9 @@ describe('Inventory toolbar', () => {
     expect(inventorySortOptions(false).map((option) => option.label)).toEqual(['Product name', 'Stock level', 'Stock value', 'Category', 'Last updated'])
     const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
     // Ascending state: the toggle offers the flip to descending (visible icon)
-    // and names itself for assistive tech. Flipping the prop flips the label.
+    // and names itself for assistive tech — the Button shim maps the explicit
+    // aria-label to the accessible name (it wins over the supplementary title
+    // tooltip). Flipping the prop flips the label.
     expect(html).toContain('aria-label="Sort descending"')
     expect(renderWithAppProvider(createElement(InventoryToolbar, { ...toolbarProps, direction: 'desc' }))).toContain('aria-label="Sort ascending"')
   })

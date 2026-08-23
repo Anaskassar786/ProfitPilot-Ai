@@ -7,6 +7,16 @@ import { DashboardLayout } from './dashboard.js'
 import { CancellationRateCard, FulfillmentRateCard, OrderHealthInsight } from './orders.js'
 import type { AnalyticsSnapshot } from './model.js'
 import type { AvailableOrderInsight } from './orders-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import { createElement } from 'react'
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
 // Polaris-powered components render the same way under test.
@@ -32,8 +42,8 @@ const catalog = [
 
 describe('PR #44 professional refinement', () => {
   it.each([false, true])('renders sibling full-width detail rows in %s theme', (light) => {
-    const cancel = renderToStaticMarkup(shell(light, <CancellationRateCard insight={insight('cancellation_rate', { status: 'available', canceled: 0, total: 6, rate: 0 })} orders={orders} />))
-    const fulfill = renderToStaticMarkup(shell(light, <FulfillmentRateCard insight={insight('fulfillment_rate', { status: 'available', fulfilled: 0, total: 6, rate: 0 })} orders={orders} />))
+    const cancel = renderWithAppProvider(shell(light, <CancellationRateCard insight={insight('cancellation_rate', { status: 'available', canceled: 0, total: 6, rate: 0 })} orders={orders} />))
+    const fulfill = renderWithAppProvider(shell(light, <FulfillmentRateCard insight={insight('fulfillment_rate', { status: 'available', fulfilled: 0, total: 6, rate: 0 })} orders={orders} />))
     for (const html of [cancel, fulfill]) {
       expect(html.match(/rate-detail-row/g)).toHaveLength(2)
       expect(html).toContain('rate-detail-label')
@@ -46,14 +56,14 @@ describe('PR #44 professional refinement', () => {
   })
 
   it.each([false, true])('renders Order Health without a circular gauge in %s theme', (light) => {
-    const html = renderToStaticMarkup(shell(light, <OrderHealthInsight totalOrders={6} orders={orders} insight={insight('order_health_score', { status: 'available', score: 80, grade: 'A', tone: 'healthy', fulfilledRate: 0, cancelledRate: 0, paidRate: 100 })} />))
+    const html = renderWithAppProvider(shell(light, <OrderHealthInsight totalOrders={6} orders={orders} insight={insight('order_health_score', { status: 'available', score: 80, grade: 'A', tone: 'healthy', fulfilledRate: 0, cancelledRate: 0, paidRate: 100 })} />))
     for (const contract of ['order-health-score', '80', '/100', 'Excellent', 'order-health-scale-track', 'Poor', 'Fair', 'Good', 'order-health-metrics', 'Avg Order Value', 'Revenue at Risk', 'Repeat Buyers', '6 orders paid, awaiting fulfillment']) expect(html).toContain(contract)
     expect(html).not.toContain('health-gauge')
     expect(html).not.toContain('conic-gradient')
   })
 
   it.each([false, true])('replaces duplicate category bars with real breakdown fields in %s theme', (light) => {
-    const html = renderToStaticMarkup(shell(light, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="Shop" storeId={null} />))
+    const html = renderWithAppProvider(shell(light, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="Shop" storeId={null} />))
     for (const contract of ['Category Breakdown', 'category-breakdown-row', 'snowboard', '1 product', '2 sold', 'accessories', '1 sold', 'View Category Report', 'Explore Products by Category']) expect(html).toContain(contract)
     expect(html).not.toContain('category-compare')
   })

@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { UsageMeterRow, visibleMeters } from './App.js'
 import { HIDDEN_METER_KEYS } from '@profitpilot/types'
@@ -32,13 +33,13 @@ const meter = (overrides: Partial<UsageMeter>): UsageMeter => ({ feature: 'produ
 
 describe('Billing — UsageMeterRow', () => {
   it('renders real product count (16/250) — never 0/250 for a live count', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'products_sync', used: 16, limit: 250 })} plan="trial" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'products_sync', used: 16, limit: 250 })} plan="trial" />)
     expect(html).toContain('16 / 250')
     expect(html).not.toContain('0 / 250')
   })
 
   it('renders unlimited as "used · Unlimited" — never 0/0 or Infinity', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'products_sync', used: 12345, limit: null })} plan="commander" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'products_sync', used: 12345, limit: null })} plan="commander" />)
     expect(html).toContain('12345 · Unlimited')
     expect(html).not.toContain('0 / 0')
     expect(html).not.toContain('Infinity')
@@ -46,7 +47,7 @@ describe('Billing — UsageMeterRow', () => {
   })
 
   it('progress bar width is a valid percentage for limited cap (no NaN/Infinity)', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 9, limit: 10 })} plan="trial" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 9, limit: 10 })} plan="trial" />)
     const widthMatch = html.match(/width:\s*([0-9.]+)%/)
     expect(widthMatch).not.toBeNull()
     const width = Number(widthMatch?.[1])
@@ -58,14 +59,14 @@ describe('Billing — UsageMeterRow', () => {
   })
 
   it('renders the agents meter as a capacity chip (no progress bar)', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'active_agents', used: 3, limit: 3 })} plan="start" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'active_agents', used: 3, limit: 3 })} plan="start" />)
     expect(html).toContain('3 of 3 included')
     expect(html).toContain('Included')
     expect(html).not.toContain('billing-usage-bar')
   })
 
   it('shows the fair-use hint on Commander when a soft cap is exceeded', () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithAppProvider(
       <UsageMeterRow meter={meter({ feature: 'orders_sync_month', used: 150_000, limit: null })} plan="commander" />,
     )
     expect(html).toContain('fair use applies')
@@ -79,7 +80,7 @@ describe('Billing — UsageMeterRow', () => {
   })
 
   it('hides the upgrade link when a meter is within its limit', () => {
-    const html = renderToStaticMarkup(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 1, limit: 300 })} plan="growth" />)
+    const html = renderWithAppProvider(<UsageMeterRow meter={meter({ feature: 'ai_recommendations_month', used: 1, limit: 300 })} plan="growth" />)
     expect(html).not.toContain('Upgrade for higher limits')
   })
 

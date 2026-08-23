@@ -4,13 +4,28 @@ import type { Request } from 'express'
 import { AppError, requestId, storeId, success } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { AiCommandService } from '@profitpilot/ai'
+import { Logger } from '@profitpilot/logger'
 import type { AiCommandPageMetricsProvider } from './ai-command-page-metrics.js'
 
-export type AiCommandRouteDependencies = Readonly<{ service: AiCommandService; pageMetrics?: AiCommandPageMetricsProvider }>
+export const AI_COMMAND_STREAM_UNAVAILABLE = 'AI is temporarily unavailable. Please try again in a moment.'
+
+export type AiCommandRouteDependencies = Readonly<{ service: AiCommandService; pageMetrics?: AiCommandPageMetricsProvider; logger?: Logger }>
+
+export function merchantSafeAiCommandStreamError(error: unknown): Readonly<{ message: string; status: number; code: string }> {
+  if (error instanceof AppError && error.status < 500 && error.expose) {
+    return { message: error.message, status: error.status, code: error.code }
+  }
+  return {
+    message: AI_COMMAND_STREAM_UNAVAILABLE,
+    status: error instanceof AppError ? error.status : 503,
+    code: error instanceof AppError ? error.code : 'AI_UNAVAILABLE',
+  }
+}
 
 export function createAiCommandRouter(dependencies: AiCommandRouteDependencies): Router {
   const router = Router()
   const service = dependencies.service
+  const logger = dependencies.logger ?? new Logger()
 
   router.post('/ai-command/chat', (request, response, next) => {
     void (async () => {
@@ -38,7 +53,12 @@ export function createAiCommandRouter(dependencies: AiCommandRouteDependencies):
           const result = await service.chat({ storeId: tenant, text: body.text, signal: controller.signal, ...(conversationId ? { conversationId } : {}) }, (event, payload) => send(event, payload))
           send('result', result)
         } catch (error: unknown) {
-          if (open && !response.writableEnded) send('error', { message: error instanceof Error ? error.message : 'AI Command failed', status: error instanceof AppError ? error.status : 500, code: error instanceof AppError ? error.code : 'INTERNAL_ERROR' })
+          logger.error('AI Command stream failed', {
+            error: error instanceof Error ? error.message : String(error),
+            code: error instanceof AppError ? error.code : 'INTERNAL_ERROR',
+            status: error instanceof AppError ? error.status : 500,
+          })
+          if (open && !response.writableEnded) send('error', merchantSafeAiCommandStreamError(error))
         } finally {
           if (!response.writableEnded) response.end()
         }

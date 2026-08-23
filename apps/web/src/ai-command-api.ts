@@ -1,7 +1,7 @@
 import { ApiClientError, attachEmbeddedSessionToken, csrfHeaders, failureFromPayload, initializeCsrf, requestJson } from './api.js'
 import type { Fetcher } from './api.js'
 import type { AiCommandConversation, AiCommandPreferences, AiCommandQuickCommand, AiCommandQuickInsights, AiCommandSavedCommand, AiCommandSuggestion, AiCommandUsage, ChatResult } from './ai-command-model.js'
-import { isRecord, parseSseBlocks, parseSseFrame } from './ai-command-model.js'
+import { isRecord, merchantSafeAiCommandError, parseSseBlocks, parseSseFrame } from './ai-command-model.js'
 
 export function fetchAiCommandConversations(storeId: string, fetcher: Fetcher = fetch): Promise<readonly AiCommandConversation[]> {
   return requestJson(`/ai-command/conversations?storeId=${encodeURIComponent(storeId)}`, {}, fetcher)

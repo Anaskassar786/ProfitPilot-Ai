@@ -326,3 +326,15 @@ No P0/P1/P2 deferred, no silent failures left: every caught server error surface
 **18/18 pages tested, 23 bugs fixed, 0 P0–P2 outstanding. The app is functionally healthy for the QA environment (grade A−).**
 
 The remaining deltas are exoticated and documented, not hidden: dead upgrade-CTA CSS (P3), genuine-LLM smoke (needs provider keys), and the real Shopify billing checkout (explicitly out of scope). The Polaris migration's composite-control flattening class of bug is now systematically covered by the `RichButton` escape hatch, with regression tests preventing re-flattening.
+
+---
+
+## ADDENDUM — Post-merge conflict resolution (2026-08-23)
+
+PR #180 conflicted with `main` after PR #181 (`fix(core): AI what-is data routing, Coach/GrowthIQ PDF downloads, automation modal a11y, CI`) merged. All 25 conflicted files were resolved hunk-by-hunk on this branch (`arena/01a02a46-profitpilot-ai`), preserving both change sets:
+
+- **Duplicate fixes, unioned:** both PRs independently added the AI data-lookup intent guard (`packages/ai/src/command.ts`) — merged into one `DATA_LOOKUP_SIGNAL` regex covering the union of both term sets, with both test suites' assertions kept. Same for `icons.tsx` role=img (kept this PR's implementation) and the recommendations group toggle (kept `RichButton` — main's plain `Button` shim drops the `.active` class).
+- **Env-configured gift codes adopted:** rebased my sequencing regression test onto #181's `giftLedger()`/`TEST_GIFT_CODES` fixture style (`PRIMARY-TEST`/`SECONDARY-TEST`), keeping the inactive-primary-shadowing regression case.
+- **Harness unions:** AppProvider/StrictMode nesting canonicalized (StrictMode outermost), `renderWithAppProvider` kept as the single helper name, `setSelect` React-safe select driver adopted, both sides' coverage kept where compatible (custom-select markup/naming/interaction/dark-theme, patternai radiogroup + pressed states, inventory sort flip, exports upgrade-CTA selectors).
+- **Auto-merge artifacts repaired:** duplicate imports (5 files) and duplicate `renderWithAppProvider` declarations (3 files: ai-command-fixes, f8-ui, jarvis-page) removed; `JSDOM` import restored in custom-select.test.ts; cwd-based fs reads for styles.css (import.meta.url is http under vitest/jsdom); sidebar-count assertion updated for the split label/count rule-row markup.
+- **Re-verified after the merge:** `pnpm build` PASS, `pnpm typecheck` PASS, `pnpm test` PASS — **247 files, 3102 passed, 1 skipped, 0 failed** (supersedes the pre-merge 240/3042 numbers above; #181 added 7 suites / 60 tests).

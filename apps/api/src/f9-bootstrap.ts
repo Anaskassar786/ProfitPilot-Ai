@@ -45,8 +45,29 @@ export function cachedAiCompletionHealth(provider: Pick<import('@profitpilot/ai'
     return pending
   }
 }
-function shopifyHealth(env: Readonly<Record<string, string | undefined>>): () => Promise<boolean> {
+/** Admin GraphQL shop probe used by readiness — never REST `/shop.json`. */
+export const SHOP_PROBE_QUERY = `query ShopProbe {
+  shop {
+    name
+    myshopifyDomain
+    plan {
+      displayName
+    }
+  }
+}`
+
+export function shopifyHealth(env: Readonly<Record<string, string | undefined>>, transport: typeof fetch = fetch): () => Promise<boolean> {
   const shop = env.SHOPIFY_HEALTH_SHOP?.trim(); const token = env.SHOPIFY_HEALTH_ACCESS_TOKEN?.trim()
   if (!shop || !token) return async () => false
-  return async () => { const response = await fetch(`https://${shop}/admin/api/${env.SHOPIFY_API_VERSION?.trim() || '2026-07'}/shop.json`, { headers: { 'X-Shopify-Access-Token': token, accept: 'application/json' } }); return response.ok }
+  const version = env.SHOPIFY_API_VERSION?.trim() || '2026-07'
+  return async () => {
+    const response = await transport(`https://${shop}/admin/api/${version}/graphql.json`, {
+      method: 'POST',
+      headers: { 'X-Shopify-Access-Token': token, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ query: SHOP_PROBE_QUERY }),
+    })
+    if (!response.ok) return false
+    const payload = await response.json().catch(() => null) as { data?: { shop?: unknown } } | null
+    return Boolean(payload?.data?.shop)
+  }
 }

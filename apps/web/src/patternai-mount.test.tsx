@@ -127,7 +127,9 @@ describe('PatternAI page mount', () => {
 
   it('renders the grouped section navigation', async () => {
     await mountApp()
-    const labels = [...document.querySelectorAll('.pa-nav-item')].map((item) => item.textContent ?? '')
+    // The Button shim consumes the `.pa-nav-item` className — nav entries
+    // are the buttons inside each (plain-div) nav group.
+    const labels = [...document.querySelectorAll('.pa-nav-group button')].map((item) => item.textContent ?? '')
     for (const label of ['Discovery feed', 'Learning library', 'Pattern lab', 'Customer personas', 'Why? explorer', 'Trend watcher', 'Knowledge base', 'Predictions', 'API access']) {
       expect(labels.some((text) => text.includes(label))).toBe(true)
     }
@@ -138,7 +140,7 @@ describe('PatternAI page mount', () => {
     await mountApp()
     const text = document.body.textContent ?? ''
     expect(document.querySelector('.pa-root')).not.toBeNull()
-    expect(document.querySelectorAll('.pa-nav-item').length).toBeGreaterThan(6)
+    expect(document.querySelectorAll('.pa-nav-group button').length).toBeGreaterThan(6)
     expect(text).toContain('This section could not load')
     expect(text).toContain('Try again')
     expect(text.toLowerCase()).not.toContain('laboratory')

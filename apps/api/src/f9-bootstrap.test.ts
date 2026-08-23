@@ -10,6 +10,8 @@ describe('F9 bootstrap boundary', () => {
       const url = String(input)
       if (url.includes('/chat/completions')) return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }], usage: {} }), { status: 200 })
       if (url.includes('/models/')) return new Response(JSON.stringify({ data: { endpoints: [{ status: 0 }] } }), { status: 200 })
+      // Readiness probes the Admin GraphQL shop object (never REST /shop.json).
+      if (url.includes('graphql.json')) return new Response(JSON.stringify({ data: { shop: { name: 'Store', myshopifyDomain: 'store.myshopify.com' } } }), { status: 200 })
       return new Response('', { status: 200 })
     })
     const bootstrap = createF9Bootstrap({ NODE_ENV: 'development', DATABASE_URL: 'postgres://db', REDIS_URL: 'redis://cache', UPSTASH_REDIS_REST_URL: 'https://redis', UPSTASH_REDIS_REST_TOKEN: 'token', OPENROUTER_API_KEY_1: 'key', SHOPIFY_API_KEY: 'shopify', SHOPIFY_API_SECRET: 'secret', SHOPIFY_REDIRECT_URI: 'https://app/callback', SHOPIFY_HEALTH_SHOP: 'store.myshopify.com', SHOPIFY_HEALTH_ACCESS_TOKEN: 'token', ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', ADMIN_KEY: 'admin', JWT_SECRET: 'jwt-secret-that-is-at-least-32-characters', LEGAL_ENTITY_NAME: 'Entity', LEGAL_ENTITY_ADDRESS: 'Address', LEGAL_JURISDICTION: 'India', SUPPORT_EMAIL: 'support@example.com' })

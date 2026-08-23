@@ -1,4 +1,4 @@
-import { Button, RichButton } from './polaris-ui.js'
+import { Button, PolarisEmpty, RichButton } from './polaris-ui.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -18,7 +18,6 @@ import {
   Crosshair,
   Database,
   Eye,
-  FlaskConical,
   Gauge,
   Heart,
   History,
@@ -65,6 +64,7 @@ import {
   undoRecommendationDecision,
   verifyRecommendationEvidence,
 } from './api.js'
+import { useModalDialog } from './modal-a11y.js'
 import type { SectionId, WorkspaceContext } from './model.js'
 import {
   ACTION_TYPE_PREVIEWS,
@@ -191,9 +191,6 @@ export const ANALYSIS_STEPS: readonly Readonly<{ label: string; detail: string }
 
 /** Day-of-week letters for the mini weekly bars (0=Sunday). */
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const
-
-/** Sample activity heights (clearly labeled) for the empty 30-day chart preview. */
-const SAMPLE_ACTIVITY_HEIGHTS: readonly number[] = [8, 22, 14, 34, 12, 26, 44, 18, 30, 24, 10, 38, 20, 28, 16, 42, 24, 12, 34, 26, 18, 46, 22, 14, 30, 20, 36, 16, 28, 40]
 
 type PendingConfirm = Readonly<{ kind: 'approve'; recommendation: RecommendationView }> | Readonly<{ kind: 'reject'; recommendation: RecommendationView }>
 type UndoState = Readonly<{ recommendation: RecommendationView; decision: 'approved' | 'rejected'; expiresAt: number }>
@@ -1132,9 +1129,11 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
 // ---------------------------------------------------------------------------
 
 function ApproveConfirmSheet({ recommendation, onCancel, onConfirm }: { recommendation: RecommendationView; onCancel: () => void; onConfirm: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onCancel)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card" role="dialog" aria-label="Confirm approval">
+      <div ref={dialogRef} className="modal-card recs-confirm-card" role="dialog" aria-modal="true" aria-label="Confirm approval">
         <div className="section-kicker"><ShieldCheck size={13} /> CONFIRM & APPROVE</div>
         <h2>{recommendation.title}</h2>
         <p className="recs-confirm-what"><strong>What happens next:</strong> {ACTION_TYPE_PREVIEWS[recommendation.actionType]}</p>
@@ -1154,9 +1153,11 @@ function ApproveConfirmSheet({ recommendation, onCancel, onConfirm }: { recommen
 
 function RejectReasonSheet({ recommendation, onCancel, onReject }: { recommendation: RecommendationView; onCancel: () => void; onReject: (reason: RejectReason | null) => void }) {
   const [reason, setReason] = useState<RejectReason | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onCancel)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card" role="dialog" aria-label="Reject recommendation">
+      <div ref={dialogRef} className="modal-card recs-confirm-card" role="dialog" aria-modal="true" aria-label="Reject recommendation">
         <div className="section-kicker"><XCircle size={13} /> SKIP THIS ONE</div>
         <h2>{recommendation.title}</h2>
         <p className="recs-confirm-what">Telling your AI team <em>why</em> makes future recommendations better — skipping lowers a teammate's confidence until it earns your trust back.</p>
@@ -1258,7 +1259,7 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
             </div>
           </>
         ) : (
-          <SampleActivityChart />
+          <p className="recs-side-empty">Your timeline fills in as your AI team works — generated vs approved, day by day.</p>
         )}
         {trend.length > 0 && <div className="recs-trend-legend"><span><i className="generated" /> Found</span><span><i className="approved" /> Approved</span></div>}
       </div>
@@ -1312,16 +1313,7 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
             </div>
           </>
         ) : (
-          <>
-            <p className="recs-side-empty">Approve or skip recommendations to build history — every decision teaches your AI team.</p>
-            <div className="recs-decision-row sample">
-              <i className="dot green" />
-              <div>
-                <strong>Restock the Everyday Hoodie before stockout <span className="recs-sample-chip">Sample</span></strong>
-                <small>Approved · example of what lands here</small>
-              </div>
-            </div>
-          </>
+          <p className="recs-side-empty">Approve or skip recommendations to build history — every decision teaches your AI team.</p>
         )}
       </div>
     </>
@@ -1386,25 +1378,6 @@ function formatRateDelta(delta: number): string {
   return Number.isInteger(delta) ? String(delta) : delta.toFixed(1)
 }
 
-/** Empty 30-day chart with labeled axes plus an opt-in, clearly-labeled sample overlay. */
-function SampleActivityChart() {
-  const [showSample, setShowSample] = useState(false)
-  return (
-    <div className="recs-trend-empty">
-      <div className="recs-trend-plot" aria-hidden={showSample ? undefined : true} aria-label={showSample ? 'Sample activity preview — not your real data' : undefined}>
-        <span className="recs-trend-axis"><i /><i /><i /></span>
-        {showSample
-          ? <div className="recs-trend sample">{SAMPLE_ACTIVITY_HEIGHTS.map((height, index) => <span key={index} className="recs-trend-bar"><i className="generated" style={{ height: `${height}%` }} /></span>)}</div>
-          : <div className="recs-trend placeholder">{SAMPLE_ACTIVITY_HEIGHTS.map((_, index) => <span key={index} className="recs-trend-bar" />)}</div>}
-        {showSample && <span className="recs-sample-chip floating"><FlaskConical size={9} /> Sample preview</span>}
-      </div>
-      <div className="recs-trend-axis-labels"><span>30 days ago</span><span>today</span></div>
-      <p className="recs-side-empty">Your timeline fills in as your AI team works — generated vs approved, day by day.</p>
-      <Button className="text-button" onClick={() => setShowSample((value) => !value)}>{showSample ? 'Hide sample' : 'See sample activity'}</Button>
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Empty / loading / educational states
 // ---------------------------------------------------------------------------
@@ -1412,15 +1385,18 @@ function SampleActivityChart() {
 function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: { onAnalyze: () => void; analyzing: boolean; onHow: () => void; onInspectRule: (rule: RuleId) => void; hasRun: boolean }) {
   return (
     <div className="recs-first-run">
-      <div className="recs-first-hero">
-        <span className="recs-first-orb" aria-hidden><Sparkles size={28} /></span>
-        <h2>{hasRun ? 'Time to see what your AI team found for you' : "Let's find your growth opportunities! 🚀"}</h2>
-        <p>Your smart AI assistants are ready to explore your store and find real opportunities to boost your revenue, retain customers, and grow your business. Just click below to get started!</p>
+      <PolarisEmpty
+        heading="No recommendations yet"
+        description="ProfitPilot analyzes your synced store data and will surface recommendations when actionable signals appear."
+        {...(analyzing ? {} : { action: 'Discover Opportunities', onAction: onAnalyze })}
+        secondaryAction={{ content: 'How it works', onAction: onHow }}
+      />
+      {hasRun && <p className="recs-sample-note"><ShieldCheck size={14} /> We already looked once — run Discover Opportunities again after fresh data syncs.</p>}
+      {analyzing && (
         <div className="recs-first-actions">
-          <Button className="button primary recs-cta-primary recs-discover" onClick={onAnalyze} disabled={analyzing}>{analyzing ? <RefreshCw size={16} className="spin" /> : <Sparkles size={16} />} {analyzing ? 'Discovering opportunities…' : 'Discover Opportunities'}</Button>
-          <Button className="button secondary" onClick={onHow}><Info size={14} /> How it works</Button>
+          <Button className="button primary recs-cta-primary recs-discover" disabled><RefreshCw size={16} className="spin" /> Discovering opportunities…</Button>
         </div>
-      </div>
+      )}
 
       <div className="recs-finds">
         <div className="recs-finds-title"><Lightbulb size={15} /> What your AI team can find</div>
@@ -1453,7 +1429,6 @@ function FirstRunState({ onAnalyze, analyzing, onHow, onInspectRule, hasRun }: {
       </div>
 
       <HowRulesWork />
-      <SampleRecommendationPreview />
       <p className="recs-sample-note"><ShieldCheck size={14} /> We never invent a recommendation. If your store looks healthy, you will see an honest all-clear — not filler.</p>
     </div>
   )
@@ -1485,62 +1460,6 @@ function HowRulesWork() {
   )
 }
 
-function SampleRecommendationPreview() {
-  return (
-    <div className="recs-sample-wrap">
-      <div className="recs-sample-banner">
-        <span className="recs-sample-badge-wrap"><span className="recs-sample-badge"><FlaskConical size={13} /> Sample Preview</span></span>
-        <p className="recs-sample-explanation">This is a preview of what a real recommendation looks like once your AI team discovers opportunities in your store — <em>not your data</em>. Click <strong>Discover Opportunities</strong> above to generate real recommendations.</p>
-      </div>
-      <article className="recs-card recs-sample-card" aria-label="Sample recommendation preview. Not generated from your store.">
-        <div className="recs-card-main">
-          <div className="recs-card-top">
-            <span className="recs-urgent-pill"><AlertTriangle size={12} /> Urgent</span>
-            <span className="recs-agent-pill" style={{ ['--chip-color' as never]: AGENT_COLORS.INVENTORY_AGENT }}><Box size={12} /> Inventory Agent</span>
-            <span className="recs-rule-name">🚨 Stockout Alerts</span>
-            <span className="recs-confidence medium"><span className="recs-confidence-bar" aria-hidden><i style={{ width: '62%' }} /></span> 62% · Medium</span>
-            <span className="recs-sample-chip"><FlaskConical size={10} /> Sample</span>
-          </div>
-          <h3 className="recs-card-title">Restock "Everyday Hoodie — Black / M" before it sells out</h3>
-          <div className="recs-card-story">
-            <div className="recs-story-block what">
-              <strong><Lightbulb size={13} /> What to do</strong>
-              <p>Restock this product — it will sell out in 5 days</p>
-            </div>
-            <div className="recs-story-block impact">
-              <strong><TrendingUp size={13} /> Impact if you act</strong>
-              <p><em>$1,240</em> potential revenue</p>
-            </div>
-            <div className="recs-story-block why">
-              <strong><Search size={13} /> Why we are telling you</strong>
-              <p>Based on the last 7 days of sales, you will run out before your usual reorder window.</p>
-            </div>
-          </div>
-          <div className="recs-card-meta">
-            <span className="recs-rule-chip">Stockout Alerts</span>
-            <span className="recs-action-chip safe"><ShieldCheck size={12} /> Safe to execute (Low risk)</span>
-          </div>
-        </div>
-        <div className="recs-card-side">
-          <span className="recs-impact-label">Revenue at risk</span>
-          <strong className="recs-impact-value">$1,240</strong>
-          <span className="recs-impact-bar" aria-hidden><i style={{ width: '62%' }} /></span>
-          <span className="recs-sample-actions">
-            <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <Button className="button reject compact" disabled tabIndex={-1} aria-label="Skip This — preview only, action unavailable">Skip This</Button>
-            </span>
-            <span className="recs-tip-anchor" data-tip="This is a preview — discover opportunities to get real recommendations">
-              <Button className="button approve compact" disabled tabIndex={-1} aria-label="Approve — preview only, action unavailable"><Check size={13} /> Approve & Take Action</Button>
-            </span>
-          </span>
-        </div>
-      </article>
-      <p className="recs-sample-helper">This is a preview of what real recommendations look like. Click <strong>Discover Opportunities</strong> to generate real ones for your store.</p>
-      <p className="recs-sample-note"><Lightbulb size={13} /> When you have real recommendations, these buttons will be active.</p>
-    </div>
-  )
-}
-
 function AllClearState({ summary, onAnalyze, analyzing }: { summary: RecommendationSummary; onAnalyze: () => void; analyzing: boolean }) {
   return (
     <div className="recs-all-clear">
@@ -1566,9 +1485,11 @@ function RuleDetailModal({ ruleId, plan, onClose, onUpgrade }: { ruleId: RuleId;
   const locked = agentLockedForPlan(agent, plan)
   const Icon = RULE_ICONS[ruleId]
   const AgentIcon = AGENT_ICONS[agent]
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
+      <div ref={dialogRef} className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-modal="true" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
         <div className="modal-card-top">
           <span className="recs-rule-modal-icon"><Icon size={17} /></span>
           <Button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></Button>
@@ -1603,9 +1524,11 @@ function AnalysisProgressModal({ step, elapsedMs, onHide }: { step: number; elap
   const total = ANALYSIS_STEPS.length
   const bounded = Math.min(step, total - 1)
   const progress = ((bounded + 1) / (total + 1)) * 100
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onHide)
   return (
     <div className="modal-overlay recs-analysis-overlay">
-      <div className="modal-card recs-analysis-modal" role="dialog" aria-label="Analysis in progress" aria-live="polite">
+      <div ref={dialogRef} className="modal-card recs-analysis-modal" role="dialog" aria-modal="true" aria-label="Analysis in progress" aria-live="polite">
         <div className="modal-card-top">
           <div className="section-kicker"><Sparkles size={13} /> YOUR AI TEAM IS ON IT</div>
           <span className="recs-analysis-elapsed" title="Elapsed time"><Clock3 size={12} /> {(elapsedMs / 1000).toFixed(0)}s</span>
@@ -1745,9 +1668,11 @@ function SidebarSkeleton() {
 // ---------------------------------------------------------------------------
 
 function HowItWorksModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-how-modal" role="dialog" aria-label="How recommendations work">
+      <div ref={dialogRef} className="modal-card recs-how-modal" role="dialog" aria-modal="true" aria-label="How recommendations work">
         <div className="modal-card-top">
           <div>
             <div className="section-kicker"><ShieldCheck size={13} /> HOW RECOMMENDATIONS WORK</div>
@@ -1806,4 +1731,4 @@ function errorText(error: unknown): string {
   return 'The API could not be reached.'
 }
 
-export { RecommendationCard, EvidenceDrawer, FirstRunState, AllClearState, HowItWorksModal, KpiHero, InsightsSidebar, ApproveConfirmSheet, RejectReasonSheet, UndoSnackbar, Tip, RuleDetailModal, AnalysisProgressModal, AnalysisReportPanel, SampleRecommendationPreview }
+export { RecommendationCard, EvidenceDrawer, FirstRunState, AllClearState, HowItWorksModal, KpiHero, InsightsSidebar, ApproveConfirmSheet, RejectReasonSheet, UndoSnackbar, Tip, RuleDetailModal, AnalysisProgressModal, AnalysisReportPanel }

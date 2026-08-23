@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ShopifyBulkClient, ShopifyClient } from './index.js'
+// ShopifyBulkClient is intentionally not exported from the package index
+// (no production callers yet) — import the implementation directly.
+import { ShopifyBulkClient } from './bulk.js'
+import { ShopifyClient } from './index.js'
 
 describe('Shopify GraphQL bulk operations', () => {
   it('starts, polls, and downloads a completed JSONL operation', async () => {

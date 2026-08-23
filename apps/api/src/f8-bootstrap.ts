@@ -3,6 +3,10 @@ import { createBrevoMailer, installTemplate, templateFor, validateWorkflow } fro
 import { sha256Hex } from '@profitpilot/crypto'
 import { Logger } from '@profitpilot/logger'
 import type { Logger as LoggerType } from '@profitpilot/logger'
+
+// Structured fallback used when no logger is injected: keeps all output on
+// the project logger (never raw console) and logs codes/ids only, no bodies.
+const fallbackBootLogger = new Logger()
 import type { QueryResultRow } from '@profitpilot/db'
 import { withTenantContext } from '@profitpilot/db'
 import { AiCommandService, OpenRouterClient, CopilotService, JarvisService, createJarvisTtsProvider } from '@profitpilot/ai'
@@ -48,7 +52,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     onFailure: (failure: import('@profitpilot/ai').ProviderFailureTelemetry) => {
       const context = { model: failure.model, status_code: failure.statusCode, failure_kind: failure.failureKind, attempt_number: failure.attemptNumber, duration_ms: failure.durationMs, request_id: failure.requestId }
       if (logger) logger.warn('OpenRouter provider failure', context)
-      else if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level: 'warn', message: 'OpenRouter provider failure', context }))
+      else if (process.env.NODE_ENV !== 'test') fallbackBootLogger.warn('OpenRouter provider failure', context)
     },
   })
   // Startup validation is enforced for EVERY boot (not only when a logger is
@@ -58,7 +62,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   const insightDiagnostics = (event: string, context: Readonly<Record<string, unknown>>): void => {
     const payload = context as import('@profitpilot/logger').JsonObject
     if (logger) logger.warn(`AI insight diagnostic: ${event}`, payload)
-    else if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level: 'warn', message: `AI insight diagnostic: ${event}`, context }))
+    else if (process.env.NODE_ENV !== 'test') fallbackBootLogger.warn(`AI insight diagnostic: ${event}`, payload)
   }
   const jarvis = new JarvisService(provider, context, new PostgresJarvisRepository(f7.database), null, () => Date.now(), (storeId, generation) => { void Promise.resolve(f7.ai.costs.record({ storeId, model: generation.model, promptTokens: generation.usage.promptTokens, completionTokens: generation.usage.completionTokens, inputRateMicroDollars: numberEnv(env.AI_INPUT_MICRO_DOLLARS, 0), outputRateMicroDollars: numberEnv(env.AI_OUTPUT_MICRO_DOLLARS, 0), at: Date.now() })).catch(() => undefined) }, jarvisActionTools(f7), jarvisActionAudit(f7, logger ?? new Logger()))
   const jarvisTts = createJarvisTtsProvider(env)
@@ -110,7 +114,12 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
       insightDiagnostics,
     ),
   }
-  const analyticsInsights: AnalyticsRouteDependencies = { insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider) }
+  const analyticsInsights: AnalyticsRouteDependencies = {
+    insights: new AnalyticsInsightsService(f7.dataPlane.analytics, f7.billing.repository, orderRepository, new PostgresAnalyticsQueryUsage(f7.database), provider),
+    // Server-side plan gate for the analytics routes (P1): the billing
+    // repository is the source of truth, never the client-side hasPlan().
+    plan: async (tenant) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial',
+  }
   const planFor = async (tenant: import('@profitpilot/types').StoreId) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial'
   const pageMetrics = new AiCommandPageMetricsService({
     customers: customerRepository,
@@ -232,7 +241,10 @@ async function validateOpenRouterModels(provider: OpenRouterClient, logger: Logg
       else logger.error(message, context as import('@profitpilot/logger').JsonObject)
       return
     }
-    if (process.env.NODE_ENV !== 'test') console.warn(JSON.stringify({ level, message, context }))
+    if (process.env.NODE_ENV === 'test') return
+    const payload = context as import('@profitpilot/logger').JsonObject
+    if (level === 'error') fallbackBootLogger.error(message, payload)
+    else fallbackBootLogger.warn(message, payload)
   }
   let validations: readonly import('@profitpilot/ai').ModelValidation[]
   try {

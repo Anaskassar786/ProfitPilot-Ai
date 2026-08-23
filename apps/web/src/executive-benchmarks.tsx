@@ -93,7 +93,7 @@ export function ExecutiveBenchmarksPage({ context, plan, gates, onToast, onUpgra
           </ExecutiveSection>
           <ExecutiveSection kicker="Methodology" title="Where the benchmarks come from" className="span-12">
             <p className="exec-muted-note" style={{ margin: 0 }}>
-              Phase 1 uses publicly available e-commerce benchmark literature (Littledata Shopify benchmarks, Shopify/Statista published commerce figures, industry return-rate studies) curated per category — {position.positions[0]?.sourceLabel ?? 'public sources'}. Phase 2 will layer in anonymized, GDPR-compliant aggregates once the ProfitPilot merchant base exceeds 100 with opt-in consent.
+              Benchmarks are curated from public e-commerce literature (Littledata Shopify figures, published Shopify/Statista commerce data, and industry return-rate studies) for {position.category} — {position.positions[0]?.sourceLabel ?? 'public sources'}. Your store values are measured from synced data only; missing metrics stay blank instead of being estimated.
             </p>
           </ExecutiveSection>
         </>

@@ -56,7 +56,7 @@ describe('QA Chart Board', () => {
     root = createRoot(host)
     await act(async () => {
       // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
-      root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: null, shop: null } }))))
+      root?.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(QaChartBoard, { context: { storeId: null, shop: null } }))))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
 
@@ -83,7 +83,7 @@ describe('QA Chart Board', () => {
     document.body.appendChild(host)
     root = createRoot(host)
     await act(async () => {
-      root?.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(StrictMode, null, createElement(QaChartBoard, { context: { storeId: 'store-1', shop: 'qa-store.myshopify.com' } }))))
+      root?.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(QaChartBoard, { context: { storeId: 'store-1', shop: 'qa-store.myshopify.com' } }))))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
 

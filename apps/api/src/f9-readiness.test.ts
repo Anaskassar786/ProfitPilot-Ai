@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateReadiness, httpHealthCheck, readinessChecksFromAdapters } from './readiness.js'
-import { cachedAiCompletionHealth } from './f9-bootstrap.js'
+import { cachedAiCompletionHealth, shopifyHealth, SHOP_PROBE_QUERY } from './f9-bootstrap.js'
 
 describe('F9 four-check readiness', () => {
   it('exposes honest database/redis/AI/Shopify adapter statuses', async () => {
@@ -24,5 +24,22 @@ describe('F9 four-check readiness', () => {
     now += 300_001
     await expect(check()).resolves.toBe(true)
     expect(calls).toBe(2)
+  })
+  it('probes Shopify readiness via Admin GraphQL ShopProbe, never REST /shop.json', async () => {
+    const urls: string[] = []
+    const check = shopifyHealth(
+      { SHOPIFY_HEALTH_SHOP: 'demo.myshopify.com', SHOPIFY_HEALTH_ACCESS_TOKEN: 'token', SHOPIFY_API_VERSION: '2026-07' },
+      async (input, init) => {
+        urls.push(String(input))
+        expect(init?.method).toBe('POST')
+        expect(String(init?.body)).toContain('ShopProbe')
+        expect(String(init?.body)).not.toContain('shop.json')
+        return new Response(JSON.stringify({ data: { shop: { name: 'Demo', myshopifyDomain: 'demo.myshopify.com', plan: { displayName: 'Shopify Plus' } } } }), { status: 200 })
+      },
+    )
+    await expect(check()).resolves.toBe(true)
+    expect(urls).toEqual(['https://demo.myshopify.com/admin/api/2026-07/graphql.json'])
+    expect(SHOP_PROBE_QUERY).toContain('myshopifyDomain')
+    expect(SHOP_PROBE_QUERY).not.toContain('shop.json')
   })
 })

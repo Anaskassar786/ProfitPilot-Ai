@@ -339,9 +339,9 @@ describe('value panels', () => {
   it('reports no money in play when the engine attached no impact', () => {
     const summary = discoveryImpactSummary([discovery({ impactEstimate: null })])
     expect(summary.moneyInPlay).toBeNull()
-    // AppProvider always emits its portals container; the contract is that a
-    // null amount renders no money-in-play markup of its own.
-    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).not.toContain('pa-money-inplay')
+    // The AppProvider always SSRs its portals container — a null amount
+    // renders no money-in-play markup of its own, nothing beyond it.
+    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('<div id="PolarisPortalsContainer"></div>')
   })
   it('builds the strength ladder from readiness have/need pairs only', () => {
     const rows = patternStrengthRows(readiness)

@@ -10,10 +10,12 @@ import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json
 import { AiCommandPage } from './ai-command-page.js'
 import { AiCommandWorkspace, PostChatActivity } from './ai-command.js'
 import type { AiCommandUsage } from './ai-command-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 /** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
- * Polaris-powered components render the same way under test. */
-function renderWithAppProvider(element: ReactElement) {
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
 

@@ -45,6 +45,11 @@ export class PostgresStoreDirectory implements StoreDirectory {
    * ON CONFLICT ... DO UPDATE clause makes concurrent installs race-safe. The
    * signed shop context is transaction-local so this also works when the app's
    * database role is subject to stores row-level security.
+   *
+   * Reinstall recovery: a returning merchant gets their old row back, so the
+   * conflict branch must also reset `status` to ACTIVE and clear
+   * `uninstalled_at` — otherwise a reinstalled store stays UNINSTALLED forever
+   * and every status='ACTIVE' query (indexes from migration 0029) skips it.
    */
   public async upsertByShopDomain(shopDomain: string): Promise<StoreConnection> {
     const normalized = normalizeShopDomain(shopDomain)
@@ -52,7 +57,10 @@ export class PostgresStoreDirectory implements StoreDirectory {
     return this.withRlsContext('app.shop_domain', normalized, async (executor) => {
       const result = await executor.query<StoreRow>(
         `INSERT INTO stores (shop_domain) VALUES ($1)
-         ON CONFLICT (shop_domain) DO UPDATE SET updated_at = now()
+         ON CONFLICT (shop_domain) DO UPDATE SET
+           updated_at = now(),
+           status = 'ACTIVE',
+           uninstalled_at = NULL
          RETURNING id, shop_domain`,
         [normalized],
       )

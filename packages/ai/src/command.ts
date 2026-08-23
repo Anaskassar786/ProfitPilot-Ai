@@ -390,18 +390,21 @@ const INSTRUCTIONAL_TOPICS: readonly Readonly<{ topic: string; pattern: RegExp }
   { topic: 'recommendations', pattern: /\b(?:recommend(?:ation|ations|s)?|what should i do|next steps?|prioriti)/i },
 ]
 
-/**
- * Store-data terms that turn a "what is / how much" question into a live data
- * lookup rather than app-usage guidance. "What is my revenue this month?" must
- * be answered from real analytics (INTENT B), never with the generic
- * instructional help card.
- */
-const DATA_LOOKUP_SIGNALS = /\b(?:revenue|sales?|orders?|aov|average order value|customers?|products?|inventory|stock|analytics|metrics?|profit(?:s|ability)?|margin|refunds?|earnings|income|payouts?|best[ -]?sellers?|conversion|purchases?|spend|sold)\b/i
+// Store metrics and entities a merchant can look up. A "what is/what are"
+// question that mentions one of these ("What is my revenue this month?") is a
+// data lookup that parseInfoTools can answer from live data — mirroring its
+// patterns — not a generic "what can this app do" guide. It must be answered
+// from real analytics (INTENT B), never with the generic instructional help
+// card.
+const DATA_LOOKUP_SIGNAL = /\b(?:revenue|sales?|aov|average order value|analytics|metrics?|profit(?:s|ability)?|margins?|earnings?|income|orders?|customers?|products?|catalog|skus?|inventory|stock(?:out)?|conversion|traffic|refunds?|performance|trends?|recap|summar(?:y|ies)|overview|this month|today|payouts?|best[ -]?sellers?|purchases?|spend|sold)\b/i
 
 /**
  * Detects instructional / how-to questions (INTENT C). Returns a topic key or
  * null. Requires an explicit "how/what/explain/set up" phrasing so plain
- * lookups such as "Show automation status" still route to live data.
+ * lookups such as "Show automation status" still route to live data. The
+ * generic "what can you do" guide is reserved for true capability questions:
+ * when parseInfoTools data signals (revenue, orders, products, customers,
+ * AOV…) are present, the analytics/info-tool path answers instead.
  */
 export function detectInstructionalIntent(query: string): string | null {
   const text = query.trim()
@@ -413,7 +416,7 @@ export function detectInstructionalIntent(query: string): string | null {
   // A "what is / how much / how many" question about measurable store data is
   // a lookup, not guidance — fall through so the tools path answers it with
   // real numbers (e.g. "What is my revenue this month?" → get_analytics).
-  if (DATA_LOOKUP_SIGNALS.test(text)) return null
+  if (DATA_LOOKUP_SIGNAL.test(text)) return null
   return 'generic'
 }
 

@@ -247,7 +247,7 @@ export const QA_AREAS: readonly QaArea[] = [
     outcome: 'FIXED',
     checks: [
       { name: 'Placeholder is generic', status: 'PASS', note: 'Input placeholder is "e.g. VIP2026" — no real code exposed.' },
-      { name: 'Valid code → Commander for 3 days', status: 'PASS', note: 'Redeemed KASSAR786 → 201, billing state GIFT_ACCESS_UNLIMITED plan commander, expiresAt = now + 3 days.' },
+      { name: 'Valid code → Commander for 3 days', status: 'PASS', note: 'Redeemed the primary promo code → 201, billing state GIFT_ACCESS_UNLIMITED plan commander, expiresAt = now + 3 days.' },
       { name: 'Invalid code → friendly error', status: 'PASS', note: '"Gift code is invalid or exhausted" (400) — the UI maps it to a friendly toast, no 500.' },
       { name: 'Already redeemed → "Already redeemed"', status: 'PASS', note: 'Second redeem → 409 CONFLICT "This store has already redeemed a gift code".' },
       { name: 'Expired code → distinct message', status: 'FIXED', note: 'BEFORE: expired and unknown codes shared one message. FIXED: gift_codes.expires_at (migration 0027) + "This gift code has expired" (GIFT_EXPIRED).' },

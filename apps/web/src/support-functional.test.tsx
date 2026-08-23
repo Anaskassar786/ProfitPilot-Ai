@@ -217,6 +217,8 @@ describe('ticket creation (FIX 5)', () => {
     expect(document.querySelector('.support-form-card')?.textContent).toContain('CREATE SUPPORT TICKET')
 
     // Category picker is now a native Polaris <select> — drive a change event.
+    // Locate the select by its options (robust to additional selects on the
+    // page) and take the value from the option itself rather than hardcoding.
     const categorySelect = [...document.querySelectorAll('select')].find((select) =>
       [...select.options].some((option) => option.textContent?.includes('Billing & Plans')))
     expect(categorySelect).toBeTruthy()

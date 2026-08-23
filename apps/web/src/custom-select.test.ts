@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
+import { JSDOM } from 'jsdom'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -53,9 +54,12 @@ function render(props: Partial<Parameters<typeof CustomSelect<SortValue>>[0]> = 
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CustomSelect<SortValue>, { ...base, ...props })))
 }
 
-describe('Polaris select markup', () => {
-  it('renders a real native select with every option', () => {
+describe('Polaris select markup contract', () => {
+  // The shared control is a thin wrapper over Polaris Select — the native
+  // popup matches the embedded admin chrome instead of a custom listbox.
+  it('renders a real native select carrying the current value and every option', () => {
     const html = render()
+    expect(html).toContain('Polaris-Select')
     expect(html).toContain('<select')
     for (const label of ['Sort: Name', 'Sort: Stock', 'Sort: Value']) expect(html).toContain(label)
     expect(html).toContain('value="name"')
@@ -64,11 +68,13 @@ describe('Polaris select markup', () => {
   })
 
   it('always has an accessible name — visible label or visually hidden labelled-by', () => {
-    // With an explicit label: visible <label> programmatically tied (for/id).
+    // With an explicit label: a visible <label> programmatically tied (for/id)
+    // replaces the ariaLabel as the accessible name.
     const withLabel = render({ label: 'Sort by' })
     expect(withLabel).toContain('Sort by')
     expect(withLabel).toContain('<label')
     expect(withLabel).toContain(' for="')
+    expect(withLabel).not.toContain('Sort inventory')
     // Without a label the ariaLabel still names the control (visually hidden).
     const hidden = render()
     expect(hidden).toContain('Polaris-Labelled--hidden')
@@ -78,6 +84,12 @@ describe('Polaris select markup', () => {
   it('renders the placeholder as the leading option when provided', () => {
     const html = render({ value: '' as SortValue, placeholder: 'All categories' })
     expect(html).toContain('All categories')
+  })
+
+  it('forwards className and icon to a wrapper so page layout css keeps applying', () => {
+    const html = render({ className: 'category-dropdown', icon: createElement('span', { className: 'my-filter-icon' }) })
+    expect(html).toContain('category-dropdown')
+    expect(html).toContain('my-filter-icon')
   })
 })
 
@@ -141,6 +153,30 @@ describe('legacy keyboard-mapper contract (kept for API stability)', () => {
   })
 })
 
+describe('dark theme styling contract', () => {
+  // In the jsdom environment import.meta.url is an http URL, so resolve
+  // sources from the repository working directory instead.
+  const readSource = (name: string) => import('node:fs/promises').then((fs) => fs.readFile(`apps/web/src/${name}`, 'utf8'))
+
+  it('paints the popup from the card variable instead of the OS palette', async () => {
+    const source = await readSource('styles.css')
+    expect(source).toContain('.custom-select-menu { position: absolute;')
+    expect(source).toContain('background: var(--card)')
+    expect(source).toContain('.custom-select-menu li:hover, .custom-select-menu li.highlighted { color: var(--text); background: rgba(59,130,246,.12); }')
+    expect(source).toContain('.custom-select-menu li[aria-selected="true"] { color: var(--blue-bright); }')
+  })
+
+  it('keeps the control fully named for assistive tech', () => {
+    const dom = new JSDOM(`<!doctype html><html lang="en"><body>${render()}</body></html>`)
+    const select = dom.window.document.querySelector('select')
+    expect(select).not.toBeNull()
+    // Polaris labels the select via a real <label> association.
+    const label = dom.window.document.querySelector(`label[for="${select?.id ?? ''}"]`)
+    expect(label?.textContent).toContain('Sort inventory')
+    dom.window.close()
+  })
+})
+
 describe('page wiring', () => {
   // In the jsdom environment import.meta.url is an http URL, so resolve
   // sources from the repository working directory instead.
@@ -171,5 +207,62 @@ describe('page wiring', () => {
     const source = await readSource('styles.css')
     expect(source).toContain('color-scheme: dark')
     expect(source).toContain('color-scheme: light')
+  })
+})
+
+describe('native select interaction in a DOM', () => {
+  async function mount(onChange: (value: SortValue) => void) {
+    const dom = new JSDOM('<!doctype html><html lang="en"><body><div id="root"></div></body></html>', { pretendToBeVisual: true })
+    const globals = globalThis as unknown as Record<string, unknown>
+    for (const [key, value] of [['window', dom.window], ['document', dom.window.document], ['navigator', dom.window.navigator], ['HTMLElement', dom.window.HTMLElement], ['Node', dom.window.Node]] as const) {
+      Object.defineProperty(globalThis, key, { configurable: true, value })
+    }
+    // Polaris consults matchMedia for responsive behavior — jsdom lacks it.
+    dom.window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as unknown as (query: string) => MediaQueryList
+    globals.IS_REACT_ACT_ENVIRONMENT = true
+    const { createRoot } = await import('react-dom/client')
+    const { act } = await import('react')
+    const container = dom.window.document.getElementById('root')
+    if (!container) throw new Error('missing root')
+    const root = createRoot(container)
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it.
+    await act(async () => { root.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CustomSelect<SortValue>, { value: 'name', options: OPTIONS, onChange, ariaLabel: 'Sort inventory' }))) })
+    return { dom, act, container }
+  }
+
+  it('renders a native select with all options and commits a change with the chosen value', async () => {
+    const onChange = vi.fn()
+    const { dom, act, container } = await mount(onChange)
+    const select = container.querySelector('select')
+    if (!select) throw new Error('missing select')
+    expect(select.options).toHaveLength(3)
+    expect(Array.from(select.options).map((option) => option.label)).toEqual(['Sort: Name', 'Sort: Stock', 'Sort: Value'])
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(select, 'stock')
+    await act(async () => { select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    expect(onChange).toHaveBeenCalledWith('stock')
+    dom.window.close()
+  })
+
+  it('keeps the current value selected in the dom and drives onChange for each pick', async () => {
+    const onChange = vi.fn()
+    const { dom, act, container } = await mount(onChange)
+    const select = container.querySelector('select')
+    if (!select) throw new Error('missing select')
+    expect(select.value).toBe('name')
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(select, 'value')
+    await act(async () => { select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    expect(onChange).toHaveBeenLastCalledWith('value')
+    dom.window.close()
   })
 })

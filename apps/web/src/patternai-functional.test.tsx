@@ -205,7 +205,7 @@ async function change(element: HTMLInputElement | HTMLTextAreaElement | HTMLSele
 }
 
 const text = (): string => document.body.textContent ?? ''
-const navItem = (label: string): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>('.pa-nav-item')].find((item) => (item.textContent ?? '').includes(label))
+const navItem = (label: string): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>('.pa-nav-group button')].find((item) => (item.textContent ?? '').includes(label))
 const buttonWith = (label: string): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>('button')].find((item) => (item.textContent ?? '').includes(label))
 
 /* ── Header ────────────────────────────────────────────────────────────── */
@@ -302,10 +302,10 @@ describe('discovery feed', () => {
 
   it('filters from a category card without changing the all-data denominator', async () => {
     await mount()
-    const product = [...document.querySelectorAll<HTMLElement>('.pa-category-signal')].find((card) => (card.textContent ?? '').includes('Products'))
+    const product = [...document.querySelectorAll<HTMLElement>('.pa-category-breakdown button')].find((card) => (card.textContent ?? '').includes('Products'))
     await click(product)
     expect(document.querySelector<HTMLSelectElement>('select[aria-label="Filter by category"]')?.value).toBe('PRODUCTS')
-    expect(document.querySelectorAll('.pa-category-signal')).toHaveLength(6)
+    expect(document.querySelectorAll('.pa-category-breakdown button')).toHaveLength(6)
     expect(product?.textContent).toContain('33%')
   })
 
@@ -332,7 +332,7 @@ describe('discovery feed', () => {
   it('shows the category signal breakdown and the pattern confidence ladder', async () => {
     await mount()
     expect(text()).toContain('WHAT PATTERNAI HAS FOUND')
-    const categories = [...document.querySelectorAll('.pa-category-signal')]
+    const categories = [...document.querySelectorAll('.pa-category-breakdown button')]
     expect(categories).toHaveLength(6)
     expect(categories.find((card) => (card.textContent ?? '').includes('Products'))?.textContent).toContain('1 signal')
     expect(categories.find((card) => (card.textContent ?? '').includes('Operations'))?.textContent).toContain('0 signals')
@@ -393,7 +393,7 @@ describe('discovery feed', () => {
 
   it('renders the six Keep exploring cards, each with its own mini chart', async () => {
     await mount()
-    const cards = [...document.querySelectorAll('.pa-explore-card')]
+    const cards = [...document.querySelectorAll('.pa-explore-grid button')]
     expect(cards).toHaveLength(6)
     expect(cards.every((card) => card.querySelector('.pa-explore-viz') !== null)).toBe(true)
     expect(document.querySelector('.pa-mini-word')).not.toBeNull()
@@ -435,8 +435,10 @@ describe('every sub-page opens', () => {
   it('shows API count badges on the sections that have data', async () => {
     await mount()
     const discoveryRow = navItem('Discovery feed')
-    expect(discoveryRow?.querySelector('.pa-nav-badge')?.textContent).toBe('3')
-    expect(navItem('Settings')?.querySelector('.pa-nav-badge')).toBeNull()
+    // The Button shim flattens children to text — the API count is pinned on
+    // the row text rather than the `.pa-nav-badge` wrapper class.
+    expect(discoveryRow?.textContent).toContain('3')
+    expect(navItem('Settings')?.textContent?.trim()).toBe('Settings')
   })
 })
 
@@ -487,7 +489,9 @@ describe('sub-page feature interactions', () => {
     currentPlan = 'commander'
     await mount()
     await click(navItem('Settings'))
-    await click(document.querySelector<HTMLElement>('.pa-toggle[role="switch"]'))
+    // The `.pa-toggle` class is consumed by the Button shim; the switch keeps
+    // its role (a11y) — select it by that instead.
+    await click(document.querySelector<HTMLElement>('button[role="switch"]'))
     expect(calls.some((call) => call === 'PATCH /insights/preferences')).toBe(true)
 
     await click(navItem('API access'))
@@ -510,6 +514,8 @@ describe('plan gating on a trial store', () => {
     expect(document.querySelectorAll('.pa-nav-item.locked').length).toBeGreaterThan(3)
     // The rich-content button maps `title` to an accessible label (aria-label),
     // so locked sections announce the upgrade path to assistive tech.
+    const lockedNav = [...document.querySelectorAll<HTMLElement>('.pa-nav-group button')].filter((entry) => (entry.getAttribute('aria-label') ?? '').startsWith('Locked on your current plan'))
+    expect(lockedNav.length).toBeGreaterThan(3)
     expect(navItem('Customer personas')?.getAttribute('aria-label')).toContain('Upgrade Plan')
   })
 
@@ -573,7 +579,7 @@ describe('both themes', () => {
     expect(shell.classList.contains('light-mode')).toBe(true)
     expect(document.querySelectorAll('.pa-stat').length).toBe(6)
     expect(document.querySelector('.pa-funnel')).not.toBeNull()
-    expect(document.querySelectorAll('.pa-explore-card').length).toBe(6)
+    expect(document.querySelectorAll('.pa-explore-grid button').length).toBe(6)
     expect(consoleErrors).toEqual([])
   })
 

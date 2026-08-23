@@ -176,6 +176,13 @@ class FakeReports implements CoachReportRepository {
     this.rows.push(record)
     return record
   }
+  public async attachPdf(storeId: StoreId, id: string, pdfUrl: string): Promise<CoachReportRecord | null> {
+    const row = this.rows.find((candidate) => candidate.storeId === storeId && candidate.id === id)
+    if (!row) return null
+    const updated = { ...row, pdfUrl }
+    this.rows = this.rows.map((candidate) => (candidate.id === id ? updated : candidate))
+    return updated
+  }
   public async markEmailed(storeId: StoreId, id: string): Promise<CoachReportRecord | null> {
     const row = this.rows.find((candidate) => candidate.storeId === storeId && candidate.id === id)
     if (!row) return null
@@ -291,7 +298,7 @@ function makeDeps(overrides: { plan?: 'trial' | 'start' | 'growth' | 'commander'
     trialExpired: () => overrides.trialExpired ?? false,
     ai: FAKE_AI,
     mailer: { sendWeeklyReview: async () => undefined },
-    pdf: { write: async (filename: string) => `/tmp/${filename}` },
+    pdf: { write: async (filename: string) => ({ filename, contentType: 'application/pdf', body: Buffer.from('%PDF-1.4\n%%EOF') }) },
     now: () => new Date('2026-08-18T08:00:00Z'),
     rateLimitPerMinute: 30,
   }
@@ -317,7 +324,10 @@ async function apiCall(base: string, method: string, path: string, body?: unknow
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
   const text = await response.text()
-  const json: Record<string, unknown> = text.trim() ? JSON.parse(text) as Record<string, unknown> : {}
+  let json: Record<string, unknown> = {}
+  // Binary routes (e.g. the review PDF download) legitimately return non-JSON
+  // bodies; the sweep only cares about their status code.
+  try { json = text.trim() ? JSON.parse(text) as Record<string, unknown> : {} } catch { json = {} }
   return { status: response.status, json }
 }
 

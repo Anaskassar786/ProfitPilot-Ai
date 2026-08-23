@@ -250,7 +250,7 @@ describe('page load', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     await act(async () => {
-      root!.render(createElement(ExportsWorkspace, { context: { storeId: null, shop: null }, onToast: () => undefined, onNavigateBilling: () => undefined }))
+      root!.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(ExportsWorkspace, { context: { storeId: null, shop: null }, onToast: () => undefined, onNavigateBilling: () => undefined })))
     })
     expect(text()).toContain('Connect your Shopify store to export data')
     expect(document.querySelectorAll('.dx-card')).toHaveLength(0)
@@ -372,8 +372,9 @@ describe('plan gating', () => {
     await mountWorkspace()
     const revenue = cardFor('revenue')
     expect(revenue.querySelector('.dx-download')).toBeNull()
-    // Shared CTA renders the wrapping span class `.upgrade-plan-button-wrap`.
-    expect(revenue.querySelector('.upgrade-plan-button-wrap')?.textContent).toContain('Upgrade Plan')
+    expect([...revenue.querySelectorAll('button')].some((candidate) => /Download Now/.test(candidate.textContent ?? ''))).toBe(false)
+    // Shared CTA renders inside the `.upgrade-plan-button-wrap` span.
+    expect(revenue.querySelector('.upgrade-plan-button-wrap button')?.textContent).toContain('Upgrade Plan')
     expect(revenue.textContent).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
   })
 
@@ -408,7 +409,7 @@ describe('plan banner', () => {
     expect(banner?.textContent).toContain('Trial')
     expect(banner?.textContent).toContain('Exports this month: 1/3')
     expect(banner?.textContent).toContain('2 exports left this month')
-    expect(banner?.querySelector('.upgrade-plan-button-wrap')?.textContent).toContain('Upgrade Plan')
+    expect(banner?.querySelector('.upgrade-plan-button-wrap button')?.textContent).toContain('Upgrade Plan')
   })
 
   it('warns without shaming once the month is used up', async () => {

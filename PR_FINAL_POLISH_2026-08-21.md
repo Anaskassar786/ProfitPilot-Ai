@@ -42,7 +42,7 @@ Final pre-submission polish PR — everything in one focused change set for the 
 
 - **Trial:** new installs auto-start a 14-day Trial (`ensureTrial`). Day-15 expiry shows a Polaris **"Trial expired — upgrade to continue"** critical banner; paid features lock while Dashboard/sync keep working (trial state `EXPIRED` → subscription `PENDING_CONFIRMATION`). Upgrading **during** the trial now actually cancels the trial (`cancelTrial` wired into mock + real charge paths). Uninstall/reinstall keeps the same `trials` row (no trial re-triggering).
 - **Gift codes:**
-  - Valid `KASSAR786`/`AFRIDI786` → Commander for exactly `durationDays` (72h), stored in Postgres (`gift_redemptions`) so it survives restarts.
+  - Valid primary/secondary promo codes (env-configured via `GIFT_CODE_SEQUENCE_1/2`) → Commander for exactly `durationDays` (72h), stored in Postgres (`gift_redemptions`) so it survives restarts.
   - Gift **overrides** the trial while its window is open; the trial is left intact so the store **reverts** to Trial (if still valid) or locked when the gift ends — enforced on every `GET /billing` and `GET /billing/usage` via `expiredGiftRevert()`.
   - After expiry the merchant sees a **"Gift access ended — upgrade to keep Commander features"** warning banner and Commander perks lock.
   - Redemption is now **atomic**: `FOR UPDATE` row lock on `gift_codes` + redemption INSERT + use-counter increment in one transaction (no double-redemption race, no crash-orphaned uses). Double redemption → 409 "already redeemed"; invalid/expired/exhausted → clear 400s; gift on an active paid plan → 409.

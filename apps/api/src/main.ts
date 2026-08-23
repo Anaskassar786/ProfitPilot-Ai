@@ -11,6 +11,7 @@ import { runMigrations } from './migrations.js'
 import { createInsightsHubBootstrap, InsightsHubService, PostgresInsightsHubRepository } from './insights-hub.js'
 import { buildStoreSnapshot } from './store-snapshot.js'
 import { shouldRunMigrations } from './ai-keys.js'
+import { assertProductionAppUrl } from './app-url.js'
 
 const port = Number(process.env.PORT ?? '3000')
 const logger = loggerFromEnv(process.env)
@@ -43,6 +44,23 @@ const main = async (): Promise<void> => {
   if (!webIndexExists) {
     logger.warn('Web app serving disabled: build output is missing', { webDistPath, exists: webDistExists, indexExists: webIndexExists })
     if (process.env.NODE_ENV === 'production') throw new Error(`Web app build is missing: ${webIndexPath}`)
+  }
+
+  // P1 launch guards (App Store audit):
+  // 1. A production deploy without a configured app URL would serve
+  //    placeholder legal/support links — refuse to boot instead.
+  // 2. localhost/127.0.0.1 in security-relevant configuration must never
+  //    reach production; warn loudly so an operator catches it.
+  if (process.env.NODE_ENV === 'production') {
+    assertProductionAppUrl(process.env)
+    const securitySensitive: ReadonlyArray<readonly [string, string | undefined]> = [
+      ['SHOPIFY_REDIRECT_URI', process.env.SHOPIFY_REDIRECT_URI],
+      ['SHOPIFY_PRIVACY_WEBHOOK_URL', process.env.SHOPIFY_PRIVACY_WEBHOOK_URL],
+      ['CORS_ALLOWED_ORIGINS', process.env.CORS_ALLOWED_ORIGINS],
+    ]
+    for (const [key, value] of securitySensitive) {
+      if (value && /localhost|127\.0\.0\.1/i.test(value)) logger.warn('localhost found in security-relevant production configuration', { key, value })
+    }
   }
 
   const bootstrap = createStoreCoachBootstrap(process.env, logger)

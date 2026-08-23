@@ -1,7 +1,11 @@
 import { Pool } from 'pg'
 import type { PoolClient, QueryResultRow } from 'pg'
+import { Logger } from '@profitpilot/logger'
 import type { StoreId } from '@profitpilot/types'
 import type { DatabaseConfig } from './config.js'
+
+/** Structured logger for pool-level failures (no query values are logged). */
+const poolLogger = new Logger()
 
 export type DatabaseResult<Row extends QueryResultRow> = Readonly<{ rows: readonly Row[]; rowCount: number }>
 
@@ -26,7 +30,7 @@ export class PostgresDatabase implements SqlExecutor {  private readonly pool: P
     // dies. Log the failure instead; the connection is re-established on the
     // next use.
     this.pool.on('error', (error) => {
-      console.error(JSON.stringify({ level: 'error', message: 'Postgres pool connection error (recovering)', error: error instanceof Error ? error.message : String(error) }))
+      poolLogger.error('Postgres pool connection error (recovering)', { error: error instanceof Error ? error.message : String(error) })
     })
   }
 
@@ -37,7 +41,7 @@ export class PostgresDatabase implements SqlExecutor {  private readonly pool: P
     // a typed NULL instead so the statement still succeeds.
     const safeValues = values.map((value) => (value === undefined ? null : value))
     if (safeValues.some((value, index) => values[index] === undefined)) {
-      console.error(JSON.stringify({ level: 'error', message: 'SQL query passed an undefined parameter (converted to NULL)', query: text.slice(0, 300) }))
+      poolLogger.error('SQL query passed an undefined parameter (converted to NULL)', { query: text.slice(0, 300) })
     }
     try {
       const result = await this.pool.query<Row>(text, [...safeValues])

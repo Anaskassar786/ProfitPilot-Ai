@@ -1,5 +1,6 @@
 import { Button } from './polaris-ui.js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useModalDialog } from './modal-a11y.js'
 import {
   Check,
   Clock3,
@@ -33,6 +34,11 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
   const [personality, setPersonality] = useState<keyof typeof PERSONALITY_META>('PROFESSIONAL')
   const [huddleMinutes, setHuddleMinutes] = useState(420)
   const [busy, setBusy] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // The dialog behavior starts once the tour content is mounted (the loading
+  // shell above has no focusable controls and a different container node).
+  // Initial focus lands on the primary tour action, not the close button.
+  useModalDialog(dialogRef, onClose, state !== null, (container) => container.querySelector<HTMLElement>('.coach-onboarding-actions .button.primary'))
 
   useEffect(() => {
     void fetchCoachOnboarding(storeId).then(setState).catch(() => setState({ currentStep: 0, completed: false, skipped: true, steps: [] }))
@@ -61,13 +67,13 @@ export function CoachOnboardingModal({ storeId, plan = 'trial', onClose, onToast
   }
 
   if (!state) {
-    return <div className="modal-overlay"><div className="modal-card coach-onboarding-modal"><div className="coach-onboarding-loading"><Clock3 size={18} /><span>Preparing your tour…</span></div></div></div>
+    return <div className="modal-overlay"><div className="modal-card coach-onboarding-modal" role="dialog" aria-modal="true" aria-label="Store Coach onboarding"><div className="coach-onboarding-loading"><Clock3 size={18} /><span>Preparing your tour…</span></div></div></div>
   }
   if (state.completed || state.skipped) return null
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card coach-onboarding-modal">
+      <div ref={dialogRef} className="modal-card coach-onboarding-modal" role="dialog" aria-modal="true" aria-label="Store Coach onboarding">
         <div className="coach-onboarding-head">
           <span className="coach-illustration" aria-hidden="true"><GrowthPathwayIcon size={26} /></span>
           <div>

@@ -24,8 +24,7 @@ import type { PlanTier } from '@profitpilot/types'
 import type { WorkspaceContext } from './model.js'
 import type { ExecutiveDashboard, ExecutiveGate } from './executive-model.js'
 import { executiveDateLabel, executiveMonthLabel, formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
-import { fetchExecutiveDashboard } from './executive-api.js'
-import { executivePdfDownloadUrl } from './executive-api.js'
+import { downloadExecutiveReportPdf, fetchExecutiveDashboard } from './executive-api.js'
 import { ExecutiveHorizontalBars, ExecutiveRadialGauge } from './executive-charts.js'
 import {
   ExecutiveEmptyState,
@@ -57,7 +56,7 @@ import { ExecutiveDecisionsPage } from './executive-decisions.js'
 import { ExecutiveRisksPage } from './executive-risks.js'
 import { ExecutiveRoadmapsPage } from './executive-roadmaps.js'
 import { ExecutiveSettingsPage } from './executive-settings.js'
-import { errorMessageFrom } from './executive-shared.js'
+import { errorMessageFrom, saveDownloadedFile } from './executive-shared.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 
 const GROWTHIQ_ROUTE_PREFIX = '#/ai-growth-command/growthiq'
@@ -270,7 +269,7 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
         </section>
       </div>
     ) : (
-      <GrowthIqDashboardView dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
+      <GrowthIqDashboardView storeId={context.storeId} dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
     )
   }
 
@@ -372,7 +371,7 @@ function GrowthIqStrategyStage({ dashboard, plan, onNavigate, onUpgrade }: { das
 // GrowthIQ dashboard (9 sections + plan panel)
 // ────────────────────────────────────────────────────────────────────────────
 
-function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
+function GrowthIqDashboardView({ storeId, dashboard, onNavigate, onUpgrade, onToast }: { storeId: string | null; dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
   const { plan, gates, usage } = dashboard
   const d = strategicDerivations(dashboard)
   // Sub-routes are relative to the GrowthIQ prefix (navigate() prepends it).
@@ -521,7 +520,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                 <div key={risk.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, border: '1px solid var(--exec-border)', background: 'var(--exec-surface-2)' }}>
                   <ExecutiveStatusPill status={risk.severity} />
                   <span style={{ fontSize: 12, color: 'var(--exec-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.title}</span>
-                  <span style={{ fontSize: 11, color: 'var(--exec-muted)', whiteSpace: 'nowrap' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--exec-muted)', whiteSpace: 'nowrap' }}>{formatExecutiveMoney(risk.impactIfRealized, risk.impactCurrency, 0)}</span>
                 </div>
               ))}
             </div>
@@ -568,7 +567,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                 <div>
                   <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 15, fontWeight: 700, color: 'var(--exec-heading)' }}>{roadmap.title}</strong>
-                  <div style={{ fontSize: 11.5, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--exec-muted)', marginTop: 3 }}>{roadmap.milestones.filter((milestone) => milestone.status === 'COMPLETE').length} of {roadmap.milestones.length} milestones complete · {roadmap.periodStart} → {roadmap.periodEnd}</div>
                 </div>
                 <span className="exec-pill gold"><i />{Math.round(roadmap.currentProgress * 100)}%</span>
               </div>
@@ -579,7 +578,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                     <ExecutiveStatusPill status={milestone.status === 'COMPLETE' ? 'COMPLETE' : milestone.status === 'CURRENT' ? 'CURRENT' : 'PENDING'} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{milestone.title}</strong>
-                      <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
+                      <span style={{ display: 'block', fontSize: 12, color: 'var(--exec-muted)' }}>{executiveDateLabel(milestone.dueDate)}</span>
                     </div>
                   </div>
                 ))}
@@ -605,7 +604,7 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                   <ExecutiveStatusPill status={decision.qualityRating} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ fontFamily: 'var(--exec-sans)', fontSize: 12.5, color: 'var(--exec-heading)' }}>{decision.title}</strong>
-                    <span style={{ display: 'block', fontSize: 11, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--exec-muted)' }}>{decision.decisionType} · {executiveDateLabel(decision.decisionDate)}{decision.accuracyScore !== null ? ` · ${Math.round(decision.accuracyScore * 100)}% accuracy` : ' · awaiting outcome'}</span>
                   </div>
                 </div>
               ))}
@@ -629,7 +628,20 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports/${dashboard.latestReport!.id}`)}><Eye size={14} /> View Report</Button>
                     {plan === 'commander' && (
-                      <a className="button secondary" href={executivePdfDownloadUrl(dashboard.latestReport!.id)}><Download size={14} /> Download PDF</a>
+                      // Authenticated fetch → blob download: the PDF route
+                      // requires the App Bridge bearer, so a plain href (no
+                      // token) returns 401 in production.
+                      <Button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => {
+                          if (!storeId) { onToast('Connect a store to download this report.', 'warning'); return }
+                          const reportId = dashboard.latestReport!.id
+                          void downloadExecutiveReportPdf(storeId, reportId)
+                            .then((file) => { if (!saveDownloadedFile(file, `board-report-${reportId}.pdf`)) onToast('Your browser blocked the download. Allow downloads for this page and try again.', 'warning') })
+                            .catch((downloadError: unknown) => onToast(errorMessageFrom(downloadError), 'error'))
+                        }}
+                      ><Download size={14} /> Download PDF</Button>
                     )}
                   </div>
                 </div>

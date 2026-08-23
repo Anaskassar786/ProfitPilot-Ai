@@ -111,6 +111,8 @@ export function QaChartBoard({ context }: { context: WorkspaceContext }) {
     setChecking(false)
   }
 
+  // Run the live sweep only when the store changes: runLiveCheck is recreated
+  // every render, so listing it would re-trigger the sweep in a loop.
   useEffect(() => { void runLiveCheck() }, [storeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const liveErrors = live.filter((r) => r.status === null || r.status >= 500)

@@ -19,6 +19,15 @@ import { DashboardLayout } from './dashboard.js'
 import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 const iso = (offset: number) => {
   const d = new Date()
@@ -102,19 +111,19 @@ const shell = (light: boolean, children: unknown) => (
 
 describe('PR #42 final-polish smoke (both themes)', () => {
   it('renders the premium Analytics KPI cards with growth, comparison and pending states', () => {
-    const dark = renderToStaticMarkup(shell(false, <AnalyticsHero kpis={kpis} loading={false} />))
+    const dark = renderWithAppProvider(shell(false, <AnalyticsHero kpis={kpis} loading={false} />))
     expect(dark).toContain('analytics-kpi premium tone-0')
     expect(dark).toContain('kpi-compare')
     expect(dark).toContain('vs. prior 28 days')
     expect(dark).toContain('Visualization pending')
     expect(dark).not.toContain('NaN')
-    const light = renderToStaticMarkup(shell(true, <AnalyticsHero kpis={kpis} loading={false} />))
+    const light = renderWithAppProvider(shell(true, <AnalyticsHero kpis={kpis} loading={false} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('kpi-compare')
   })
 
   it('renders Revenue Momentum and Orders & AOV correlation with the enhanced chrome', () => {
-    const dark = renderToStaticMarkup(shell(false, <div><RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} /><OrdersAOVCorrelation trend={trend} /></div>))
+    const dark = renderWithAppProvider(shell(false, <div><RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} /><OrdersAOVCorrelation trend={trend} /></div>))
     expect(dark).toContain('revenue-trend')
     expect(dark).toContain('orders-aov')
     expect(dark).toContain('legend orders')
@@ -122,51 +131,51 @@ describe('PR #42 final-polish smoke (both themes)', () => {
     expect(dark).toContain('Busiest day')
     expect(dark).toContain('Average order value')
     expect(dark).toContain('orders · ')
-    const light = renderToStaticMarkup(shell(true, <OrdersAOVCorrelation trend={trend} />))
+    const light = renderWithAppProvider(shell(true, <OrdersAOVCorrelation trend={trend} />))
     expect(light).toContain('orders-aov')
     expect(light).toContain('app-shell light-mode')
   })
 
   it('renders Stock Distribution with reorder insights, stats and actions', () => {
-    const dark = renderToStaticMarkup(shell(false, <StockDistributionChart data={invPage} loading={false} onSelectTab={() => {}} />))
+    const dark = renderWithAppProvider(shell(false, <StockDistributionChart data={invPage} loading={false} onSelectTab={() => {}} />))
     for (const contract of ['Stock Distribution', 'distribution-insights', 'need reorder attention', 'Stock health B · Good', 'Restock alerts', 'Stock coverage', 'Avg units / SKU', 'View Low Stock Items', 'Reorder Recommendations', 'Export Stock Report']) {
       expect(dark).toContain(contract)
     }
-    const light = renderToStaticMarkup(shell(true, <StockDistributionChart data={invPage} loading={false} onSelectTab={() => {}} />))
+    const light = renderWithAppProvider(shell(true, <StockDistributionChart data={invPage} loading={false} onSelectTab={() => {}} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('distribution-callouts')
   })
 
   it('renders the verified Inventory Value card with metrics, insight and actions', () => {
-    const dark = renderToStaticMarkup(shell(false, <InventoryValueSummary data={invPage} loading={false} />))
+    const dark = renderWithAppProvider(shell(false, <InventoryValueSummary data={invPage} loading={false} />))
     for (const contract of ['Inventory Value', 'USD 552,366.55', 'value-metrics', 'Avg value / SKU', 'Top 5 products hold', 'value-insight-strip', 'Export Valuation', 'View Full Report', 'value-distribution-bar']) {
       expect(dark).toContain(contract)
     }
-    const light = renderToStaticMarkup(shell(true, <InventoryValueSummary data={invPage} loading={false} />))
+    const light = renderWithAppProvider(shell(true, <InventoryValueSummary data={invPage} loading={false} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('value-metrics')
   })
 
   it('renders the Inventory stats and health cards without regressions', () => {
-    const dark = renderToStaticMarkup(shell(false, <div><InventoryStatsGrid data={invPage} loading={false} /><InventoryHealthCard data={invPage} loading={false} /></div>))
+    const dark = renderWithAppProvider(shell(false, <div><InventoryStatsGrid data={invPage} loading={false} /><InventoryHealthCard data={invPage} loading={false} /></div>))
     expect(dark).toContain('Total Products')
     expect(dark).toContain('Inventory Health')
     expect(dark).toContain('B · Good')
   })
 
   it('renders the Store Summary and By Category fills on the dashboard', () => {
-    const dark = renderToStaticMarkup(shell(false, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))
+    const dark = renderWithAppProvider(shell(false, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))
     for (const contract of ['ai-summary-card', 'ai-summary-extras', 'ai-growth-metric', 'Weekly comparison', 'ai-weekly-chart', 'Best seller', 'Top category', 'Revenue trend', 'Recommended actions', 'View Full Report', 'pie-extras', 'category-insights', 'Diversification', 'category-breakdown', 'Category Breakdown', 'sold', 'View Category Report', 'Explore Products by Category', 'Recent Activity']) {
       expect(dark).toContain(contract)
     }
-    const light = renderToStaticMarkup(shell(true, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))
+    const light = renderWithAppProvider(shell(true, <DashboardLayout data={{ analytics: snapshot, catalog, loadState: 'ready' }} onSync={async () => {}} onSyncAll={async () => {}} syncAllRunning={false} onNavigate={() => {}} storeName="demo-store" storeId="s1" />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('ai-summary-extras')
     expect(light).toContain('pie-extras')
   })
 
   it('renders Sales by Channel and Category Distribution unchanged', () => {
-    const dark = renderToStaticMarkup(shell(false, <div><SalesByChannel channels={channels} /><CategoryDistribution categories={categories} /></div>))
+    const dark = renderWithAppProvider(shell(false, <div><SalesByChannel channels={channels} /><CategoryDistribution categories={categories} /></div>))
     expect(dark).toContain('Sales by channel')
     expect(dark).toContain('Sales by category')
     expect(dark).toContain('Total mix')
@@ -174,10 +183,10 @@ describe('PR #42 final-polish smoke (both themes)', () => {
   })
 
   it('renders the Orders workspace shell without crashing', () => {
-    const dark = renderToStaticMarkup(shell(false, <OrdersWorkspace context={{ storeId: 's1', shop: 'demo.myshopify.com' }} onSync={async () => {}} onNavigate={() => {}} onToast={() => {}} />))
+    const dark = renderWithAppProvider(shell(false, <OrdersWorkspace context={{ storeId: 's1', shop: 'demo.myshopify.com' }} onSync={async () => {}} onNavigate={() => {}} onToast={() => {}} />))
     expect(dark).toContain('orders-workspace')
     expect(dark).toContain('AI Insights')
-    const light = renderToStaticMarkup(shell(true, <OrdersWorkspace context={{ storeId: 's1', shop: 'demo.myshopify.com' }} onSync={async () => {}} onNavigate={() => {}} onToast={() => {}} />))
+    const light = renderWithAppProvider(shell(true, <OrdersWorkspace context={{ storeId: 's1', shop: 'demo.myshopify.com' }} onSync={async () => {}} onNavigate={() => {}} onToast={() => {}} />))
     expect(light).toContain('app-shell light-mode')
   })
 
@@ -187,11 +196,11 @@ describe('PR #42 final-polish smoke (both themes)', () => {
       { id: 'o1', orderNumber: '#1001', customer: { name: 'Anas Kassar' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 2, price: 649.99 }, { productId: 'p2', title: 'Boots', quantity: 1, price: 289 }], status: 'completed', paymentStatus: 'paid', totalPrice: 1589 },
       { id: 'o2', orderNumber: '#1002', customer: { name: 'Jane Doe' }, lineItems: [{ productId: 'p1', title: 'Burton Custom Snowboard', quantity: 4, price: 649.99 }], status: 'completed', paymentStatus: 'paid', totalPrice: 2600 },
     ]
-    const dark = renderToStaticMarkup(shell(false, <TopProductInsight insight={insight} orders={mockOrders as never} ordersTotal={2} onNavigate={() => {}} />))
+    const dark = renderWithAppProvider(shell(false, <TopProductInsight insight={insight} orders={mockOrders as never} ordersTotal={2} onNavigate={() => {}} />))
     for (const contract of ['Top Selling Product', 'Burton Custom Snowboard', '6 sold · $4,199.70', 'Avg sale price', 'Orders featuring it', 'Of line revenue', 'Baseline building', 'units', 'x the average product', 'View Product Details', 'See All Orders']) {
       expect(dark).toContain(contract)
     }
-    const light = renderToStaticMarkup(shell(true, <TopProductInsight insight={insight} orders={mockOrders as never} ordersTotal={2} onNavigate={() => {}} />))
+    const light = renderWithAppProvider(shell(true, <TopProductInsight insight={insight} orders={mockOrders as never} ordersTotal={2} onNavigate={() => {}} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('top-product-stats')
   })
@@ -199,13 +208,13 @@ describe('PR #42 final-polish smoke (both themes)', () => {
   it('renders the premium Cancellation and Fulfillment rate cards', () => {
     const cancellation: AvailableOrderInsight = { feature: 'cancellation_rate', name: 'Cancellation Rate', data: { status: 'available', canceled: 0, total: 5, rate: 0 } }
     const fulfillment: AvailableOrderInsight = { feature: 'fulfillment_rate', name: 'Fulfillment Rate', data: { status: 'available', fulfilled: 5, total: 5, rate: 100, basis: 'Shopify fulfillment status' } }
-    const dark = renderToStaticMarkup(shell(false, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
+    const dark = renderWithAppProvider(shell(false, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
     for (const contract of ['Cancellation Rate', 'Excellent — no cancellations this period', 'rate-donut', 'Cancelled', '0 of 5 orders cancelled', 'rate-divider', 'rate-metrics', 'Refunded', 'vs Last Period', 'rate-status-bar good', 'Fulfillment Rate', 'All orders fulfilled', 'Fulfilled', '5 of 5 orders fulfilled', 'Pending', 'Avg Fulfill Time']) {
       expect(dark).toContain(contract)
     }
     expect(dark).not.toContain('rate-progress')
     expect(dark).not.toContain('Industry comparison connects when benchmark data is available')
-    const light = renderToStaticMarkup(shell(true, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
+    const light = renderWithAppProvider(shell(true, <div><CancellationRateCard insight={cancellation} /><FulfillmentRateCard insight={fulfillment} /></div>))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('rate-card')
   })

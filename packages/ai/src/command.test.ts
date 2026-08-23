@@ -599,12 +599,23 @@ describe('AI Command strategic advisor overhaul', () => {
     // Growth questions are handled by the growth plan path in the service, not
     // the instructional path.
     expect(detectInstructionalIntent('How do I use the recommendations page?')).toBe('recommendations')
-    // Data-lookup phrasing ("what is / how much / how many" + store metric)
-    // must route to live analytics, never to the generic help card.
+    // Data-lookup phrasing ("what is / how much / how many / what are" + a
+    // store metric) is a lookup, not guidance — it must route to live
+    // analytics, never to the generic help card.
     expect(detectInstructionalIntent('What is my revenue this month?')).toBeNull()
     expect(detectInstructionalIntent('What is my average order value?')).toBeNull()
     expect(detectInstructionalIntent('How many orders did I get today?')).toBeNull()
     expect(detectInstructionalIntent('What is my best selling product?')).toBeNull()
+    expect(detectInstructionalIntent('What are my top products?')).toBeNull()
+    expect(detectInstructionalIntent('What is my AOV?')).toBeNull()
+    expect(detectInstructionalIntent('What are my recent orders?')).toBeNull()
+  })
+
+  it('answers a "what is my revenue" question from live analytics, not the generic capability guide', async () => {
+    const result = await service('growth').chat({ storeId: tenant, text: 'What is my revenue this month?' })
+    expect(result.message.structuredData?.type).toBe('analytics')
+    expect(result.message.content).toContain('$8,940')
+    expect(result.message.content).not.toContain('What AI Command can do')
   })
 
   it('routes growth questions to the growth plan, not instructional guidance', async () => {

@@ -6,7 +6,7 @@
  * accuracy, quality distribution, best decisions, improvement areas).
  */
 import { Button } from './polaris-ui.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardList, Plus, Trash2, TrendingUp } from './icons.js'
 import type { DecisionQuality, DecisionType, ExecutiveDecision } from './executive-model.js'
 import { executiveDateLabel } from './executive-model.js'
@@ -14,6 +14,7 @@ import { deleteExecutiveDecision, fetchExecutiveDecisionAnalytics, fetchExecutiv
 import { ExecutiveEmptyState, ExecutiveErrorState, ExecutivePageHeader, ExecutiveSection, ExecutiveSkeleton, ExecutiveStatusPill } from './executive-ui.js'
 import { ExecutiveStackedBars } from './executive-charts.js'
 import { errorMessageFrom, isUpgradeError } from './executive-shared.js'
+import { useModalDialog } from './modal-a11y.js'
 import type { ExecutivePageProps } from './executive-shared.js'
 
 const DECISION_TYPES: readonly DecisionType[] = ['PRICING', 'PRODUCT', 'MARKETING', 'INVENTORY', 'STRATEGIC', 'CUSTOM']
@@ -35,6 +36,8 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
   const [predictedValue, setPredictedValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [reviewTarget, setReviewTarget] = useState<ExecutiveDecision | null>(null)
+  const reviewDialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(reviewDialogRef, () => setReviewTarget(null), reviewTarget !== null)
   const [actualValue, setActualValue] = useState('')
 
   const load = async () => {
@@ -191,9 +194,9 @@ export function ExecutiveDecisionsPage({ context, plan, gates, onToast, onUpgrad
       </div>
       {reviewTarget && (
         <div className="modal-overlay">
-          <div className="modal-card">
+          <div className="modal-card" ref={reviewDialogRef} role="dialog" aria-modal="true" aria-labelledby="review-outcome-title">
             <div className="section-kicker">RECORD OUTCOME</div>
-            <h2>What actually happened?</h2>
+            <h2 id="review-outcome-title">What actually happened?</h2>
             <p style={{ fontSize: 12.5, color: 'var(--exec-body)' }}>{reviewTarget.title}</p>
             <label>Actual value
               <input type="number" autoFocus value={actualValue} onChange={(event) => setActualValue(event.target.value)} placeholder="e.g. 4800" />

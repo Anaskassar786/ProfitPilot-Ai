@@ -45,7 +45,7 @@ Raises AI recommendation monthly limits per plan, runs a full product QA across 
 **Remaining risks**
 
 - Live Shopify recurring-charge creation/verification is Phase 2 Shopify billing; covered by unit tests but not exercised against a real store here.
-- Gift/redeem success path depends on seeded `DEFAULT_GIFT_CODES` (env-overridable); the UI placeholder is a generic example, never a real secret.
+- Gift/redeem success path depends on env-configured codes (`GIFT_CODE_SEQUENCE_1/2`, seeded at boot); the UI placeholder is a generic example, never a real secret.
 
 **Build**
 

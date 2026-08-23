@@ -1,9 +1,10 @@
 import { Button, RichButton } from './polaris-ui.js'
 import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, Sparkles, WandSparkles, X } from './icons.js'
 import type { JSX } from 'react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { WorkflowTemplate } from './automation-model.js'
 import { categoryIcon, friendlyCategory, planBadgeClass, planBadgeLabel, setupLabel, templateToneClass } from './automation-helpers.js'
+import { useModalDialog } from './modal-a11y.js'
 
 type TabKey =
   | 'All'
@@ -43,6 +44,8 @@ export function TemplateGallery({
 }): JSX.Element {
   const [tab, setTab] = useState<TabKey>('All')
   const [preview, setPreview] = useState<WorkflowTemplate | null>(null)
+  const previewDialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(previewDialogRef, () => setPreview(null), preview !== null)
   const [installing, setInstalling] = useState(false)
   const items = useMemo(() => templates.filter(TABS.find((t) => t.key === tab)?.match ?? (() => true)), [templates, tab])
 
@@ -101,13 +104,13 @@ export function TemplateGallery({
 
       {preview && (
         <div className="automation-modal-backdrop">
-          <div className="automation-modal template-preview">
+          <div className="automation-modal template-preview" ref={previewDialogRef} role="dialog" aria-modal="true" aria-labelledby="template-preview-title">
             <Button className="modal-close" onClick={() => setPreview(null)} aria-label="Close">
               <X size={18} />
             </Button>
             <TemplateIcon template={preview} />
             <span className="template-category">{friendlyCategory(preview.category)}</span>
-            <h2>{preview.name}</h2>
+            <h2 id="template-preview-title">{preview.name}</h2>
             <p>{preview.description}</p>
 
             <div className="template-impact">

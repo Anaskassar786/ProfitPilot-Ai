@@ -137,7 +137,7 @@ export function ExecutiveScenariosPage({ context, plan, gates, onToast, onUpgrad
                       <div key={scenario.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-md)', background: 'var(--exec-surface-2)' }}>
                         <Button type="button" className="text-button" style={{ flex: 1, textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setResult(scenario); setExpanded(scenario.id) }}>
                           <strong style={{ fontSize: 12.5, color: 'var(--exec-heading)' }}>{scenario.title}</strong>
-                          <small style={{ display: 'block', color: 'var(--exec-muted)', fontSize: 11 }}>{scenario.scenarioType} · {executiveDateLabel(scenario.createdAt)}</small>
+                          <small style={{ display: 'block', color: 'var(--exec-muted)', fontSize: 12 }}>{scenario.scenarioType} · {executiveDateLabel(scenario.createdAt)}</small>
                         </Button>
                         <ExecutiveStatusPill status={scenario.riskLevel} />
                         <ExecutiveConfidenceBar value={scenario.confidence} />
