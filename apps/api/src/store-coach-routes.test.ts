@@ -7,7 +7,7 @@ import type { StoreId } from '@profitpilot/types'
 import type { AiGeneration, PriorityCandidate } from '@profitpilot/ai'
 import { createApi } from './app.js'
 import { huddleGreetingForHour, StoreCoachService } from './store-coach-service.js'
-import type { CoachAiProvider } from './store-coach-service.js'
+import type { CoachAiProvider, CoachPdfWriter } from './store-coach-service.js'
 import type {
   AchievementRepository,
   CoachAchievementRecord,
@@ -167,6 +167,13 @@ class FakeReports implements CoachReportRepository {
     this.rows.push(record)
     return record
   }
+  public async attachPdf(storeId: StoreId, id: string, pdfUrl: string): Promise<CoachReportRecord | null> {
+    const row = this.rows.find((candidate) => candidate.storeId === storeId && candidate.id === id)
+    if (!row) return null
+    const updated = { ...row, pdfUrl }
+    this.rows = this.rows.map((candidate) => (candidate.id === id ? updated : candidate))
+    return updated
+  }
   public async markEmailed(storeId: StoreId, id: string): Promise<CoachReportRecord | null> {
     const row = this.rows.find((candidate) => candidate.storeId === storeId && candidate.id === id)
     if (!row) return null
@@ -254,7 +261,7 @@ function buildService(overrides: Partial<Parameters<typeof makeDeps>[0]> = {}): 
   return new StoreCoachService(makeDeps(overrides))
 }
 
-function makeDeps(overrides: { plan?: 'trial' | 'start' | 'growth' | 'commander'; trialExpired?: boolean; analyticsDays?: number } = {}): ConstructorParameters<typeof StoreCoachService>[0] {
+function makeDeps(overrides: { plan?: 'trial' | 'start' | 'growth' | 'commander'; trialExpired?: boolean; analyticsDays?: number; pdf?: CoachPdfWriter } = {}): ConstructorParameters<typeof StoreCoachService>[0] {
   const analytics = new InMemoryAnalyticsRepository()
   void analytics.upsert({
     revenue: [
@@ -292,7 +299,13 @@ function makeDeps(overrides: { plan?: 'trial' | 'start' | 'growth' | 'commander'
     ai: FAKE_AI,
     now: () => new Date('2026-08-18T08:00:00Z'),
     rateLimitPerMinute: 30,
+    ...(overrides.pdf ? { pdf: overrides.pdf } : {}),
   }
+}
+
+/** Deterministic stand-in for the reporting package's real PDF writer. */
+const FAKE_PDF: CoachPdfWriter = {
+  write: async (filename: string) => ({ filename, contentType: 'application/pdf', body: Buffer.from('%PDF-1.4\n%%EOF\n') }),
 }
 
 async function withServer<Value>(service: StoreCoachService, handler: (base: string) => Promise<Value>): Promise<Value> {
@@ -488,6 +501,30 @@ describe('Store Coach plan gating', () => {
     const pdf = await apiCall(base, 'GET', `/store-coach/review/${id}/pdf?storeId=${STORE}`)
     expect(pdf.status).toBe(402)
     expect((pdf.json.error as Record<string, unknown>).code).toBe('PAYMENT_REQUIRED')
+  }))
+
+  it('serves real PDF bytes to Commander through the authenticated review route', async () => withServer(buildService({ plan: 'commander', pdf: FAKE_PDF }), async (base) => {
+    const generated = await apiCall(base, 'POST', `/store-coach/review/generate?storeId=${STORE}`)
+    expect(generated.status).toBe(200)
+    const review = generated.json.data as Record<string, unknown>
+    const id = review.id as string
+    // The generation response carries the route's real path — the single
+    // saved row is the one the bytes are served for (no duplicate row, no
+    // bare filename).
+    expect(review.pdfUrl).toBe(`/store-coach/review/${id}/pdf`)
+    const pdf = await fetch(`${base}/store-coach/review/${id}/pdf?storeId=${STORE}`)
+    expect(pdf.status).toBe(200)
+    expect(pdf.headers.get('content-type')).toBe('application/pdf')
+    expect(pdf.headers.get('content-disposition')).toContain('store-coach-weekly-review.pdf')
+    expect(pdf.headers.get('cache-control')).toBe('private, no-store')
+    const body = Buffer.from(await pdf.arrayBuffer())
+    expect(body.subarray(0, 8).toString('utf8')).toBe('%PDF-1.4')
+    // And the report history still lists exactly the single saved row — the
+    // pdf attach must not create a duplicate (the old double-insert bug).
+    const list = await apiCall(base, 'GET', `/store-coach/review/history?storeId=${STORE}`)
+    const rows = (list.json.data as Record<string, unknown>).reports as Record<string, unknown>[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.id).toBe(id)
   }))
 
   it('exposes the usage meter with plan limits', async () => withServer(buildService({ plan: 'start' }), async (base) => {

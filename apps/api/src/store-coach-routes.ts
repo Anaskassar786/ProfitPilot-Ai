@@ -229,9 +229,18 @@ export function createStoreCoachRouter(dependencies: StoreCoachRouteDependencies
       response.status(200).json(success(await service.generateReview(queryStoreId(request), true), requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
+  // Serves the actual PDF bytes (authenticated like every other route — the
+  // web client fetches with its App Bridge bearer and downloads via a blob
+  // anchor). Previously this returned a bare filename that the client could
+  // not fetch, so the download always 404'd.
   router.get('/store-coach/review/:id/pdf', async (request, response, next) => {
     try {
-      response.status(200).json(success(await service.reviewPdf(queryStoreId(request), param(request, 'id')), requestIdFrom(request)))
+      const file = await service.reviewPdf(queryStoreId(request), param(request, 'id'))
+      response.status(200)
+      response.setHeader('content-type', file.contentType)
+      response.setHeader('content-disposition', `attachment; filename="${file.filename}"`)
+      response.setHeader('cache-control', 'private, no-store')
+      response.end(file.body)
     } catch (error: unknown) { next(error) }
   })
   router.post('/store-coach/review/:id/email', async (request, response, next) => {

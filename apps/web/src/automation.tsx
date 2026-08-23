@@ -30,6 +30,7 @@ import type { WorkflowCategory, WorkflowRecord, WorkflowStatus, WorkflowTemplate
 import { CATEGORIES } from './automation-model.js'
 import { friendlyCategory, friendlyStatus, isEmptyWorkflow, relativeTime, shortDate } from './automation-helpers.js'
 import { HowItWorksModal } from './automation-tutorial.js'
+import { useModalDialog } from './modal-a11y.js'
 import { AutomationKpis } from './AutomationKpis.js'
 import { ApprovalInbox } from './ApprovalInbox.js'
 import { CustomSelect } from './CustomSelect.js'
@@ -610,6 +611,8 @@ export function CreateAutomationModal({
   const [category, setCategory] = useState<WorkflowCategory>('Marketing')
   const [templateId, setTemplateId] = useState('')
   const [busy, setBusy] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   const available = templates.filter((template) => !template.locked)
   const submit = async (): Promise<void> => {
     if (!name.trim()) {
@@ -632,12 +635,12 @@ export function CreateAutomationModal({
   }
   return (
     <div className="automation-modal-backdrop">
-      <div className="automation-modal create-workflow-modal">
+      <div className="automation-modal create-workflow-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="create-automation-title">
         <Button className="modal-close" onClick={onClose} aria-label="Close">
           <X size={18} />
         </Button>
         <span className="automation-eyebrow">NEW AUTOMATION</span>
-        <h2>Create New Automation</h2>
+        <h2 id="create-automation-title">Create New Automation</h2>
         <p>Give it a name and choose a starting point. You can change everything later.</p>
 
         <label>
@@ -676,7 +679,10 @@ export function CreateAutomationModal({
             <CustomSelect
               className="automation-custom-select create-template-select"
               value={templateId}
-              options={[{ value: '', label: 'Choose a template' }, ...available.map((template) => ({ value: template.id, label: template.name }))]}
+              // No explicit '' option here — the Polaris placeholder renders
+              // its own disabled `value=""` option and two empty-value options
+              // collide on React key "". The placeholder covers the prompt.
+              options={available.map((template) => ({ value: template.id, label: template.name }))}
               onChange={setTemplateId}
               ariaLabel="Automation template"
               placeholder="Choose a template"

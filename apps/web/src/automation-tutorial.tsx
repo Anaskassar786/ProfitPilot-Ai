@@ -1,6 +1,8 @@
 import { Button } from './polaris-ui.js'
 import { Compass, ListChecks, Play, Rocket, Target, X } from './icons.js'
 import type { JSX } from 'react'
+import { useRef } from 'react'
+import { useModalDialog } from './modal-a11y.js'
 
 /** Educational "How automations work" content — reused by the hub and the editor. */
 export function HowItWorksContent(): JSX.Element {
@@ -47,12 +49,14 @@ export function HowItWorksModal({
   onStartBuilding: () => void
   onBrowseTemplates: () => void
 }): JSX.Element {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   return (
     <div className="automation-modal-backdrop">
-      <div className="automation-modal how-it-works-modal">
+      <div className="automation-modal how-it-works-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="how-it-works-title">
         <Button className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></Button>
         <span className="automation-eyebrow">LEARN THE BASICS</span>
-        <h2>How automations work</h2>
+        <h2 id="how-it-works-title">How automations work</h2>
         <p>Automations follow a simple recipe: when something happens, check if it matters, then do something about it.</p>
         <HowItWorksContent />
         <footer>

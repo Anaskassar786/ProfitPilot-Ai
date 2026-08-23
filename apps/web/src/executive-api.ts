@@ -6,7 +6,8 @@
  * 402 UPGRADE_REQUIRED responses surface as ApiClientError with the
  * upgrade context attached in the message.
  */
-import { requestJson } from './api.js'
+import { requestFile, requestJson } from './api.js'
+import type { ApiFileDownload } from './api.js'
 import type {
   BenchmarkPosition,
   ExecutiveDashboard,
@@ -55,8 +56,14 @@ export function generateExecutiveReportPdf(storeId: string, id: string, whiteLab
 export function fetchExecutivePdfJob(storeId: string, id: string, jobId: string): Promise<ExecutivePdfJob> {
   return requestJson<ExecutivePdfJob>(`/ai-executive/reports/${id}/pdf/status${q(storeId, { jobId })}`)
 }
-export function executivePdfDownloadUrl(id: string): string {
-  return `/ai-executive/reports/${id}/pdf/download?storeId=${encodeURIComponent(localStorageStoreId() ?? '')}`
+/**
+ * Authenticated download of the generated board-report PDF. The route
+ * requires the App Bridge bearer, so a tokenless `window.open(url)` fails
+ * with 401 in production — fetch the bytes instead and hand the blob to a
+ * temporary `<a download>` anchor in the caller.
+ */
+export function downloadExecutiveReportPdf(storeId: string, id: string): Promise<ApiFileDownload> {
+  return requestFile(`/ai-executive/reports/${id}/pdf/download${q(storeId)}`)
 }
 export function emailExecutiveReport(storeId: string, id: string, email?: string): Promise<Readonly<{ sent: boolean; messageId: string }>> {
   return requestJson<Readonly<{ sent: boolean; messageId: string }>>(`/ai-executive/reports/${id}/email`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, ...(email ? { email } : {}) }) })

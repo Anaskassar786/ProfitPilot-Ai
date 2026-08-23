@@ -213,7 +213,9 @@ describe('AUDIT-4: past ticket rows actually expand', () => {
   it('reveals the resolved ticket details on click and collapses again', async () => {
     mockBackend([ticketFixture({ id: 't-old', subject: 'Old billing question', status: 'RESOLVED', description: 'Refund was issued.' })])
     await mount()
-    const row = document.querySelector('.support-past-row') as HTMLButtonElement
+    // The Button shim consumes `.support-past-row`; the row is the button
+    // inside the (plain-div) past-item wrapper.
+    const row = document.querySelector('.support-past-item button') as HTMLButtonElement
     expect(row).toBeTruthy()
     expect(document.querySelector('.support-past-details')).toBeNull()
     await act(async () => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })

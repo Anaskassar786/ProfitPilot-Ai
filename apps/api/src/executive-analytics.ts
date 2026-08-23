@@ -289,7 +289,7 @@ export function detectExecutiveRisks(snapshot: StoreSnapshot, analytics: Analyti
     })
   }
 
-  const competition = competitionSignal(snapshot, analytics)
+  const competition = competitionSignal(snapshot, analytics, now)
   if (competition !== null) {
     risks.push({
       riskType: 'COMPETITION',
@@ -867,9 +867,9 @@ function stockoutExposure(snapshot: StoreSnapshot): Readonly<{ count: number; mo
   return { count: exposed.length, monthlyRevenueAtRisk }
 }
 
-function competitionSignal(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot): Readonly<{ orderChange: number; aovChange: number; orderShortfall: number; aov: number }> | null {
-  const last30 = sinceDays(Date.now(), 30)
-  const prev30 = sinceDays(Date.now(), 60)
+function competitionSignal(snapshot: StoreSnapshot, analytics: AnalyticsSnapshot, now: number): Readonly<{ orderChange: number; aovChange: number; orderShortfall: number; aov: number }> | null {
+  const last30 = sinceDays(now, 30)
+  const prev30 = sinceDays(now, 60)
   const last = analytics.orders.filter((row) => dayLabel(row.day) >= last30)
   const previous = analytics.orders.filter((row) => dayLabel(row.day) >= prev30 && dayLabel(row.day) < last30)
   const lastOrders = last.reduce((sum, row) => sum + row.orderCount, 0)

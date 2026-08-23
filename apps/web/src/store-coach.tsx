@@ -1567,23 +1567,23 @@ function ReviewSnapshotPanel({ snapshot }: { snapshot: CoachReviewSnapshot }) {
 }
 
 /**
- * Opens the generated PDF without navigating the app frame. The app runs
- * inside the Shopify admin iframe: navigating it to the PDF would replace
- * the whole app with the file. A temporary anchor with the `download`
- * attribute keeps same-origin PDFs as a download; for cross-origin URLs the
- * browser instead opens a new top-level tab (the `download` attribute is
- * ignored cross-origin), so the embedded iframe never leaves the app.
+ * Saves the generated PDF without navigating the app frame. The app runs
+ * inside the Shopify admin iframe, and the download route requires the App
+ * Bridge bearer — so the bytes are fetched first (`downloadCoachReviewPdf`)
+ * and handed to a temporary object-URL anchor with the `download` attribute.
+ * This never touches `window.location`, `window.open`, or the frame's URL.
  */
-export function triggerPdfDownload(pdfUrl: string): void {
-  if (typeof document === 'undefined' || !pdfUrl) return
+export function triggerPdfDownload(file: Readonly<{ blob: Blob; filename: string | null }>): void {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return
+  const url = URL.createObjectURL(file.blob)
   const anchor = document.createElement('a')
-  anchor.href = pdfUrl
-  anchor.download = 'store-coach-weekly-review.pdf'
+  anchor.href = url
+  anchor.download = file.filename || 'store-coach-weekly-review.pdf'
   anchor.rel = 'noopener noreferrer'
-  anchor.target = '_blank'
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
+  URL.revokeObjectURL(url)
 }
 
 function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, onSetGoal }: { storeId: string; review: CoachReviewView; plan: CoachPlan; onToast: CoachToast; onNavigateBilling: () => void; onSetGoal: () => void }) {
@@ -1603,7 +1603,7 @@ function WeeklyReviewCard({ storeId, review, plan, onToast, onNavigateBilling, o
       .finally(() => setEmailing(false))
   }
   const downloadPdf = () => {
-    void import('./api.js').then(({ fetchCoachReviewPdf }) => fetchCoachReviewPdf(storeId, review.id)).then(({ pdfUrl }) => { triggerPdfDownload(pdfUrl); onToast('PDF report ready.', 'success') }).catch((error: unknown) => onToast(errorMessage(error), 'error'))
+    void import('./api.js').then(({ downloadCoachReviewPdf }) => downloadCoachReviewPdf(storeId, review.id)).then((file) => { triggerPdfDownload(file); onToast('PDF report ready.', 'success') }).catch((error: unknown) => onToast(errorMessage(error), 'error'))
   }
   return (
     <section className="coach-card coach-review-card">

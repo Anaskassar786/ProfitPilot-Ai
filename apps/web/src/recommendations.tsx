@@ -513,9 +513,12 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                 </select>
               </span>
               <div className="recs-group-toggle" role="group" aria-label="Group recommendations">
-                <Button className={groupMode === 'none' ? 'active' : ''} onClick={() => setGroupMode('none')}>List</Button>
-                <Button className={groupMode === 'agent' ? 'active' : ''} onClick={() => setGroupMode('agent')}>By agent</Button>
-                <Button className={groupMode === 'rule' ? 'active' : ''} onClick={() => setGroupMode('rule')}>By rule</Button>
+                {/* The Button shim consumes className, so the active mode is
+                    exposed as aria-pressed (rendered by Polaris pressed) —
+                    keeps the affordance for assistive tech and the DOM. */}
+                <Button className={groupMode === 'none' ? 'active' : ''} aria-pressed={groupMode === 'none'} onClick={() => setGroupMode('none')}>List</Button>
+                <Button className={groupMode === 'agent' ? 'active' : ''} aria-pressed={groupMode === 'agent'} onClick={() => setGroupMode('agent')}>By agent</Button>
+                <Button className={groupMode === 'rule' ? 'active' : ''} aria-pressed={groupMode === 'rule'} onClick={() => setGroupMode('rule')}>By rule</Button>
               </div>
               <div className="recs-dates">
                 <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} onInput={(event) => setDateFrom(event.currentTarget.value)} aria-label="From date" />

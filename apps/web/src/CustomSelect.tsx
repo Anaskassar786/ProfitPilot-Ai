@@ -33,15 +33,21 @@ export function customSelectKeyAction(key: string, open: boolean, activeIndex: n
   return { type: 'none' }
 }
 
-export function CustomSelect<Value extends string>({ value, options, onChange, ariaLabel, label, placeholder }: CustomSelectProps<Value>) {
+export function CustomSelect<Value extends string>({ value, options, onChange, ariaLabel, label, placeholder, className, icon }: CustomSelectProps<Value>) {
+  // `className` and `icon` are part of the public contract — callers size and
+  // decorate these selects via layout css (`.category-dropdown`, `.inventory-
+  // select`, …). Polaris Select accepts neither, so wrap it.
   return (
-    <Select
-      label={label ?? ariaLabel}
-      labelHidden={!label}
-      options={options.map((option) => ({ label: option.label, value: option.value }))}
-      value={value}
-      {...(placeholder ? { placeholder } : {})}
-      onChange={(next) => onChange(next as Value)}
-    />
+    <div className={className}>
+      {icon}
+      <Select
+        label={label ?? ariaLabel}
+        labelHidden={!label}
+        options={options.map((option) => ({ label: option.label, value: option.value }))}
+        value={value}
+        {...(placeholder ? { placeholder } : {})}
+        onChange={(next) => onChange(next as Value)}
+      />
+    </div>
   )
 }

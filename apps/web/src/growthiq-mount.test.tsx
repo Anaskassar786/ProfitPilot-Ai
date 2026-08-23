@@ -166,7 +166,9 @@ describe('GrowthIQ — thin-data strategic stage', () => {
     expect(text).toContain('Executive insights')
     expect(text).toContain('Executive actions')
     expect(text).toContain('Launch') // real lifecycle stage from 7 orders
-    expect(document.querySelectorAll('.gq-action-card').length).toBe(4)
+    // The Polaris Button shim consumes the consumer `.gq-action-card`
+    // className — the four actions are the action panel's buttons.
+    expect(document.querySelectorAll('.gq-actions-panel .gq-action-grid button').length).toBe(4)
     expect(consoleErrors).toEqual([])
   })
 
@@ -175,7 +177,11 @@ describe('GrowthIQ — thin-data strategic stage', () => {
     const text = document.body.textContent ?? ''
     expect(text).toContain('Your plan: Trial')
     expect(text).toContain('3 features active · 12 more available')
-    const toggle = document.querySelector<HTMLButtonElement>('.gq-plan-toggle')
+    // The Button shim consumes `.gq-plan-toggle`; the toggle is the
+    // "Show/Hide details" action — aria-expanded itself is forwarded.
+    const planToggle = () =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.gq-plan-head-actions button')).find((entry) => entry.textContent?.includes('details')) ?? null
+    const toggle = planToggle()
     expect(toggle).not.toBeNull()
     expect(toggle!.getAttribute('aria-expanded')).toBe('false')
     expect(text).toContain('Show details')
@@ -183,7 +189,7 @@ describe('GrowthIQ — thin-data strategic stage', () => {
     expect(document.querySelector('.gq-plan-details')!.classList.contains('open')).toBe(false)
     await act(async () => { toggle!.click() })
     const expanded = document.body.textContent ?? ''
-    expect(document.querySelector('.gq-plan-toggle')!.getAttribute('aria-expanded')).toBe('true')
+    expect(planToggle()!.getAttribute('aria-expanded')).toBe('true')
     expect(document.querySelector('.gq-plan-details')!.classList.contains('open')).toBe(true)
     expect(expanded).toContain('Currently available (3)')
     expect(expanded).toContain('Available on higher plans (12)')
@@ -193,8 +199,8 @@ describe('GrowthIQ — thin-data strategic stage', () => {
     expect(expanded).toContain('Investor reports (PDF)')
     expect(expanded).not.toContain('Upgrade to')
     // Collapse again.
-    await act(async () => { document.querySelector<HTMLButtonElement>('.gq-plan-toggle')!.click() })
-    expect(document.querySelector('.gq-plan-toggle')!.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { planToggle()!.click() })
+    expect(planToggle()!.getAttribute('aria-expanded')).toBe('false')
     expect(document.querySelector('.gq-plan-details')!.classList.contains('open')).toBe(false)
     expect(consoleErrors).toEqual([])
   })
@@ -225,7 +231,8 @@ describe('GrowthIQ — rich dashboard', () => {
     expect(text).toContain('Executive actions')
     // Plan panel collapsed by default even on a rich dashboard.
     expect(text).toContain('Your plan: Growth')
-    expect(document.querySelector('.gq-plan-toggle')?.getAttribute('aria-expanded')).toBe('false')
+    const planToggle = Array.from(document.querySelectorAll<HTMLButtonElement>('.gq-plan-head-actions button')).find((entry) => entry.textContent?.includes('details'))
+    expect(planToggle?.getAttribute('aria-expanded')).toBe('false')
     expect(consoleErrors).toEqual([])
   })
 

@@ -120,6 +120,11 @@ export const UiButton = forwardRef<HTMLElement, UiButtonProps>(function UiButton
   if (iconChild) props.icon = iconChild
   if (rest['aria-expanded'] !== undefined) props.ariaExpanded = rest['aria-expanded']
   if (rest['aria-controls']) props.ariaControls = rest['aria-controls']
+  // Switch/radio semantics (settings toggles, segmented single-choice
+  // groups) — Polaris Button forwards these to the underlying control;
+  // dropping them strips the control's role and state from assistive tech.
+  if (rest.role === 'switch' || rest.role === 'radio') props.role = rest.role
+  if (rest['aria-checked'] !== undefined) props.ariaChecked = rest['aria-checked'] === true || rest['aria-checked'] === 'true'
   if (text) props.children = text
   return <PolarisButton {...(props as PolarisButtonProps)} />
 })

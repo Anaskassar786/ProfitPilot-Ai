@@ -14,6 +14,8 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetApiClientStateForTests } from './api.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import type { RecommendationSummary, RecommendationView } from './recommendations-model.js'
 
 type RequestRecord = Readonly<{ url: string; method: string; status: number }>
@@ -204,12 +206,12 @@ async function mount(items: readonly RecommendationView[], usage = 7): Promise<I
   const { RecommendationsWorkspace } = await import('./recommendations.js')
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(StrictMode, null, createElement(RecommendationsWorkspace, {
+    root?.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(RecommendationsWorkspace, {
       context: { shop: 'snowboard.myshopify.com', storeId },
       onToast,
       onNavigateBilling: onBilling,
       onNavigateSection: onNavigate,
-    } as never)))
+    } as never))))
   })
   await settle()
   return harness
@@ -239,6 +241,25 @@ beforeAll(() => {
   Object.defineProperty(globalThis, 'Event', { configurable: true, value: dom.window.Event })
   Object.defineProperty(globalThis, 'MutationObserver', { configurable: true, value: dom.window.MutationObserver })
   Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true })
+  // Polaris reads `window.matchMedia` at module load; this suite builds its
+  // own JSDOM (instead of the shared jsdom environment), so the shared stubs
+  // that ran before `window` existed could not cover it — stub it here.
+  if (typeof dom.window.matchMedia !== 'function') {
+    Object.defineProperty(dom.window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() { return false },
+      }),
+    })
+  }
   container = dom.window.document.createElement('div')
   dom.window.document.body.append(container)
 })
@@ -248,6 +269,10 @@ afterAll(() => { dom.window.close() })
 beforeEach(() => {
   if (root) { act(() => root?.unmount()); root = null }
   container.innerHTML = ''
+  // The workspace keeps a deep-link hash (#/recommendations/:id) in the shared
+  // JSDOM location; without a reset one test's drawer link leaks into the next
+  // test and fires the "link could not be found" warning toast on load.
+  window.location.hash = ''
   onToast = vi.fn()
   onBilling = vi.fn()
   onNavigate = vi.fn()
@@ -300,7 +325,9 @@ describe('Recommendations — real-click decision and evidence flows', () => {
 
     await click(buttonByText(cardContaining('Snowboard stockout opportunity'), 'View Full Details'))
     expect(container.querySelector('[role="dialog"][aria-label="Recommendation evidence"]')).not.toBeNull()
-    expect(container.querySelector('.recs-hash')?.textContent).toContain('SHA-256')
+    // The Polaris Button shim consumes the `.recs-hash` class — the copy
+    // control is found by its accessible label instead.
+    expect(container.querySelector('.evidence-drawer [aria-label="Copy full SHA-256"]')?.textContent).toContain('SHA-256')
     expect(harness.requests.some((request) => request.url.includes('/r1/evidence/verify') && request.status === 200)).toBe(true)
     await click(container.querySelector('.evidence-drawer button[aria-label="Close"]')!)
     expect(container.querySelector('[role="dialog"][aria-label="Recommendation evidence"]')).toBeNull()
@@ -333,11 +360,11 @@ describe('Recommendations — real-click decision and evidence flows', () => {
     expect(harness.requests.some((request) => request.url.includes('sort=confidence'))).toBe(true)
 
     await click(buttonByText(container, 'By agent'))
-    expect(container.querySelector('.recs-group-toggle button.active')?.textContent).toBe('By agent')
+    expect(container.querySelector('.recs-group-toggle button[aria-pressed="true"]')?.textContent).toBe('By agent')
     await click(buttonByText(container, 'By rule'))
-    expect(container.querySelector('.recs-group-toggle button.active')?.textContent).toBe('By rule')
+    expect(container.querySelector('.recs-group-toggle button[aria-pressed="true"]')?.textContent).toBe('By rule')
     await click(buttonByText(container, 'List'))
-    expect(container.querySelector('.recs-group-toggle button.active')?.textContent).toBe('List')
+    expect(container.querySelector('.recs-group-toggle button[aria-pressed="true"]')?.textContent).toBe('List')
 
     const from = container.querySelector<HTMLInputElement>('input[aria-label="From date"]')!
     await act(async () => {
@@ -356,10 +383,12 @@ describe('Recommendations — real-click decision and evidence flows', () => {
     await settle()
     expect(harness.requests.some((request) => request.url.includes('dateTo=2026-08-20'))).toBe(true)
 
-    const inventoryChip = [...container.querySelectorAll<HTMLButtonElement>('.recs-agent-chips .recs-chip')].find((button) => button.textContent?.includes('Inventory Agent'))!
+    // The Polaris Button shim consumes the consumer `className`, so `.recs-chip`
+    // never reaches the DOM — the chips are the buttons inside the group.
+    const inventoryChip = [...container.querySelectorAll<HTMLButtonElement>('.recs-agent-chips button')].find((button) => button.textContent?.includes('Inventory Agent'))!
     await click(inventoryChip)
     expect(harness.requests.some((request) => request.url.includes('agent=INVENTORY_AGENT'))).toBe(true)
-    await click([...container.querySelectorAll<HTMLButtonElement>('.recs-agent-chips .recs-chip')].find((button) => button.textContent?.includes('All agents'))!)
+    await click([...container.querySelectorAll<HTMLButtonElement>('.recs-agent-chips button')].find((button) => button.textContent?.includes('All agents'))!)
     expect(harness.requests.some((request) => request.url.includes('recommendations?') && !request.url.includes('agent='))).toBe(true)
 
     await click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh recommendations"]')!)

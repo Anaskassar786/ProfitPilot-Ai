@@ -37,6 +37,7 @@ import type {
   CoachOnboardingState,
   CoachPreferences,
   CoachPriorityRecord,
+  CoachReportRecord,
   CoachReportRepository,
   CoachUsageRepository,
   ConversationRepository,
@@ -67,8 +68,10 @@ export type CoachMailer = Readonly<{
   sendWeeklyReview(input: Readonly<{ storeId: StoreId; to: string; subject: string; html: string }>): Promise<void>
 }>
 
+export type CoachPdfFile = Readonly<{ filename: string; contentType: string; body: Buffer }>
+
 export type CoachPdfWriter = Readonly<{
-  write(filename: string, rows: readonly Readonly<Record<string, string | number>>[]): Promise<string>
+  write(filename: string, rows: readonly Readonly<Record<string, string | number>>[]): Promise<CoachPdfFile>
 }>
 
 export type StoreCoachServiceDependencies = Readonly<{
@@ -890,37 +893,52 @@ export class StoreCoachService {
       streakDays: evidence.streakDays,
     }
     const content = { ...parseWeeklyReviewJson(generation.text, evidence), snapshot }
-    const report = await this.deps.reports.save(storeId, { reportType: 'WEEKLY', reportDate: day, content })
-    const pdfUrl = plan === 'commander' && this.deps.pdf ? await this.buildReviewPdf(storeId, report.id, report.content) : null
-    if (pdfUrl) {
-      await this.deps.reports.save(storeId, { reportType: 'WEEKLY', reportDate: day, content: { ...content }, pdfUrl })
-    }
-    return { id: report.id, reportDate: report.reportDate, content: report.content, pdfUrl, sentViaEmail: report.sentViaEmail, commanderPdf: plan === 'commander', emailAvailable: this.deps.mailer !== undefined, pdfAvailable: plan === 'commander' && this.deps.pdf !== undefined }
+    const saved = await this.deps.reports.save(storeId, { reportType: 'WEEKLY', reportDate: day, content })
+    // Commander PDFs are served by the authenticated download route in
+    // store-coach-routes. The stored pdfUrl is that route's real path (never
+    // a bare filename) and it is attached to the SAME report row — the old
+    // code inserted a second duplicate row, so the id the client held often
+    // pointed at a row without a pdfUrl.
+    const report = plan === 'commander' && this.deps.pdf
+      ? await this.attachReviewPdf(storeId, saved)
+      : saved
+    return { id: report.id, reportDate: report.reportDate, content: report.content, pdfUrl: report.pdfUrl, sentViaEmail: report.sentViaEmail, commanderPdf: plan === 'commander', emailAvailable: this.deps.mailer !== undefined, pdfAvailable: plan === 'commander' && this.deps.pdf !== undefined }
   }
 
-  public async reviewPdf(storeId: StoreId, id: string): Promise<Readonly<{ pdfUrl: string }>> {
+  /**
+   * Serves the weekly-review PDF bytes for the authenticated download route.
+   * The document is deterministic from the stored report content, so it is
+   * rebuilt on demand — the bytes never need a separate object store.
+   */
+  public async reviewPdf(storeId: StoreId, id: string): Promise<CoachPdfFile> {
     const plan = await this.planFor(storeId)
     if (plan !== 'commander') {
       throw new AppError('PAYMENT_REQUIRED', 'PDF reports are included on the Commander plan', 402, {
         upgrade: 'required', currentPlan: plan, requiredPlan: 'commander', feature: 'weeklyPdf',
       })
     }
+    if (!this.deps.pdf) throw new AppError('DEPENDENCY_ERROR', 'PDF generation is not configured for this deployment', 503)
     const reports = await this.deps.reports.list(storeId, 12)
     const report = reports.find((candidate) => candidate.id === id)
     if (!report) throw new AppError('NOT_FOUND', 'Report not found', 404)
-    if (!report.pdfUrl) throw new AppError('NOT_FOUND', 'No PDF has been generated for this report yet. Regenerate the review.', 404)
-    return { pdfUrl: report.pdfUrl }
+    return this.buildReviewPdf(report.content)
   }
 
-  private async buildReviewPdf(_storeId: StoreId, _reportId: string, content: Readonly<Record<string, unknown>>): Promise<string | null> {
-    if (!this.deps.pdf) return null
+  private async attachReviewPdf(storeId: StoreId, report: CoachReportRecord): Promise<CoachReportRecord> {
+    const pdfUrl = `/store-coach/review/${report.id}/pdf`
+    const attached = await this.deps.reports.attachPdf(storeId, report.id, pdfUrl)
+    return attached ?? { ...report, pdfUrl }
+  }
+
+  private async buildReviewPdf(content: Readonly<Record<string, unknown>>): Promise<CoachPdfFile> {
+    if (!this.deps.pdf) throw new AppError('DEPENDENCY_ERROR', 'PDF generation is not configured for this deployment', 503)
     const rows: Readonly<Record<string, string | number>>[] = [
       { section: 'Subject', value: String(content.subject ?? 'Weekly review') },
       { section: 'Week wins', value: stringArray(content.weekWins).join(' | ') },
       { section: 'Learnings', value: stringArray(content.learnings).join(' | ') },
       { section: 'Next week focus', value: stringArray(content.nextWeekFocus).join(' | ') },
     ]
-    return this.deps.pdf.write(`store-coach-weekly-review.pdf`, rows)
+    return this.deps.pdf.write('store-coach-weekly-review.pdf', rows)
   }
 
   public async emailReview(storeId: StoreId, id: string): Promise<Readonly<{ sent: boolean }>> {

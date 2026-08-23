@@ -24,8 +24,7 @@ import type { PlanTier } from '@profitpilot/types'
 import type { WorkspaceContext } from './model.js'
 import type { ExecutiveDashboard, ExecutiveGate } from './executive-model.js'
 import { executiveDateLabel, executiveMonthLabel, formatExecutiveMoney, formatExecutiveNumber } from './executive-model.js'
-import { fetchExecutiveDashboard } from './executive-api.js'
-import { executivePdfDownloadUrl } from './executive-api.js'
+import { downloadExecutiveReportPdf, fetchExecutiveDashboard } from './executive-api.js'
 import { ExecutiveHorizontalBars, ExecutiveRadialGauge } from './executive-charts.js'
 import {
   ExecutiveEmptyState,
@@ -57,7 +56,7 @@ import { ExecutiveDecisionsPage } from './executive-decisions.js'
 import { ExecutiveRisksPage } from './executive-risks.js'
 import { ExecutiveRoadmapsPage } from './executive-roadmaps.js'
 import { ExecutiveSettingsPage } from './executive-settings.js'
-import { errorMessageFrom } from './executive-shared.js'
+import { errorMessageFrom, saveDownloadedFile } from './executive-shared.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 
 const GROWTHIQ_ROUTE_PREFIX = '#/ai-growth-command/growthiq'
@@ -270,7 +269,7 @@ function GrowthIqWorkspace({ context, onToast, onNavigateBilling, onSync }: Grow
         </section>
       </div>
     ) : (
-      <GrowthIqDashboardView dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
+      <GrowthIqDashboardView storeId={context.storeId} dashboard={dashboard} onNavigate={navigate} onUpgrade={onUpgrade} onToast={onToast} />
     )
   }
 
@@ -372,7 +371,7 @@ function GrowthIqStrategyStage({ dashboard, plan, onNavigate, onUpgrade }: { das
 // GrowthIQ dashboard (9 sections + plan panel)
 // ────────────────────────────────────────────────────────────────────────────
 
-function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
+function GrowthIqDashboardView({ storeId, dashboard, onNavigate, onUpgrade, onToast }: { storeId: string | null; dashboard: ExecutiveDashboard; onNavigate: (route: string) => void; onUpgrade: () => void; onToast: (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void }) {
   const { plan, gates, usage } = dashboard
   const d = strategicDerivations(dashboard)
   // Sub-routes are relative to the GrowthIQ prefix (navigate() prepends it).
@@ -629,7 +628,20 @@ function GrowthIqDashboardView({ dashboard, onNavigate, onUpgrade, onToast }: { 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Button type="button" className="button secondary" onClick={() => onNavigate(`${base}/reports/${dashboard.latestReport!.id}`)}><Eye size={14} /> View Report</Button>
                     {plan === 'commander' && (
-                      <a className="button secondary" href={executivePdfDownloadUrl(dashboard.latestReport!.id)}><Download size={14} /> Download PDF</a>
+                      // Authenticated fetch → blob download: the PDF route
+                      // requires the App Bridge bearer, so a plain href (no
+                      // token) returns 401 in production.
+                      <Button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => {
+                          if (!storeId) { onToast('Connect a store to download this report.', 'warning'); return }
+                          const reportId = dashboard.latestReport!.id
+                          void downloadExecutiveReportPdf(storeId, reportId)
+                            .then((file) => { if (!saveDownloadedFile(file, `board-report-${reportId}.pdf`)) onToast('Your browser blocked the download. Allow downloads for this page and try again.', 'warning') })
+                            .catch((downloadError: unknown) => onToast(errorMessageFrom(downloadError), 'error'))
+                        }}
+                      ><Download size={14} /> Download PDF</Button>
                     )}
                   </div>
                 </div>
