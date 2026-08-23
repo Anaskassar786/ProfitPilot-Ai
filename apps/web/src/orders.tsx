@@ -220,7 +220,7 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <CommanderCapability title="Auto-action suggestions" icon={<Bot size={15} />} insight={available('auto_action_suggestions')} locked={locked('auto_action_suggestions')} onUpgrade={onNavigateBilling} />
           <CommanderCapability title="Custom AI queries" icon={<ShoppingBag size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
         </div>
-        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><div><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && question.trim() && !asking) void ask() }} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></div><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
+        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><form onSubmit={(event) => { event.preventDefault(); if (!asking) void ask() }}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button type="submit" aria-label="Ask order intelligence" disabled={!question.trim() || asking}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></form><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
       </>}
     </div>}
   </section>
@@ -476,7 +476,7 @@ export function CustomQueryAnswer({ insight }: { insight: ReturnType<typeof insi
   // Every backend state renders honest feedback — a swallowed null here made
   // "Ask order intelligence" look broken whenever the answer was anything but
   // a successful generation (BUG-2).
-  if (data.status === 'generated' && text(data.text)) return <p className="custom-query-answer"><ShoppingBag size={13} />{text(data.text)}</p>
+  if (data.status === 'generated' && text(data.text)) return <p className="custom-query-answer" aria-live="polite"><ShoppingBag size={13} />{text(data.text)}</p>
   if (data.status === 'unavailable') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'AI is temporarily unavailable. Your data is safe — try again in a moment.'}</p>
   if (data.status === 'safety_failed') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'The AI answer failed a safety check and was withheld. Try rephrasing your question.'}</p>
   if (data.status === 'limit_reached') return <p className="custom-query-answer error" role="status"><AlertTriangle size={13} />{text(data.message) ?? 'Daily AI limit reached — upgrade or try again tomorrow.'}</p>

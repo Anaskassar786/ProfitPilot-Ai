@@ -75,8 +75,10 @@ describe('Orders UI regressions', () => {
   it('only clears the question box after a successful generation', () => {
     const source = readFileSync(new URL('./orders.tsx', import.meta.url), 'utf8')
     expect(source).toContain("if (status === 'generated') setQuestion('')")
-    // Enter submits the question — not just the send button.
-    expect(source).toContain("event.key === 'Enter'")
+    // A native form makes Enter and the labelled send button share one path.
+    expect(source).toContain('<form onSubmit=')
+    expect(source).toContain('event.preventDefault()')
+    expect(source).toContain('aria-label="Ask order intelligence"')
   })
 })
 

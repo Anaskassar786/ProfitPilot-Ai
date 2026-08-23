@@ -174,6 +174,20 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     shopify: { directory: f7.storeDirectory, tokens: f7.tokenVault, apiVersion: env.SHOPIFY_API_VERSION?.trim() || '2026-07' },
     recommendations: f7.ai.recommendations,
     workflows: {
+      create: async (tenant, input) => {
+        const template = templateFor(input.templateId)
+        if (!template) throw new Error('That automation template is not supported. Open Automation to choose from the available templates.')
+        const plan = await planFor(tenant as import('@profitpilot/types').StoreId)
+        const rank = { trial: 0, start: 1, growth: 2, commander: 3 } as const
+        if (rank[plan] < rank[template.minimumPlan]) throw new Error(`The ${template.name} template requires the ${template.minimumPlan} plan.`)
+        const used = await f7.automation.workflows.count(tenant)
+        const limit = PLAN_ENTITLEMENT_LIMITS[plan].automation_workflows
+        if (limit !== null && used >= limit) throw new Error(`Your ${plan} plan allows ${limit} automation workflows. Archive one or upgrade before creating another.`)
+        const definition = installTemplate(template, { id: randomUUID(), storeId: tenant, name: input.name.slice(0, 120), actor: 'ai-command' })
+        validateWorkflow(definition)
+        const created = await f7.automation.workflows.put(definition, 'ai-command')
+        return { id: created.id, name: created.name, status: created.status, category: created.category, templateId: input.templateId }
+      },
       trigger: async (tenant, workflowId) => {
         const execution = f7.automation.execution
         if (!execution) throw new Error('Workflow execution is not connected.')

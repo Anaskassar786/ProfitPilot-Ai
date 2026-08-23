@@ -18,7 +18,10 @@ export type RecommendationDecider = Readonly<{ decidePending(storeId: StoreId, i
 export type EmailSender = Readonly<{ send(input: Readonly<{ to: string; subject: string; html: string; storeId: string }>): Promise<Readonly<{ messageId: string }>> }>
 export type WorkflowTrigger = Readonly<{ trigger(storeId: string, workflowId: string): Promise<Readonly<{ runId: string; status: string }>> }>
 export type WorkflowReader = Readonly<{ list(storeId: string, query?: Readonly<Record<string, unknown>>): Promise<Readonly<{ items: readonly Readonly<Record<string, unknown>>[]; total?: number }>> }>
-export type WorkflowController = WorkflowTrigger & Readonly<{ setStatus(storeId: string, workflowId: string, status: 'PAUSED' | 'ACTIVE'): Promise<Readonly<Record<string, unknown>> | null> }>
+export type WorkflowController = WorkflowTrigger & Readonly<{
+  create(storeId: string, input: Readonly<{ templateId: string; name: string }>): Promise<Readonly<Record<string, unknown>>>
+  setStatus(storeId: string, workflowId: string, status: 'PAUSED' | 'ACTIVE'): Promise<Readonly<Record<string, unknown>> | null>
+}>
 export type ReportGenerator = Readonly<{ generate(storeId: string, reportType: string, dateRange: string): Promise<unknown> }>
 export type NotificationWriter = Readonly<{ create(storeId: string, title: string, message: string, priority: string): Promise<Readonly<{ id: string }>> }>
 
@@ -260,6 +263,7 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
     if (action.actionType === 'TAG_CUSTOMER') return this.tagCustomers(storeId, action)
     if (action.actionType === 'CREATE_DISCOUNT') return this.createDiscount(storeId, action)
     if (action.actionType === 'APPROVE_RECOMMENDATION') return this.approveRecommendation(storeId, action)
+    if (action.actionType === 'CREATE_WORKFLOW') return this.createWorkflow(storeId, action)
     if (action.actionType === 'TRIGGER_WORKFLOW') return this.triggerWorkflow(storeId, action)
     if (action.actionType === 'PAUSE_WORKFLOW') return this.pauseWorkflow(storeId, action)
     if (action.actionType === 'RESUME_WORKFLOW') return this.resumeWorkflow(storeId, action)
@@ -428,6 +432,19 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
       return { status: 'SUCCESS', result: { message: 'Recommendation approved.', recommendation: result }, rollbackAvailable: false }
     } catch (error: unknown) {
       return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Approval failed.' }, rollbackAvailable: false }
+    }
+  }
+
+  private async createWorkflow(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult> {
+    if (!this.deps.workflows) return { status: 'FAILED', result: { message: 'Workflow creation is not connected.' }, rollbackAvailable: false }
+    const templateId = String(action.actionParams.template_id ?? '').trim()
+    const name = String(action.actionParams.name ?? '').trim()
+    if (!templateId || !name) return { status: 'FAILED', result: { message: 'A supported template and workflow name are required.' }, rollbackAvailable: false }
+    try {
+      const workflow = await this.deps.workflows.create(storeId, { templateId, name })
+      return { status: 'SUCCESS', result: { ...workflow, message: 'Automation created as a draft.' }, rollbackAvailable: false }
+    } catch (error: unknown) {
+      return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Workflow creation failed.' }, rollbackAvailable: false }
     }
   }
 

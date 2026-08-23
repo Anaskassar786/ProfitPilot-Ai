@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════
 # PROFITPILOT — PRODUCT QA FINAL REPORT
 # Date: 2026-08-23
-# Commit: 2a09872 (branch arena/01a02ef2-profitpilot-ai)
+# Commits: 2a09872 + 43447f5 (branch arena/01a02ef2-profitpilot-ai)
 # ═══════════════════════════════════════════════════════════════════
 
 ## OVERALL HEALTH SCORE: 94/100
@@ -12,7 +12,7 @@
 |-----------|--------|
 | Build     | ✅ `pnpm build` — all 20 workspace projects compile |
 | Typecheck | ✅ `pnpm typecheck` — 0 errors |
-| Tests     | ✅ **3,109 passed / 0 failed / 1 skipped** (247 files) — includes 9 new regression tests |
+| Tests     | ✅ **3,110 passed / 0 failed / 1 skipped** (247 files) — includes 11 new regression tests |
 
 ## SECTION STATUS BOARD
 
@@ -24,17 +24,17 @@
 | Customers        | ✅     | 0          | 0     | Real customer rows; guest handling shows "Customer name unavailable" avatar; insights grounded; endpoints all live. |
 | Inventory        | ✅     | 0          | 0     | Real levels + locations; coverage explanation honest about partial data; sort/aria fixes intact. |
 | Analytics        | ✅     | 0          | 0     | **No fake data found.** Every metric (forecast, cohorts, funnel, geography, channels, comparisons) is computed from the real analytics snapshot + synced orders; plan-locked features throw honest 402-style locks, not fabricated numbers. Custom AI query hits `/analytics/insights/query` with real facts. |
-| AI Command       | ✅     | 1 (shared with BUG-1) | 1 | `get_store_health` tool now recency-capped (a dead store can no longer be quoted "Healthy" in chat). Data lookups, SSE chat, discount/e-mail/tag actions, evidence, 503 degradation, and daily limits verified by existing suites. |
+| AI Command       | ✅     | 2 | 2 | `get_store_health` is recency-capped. **BUG-3 fixed:** create-automation intent now produces an approval preview, resolves a governed template, enforces plan/workflow limits, validates the graph, and persists a real draft workflow. |
 | Recommendations  | ✅     | 0          | 0     | Analyze runs the deterministic engine on real snapshots; approve/dismiss CAS flow covered by tests; empty state honest. |
 | GrowthIQ         | ✅     | 0          | 0     | Executive analytics from real data; risk-radar false-positive fix intact; PDF endpoints (`/reports/:id/pdf` + status poll) live. |
-| Automation       | ✅     | 0          | 0     | **BUG-3 verified not broken**: "Create an automation…" in AI Command routes to the automation guide with a working "Go to Automation gallery" CTA (by design — config needs the visual editor); template install, workflow CRUD, approvals, trigger→condition→action pipeline all covered and green. |
+| Automation       | ✅     | 1          | 1     | **BUG-3 fixed:** AI Command automation creation now reaches `WorkflowRepository.put`; the workflow appears as a validated draft for merchant review. Template install, CRUD, approvals, and trigger→condition→action remain green. |
 | Store Coach      | ✅     | 0          | 0     | Weekly review, chat, huddle, goals, PDF (`/store-coach/review/:id/pdf`) all wired to live routes; plan gating honest. |
 | PatternAI        | ✅     | 0          | 0     | Charts guarded against NaN; "Preview only — no sample metrics or invented store results" label present. |
 | Reports          | ✅     | 0          | 0     | Generate → poll → download chain real (`/reports/generate`, `/reports/:id/download`); stale-GENERATING recovery covered by tests. |
 | Exports          | ✅     | 0          | 0     | `/exports/:dataset` produces real files; 0-row exports handled; downloads authenticated. |
 | Settings         | ✅     | 0          | 0     | Workspace, merchant-email verify, sync settings save via live routes; modals a11y-clean. |
 | Help & Support   | ✅     | 0          | 0     | Contact form POSTs to `/support/tickets` (validated, persisted, 201); legal links live. |
-| **TOTAL**        |        | **2 bugs / 6 defect instances** | **2 / 6** | |
+| **TOTAL**        |        | **3 bugs / 7 defect instances** | **3 / 7** | |
 
 ## DETAILED BUG LOG
 
@@ -46,6 +46,7 @@
 | 4 | Orders | Question box cleared even when the ask failed | Medium | `ask()` unconditionally called `setQuestion('')` | ✅ Fixed — clears only after successful generation |
 | 5 | Orders | Enter key did not submit the AI question | Low | No `onKeyDown` handler on the input | ✅ Fixed |
 | 6 | Tests | `model.test.ts` + `f8-context.test.ts` had the stale-score bug codified as expected behaviour | Medium | Tests used 2024 data and asserted "healthy" | ✅ Updated + 5 new regression tests added |
+| 7 | AI Command / Automation | “Create an automation…” could not create or persist a workflow | Critical | Command tools only supported list/trigger/pause/resume; no create action or production repository adapter existed | ✅ Fixed — governed template → approval → entitlement check → validation → DB draft persistence |
 
 ## DATA INTEGRITY CHECK
 
@@ -61,7 +62,7 @@
 | Check | Result |
 |-------|--------|
 | Dead endpoints found | **0** — every path called from `apps/web` (163 unique routes incl. AI Command, Executive, Store Coach, PatternAI, Reports, Exports, Support) resolves to a registered Express route |
-| Broken API chains found | 1 (Orders ask-intelligence render chain) — fixed |
+| Broken API chains found | 2 (Orders ask-intelligence rendering; AI automation creation/persistence) — both fixed |
 | Internal Server Errors | 0 new; existing 500-guards (currency fallback, Promise.allSettled sources, safe-date) verified intact |
 | All fixed | **YES** |
 

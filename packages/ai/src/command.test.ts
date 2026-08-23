@@ -137,6 +137,7 @@ describe('AI Command safety parsers', () => {
     expect(detectWriteTool('Send email to VIP customers')).toBe('send_email')
     expect(detectWriteTool('Tag new customers as vip')).toBe('tag_customers')
     expect(detectWriteTool('Create a 15% weekend discount')).toBe('create_discount')
+    expect(detectWriteTool('Create an automation that alerts me when inventory is low')).toBe('create_workflow')
     expect(detectWriteTool('Run my cart recovery workflow')).toBe('trigger_workflow')
     expect(detectWriteTool('Pause the welcome email automation')).toBe('pause_workflow')
     expect(detectWriteTool('Resume the abandoned cart workflow')).toBe('resume_workflow')
