@@ -7,8 +7,9 @@
  */
 import { Button, AppSaveBar, RichButton } from './polaris-ui.js'
 import { Page } from '@shopify/polaris'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useModalDialog } from './modal-a11y.js'
 import {
   AlertTriangle,
   Bell,
@@ -933,9 +934,11 @@ function ConfirmModal({
   onConfirm: () => void
   children?: ReactNode
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onCancel)
   return (
     <div className="settings-modal-overlay">
-      <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
+      <div ref={dialogRef} className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
         <div className="section-kicker"><AlertTriangle size={13} /> Confirm</div>
         <h2 id="settings-confirm-title">{title}</h2>
         <p>{body}</p>

@@ -120,6 +120,44 @@ export function ensureEmbeddedAppBridgeRedirect(search: string = currentSearch()
 }
 
 /**
+ * Opens a Shopify admin deep link (e.g. /admin/orders/… or /admin/products/…)
+ * from the app without navigating the app's own frame.
+ *
+ * Prefers an App Bridge navigation API when the loaded bridge exposes one
+ * (v4 CDN bridges expose none, so embedded apps normally take the fallback):
+ * the caller then lets the plain `<a target="_blank" rel="noopener
+ * noreferrer">` default action open the link in a new top-level tab, which
+ * is Shopify's recommended way to leave the admin iframe.
+ *
+ * Returns true when App Bridge handled the navigation (callers should
+ * preventDefault the anchor), false otherwise.
+ */
+export function openAdminUrlInNewTab(url: string): boolean {
+  if (typeof window === 'undefined' || !url) return false
+  try {
+    const bridge = readShopifyGlobal()
+    if (!bridge) return false
+    // v3-style bridge instances expose a `Navigation` action with
+    // `openExternal`; be defensive about the exact surface.
+    const navigation = (bridge.Navigation ?? (bridge as Record<string, unknown>).navigation) as
+      | Readonly<{ openExternal?: (options: Readonly<{ url: string }>) => void }>
+      | undefined
+    if (navigation && typeof navigation.openExternal === 'function') {
+      navigation.openExternal({ url })
+      return true
+    }
+    const topLevel = (bridge as Record<string, unknown>).openExternal
+    if (typeof topLevel === 'function') {
+      ;(topLevel as (options: Readonly<{ url: string }>) => void)({ url })
+      return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+/**
  * Returns a fresh Shopify session token for the embedded admin, or a
  * discriminated "why not" result. Never throws: callers decide how to handle
  * an unavailable token (log + keep the cookie fallback, or surface a

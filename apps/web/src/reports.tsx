@@ -1,5 +1,6 @@
 import { Button } from './polaris-ui.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useModalDialog } from './modal-a11y.js'
 import {
   AlertTriangle,
   BarChart3,
@@ -67,6 +68,12 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
   const [customEnd, setCustomEnd] = useState('')
   const [emailAfterGenerate, setEmailAfterGenerate] = useState(false)
   const [preview, setPreview] = useState<Readonly<{ run: ReportRun; content: ReportPreview }> | null>(null)
+  const settingsModalRef = useRef<HTMLDivElement>(null)
+  const customModalRef = useRef<HTMLDivElement>(null)
+  const previewModalRef = useRef<HTMLDivElement>(null)
+  useModalDialog(settingsModalRef, () => setSettingsOpen(false), settingsOpen)
+  useModalDialog(customModalRef, () => setCustomOpen(false), customOpen)
+  useModalDialog(previewModalRef, () => setPreview(null), preview !== null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [fileBytes, setFileBytes] = useState<Readonly<Record<string, number>>>({})
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set())
@@ -452,7 +459,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
 
       {settingsOpen && (
         <div className="reports-modal-overlay">
-          <div className="reports-modal" role="dialog" aria-labelledby="reports-settings-title">
+          <div ref={settingsModalRef} className="reports-modal" role="dialog" aria-modal="true" aria-labelledby="reports-settings-title">
             <header>
               <h3 id="reports-settings-title">Report settings</h3>
               <Button type="button" className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={16} /></Button>
@@ -482,7 +489,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
 
       {customOpen && (
         <div className="reports-modal-overlay">
-          <div className="reports-modal" role="dialog" aria-labelledby="reports-custom-title">
+          <div ref={customModalRef} className="reports-modal" role="dialog" aria-modal="true" aria-labelledby="reports-custom-title">
             <header>
               <h3 id="reports-custom-title">Custom report range</h3>
               <Button type="button" className="icon-button" onClick={() => setCustomOpen(false)} aria-label="Close custom range"><X size={16} /></Button>
@@ -520,7 +527,7 @@ export function ReportsWorkspace({ context, onNavigateBilling, onToast }: Report
 
       {preview && (
         <div className="reports-modal-overlay">
-          <div className="reports-modal reports-preview" role="dialog" aria-labelledby="reports-preview-title">
+          <div ref={previewModalRef} className="reports-modal reports-preview" role="dialog" aria-modal="true" aria-labelledby="reports-preview-title">
             <header>
               <div>
                 <span className="reports-kicker">Report preview</span>

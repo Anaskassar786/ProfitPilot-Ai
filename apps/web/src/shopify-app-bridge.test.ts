@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, openAdminUrlInNewTab, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -163,5 +163,39 @@ describe('ensureEmbeddedAppBridgeRedirect', () => {
     expect(redirected).toBe(true)
     expect(replace).toHaveBeenCalledWith('https://admin.shopify.com/store/demo/apps/client-id/recommendations?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==')
     Object.defineProperty(window, 'location', { configurable: true, value: original })
+  })
+})
+
+describe('openAdminUrlInNewTab', () => {
+  afterEach(() => {
+    delete (window as unknown as { shopify?: unknown }).shopify
+  })
+
+  it('returns false without a bridge so the anchor fallback (new top-level tab) takes over', () => {
+    delete (window as unknown as { shopify?: unknown }).shopify
+    expect(openAdminUrlInNewTab('https://shop.myshopify.com/admin/orders/123')).toBe(false)
+  })
+
+  it('returns false for an empty url even when a bridge is present', () => {
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken: vi.fn() }
+    expect(openAdminUrlInNewTab('')).toBe(false)
+  })
+
+  it('uses the App Bridge Navigation.openExternal action when exposed', () => {
+    const openExternal = vi.fn()
+    ;(window as unknown as { shopify: unknown }).shopify = { Navigation: { openExternal } }
+    const handled = openAdminUrlInNewTab('https://shop.myshopify.com/admin/products/456')
+    expect(handled).toBe(true)
+    expect(openExternal).toHaveBeenCalledWith({ url: 'https://shop.myshopify.com/admin/products/456' })
+  })
+
+  it('falls back to the anchor when the v4 CDN bridge exposes only idToken()', () => {
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken: vi.fn(async () => 'token') }
+    expect(openAdminUrlInNewTab('https://shop.myshopify.com/admin/orders/123')).toBe(false)
+  })
+
+  it('never throws when the bridge surface is malformed', () => {
+    ;(window as unknown as { shopify: unknown }).shopify = { Navigation: { openExternal: 'not-a-function' } }
+    expect(openAdminUrlInNewTab('https://shop.myshopify.com/admin/orders/123')).toBe(false)
   })
 })

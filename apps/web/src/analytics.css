@@ -503,7 +503,7 @@
   color: rgb(178, 132, 0) !important;
   fill: rgb(178, 132, 0) !important;
 }
-.risk-footnote { margin: 0 17px 14px; color: var(--text-tertiary); font-size: 10.5px; }
+.risk-footnote { margin: 0 17px 14px; color: var(--text-tertiary); font-size: 12px; }
 
 /* Light theme parity */
 .app-shell.light-mode .chart-mid .recharts-cartesian-grid line,

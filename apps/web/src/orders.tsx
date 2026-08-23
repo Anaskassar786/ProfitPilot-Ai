@@ -43,6 +43,7 @@ import {
   XCircle,
 } from './icons.js'
 import { fetchOrder, fetchOrderInsights, fetchOrders } from './api.js'
+import { openAdminUrlInNewTab } from './shopify-app-bridge.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { WorkspaceContext } from './model.js'
@@ -510,6 +511,16 @@ function OrderStatusBadge({ status }: { status: OrderStatus }) { return <span cl
 
 function OrdersPagination({ pagination, onPage }: { pagination: OrdersPageResult['pagination']; onPage: (page: number) => void }) { return <footer className="orders-pagination"><span>Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} real orders</span><div><Button disabled={pagination.page <= 1} onClick={() => onPage(pagination.page - 1)}><ChevronLeft size={15} /></Button><strong>Page {pagination.page} of {pagination.pages}</strong><Button disabled={pagination.page >= pagination.pages} onClick={() => onPage(pagination.page + 1)}><ChevronRight size={15} /></Button></div></footer> }
 
+/**
+ * "Open in Shopify" admin deep link. When the loaded App Bridge exposes a
+ * navigation API it is used; otherwise the anchor's own
+ * `target="_blank" rel="noopener noreferrer"` opens the admin in a new
+ * top-level tab — the embedded app iframe is never navigated.
+ */
+export function OpenInShopifyLink({ href }: { href: string }) {
+  return <a className="button primary" href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => { if (openAdminUrlInNewTab(href)) event.preventDefault() }}>Open in Shopify <ExternalLink size={14} /></a>
+}
+
 function OrderDetailsDrawer({ storeId, orderId, shop, onClose, onToast }: { storeId: string; orderId: string; shop: string | null; onClose: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [order, setOrder] = useState<OrderView | null>(null)
   const [loading, setLoading] = useState(true)
@@ -526,7 +537,7 @@ function OrderDetailsDrawer({ storeId, orderId, shop, onClose, onToast }: { stor
       {(order.cancelledAt || order.cancelReason) && <DetailSection title="Cancellation" icon={<AlertTriangle size={16} />}><DetailGrid items={[['Canceled at', formatDateTime(order.cancelledAt)], ['Reason', order.cancelReason]]} /></DetailSection>}
       {(order.tags.length > 0 || order.note) && <DetailSection title="Tags & note" icon={<CalendarDays size={16} />}>{order.tags.length > 0 && <div className="order-detail-tags">{order.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}{order.note && <p className="order-note">{order.note}</p>}</DetailSection>}
     </div>
-    <footer><span><LockKeyhole size={14} /> Shopify is the source of truth</span>{shop && <a className="button primary" href={`https://${shop}/admin/orders/${encodeURIComponent(order.id)}`} target="_blank" rel="noreferrer">Open in Shopify <ExternalLink size={14} /></a>}</footer>
+    <footer><span><LockKeyhole size={14} /> Shopify is the source of truth</span>{shop && <OpenInShopifyLink href={`https://${shop}/admin/orders/${encodeURIComponent(order.id)}`} />}</footer>
   </>}</aside></div>
 }
 function DetailSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <section className="order-detail-section"><h3>{icon}{title}</h3>{children}</section> }

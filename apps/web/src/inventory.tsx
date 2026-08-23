@@ -32,6 +32,7 @@ import {
   X,
 } from './icons.js'
 import { fetchInventory, fetchInventoryHistory, fetchInventoryInsights, fetchInventoryItem } from './api.js'
+import { openAdminUrlInNewTab } from './shopify-app-bridge.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
@@ -685,6 +686,16 @@ function InventoryPagination({ pagination, onPage }: { pagination: InventoryPage
   </footer>
 }
 
+/**
+ * "Open in Shopify" admin deep link. When the loaded App Bridge exposes a
+ * navigation API it is used; otherwise the anchor's own
+ * `target="_blank" rel="noopener noreferrer"` opens the admin in a new
+ * top-level tab — the embedded app iframe is never navigated.
+ */
+export function OpenInShopifyLink({ href }: { href: string }) {
+  return <a className="button primary" href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => { if (openAdminUrlInNewTab(href)) event.preventDefault() }}>Open in Shopify</a>
+}
+
 function InventoryDetailDrawer({ storeId, variantId, shop, onClose, onToast }: { storeId: string; variantId: string; shop: string | null; onClose: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [item, setItem] = useState<InventoryItem | null>(null)
   const [loading, setLoading] = useState(true)
@@ -745,7 +756,7 @@ function InventoryDetailDrawer({ storeId, variantId, shop, onClose, onToast }: {
         </div>
         <footer>
           <span>Shopify is the source of truth</span>
-          {shop && <a className="button primary" href={`https://${shop}/admin/products/${encodeURIComponent(item.productId)}`} target="_blank" rel="noreferrer">Open in Shopify</a>}
+          {shop && <OpenInShopifyLink href={`https://${shop}/admin/products/${encodeURIComponent(item.productId)}`} />}
         </footer>
       </>}
     </aside>
