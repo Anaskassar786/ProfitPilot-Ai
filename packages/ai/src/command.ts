@@ -217,7 +217,13 @@ export type ActionExecutionResult = Readonly<{
   rollbackAvailable: boolean
 }>
 
-export type ActionPreflightResult = Readonly<{ ok: boolean; reason?: string | null; missingScope?: string | null }>
+export type ActionPreflightResult = Readonly<{
+  ok: boolean
+  reason?: string | null
+  missingScope?: string | null
+  /** Deep link that restarts Shopify OAuth so the merchant can grant the scope. */
+  reauthorizeUrl?: string | null
+}>
 
 export interface AiCommandActionRuntime {
   execute(storeId: StoreId, action: AiCommandActionRecord): Promise<ActionExecutionResult>
@@ -334,6 +340,51 @@ const WRITE_INTENT: Readonly<Record<AiCommandWriteTool, RegExp>> = {
 }
 
 const REVERSIBLE_ACTIONS = new Set<AiCommandActionType>(['TAG_CUSTOMER', 'CREATE_DISCOUNT', 'SEND_NOTIFICATION'])
+
+/**
+ * The single merchant-facing sentence used for EVERY Shopify authorization
+ * failure (HTTP 401/403 or GraphQL ACCESS_DENIED), whether it is detected by
+ * the preflight scope probe or thrown mid-execution. Raw transport strings such
+ * as "9414254756053 — Shopify API request failed with 403" must never reach the
+ * merchant.
+ */
+export const SHOPIFY_PERMISSION_MESSAGE = '⚠️ Action requires additional Shopify permissions. Please re-authorize or reinstall ProfitPilot from Shopify Admin to grant updated permissions.'
+
+/**
+ * Recognises a permission failure recorded by the action runtime. The runtime
+ * (which owns the Shopify client) classifies the error and records a
+ * `MISSING_*_SCOPE` / `SHOPIFY_PERMISSION_DENIED` reason plus the re-authorize
+ * link; this reads that structured channel back out. The raw-status regexes are
+ * a defensive net for any handler that has not been migrated yet.
+ */
+export function shopifyPermissionFailure(action: AiCommandActionRecord): Readonly<{ message: string; missingScope: string | null; reauthorizeUrl: string | null }> | null {
+  const details = isRecord(action.errorDetails) ? action.errorDetails : null
+  const result = isRecord(action.executionResult) ? action.executionResult : null
+  const reason = details && typeof details.reason === 'string' ? details.reason : ''
+  const missingScope = firstString(details?.missingScope, result?.missingScope)
+  const texts = [
+    details && typeof details.message === 'string' ? details.message : '',
+    result && typeof result.message === 'string' ? result.message : '',
+    ...(Array.isArray(details?.reasons) ? details.reasons.map(String) : []),
+    ...(Array.isArray(result?.reasons) ? result.reasons.map(String) : []),
+  ].filter(Boolean)
+  const coded = /_SCOPE$|^SHOPIFY_PERMISSION_DENIED$|^ACCESS_DENIED$/i.test(reason)
+  const rawPermission = texts.some((text) => /request failed with 40[13]\b|\baccess[_ ]denied\b|\bforbidden\b|missing .*permission|requires? .*(?:scope|permission)/i.test(text))
+  if (!coded && !rawPermission && !missingScope) return null
+  const scopeSuffix = missingScope ? ` Missing permission: ${missingScope}.` : ''
+  return {
+    message: `${SHOPIFY_PERMISSION_MESSAGE}${scopeSuffix}`,
+    missingScope,
+    reauthorizeUrl: firstString(details?.reauthorizeUrl, result?.reauthorizeUrl),
+  }
+}
+
+function firstString(...values: readonly unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
 
 export function limitsForPlan(plan: PlanTier): AiCommandPlanLimits {
   return AI_COMMAND_PLAN_LIMITS[plan]
@@ -1940,9 +1991,20 @@ export class AiCommandService {
       try {
         const check = await this.actions.preflight(storeId, type)
         if (!check.ok) {
-          const scope = check.missingScope ? `the "${check.missingScope}" permission` : 'the required permission'
-          return message('assistant', check.reason ?? `This action needs ${scope} that your current Shopify connection has not granted. Re-authorize or re-install ProfitPilot from the Shopify App Store, then try this command again.`, 'error', this.now(), {
-            structuredData: { type: 'action_blocked', data: { actionType: type, missingScope: check.missingScope ?? null, reason: check.reason ?? null }, actions: [] },
+          const scope = check.missingScope ? ` Missing permission: ${check.missingScope}.` : ''
+          const copy = check.reason?.trim() || `${SHOPIFY_PERMISSION_MESSAGE}${scope}`
+          return message('assistant', copy, 'error', this.now(), {
+            structuredData: {
+              type: 'action_blocked',
+              data: {
+                actionType: type,
+                missingScope: check.missingScope ?? null,
+                reason: copy,
+                message: copy,
+                reauthorizeUrl: check.reauthorizeUrl ?? null,
+              },
+              actions: [],
+            },
             thinkingSteps: thinkingStepsFor(text, [{ name: tool, params }], 'preview'),
           })
         }
@@ -2188,6 +2250,9 @@ export class AiCommandService {
 
 function resultMessage(action: AiCommandActionRecord, now: number, prefix?: string): AiCommandMessage {
   const summary = summarizeActionResult(action)
+  // Permission failures render as an `action_blocked` block so the web client
+  // can attach the "Re-authorize ProfitPilot" CTA.
+  const permission = action.executionStatus === 'SUCCESS' ? null : shopifyPermissionFailure(action)
   const thinkingSteps = action.executionStatus === 'CANCELLED'
     ? ['Cancelling pending action...']
     : action.executionStatus === 'ROLLED_BACK'
@@ -2204,7 +2269,20 @@ function resultMessage(action: AiCommandActionRecord, now: number, prefix?: stri
       rollbackAvailable: action.rollbackAvailable,
       rollbackDeadline: action.rollbackDeadline,
     },
-    structuredData: { type: 'action_result', data: action.executionResult, actions: action.rollbackAvailable ? ['undo'] : [] },
+    structuredData: permission
+      ? {
+          type: 'action_blocked',
+          data: {
+            actionType: action.actionType,
+            missingScope: permission.missingScope,
+            reason: permission.message,
+            message: permission.message,
+            reauthorizeUrl: permission.reauthorizeUrl,
+            result: action.executionResult,
+          },
+          actions: [],
+        }
+      : { type: 'action_result', data: action.executionResult, actions: action.rollbackAvailable ? ['undo'] : [] },
     thinkingSteps,
   })
 }
@@ -2212,6 +2290,15 @@ function resultMessage(action: AiCommandActionRecord, now: number, prefix?: stri
 export function summarizeActionResult(action: AiCommandActionRecord): string {
   if (action.executionStatus === 'CANCELLED') return 'Cancelled. Nothing was executed.'
   if (action.executionStatus === 'ROLLED_BACK') return 'The action was rolled back. The reverse change was applied.'
+  // A missing Shopify permission replaces the whole summary (including any
+  // partial-success counts) with one actionable re-authorize sentence.
+  const permission = shopifyPermissionFailure(action)
+  if (permission && action.executionStatus !== 'SUCCESS') {
+    const partial = action.executionStatus === 'PARTIAL_SUCCESS' && action.actionType === 'TAG_CUSTOMER' && isRecord(action.executionResult)
+      ? ` ${numberish(action.executionResult.updated) ?? 0} customer(s) were updated before Shopify refused the rest.`
+      : ''
+    return `${permission.message}${partial}`
+  }
   if (action.executionStatus === 'FAILED') {
     return `The action failed. ${actionFailureDetails(action)}`
   }
@@ -2257,6 +2344,12 @@ const GENERIC_FAILURE = 'The backend did not confirm success.'
 export function actionFailureDetails(action: AiCommandActionRecord): string {
   const errorDetails = isRecord(action.errorDetails) ? action.errorDetails : null
   const result = isRecord(action.executionResult) ? action.executionResult : null
+
+  // Authorization failures are always rewritten: raw Shopify strings like
+  // "9414254756053 — Shopify API request failed with 403" leak internal ids and
+  // give the merchant nothing to act on.
+  const permission = shopifyPermissionFailure(action)
+  if (permission) return permission.message
 
   // errorDetails is the authoritative structured channel when present.
   if (errorDetails) {

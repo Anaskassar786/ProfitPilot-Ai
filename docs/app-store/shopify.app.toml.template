@@ -16,9 +16,11 @@ redirect_urls = [
 # Must stay identical to PROFITPILOT_SHOPIFY_SCOPES in apps/api/src/app-store-assets.ts.
 # write_discounts powers the discount actions run by the AI Command Center and
 # the Automation Engine (discountCodeBasicCreate / discountCodeDeactivate);
+# write_customers powers the customer tag/note writes (PUT /customers/{id}.json,
+# customerUpdate) run by the AI Command Center and the Automation Engine;
 # read_price_rules still authorizes the legacy REST /price_rules.json sync.
 [access_scopes]
-scopes = "read_products,read_orders,read_customers,read_inventory,read_locations,read_discounts,write_discounts,read_price_rules"
+scopes = "read_products,read_orders,read_customers,write_customers,read_inventory,read_locations,read_discounts,write_discounts,read_price_rules"
 
 [webhooks]
 api_version = "2026-07"

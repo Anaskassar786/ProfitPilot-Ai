@@ -8,6 +8,11 @@
  *
  * Why each scope exists:
  * - read_products / read_orders / read_customers: core analytics + sync.
+ * - write_customers: REQUIRED to write customer tags and notes back to
+ *   Shopify (PUT /customers/{id}.json, customerUpdate). The AI Command Center
+ *   "tag customers" action and the Automation Engine tagging step both call
+ *   it; without this scope Shopify answers 403 Access Denied even though
+ *   read_customers is granted.
  * - read_inventory / read_locations: inventory health and stockout features.
  * - read_discounts: reading discounts via the GraphQL Admin API.
  * - write_discounts: REQUIRED to run discountCodeBasicCreate and
@@ -29,6 +34,7 @@ export const PROFITPILOT_SHOPIFY_SCOPES = [
   'read_products',
   'read_orders',
   'read_customers',
+  'write_customers',
   'read_inventory',
   'read_locations',
   'read_discounts',

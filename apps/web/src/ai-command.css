@@ -2333,6 +2333,41 @@
 }
 
 
+/* Missing Shopify permission (401/403 / ACCESS_DENIED) — replaces the raw
+   Shopify error with an actionable re-authorize card. */
+.aic-blocked-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(245, 158, 11, .38);
+  border-left: 3px solid var(--aic-warning);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, .07);
+}
+.aic-blocked-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--aic-warning);
+}
+.aic-blocked-head strong { font-size: 13px; font-weight: 700; }
+.aic-blocked-copy {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--aic-text-secondary);
+}
+.aic-blocked-scope { margin: 6px 0 0; font-size: 12px; color: var(--aic-text-muted); }
+.aic-blocked-scope code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--aic-panel-2);
+  color: var(--aic-text);
+}
+.aic-blocked-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.aic-blocked-hint { margin: 10px 0 0; font-size: 12px; color: var(--aic-text-muted); }
+
 /* ═══════════════════════════════════════════════════════════════════════
    AI Command — LIGHT THEME (high-contrast, Claude/ChatGPT-grade)
    Loaded last so these win. Dark theme is never matched (all rules are

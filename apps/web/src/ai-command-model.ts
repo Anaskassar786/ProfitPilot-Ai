@@ -2,6 +2,14 @@ export type AiCommandPlan = 'trial' | 'start' | 'growth' | 'commander'
 export type AiCommandContentType = 'text' | 'structured_data' | 'action_preview' | 'action_result' | 'error' | 'upgrade' | 'blocked' | 'offtopic'
 export type AiCommandRole = 'user' | 'assistant' | 'system'
 
+/**
+ * Fallback copy for a Shopify permission failure. Mirrors
+ * `SHOPIFY_PERMISSION_MESSAGE` in `@profitpilot/ai` `command.ts` — the server
+ * normally supplies the exact string, this is only used if a payload arrives
+ * without one. (`apps/web` intentionally has no dependency on `@profitpilot/ai`.)
+ */
+export const SHOPIFY_PERMISSION_MESSAGE = '⚠️ Action requires additional Shopify permissions. Please re-authorize or reinstall ProfitPilot from Shopify Admin to grant updated permissions.'
+
 export type AiCommandStructuredData = Readonly<{
   type: string
   data: unknown

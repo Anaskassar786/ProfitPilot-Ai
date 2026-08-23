@@ -689,10 +689,53 @@ describe('summarizeActionResult failure detail forwarding (SC-2)', () => {
     expect(summary).not.toContain('The backend did not confirm success.')
   })
 
-  it('surfaces scope failures as re-authorize guidance', () => {
-    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Shopify rejected the discount request because the app is missing the write_discounts permission. Re-authorize or re-install ProfitPilot from the Shopify App Store, then try again.', reason: 'MISSING_WRITE_DISCOUNTS_SCOPE' } }))
+  it('surfaces scope failures as the standard re-authorize permission message', () => {
+    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Shopify rejected the discount request.', reason: 'MISSING_WRITE_DISCOUNTS_SCOPE', missingScope: 'write_discounts' } }))
+    expect(summary).toContain(SHOPIFY_PERMISSION_MESSAGE)
     expect(summary).toContain('write_discounts')
-    expect(summary).toContain('Re-authorize or re-install')
+  })
+
+  it('rewrites a raw Shopify 403 (with the customer id) into the permission message', () => {
+    // The exact shape reported from the dev store before this fix.
+    const summary = summarizeActionResult(failedAction({
+      actionType: 'TAG_CUSTOMER',
+      errorDetails: { reasons: ['9414254756053 — Shopify API request failed with 403'] },
+      executionResult: { updated: 0, failed: 1, reasons: ['9414254756053 — Shopify API request failed with 403'] },
+    }))
+    expect(summary).toContain(SHOPIFY_PERMISSION_MESSAGE)
+    expect(summary).not.toContain('9414254756053')
+    expect(summary).not.toContain('Shopify API request failed with 403')
+    expect(summary).not.toContain('The action failed.')
+  })
+
+  it('rewrites a GraphQL ACCESS_DENIED failure into the permission message', () => {
+    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Access denied for discountCodeBasicCreate field.', reason: 'ACCESS_DENIED' } }))
+    expect(summary).toContain(SHOPIFY_PERMISSION_MESSAGE)
+    expect(summary).not.toContain('discountCodeBasicCreate')
+  })
+
+  it('keeps partial tagging results honest while still leading with the permission message', () => {
+    const summary = summarizeActionResult(failedAction({
+      actionType: 'TAG_CUSTOMER',
+      executionStatus: 'PARTIAL_SUCCESS',
+      errorDetails: { message: 'blocked', reason: 'MISSING_WRITE_CUSTOMERS_SCOPE', missingScope: 'write_customers' },
+      executionResult: { updated: 3, failed: 5 },
+    }))
+    expect(summary).toContain(SHOPIFY_PERMISSION_MESSAGE)
+    expect(summary).toContain('write_customers')
+    expect(summary).toContain('3 customer(s) were updated')
+  })
+
+  it('leaves non-permission failures untouched', () => {
+    const summary = summarizeActionResult(failedAction({ errorDetails: { message: 'Discount code is already taken.', reason: 'GRAPHQL_USER_ERRORS' } }))
+    expect(summary).toBe('The action failed. Discount code is already taken.')
+  })
+
+  it('shopifyPermissionFailure ignores successful and unrelated actions', () => {
+    expect(shopifyPermissionFailure(failedAction({ errorDetails: { message: 'Discount code is already taken.', reason: 'GRAPHQL_USER_ERRORS' } }))).toBeNull()
+    expect(shopifyPermissionFailure(failedAction({ errorDetails: { message: 'Shopify API request failed with 429', reason: 'SHOPIFY_REQUEST_FAILED' } }))).toBeNull()
+    const blocked = shopifyPermissionFailure(failedAction({ errorDetails: { reason: 'MISSING_WRITE_CUSTOMERS_SCOPE', missingScope: 'write_customers', reauthorizeUrl: '/shopify/install?shop=demo.myshopify.com' } }))
+    expect(blocked?.reauthorizeUrl).toBe('/shopify/install?shop=demo.myshopify.com')
   })
 
   it('uses the generic fallback only when nothing specific was recorded', () => {
@@ -700,7 +743,7 @@ describe('summarizeActionResult failure detail forwarding (SC-2)', () => {
   })
 })
 
-import { actionFailureDetails, buildConstrainedFormatPrompt, hasStrictFormatConstraints, parseFormatConstraints, serializeToolOutcomes } from './command.js'
+import { SHOPIFY_PERMISSION_MESSAGE, actionFailureDetails, buildConstrainedFormatPrompt, hasStrictFormatConstraints, parseFormatConstraints, serializeToolOutcomes, shopifyPermissionFailure } from './command.js'
 
 describe('parseFormatConstraints (Bug #6)', () => {
   it('detects strict yes/no constraints', () => {
