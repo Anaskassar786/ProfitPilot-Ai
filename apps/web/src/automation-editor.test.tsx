@@ -15,6 +15,8 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkflowEditor } from './WorkflowEditor.js'
 import type { AutomationUsage, WorkflowNode, WorkflowRecord } from './automation-model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -159,7 +161,8 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
   const renderEditor = (): void => {
     root?.render(
       <StrictMode>
-        <WorkflowEditor
+        <AppProvider i18n={enTranslations as never}>
+          <WorkflowEditor
           storeId="s1"
           workflow={store.workflow}
           usage={store.usage}
@@ -173,7 +176,8 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
             if (kind) toasts.push({ message, kind })
             else toasts.push({ message })
           }}
-        />
+          />
+        </AppProvider>
       </StrictMode>,
     )
   }
@@ -310,7 +314,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       ],
     })
     const container = await mount(store)
-    const trash = container.querySelector('.simple-step .danger') as HTMLButtonElement
+    // The Polaris Button shim translates className into variant/tone props, so
+    // the stable hook is the aria label, not the old `.danger` class.
+    const trash = container.querySelector('.simple-step [aria-label="Remove step"]') as HTMLButtonElement
     expect(trash).toBeTruthy()
     await click(trash)
     // After remove, only the trigger remains (Configure for trigger is still
@@ -345,7 +351,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       b.textContent?.includes('Smart classification'),
     ) as HTMLButtonElement
     expect(aiButton).toBeTruthy()
-    expect(aiButton.className).toContain('locked')
+    // Lock affordance: the AI-Powered group advertises its Commander gate
+    // (the button shim consumes the `locked` class, so assert the badge).
+    expect(container.querySelector('.node-library')?.textContent).toContain('Commander only')
     await click(aiButton)
     expect(toasts.some((t) => t.message.includes('upgraded subscription') || t.message.includes('Upgrade'))).toBe(true)
   })

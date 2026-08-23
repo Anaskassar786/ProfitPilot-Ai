@@ -147,6 +147,8 @@ export interface CoachReportRepository {
   latest(storeId: StoreId, reportType: 'WEEKLY' | 'MONTHLY'): Promise<CoachReportRecord | null>
   list(storeId: StoreId, limit: number): Promise<readonly CoachReportRecord[]>
   save(storeId: StoreId, input: Readonly<{ reportType: 'WEEKLY' | 'MONTHLY'; reportDate: string; content: Readonly<Record<string, unknown>>; pdfUrl?: string | null; sentViaEmail?: boolean }>): Promise<CoachReportRecord>
+  /** Sets the pdf download path on an existing report row (no duplicate row). */
+  attachPdf(storeId: StoreId, id: string, pdfUrl: string): Promise<CoachReportRecord | null>
   markEmailed(storeId: StoreId, id: string): Promise<CoachReportRecord | null>
   readCount(storeId: StoreId): Promise<number>
 }
@@ -600,6 +602,13 @@ export class PostgresCoachReportRepository implements CoachReportRepository {
       const row = result.rows[0]
       if (!row) throw new AppError('INTERNAL_ERROR', 'Report insert returned no row', 500, {}, false)
       return toReport(row)
+    })
+  }
+  public async attachPdf(storeId: StoreId, id: string, pdfUrl: string): Promise<CoachReportRecord | null> {
+    return withTenantContext(this.executor, storeId, async (client) => {
+      const result = await client.query<ReportRow>('UPDATE store_coach_reports SET pdf_url = $3 WHERE id = $1 AND store_id = $2 RETURNING id, store_id, report_type, report_date, content, pdf_url, sent_via_email, created_at', [id, storeId, pdfUrl])
+      const row = result.rows[0]
+      return row ? toReport(row) : null
     })
   }
   public async markEmailed(storeId: StoreId, id: string): Promise<CoachReportRecord | null> {

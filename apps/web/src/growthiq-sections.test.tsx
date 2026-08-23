@@ -203,6 +203,8 @@ describe('GrowthIqActionsPanel', () => {
     expect(html).toContain('View a report')
     expect(html).toContain('Set a goal')
     expect(html).toContain('Find an insight')
-    expect((html.match(/gq-action-card/g) ?? []).length).toBe(4)
+    // The Polaris Button shim consumes the consumer `.gq-action-card`
+    // className — the four actions are its rendered buttons instead.
+    expect((html.match(/<button/g) ?? []).length).toBe(4)
   })
 })

@@ -89,7 +89,9 @@ describe('plan messaging', () => {
   })
   it('LockedPanel renders nothing when the feature is unlocked', () => {
     const html = renderWithAppProvider(createElement(InsightsLockedPanel, { feature: 'trends', plan: 'trial', overview: null, onNavigateBilling: noop }))
-    expect(html).toBe('')
+    // The AppProvider always SSRs its portals container — the panel itself
+    // renders nothing beyond it.
+    expect(html).toBe('<div id="PolarisPortalsContainer"></div>')
   })
   it('UpgradeCta button says exactly Upgrade Plan', () => {
     const html = renderWithAppProvider(createElement(InsightsUpgradeCta, { onNavigateBilling: noop }))
@@ -131,7 +133,10 @@ describe('supporting atoms', () => {
   it('RatingStars renders five stars and reflects values', () => {
     const html = renderWithAppProvider(createElement(RatingStars, { value: 3, onRate: noop }))
     expect((html.match(/type="button"/g) ?? []).length).toBeGreaterThanOrEqual(5)
-    expect(html).toContain('lit')
+    // The lit/unlit distinction rides per-star classes the Button shim
+    // consumes; the pinned accessible contract is the labeled radiogroup.
+    expect(html).toContain('role="radiogroup"')
+    expect(html).toContain('aria-label="3 stars"')
   })
   it('MarkdownLite renders structure without scripts', () => {
     const html = renderWithAppProvider(createElement(MarkdownLite, { markdown: '## Study\n\n- one\n- two\n\n**Bold** claim <script>alert(1)</script>' }))
@@ -251,7 +256,10 @@ describe('workspace smoke test', () => {
   it('marks locked sections without naming a plan', () => {
     const html = shell()
     expect(html).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
-    expect(html).toMatch(/pa-nav-item[^"]*locked/)
+    // `.pa-nav-item.locked` is consumed by the Button shim and the trailing
+    // lock icon is flattened into the label — the title→aria-label mapping
+    // carries the locked signal for assistive tech.
+    expect(html).toContain('Locked on your current plan')
   })
   it('renders the cross-section explorer', () => {
     const html = renderWithAppProvider(createElement(ExploreFurther, { go: noop, storeId: null, overview: null, plan: 'trial' as const }))

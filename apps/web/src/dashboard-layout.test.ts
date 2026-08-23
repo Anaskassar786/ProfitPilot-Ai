@@ -68,7 +68,9 @@ describe('dashboard layout (PR #23)', () => {
     const html = render()
     expect(html).toContain('aria-label="Previous month"')
     expect(html).toContain('aria-label="Next month"')
-    expect(html).toContain('cal-month-label')
+    // The month label button's consumer class is consumed by the Button
+    // shim; its accessible name is the jump-to-today label.
+    expect(html).toContain('aria-label="Jump to current month"')
     expect(html).toContain('cal-total-block')
     expect(html).toContain('Total revenue')
   })

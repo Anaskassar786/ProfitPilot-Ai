@@ -117,14 +117,18 @@ import {
   XIcon,
 } from '@shopify/polaris-icons'
 
-export type IconProps = Readonly<{ size?: number | string; className?: string; strokeWidth?: number; fill?: string; color?: string; style?: CSSProperties }>
+export type IconProps = Readonly<{ size?: number | string; className?: string; strokeWidth?: number; fill?: string; color?: string; style?: CSSProperties; 'aria-label'?: string }>
 export type LucideIcon = (props: IconProps) => ReactElement
 
 function wrap(source: ComponentType): LucideIcon {
-  function Wrapped({ size = 20, className, style }: IconProps): ReactElement {
+  function Wrapped({ size = 20, className, style, ...rest }: IconProps): ReactElement {
     const px = typeof size === 'number' ? size : Number.parseInt(String(size), 10) || 20
     const box: CSSProperties = { display: 'inline-flex', width: px, height: px, verticalAlign: 'middle', ...style }
-    return <span className={`pp-icon ${className ?? ''}`.trim()} style={box} aria-hidden><Icon source={source as never} /></span>
+    const label = rest['aria-label']
+    // Decorative by default; when the caller supplies an accessible label the
+    // icon is meaningful (e.g. guest-customer placeholder) — expose it as an
+    // img role instead of hiding it from assistive technology.
+    return <span className={`pp-icon ${className ?? ''}`.trim()} style={box} aria-hidden={label ? undefined : true} aria-label={label} role={label ? 'img' : undefined}><Icon source={source as never} /></span>
   }
   return Wrapped
 }

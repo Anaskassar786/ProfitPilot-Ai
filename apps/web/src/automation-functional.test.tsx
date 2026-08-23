@@ -371,6 +371,16 @@ const setInput = (input: HTMLInputElement, value: string): void => {
   input.dispatchEvent(new window.Event('input', { bubbles: true }))
 }
 
+const setSelect = async (select: HTMLSelectElement, value: string): Promise<void> => {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
+  setter?.call(select, value)
+  await act(async () => {
+    select.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  await flush()
+}
+
 const keyDown = (element: Element, key: string): void => {
   element.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
 }
@@ -386,9 +396,11 @@ describe('Automation page — header, banner, navigation', () => {
     expect(button(container, 'Browse Templates')).toBeTruthy()
     const create = button(container, 'Create Automation')
     expect(create).toBeTruthy()
-    // Limit reached → create is disabled with an explanatory tooltip.
-    expect(create.disabled).toBe(true)
-    expect(create.title).toContain('upgrade')
+    // Limit reached → create is disabled with an explanatory tooltip. The
+    // Polaris Button shim expresses disabled as aria-disabled (plus the
+    // disabled class) and maps title → accessibilityLabel → aria-label.
+    expect(create.getAttribute('aria-disabled')).toBe('true')
+    expect(create.getAttribute('aria-label')).toContain('upgrade')
   })
 
   it('opens and closes the How it works modal without errors', async () => {
@@ -533,7 +545,10 @@ describe('Automation page — featured templates (all 8 cards)', () => {
     setup()
     const container = await mount()
     const cards = Array.from(container.querySelectorAll('.template-card'))
-    const iconClass = (card: Element) => (card.querySelector('.template-icon svg') as SVGElement).className.baseVal
+    // Icons are lucide components nested inside the `.template-icon` wrapper —
+    // the distinguishing signal is each icon's rendered path markup, not an
+    // svg class (the shim carries classes on the wrapper, not the svg).
+    const iconClass = (card: Element) => (card.querySelector('.template-icon svg') as SVGElement).innerHTML
     const byCategory = new Map<string, Set<string>>()
     for (const card of cards) {
       const category = card.querySelector('.template-category')?.textContent ?? ''
@@ -678,12 +693,11 @@ describe('Automation page — Your Automations section', () => {
   it('category dropdown filters cards', async () => {
     setup({ workflows: [workflowRecord('wf-1', { category: 'Marketing', name: 'Cart saver' }), workflowRecord('wf-2', { category: 'Operations', name: 'Ops alert' })] })
     const container = await mount()
-    const trigger = container.querySelector<HTMLButtonElement>('.category-dropdown .custom-select-trigger')
-    expect(trigger).toBeTruthy()
-    await click(trigger as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.category-dropdown [role="option"]')).find((entry) => entry.textContent?.includes('Sales & Growth'))
-    expect(option).toBeTruthy()
-    await click(option as HTMLElement)
+    // CustomSelect is a native Polaris select — drive its change event.
+    const select = container.querySelector<HTMLSelectElement>('.category-dropdown select')
+    expect(select).toBeTruthy()
+    expect(Array.from((select as HTMLSelectElement).options).some((entry) => entry.textContent?.includes('Sales & Growth'))).toBe(true)
+    await setSelect(select as HTMLSelectElement, 'Marketing')
     expect(container.querySelectorAll('.workflow-card')).toHaveLength(1)
     expect(container.textContent).toContain('Cart saver')
   })
@@ -691,10 +705,9 @@ describe('Automation page — Your Automations section', () => {
   it('sort dropdown reorders cards', async () => {
     setup({ workflows: [workflowRecord('wf-1', { name: 'Zulu' }), workflowRecord('wf-2', { name: 'Alpha' })] })
     const container = await mount()
-    const trigger = container.querySelector<HTMLButtonElement>('.last-run-dropdown .custom-select-trigger')
-    await click(trigger as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.last-run-dropdown [role="option"]')).find((entry) => entry.textContent?.includes('Name'))
-    await click(option as HTMLElement)
+    const select = container.querySelector<HTMLSelectElement>('.last-run-dropdown select')
+    expect(select).toBeTruthy()
+    await setSelect(select as HTMLSelectElement, 'name')
     const names = Array.from(container.querySelectorAll('.workflow-name')).map((node) => node.textContent)
     expect(names).toEqual(['Alpha', 'Zulu'])
   })
@@ -772,8 +785,11 @@ describe('Automation page — Your Automations section', () => {
     await click(button(container, 'Edit'))
     expect(window.location.pathname).toBe('/automation/workflows/wf-1')
     await backToHub()
-    const viewReport = container.querySelectorAll<HTMLButtonElement>('.view-report')[1]
-    await click(viewReport as HTMLButtonElement)
+    // `.view-report` is the consumer className — the Polaris Button shim
+    // consumes it, so the action is found by its visible text on the card.
+    const cards = container.querySelectorAll('.workflow-card')
+    const viewReport = button(cards[1] as Element, 'View Report')
+    await click(viewReport)
     expect(window.location.pathname).toBe('/automation/workflows/wf-2/runs')
   })
 
@@ -800,9 +816,9 @@ describe('Automation page — Your Automations section', () => {
   it('Pause pauses the automation and the card status updates', async () => {
     setup()
     const container = await mount()
-    const pause = container.querySelector<HTMLButtonElement>('.workflow-action-btn.pause')
-    expect(pause).toBeTruthy()
-    await click(pause as HTMLButtonElement)
+    // Shim consumes `.workflow-action-btn.pause` — find the action by text.
+    const pause = button(container.querySelector('.workflow-card') as Element, 'Pause')
+    await click(pause)
     expect(toasts).toContain('Automation paused.')
     expect(container.textContent).toContain('Resume')
   })
@@ -833,7 +849,7 @@ describe('Automation page — Your Automations section', () => {
     setup()
     const container = await mount()
     const cards = Array.from(container.querySelectorAll('.workflow-card'))
-    const firstPause = (cards[0] as Element).querySelector('.pause') as HTMLElement
+    const firstPause = button(cards[0] as Element, 'Pause')
     await click(firstPause)
     const badges = Array.from(container.querySelectorAll('.workflow-status-badge')).map((badge) => badge.textContent)
     expect(badges).toEqual(['Paused', 'Active'])
@@ -942,8 +958,10 @@ describe('Automation page — states, resilience, and accessibility', () => {
     const container = await mount()
     await click(button(container, 'Create Automation'))
     expect(container.textContent).toContain('Create New Automation')
-    const submit = container.querySelector('.create-workflow-modal .automation-primary') as HTMLButtonElement
-    expect(submit.disabled).toBe(true)
+    // `.automation-primary` is consumed by the Button shim; the submit is the
+    // footer's "Continue →" action and its disabled state rides aria-disabled.
+    const submit = button(container, 'Continue →')
+    expect(submit.getAttribute('aria-disabled')).toBe('true')
     await click(button(container, 'Cancel'))
     expect(container.querySelector('.create-workflow-modal')).toBeNull()
     await click(button(container, 'Create Automation'))
@@ -952,12 +970,11 @@ describe('Automation page — states, resilience, and accessibility', () => {
     await act(async () => {
       setInput(nameInput as HTMLInputElement, 'My new automation')
     })
-    const templateSelect = container.querySelector<HTMLButtonElement>('.create-template-select .custom-select-trigger')
-    await click(templateSelect as HTMLButtonElement)
-    const option = Array.from(container.querySelectorAll('.create-template-select [role="option"]')).find((entry) => entry.textContent?.includes('Welcome New Customer'))
-    await click(option as HTMLElement)
-    const submitAgain = container.querySelector('.create-workflow-modal .automation-primary') as HTMLButtonElement
-    expect(submitAgain.disabled).toBe(false)
+    const templateSelect = container.querySelector<HTMLSelectElement>('.create-template-select select')
+    expect(templateSelect).toBeTruthy()
+    await setSelect(templateSelect as HTMLSelectElement, 'welcome-customer')
+    const submitAgain = button(container, 'Continue →')
+    expect(submitAgain.getAttribute('aria-disabled')).not.toBe('true')
     await click(submitAgain)
     expect(window.location.pathname).toBe('/automation/workflows/installed-welcome-customer')
     expect(toasts.some((toast) => toast.includes('Template installed'))).toBe(true)

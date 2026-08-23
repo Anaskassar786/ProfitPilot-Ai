@@ -18,6 +18,15 @@ import type { AvailableOrderInsight } from './orders-model.js'
 import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 const shell = (light: boolean, children: unknown) => <div className={appShellClass(light)}>{children as never}</div>
 function appShellClass(light: boolean): string { return light ? 'app-shell light-mode' : 'app-shell' }
@@ -38,45 +47,45 @@ const fulfillment = (fulfilled: number, total: number): AvailableOrderInsight =>
 
 describe('PR #43 professional polish (both themes)', () => {
   it('Cancellation card: clean single-metric donut, real refund metrics and status bar', () => {
-    const dark = renderToStaticMarkup(shell(false, <CancellationRateCard insight={cancellation(0, 6)} orders={realOrders as never} />))
+    const dark = renderWithAppProvider(shell(false, <CancellationRateCard insight={cancellation(0, 6)} orders={realOrders as never} />))
     for (const contract of ['Cancellation Rate', 'rate-donut', '0%', 'Cancelled', '0 of 6 orders cancelled', 'rate-divider', 'Refunded', '$469.00', 'vs Last Period', '↑ 582%', 'rate-status-bar good', 'Excellent — no cancellations this period']) {
       expect(dark).toContain(contract)
     }
     // No overlapping side numbers — the old three-box facts row is gone.
     expect(dark).not.toContain('total orders')
     expect(dark).not.toContain('rate-facts')
-    const light = renderToStaticMarkup(shell(true, <CancellationRateCard insight={cancellation(0, 6)} orders={realOrders as never} />))
+    const light = renderWithAppProvider(shell(true, <CancellationRateCard insight={cancellation(0, 6)} orders={realOrders as never} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('rate-status-bar good')
   })
 
   it('Cancellation card: healthy, monitor and high thresholds map to the right status bars', () => {
-    const healthy = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(1, 100) }))
+    const healthy = renderWithAppProvider(createElement(CancellationRateCard, { insight: cancellation(1, 100) }))
     expect(healthy).toContain('Healthy cancellation rate')
     expect(healthy).toContain('rate-status-bar good')
-    const monitor = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(4, 100) }))
+    const monitor = renderWithAppProvider(createElement(CancellationRateCard, { insight: cancellation(4, 100) }))
     expect(monitor).toContain('Monitor cancellation trends')
     expect(monitor).toContain('rate-status-bar watch')
-    const high = renderToStaticMarkup(createElement(CancellationRateCard, { insight: cancellation(12, 100) }))
+    const high = renderWithAppProvider(createElement(CancellationRateCard, { insight: cancellation(12, 100) }))
     expect(high).toContain('High cancellation rate — review orders')
     expect(high).toContain('rate-status-bar attention')
   })
 
   it('Fulfillment card: donut matches Cancellation design, real pending count and avg fulfillment time', () => {
-    const dark = renderToStaticMarkup(shell(false, <FulfillmentRateCard insight={fulfillment(3, 6)} orders={realOrders as never} />))
+    const dark = renderWithAppProvider(shell(false, <FulfillmentRateCard insight={fulfillment(3, 6)} orders={realOrders as never} />))
     for (const contract of ['Fulfillment Rate', 'rate-donut', '50%', 'Fulfilled', '3 of 6 orders fulfilled', 'rate-divider', 'Pending', '3 orders', 'Avg Fulfill Time', '2.0 days', 'rate-status-bar watch', 'Fulfillment in progress']) {
       expect(dark).toContain(contract)
     }
-    const light = renderToStaticMarkup(shell(true, <FulfillmentRateCard insight={fulfillment(3, 6)} orders={realOrders as never} />))
+    const light = renderWithAppProvider(shell(true, <FulfillmentRateCard insight={fulfillment(3, 6)} orders={realOrders as never} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('rate-status-bar watch')
   })
 
   it('Fulfillment card: 100% and 0% states use the correct status bars', () => {
-    const allDone = renderToStaticMarkup(createElement(FulfillmentRateCard, { insight: fulfillment(6, 6) }))
+    const allDone = renderWithAppProvider(createElement(FulfillmentRateCard, { insight: fulfillment(6, 6) }))
     expect(allDone).toContain('All orders fulfilled')
     expect(allDone).toContain('rate-status-bar good')
-    const noneDone = renderToStaticMarkup(createElement(FulfillmentRateCard, { insight: fulfillment(0, 6) }))
+    const noneDone = renderWithAppProvider(createElement(FulfillmentRateCard, { insight: fulfillment(0, 6) }))
     expect(noneDone).toContain('Attention — orders need fulfillment')
     expect(noneDone).toContain('rate-status-bar attention')
   })
@@ -89,12 +98,12 @@ describe('PR #43 professional polish (both themes)', () => {
     const orders = revenue.map((r) => ({ storeId: 's1', day: r.day, orderCount: r.orderCount, fulfilledCount: r.orderCount, cancelledCount: 0, averageOrderValue: 200 }))
     const snapshot: AnalyticsSnapshot = { revenue, orders, productSales: [], customerCohorts: [] }
     const trend = periodTrend(snapshot, 30, null)
-    const dark = renderToStaticMarkup(shell(false, <RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />))
+    const dark = renderWithAppProvider(shell(false, <RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />))
     for (const contract of ['revenue-trend', 'chart-summary', 'Total', 'Average', 'Peak Day', 'Growth', 'Current', 'Previous', 'AI forecast', 'Baseline building']) {
       expect(dark).toContain(contract)
     }
     expect(dark).not.toContain('NaN')
-    const light = renderToStaticMarkup(shell(true, <RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />))
+    const light = renderWithAppProvider(shell(true, <RevenueTrendChart trend={trend} period={30} setPeriod={() => {}} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('chart-summary')
   })
@@ -110,13 +119,13 @@ describe('PR #43 professional polish (both themes)', () => {
       ],
       health: { score: 73, grade: 'B', label: 'Good', tone: 'healthy' as const, components: [{ key: 'stock_coverage', label: 'Items in stock', score: 77, weight: 0.4, detail: '1 of 3 tracked items have stock' }], excluded: [] },
     }
-    const dark = renderToStaticMarkup(shell(false, <InventoryHealthCard data={page} loading={false} />))
+    const dark = renderWithAppProvider(shell(false, <InventoryHealthCard data={page} loading={false} />))
     for (const contract of ['Inventory Health', 'B', 'Health Score Trend (30d)', 'Building history…', 'Needs Attention', 'Burton Custom Snowboard', 'Out of stock', 'Ride Boots Size 10', '4', 'Oakley Flight Deck Goggles', 'Untracked', 'View All Recommendations →']) {
       expect(dark).toContain(contract)
     }
     // Only the three critical items appear; the healthy item stays out of the list.
     expect(dark).not.toContain('Healthy Helmet')
-    const light = renderToStaticMarkup(shell(true, <InventoryHealthCard data={page} loading={false} />))
+    const light = renderWithAppProvider(shell(true, <InventoryHealthCard data={page} loading={false} />))
     expect(light).toContain('app-shell light-mode')
     expect(light).toContain('health-critical-list')
   })
@@ -129,7 +138,7 @@ describe('PR #43 professional polish (both themes)', () => {
       ],
       health: { score: 90, grade: 'A', label: 'Excellent', tone: 'healthy' as const, components: [], excluded: [] },
     }
-    const html = renderToStaticMarkup(createElement(InventoryHealthCard, { data: page, loading: false }))
+    const html = renderWithAppProvider(createElement(InventoryHealthCard, { data: page, loading: false }))
     expect(html).toContain('All items healthy')
     expect(html).not.toContain('Out of stock')
   })

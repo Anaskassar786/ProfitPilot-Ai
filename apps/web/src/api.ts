@@ -108,6 +108,56 @@ async function performFetch(path: string, init: RequestInit, headers: Headers, f
   }
 }
 
+export type ApiFileDownload = Readonly<{ blob: Blob; filename: string | null; contentType: string }>
+
+/**
+ * Binary counterpart of `requestJson` for authenticated file downloads (PDF
+ * reports). It attaches the fresh App Bridge bearer, performs the same silent
+ * 401 refresh-retry, and maps the standard error envelope — but resolves with
+ * the raw bytes instead of a parsed JSON body. Routes like
+ * `/store-coach/review/:id/pdf` require the bearer; a tokenless
+ * `window.open(url)` fails with 401 in production.
+ */
+export function requestFile(path: string, init: RequestInit = {}, fetcher: Fetcher = fetch): Promise<ApiFileDownload> {
+  return requestFileAttempt(path, init, fetcher, true)
+}
+
+async function requestFileAttempt(path: string, init: RequestInit, fetcher: Fetcher, allowRetry: boolean): Promise<ApiFileDownload> {
+  const headers = new Headers(init.headers)
+  const callerAuthorization = headers.has('authorization')
+  await attachEmbeddedSessionToken(headers)
+  let response = await performFetch(path, init, headers, fetcher)
+  if (response.status === 401 && allowRetry && !callerAuthorization) {
+    const fresh = await getShopifySessionToken()
+    if (fresh.status === 'ok') {
+      const retryHeaders = new Headers(init.headers)
+      retryHeaders.set('authorization', `Bearer ${fresh.token}`)
+      response = await performFetch(path, init, retryHeaders, fetcher)
+    }
+  }
+  if (!response.ok) {
+    if (response.status === 401) notifyEmbeddedAuthFailure()
+    throw failureFromPayload(await readJsonPayload(response), response.status)
+  }
+  notifyEmbeddedAuthRecovered()
+  return {
+    blob: await response.blob(),
+    filename: filenameFromDisposition(response.headers.get('content-disposition')),
+    contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+  }
+}
+
+/** Parses the filename out of a Content-Disposition header (plain or RFC 5987). */
+export function filenameFromDisposition(disposition: string | null): string | null {
+  if (!disposition) return null
+  const extended = /filename\*=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)
+  if (extended?.[1]) {
+    try { return decodeURIComponent(extended[1]) } catch { return extended[1] }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)
+  return plain?.[1] ?? null
+}
+
 async function readJsonPayload(response: Response): Promise<unknown> {
   try {
     return await response.json()
@@ -919,7 +969,7 @@ export function fetchCoachChatSuggestions(storeId: string, fetcher: Fetcher = fe
 export function fetchCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/current', storeId), {}, fetcher) }
 export function fetchCoachReviewHistory(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ reports: readonly Readonly<{ id: string; reportType: string; reportDate: string; createdAt: number; sentViaEmail: boolean }>[] }>> { return requestJson(coachPath('/store-coach/review/history', storeId), {}, fetcher) }
 export function regenerateCoachReview(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachReviewView> { return requestJson(coachPath('/store-coach/review/generate', storeId), { method: 'POST' }, fetcher) }
-export function fetchCoachReviewPdf(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ pdfUrl: string }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/pdf`, storeId), {}, fetcher) }
+export function downloadCoachReviewPdf(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<ApiFileDownload> { return requestFile(coachPath(`/store-coach/review/${encodeURIComponent(id)}/pdf`, storeId), {}, fetcher) }
 export function emailCoachReview(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<{ sent: boolean }>> { return requestJson(coachPath(`/store-coach/review/${encodeURIComponent(id)}/email`, storeId), { method: 'POST' }, fetcher) }
 
 export function fetchCoachPreferences(storeId: string, fetcher: Fetcher = fetch): Promise<import('./store-coach-model.js').CoachPreferencesView> { return requestJson(coachPath('/store-coach/preferences', storeId), {}, fetcher) }

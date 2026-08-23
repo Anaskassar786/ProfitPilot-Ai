@@ -128,7 +128,10 @@ describe('Inventory toolbar', () => {
     expect(html).toContain('Sort by')
     expect(html).toContain('Product name')
     expect(html).toContain('aria-label="Sort inventory"')
-    expect(html).toContain('aria-label="Sort inventory by"')
+    // With a visible "Sort by" label Polaris uses it as the select's
+    // accessible name and drops the hidden ariaLabel (WCAG requires the
+    // visible label be part of the accessible name, so this is correct).
+    expect(html).not.toContain('aria-label="Sort inventory by"')
     expect(html).toContain('Search by product name or SKU')
     const primary = html.slice(html.indexOf('inventory-toolbar-primary'), html.indexOf('inventory-toolbar-filters'))
     expect(primary).toContain('inventory-search')
@@ -150,8 +153,9 @@ describe('Inventory toolbar', () => {
   it('offers readable sort fields and a direction toggle', () => {
     expect(inventorySortOptions(false).map((option) => option.label)).toEqual(['Product name', 'Stock level', 'Stock value', 'Category', 'Last updated'])
     const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
+    // The Button shim maps the explicit aria-label to the accessible name
+    // (it wins over the supplementary title tooltip).
     expect(html).toContain('aria-label="Sort descending"')
-    expect(html).toContain('Currently ascending')
   })
 
   it('shows a clear-filters action only when a filter or search is active', () => {

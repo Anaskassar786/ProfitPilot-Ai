@@ -11,6 +11,7 @@ import { Download, FileText, Landmark, Mail, Printer, RefreshCw } from './icons.
 import type { ExecutiveReport } from './executive-model.js'
 import { executiveDateLabel, executiveMonthLabel } from './executive-model.js'
 import {
+  downloadExecutiveReportPdf,
   emailExecutiveReport,
   fetchExecutivePdfJob,
   fetchExecutiveReports,
@@ -20,7 +21,7 @@ import {
 } from './executive-api.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
 import { ExecutiveEmptyState, ExecutiveErrorState, ExecutivePageHeader, ExecutiveSection, ExecutiveSkeleton, ExecutiveStatusPill } from './executive-ui.js'
-import { errorMessageFrom } from './executive-shared.js'
+import { errorMessageFrom, saveDownloadedFile } from './executive-shared.js'
 import type { ExecutivePageProps } from './executive-shared.js'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error'
@@ -97,8 +98,14 @@ export function ExecutiveReportsPage({ context, plan, gates, onToast, onUpgrade,
             if (pollTimer.current !== null) window.clearInterval(pollTimer.current)
             setPdfJobId(null)
             setPdfBusy(false)
-            window.open(`/ai-executive/reports/${selected.id}/pdf/download?storeId=${encodeURIComponent(storeId)}`, '_blank', 'noopener')
-            onToast('Investor PDF ready — download started.', 'success')
+            // The download route requires the App Bridge bearer — fetch the
+            // bytes (tokenless window.open would 401) and save via blob anchor.
+            void downloadExecutiveReportPdf(storeId, selected.id)
+              .then((file) => {
+                if (!saveDownloadedFile(file, `board-report-${selected.id}.pdf`)) { onToast('Your browser blocked the download. Allow downloads for this page and try again.', 'warning'); return }
+                onToast('Investor PDF ready — download started.', 'success')
+              })
+              .catch((downloadError: unknown) => onToast(errorMessageFrom(downloadError), 'error'))
           } else if (job.status === 'FAILED') {
             if (pollTimer.current !== null) window.clearInterval(pollTimer.current)
             setPdfJobId(null)

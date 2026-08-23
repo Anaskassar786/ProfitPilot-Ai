@@ -6,16 +6,24 @@ import { describe, expect, it } from 'vitest'
  *
  * The web app is embedded inside the Shopify admin iframe. None of these
  * handlers may navigate the app's own frame:
- *   C1 — the Store Coach PDF is fetched via a download anchor, never
- *        `window.location.assign(pdfUrl)`.
+ *   C1 — the Store Coach PDF bytes are fetched with the App Bridge bearer
+ *        and saved via an object-url download anchor, never
+ *        `window.location.assign(pdfUrl)` / a bare tokenless url.
  *   C2 — "Open in Shopify" admin deep links are `target="_blank"` +
  *        `rel="noopener noreferrer"` anchors (App Bridge navigation is
  *        attempted first when a bridge exposes it); the external OpenAPI
  *        docs link keeps a new tab + noopener noreferrer.
  *   C5 — the install (OAuth) handoff only uses `location.assign` when the
  *        app is a standalone top window; embedded, it opens the top window.
+ *   K3 — the GrowthIQ executive PDF goes through the authenticated
+ *        `downloadExecutiveReportPdf` fetch + `saveDownloadedFile` blob
+ *        anchor; the tokenless `window.open(pdfUrl)` would 401.
  */
 const source = (name: string): string => readFileSync(new URL(name, import.meta.url), 'utf8')
+/** Source with comments stripped, so pins only match live code (several
+ *  modules document the old tokenless pattern they replaced). */
+const liveCode = (name: string): string =>
+  source(name).replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((line) => !line.trimStart().startsWith('*') && !line.trimStart().startsWith('//')).join('\n')
 
 describe('C1 — store coach PDF never navigates the frame', () => {
   const coach = source('./store-coach.tsx')
@@ -24,11 +32,33 @@ describe('C1 — store coach PDF never navigates the frame', () => {
     expect(coach).not.toContain('window.location.assign')
   })
 
-  it('downloads through a temporary anchor (download + noopener + new tab)', () => {
-    expect(coach).toContain('anchor.download = \'store-coach-weekly-review.pdf\'')
+  it('fetches bytes with the bearer, then saves via an object-url download anchor', () => {
+    expect(coach).toContain('downloadCoachReviewPdf')
+    // Blob → object URL → temporary anchor; never a bare report url.
+    expect(coach).toContain('URL.createObjectURL(file.blob)')
+    expect(coach).toContain('anchor.download = file.filename || \'store-coach-weekly-review.pdf\'')
     expect(coach).toContain('anchor.rel = \'noopener noreferrer\'')
-    expect(coach).toContain('anchor.target = \'_blank\'')
-    expect(coach).toContain('triggerPdfDownload(pdfUrl)')
+    expect(coach).toContain('triggerPdfDownload(file)')
+    // No new-tab target and no direct use of the stored pdf url.
+    expect(coach).not.toContain('anchor.target')
+    expect(coach).not.toContain('triggerPdfDownload(pdfUrl)')
+  })
+})
+
+describe('K3 — GrowthIQ executive PDF is an authenticated download', () => {
+  it('goes through requestFile with the api bearer, never a tokenless window.open href', () => {
+    const api = liveCode('./executive-api.ts')
+    expect(api).toContain('downloadExecutiveReportPdf')
+    expect(api).toContain('requestFile(`/ai-executive/reports/${id}/pdf/download${q(storeId)}`)')
+    expect(api).not.toContain('window.open')
+    // The callers save the fetched bytes through the shared blob anchor.
+    for (const file of ['./executive.tsx', './executive-reports.tsx']) {
+      const src = liveCode(file)
+      expect(src).toContain('downloadExecutiveReportPdf')
+      expect(src).toContain('saveDownloadedFile')
+      expect(src).not.toContain('window.open')
+      expect(src).not.toContain('executivePdfDownloadUrl')
+    }
   })
 })
 

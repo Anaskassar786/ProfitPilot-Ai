@@ -4,10 +4,19 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { JarvisExperience } from './f8.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 describe('Jarvis voice-strip UI', () => {
   it('renders the orb launcher instead of a chat panel when closed', () => {
-    const html = renderToStaticMarkup(createElement(JarvisExperience, {
+    const html = renderWithAppProvider(createElement(JarvisExperience, {
       context: { storeId: 'store-1', shop: 'demo.myshopify.com' },
       page: 'dashboard',
       open: false,

@@ -339,7 +339,9 @@ describe('value panels', () => {
   it('reports no money in play when the engine attached no impact', () => {
     const summary = discoveryImpactSummary([discovery({ impactEstimate: null })])
     expect(summary.moneyInPlay).toBeNull()
-    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('')
+    // The AppProvider always SSRs its portals container — the atom itself
+    // renders nothing beyond it.
+    expect(renderWithAppProvider(createElement(MoneyInPlay, { amount: null, currency: 'USD' }))).toBe('<div id="PolarisPortalsContainer"></div>')
   })
   it('builds the strength ladder from readiness have/need pairs only', () => {
     const rows = patternStrengthRows(readiness)

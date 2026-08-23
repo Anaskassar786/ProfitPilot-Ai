@@ -26,25 +26,34 @@ function render(props: Partial<Parameters<typeof CustomSelect<SortValue>>[0]> = 
   return renderWithAppProvider(createElement(CustomSelect<SortValue>, { ...base, ...props }))
 }
 
-describe('shared dark listbox markup', () => {
-  it('renders a button trigger, not a native select that would paint a white popup', () => {
+describe('polaris select markup contract', () => {
+  // The shared control is a thin wrapper over Polaris Select — the native
+  // popup matches the embedded adminchrome instead of a custom listbox.
+  it('renders a Polaris select carrying the current value and option labels', () => {
     const html = render()
-    expect(html).toContain('class="custom-select"')
-    expect(html).toContain('aria-haspopup="listbox"')
-    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain('Polaris-Select')
+    expect(html).toContain('<select')
     expect(html).toContain('Sort: Name')
-    expect(html).not.toContain('<select')
-    expect(html).not.toContain('<option')
+    expect(html).toContain('Sort: Stock')
   })
 
   it('exposes the accessible label and an optional prefix label', () => {
+    // ariaLabel becomes the (visually hidden) Polaris label…
+    expect(render()).toContain('Sort inventory')
+    // …and an explicit visible label replaces it as the accessible name.
     const html = render({ label: 'Sort by' })
-    expect(html).toContain('aria-label="Sort inventory"')
     expect(html).toContain('Sort by')
+    expect(html).not.toContain('Sort inventory')
   })
 
   it('falls back to a placeholder when the value matches no option', () => {
     expect(render({ value: '' as 'name', placeholder: 'All categories' })).toContain('All categories')
+  })
+
+  it('forwards className and icon to a wrapper so page layout css keeps applying', () => {
+    const html = render({ className: 'category-dropdown', icon: createElement('span', { className: 'my-filter-icon' }) })
+    expect(html).toContain('category-dropdown')
+    expect(html).toContain('my-filter-icon')
   })
 })
 
@@ -90,11 +99,13 @@ describe('dark theme styling contract', () => {
     expect(source).toContain('.custom-select-menu li[aria-selected="true"] { color: var(--blue-bright); }')
   })
 
-  it('keeps the option list inside a real listbox for assistive tech', () => {
+  it('keeps the control fully named for assistive tech', () => {
     const dom = new JSDOM(`<!doctype html><html lang="en"><body>${render()}</body></html>`)
-    const trigger = dom.window.document.querySelector('.custom-select-trigger')
-    expect(trigger?.getAttribute('aria-haspopup')).toBe('listbox')
-    expect(trigger?.tagName).toBe('BUTTON')
+    const select = dom.window.document.querySelector('select')
+    expect(select).not.toBeNull()
+    // Polaris labels the select via a real <label> association.
+    const label = dom.window.document.querySelector(`label[for="${select?.id ?? ''}"]`)
+    expect(label?.textContent).toContain('Sort inventory')
     dom.window.close()
   })
 })
@@ -120,65 +131,59 @@ describe('page wiring', () => {
   })
 })
 
-describe('interactive listbox behaviour in a DOM', () => {
+describe('native select interaction in a DOM', () => {
   async function mount(onChange: (value: SortValue) => void) {
     const dom = new JSDOM('<!doctype html><html lang="en"><body><div id="root"></div></body></html>', { pretendToBeVisual: true })
     const globals = globalThis as unknown as Record<string, unknown>
     for (const [key, value] of [['window', dom.window], ['document', dom.window.document], ['navigator', dom.window.navigator], ['HTMLElement', dom.window.HTMLElement], ['Node', dom.window.Node]] as const) {
       Object.defineProperty(globalThis, key, { configurable: true, value })
     }
+    // Polaris consults matchMedia for responsive behavior — jsdom lacks it.
+    dom.window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as unknown as (query: string) => MediaQueryList
     globals.IS_REACT_ACT_ENVIRONMENT = true
     const { createRoot } = await import('react-dom/client')
     const { act } = await import('react')
     const container = dom.window.document.getElementById('root')
     if (!container) throw new Error('missing root')
     const root = createRoot(container)
-    await act(async () => { root.render(createElement(CustomSelect<SortValue>, { value: 'name', options: OPTIONS, onChange, ariaLabel: 'Sort inventory' })) })
+    // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it.
+    await act(async () => { root.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CustomSelect<SortValue>, { value: 'name', options: OPTIONS, onChange, ariaLabel: 'Sort inventory' }))) })
     return { dom, act, container }
   }
 
-  it('opens on click, highlights the selection, and commits a mouse choice', async () => {
+  it('renders a native select with all options and commits a change with the chosen value', async () => {
     const onChange = vi.fn()
     const { dom, act, container } = await mount(onChange)
-    const trigger = container.querySelector('button')
-    if (!trigger) throw new Error('missing trigger')
-    await act(async () => { trigger.click() })
-    const listbox = container.querySelector('[role="listbox"]')
-    expect(listbox).not.toBeNull()
-    expect(container.querySelectorAll('[role="option"]')).toHaveLength(3)
-    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('Sort: Name')
-    const second = container.querySelectorAll('[role="option"]')[1] as HTMLElement | undefined
-    await act(async () => { second?.click() })
+    const select = container.querySelector('select')
+    if (!select) throw new Error('missing select')
+    expect(select.options).toHaveLength(3)
+    expect(Array.from(select.options).map((option) => option.label)).toEqual(['Sort: Name', 'Sort: Stock', 'Sort: Value'])
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(select, 'stock')
+    await act(async () => { select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
     expect(onChange).toHaveBeenCalledWith('stock')
-    expect(container.querySelector('[role="listbox"]')).toBeNull()
     dom.window.close()
   })
 
-  it('opens with ArrowDown and commits the highlighted option with Enter', async () => {
+  it('keeps the current value selected in the dom and drives onChange for each pick', async () => {
     const onChange = vi.fn()
     const { dom, act, container } = await mount(onChange)
-    const trigger = container.querySelector('button')
-    if (!trigger) throw new Error('missing trigger')
-    const press = async (key: string) => { await act(async () => { trigger.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true })) }) }
-    await press('ArrowDown')
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    await press('ArrowDown')
-    expect(trigger.getAttribute('aria-activedescendant')).toContain('option-1')
-    await press('Enter')
-    expect(onChange).toHaveBeenCalledWith('stock')
-    expect(container.querySelector('[role="listbox"]')).toBeNull()
-    await press('Escape')
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    dom.window.close()
-  })
-
-  it('closes when a click lands outside the control', async () => {
-    const { dom, act, container } = await mount(vi.fn())
-    const trigger = container.querySelector('button')
-    await act(async () => { trigger?.click() })
-    expect(container.querySelector('[role="listbox"]')).not.toBeNull()
-    await act(async () => { dom.window.document.body.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })) })
-    expect(container.querySelector('[role="listbox"]')).toBeNull()
+    const select = container.querySelector('select')
+    if (!select) throw new Error('missing select')
+    expect(select.value).toBe('name')
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(select, 'value')
+    await act(async () => { select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    expect(onChange).toHaveBeenLastCalledWith('value')
     dom.window.close()
   })
 })

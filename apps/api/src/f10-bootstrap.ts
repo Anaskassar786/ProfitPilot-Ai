@@ -106,10 +106,10 @@ export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string
   const pdf: CoachPdfWriter | null = (() => {
     try {
       return {
-        write: async (filename, rows) => {
-          const file = writePdf(filename, rows as readonly Readonly<Record<string, string | number>>[])
-          return file.filename
-        },
+        // The full file (bytes included) is returned so the review PDF
+        // download route can serve it — the old code returned only the
+        // filename and silently discarded the document body.
+        write: async (filename, rows) => writePdf(filename, rows as readonly Readonly<Record<string, string | number>>[]),
       }
     } catch {
       return null

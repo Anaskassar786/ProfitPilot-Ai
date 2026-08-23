@@ -11,6 +11,11 @@ import type { CoachPriority } from './store-coach-model.js'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
 
 /**
  * Store Coach integrity suite.
@@ -137,7 +142,7 @@ describe('Store Coach — no fabricated data', () => {
   })
 
   it('labels the momentum wave with the real series length, not fixed weekdays', () => {
-    const html = renderToStaticMarkup(createElement(MomentumWave, { values: [10, 20, 30, 40, 50] }))
+    const html = renderWithAppProvider(createElement(MomentumWave, { values: [10, 20, 30, 40, 50] }))
     expect(html).toContain('5 days of real revenue')
     // The old markup hardcoded M/T/W/T/F/S/S regardless of the series.
     expect(html).not.toMatch(/<span>M<\/span><span>T<\/span><span>W<\/span>/)
@@ -151,7 +156,7 @@ describe('Store Coach — honest controls', () => {
       impactValue: 1200, impactCurrency: 'USD', impactLabel: 'revenue at risk', timeEstimateMinutes: 15,
       actionType: 'navigate', actionPayload: {}, status: 'PENDING', expiresAt: null,
     }
-    const html = renderToStaticMarkup(createElement(PriorityCard, { priority, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
+    const html = renderWithAppProvider(createElement(PriorityCard, { priority, busy: false, onComplete: () => undefined, onDismiss: () => undefined }))
     // "Take Action" implied the app performed the task; it only records completion.
     expect(html).toContain('Mark as done')
     expect(html).not.toContain('Take Action')

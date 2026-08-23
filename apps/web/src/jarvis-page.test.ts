@@ -4,10 +4,19 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { JarvisNavIcon, JarvisWorkspace } from './jarvis-page.js'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+ *  components using the Polaris shims render outside an app shell. */
+function renderWithAppProvider(element: import('react').ReactElement) {
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
+}
+
 
 describe('Jarvis workspace page', () => {
   it('centers the speaking orb and keeps chat out of the page', () => {
-    const html = renderToStaticMarkup(createElement(JarvisWorkspace, {
+    const html = renderWithAppProvider(createElement(JarvisWorkspace, {
       context: { storeId: 'store-1', shop: 'demo.myshopify.com' },
       onListen: vi.fn(),
     }))
@@ -32,7 +41,7 @@ describe('Jarvis workspace page', () => {
   })
 
   it('renders a compact nav mark', () => {
-    const html = renderToStaticMarkup(createElement(JarvisNavIcon, { size: 17 }))
+    const html = renderWithAppProvider(createElement(JarvisNavIcon, { size: 17 }))
     expect(html).toContain('viewBox="0 0 24 24"')
   })
 })
