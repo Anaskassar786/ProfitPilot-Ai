@@ -32,7 +32,6 @@ import {
   Package,
   RefreshCw,
   Search,
-  Send,
   ShoppingBag,
   Sparkles,
   TrendingUp,
@@ -174,26 +173,10 @@ function OrderTabs({ counts, active, onSelect }: { counts: OrdersPageResult['tab
   </div>
 }
 
-function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToast, orders, ordersTotal, onNavigate }: { result: OrderInsightsResult | null; loading: boolean; storeId: string; onNavigateBilling: () => void; onToast: (message: string, kind?: ToastKind) => void; orders?: readonly OrderView[]; ordersTotal?: number; onNavigate?: (page: 'billing' | 'products' | 'orders') => void }) {
+function OrdersInsightsCard({ result, loading, onNavigateBilling, orders, ordersTotal, onNavigate }: { result: OrderInsightsResult | null; loading: boolean; storeId: string; onNavigateBilling: () => void; onToast: (message: string, kind?: ToastKind) => void; orders?: readonly OrderView[]; ordersTotal?: number; onNavigate?: (page: 'billing' | 'products' | 'orders') => void }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [question, setQuestion] = useState('')
-  const [asking, setAsking] = useState(false)
-  const [customInsight, setCustomInsight] = useState<ReturnType<typeof insightByFeature>>(null)
   const available = (feature: OrderInsightFeature) => insightByFeature(result, feature)
   const locked = (feature: OrderInsightFeature) => lockedInsightByFeature(result, feature)
-  const ask = async () => {
-    if (!question.trim()) return
-    setAsking(true)
-    try {
-      const response = await fetchOrderInsights(storeId, { feature: 'custom_ai_queries', question })
-      const answer = insightByFeature(response, 'custom_ai_queries')
-      setCustomInsight(answer)
-      // Only clear the input on a successful generation so the merchant can
-      // retry a question that hit an outage or the daily limit (BUG-2).
-      const status = isInsightData(answer?.data) ? answer?.data.status : null
-      if (status === 'generated') setQuestion('')
-    } catch (reason: unknown) { onToast(errorText(reason), 'error') } finally { setAsking(false) }
-  }
 
   return <section className={`card orders-insights ${collapsed ? 'collapsed' : ''}`}>
     <header className="orders-insights-header">
@@ -220,7 +203,6 @@ function OrdersInsightsCard({ result, loading, storeId, onNavigateBilling, onToa
           <CommanderCapability title="Auto-action suggestions" icon={<Bot size={15} />} insight={available('auto_action_suggestions')} locked={locked('auto_action_suggestions')} onUpgrade={onNavigateBilling} />
           <CommanderCapability title="Custom AI queries" icon={<ShoppingBag size={15} />} insight={available('custom_ai_queries')} locked={locked('custom_ai_queries')} onUpgrade={onNavigateBilling} />
         </div>
-        {available('custom_ai_queries') && <div className="orders-custom-query"><div><ShoppingBag size={16} /><span><strong>Ask order intelligence</strong><small>Commander answers from aggregate order facts only.</small></span></div><form onSubmit={(event) => { event.preventDefault(); if (!asking) void ask() }}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What should I review in my orders?" aria-label="Custom order insight query" /><Button type="submit" aria-label="Ask order intelligence" disabled={!question.trim() || asking}>{asking ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}</Button></form><CustomQueryAnswer insight={customInsight ?? available('custom_ai_queries')} /></div>}
       </>}
     </div>}
   </section>

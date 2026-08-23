@@ -2,11 +2,11 @@ import { Button } from './polaris-ui.js'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Boxes, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, PackageX, Repeat, Send, Sparkles, TrendingUp, Truck, X } from './icons.js'
+import { AlertTriangle, Boxes, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, PackageX, Repeat, Sparkles, TrendingUp, Truck, X } from './icons.js'
 import { PlanLockedFeature } from './orders.js'
 import { CustomSelect } from './CustomSelect.js'
 import { UpgradePlanButton } from './UpgradePlanButton.js'
-import { fetchInventoryHistory, queryInventoryInsights, submitReorderDecision } from './api.js'
+import { fetchInventoryHistory, submitReorderDecision } from './api.js'
 import {
   HISTORY_WINDOWS,
   awaitingMessage,
@@ -69,7 +69,6 @@ export function AIInventoryInsightsCard({ storeId, insights, loading, error, onU
         <SeasonalTrendsCard insights={insights} onUpgrade={onUpgrade} />
         <AutoReorderCard storeId={storeId} insights={insights} onUpgrade={onUpgrade} onToast={onToast} />
       </div>
-      <CustomInventoryQueryInput storeId={storeId} insights={insights} onUpgrade={onUpgrade} onToast={onToast} />
     </>)}
   </section>
 }
@@ -337,48 +336,6 @@ export function HistoricalInventoryChart({ storeId, insights, onUpgrade, onToast
   </article>
 }
 
-/** Commander free-form question. The API redacts identifiers before the model. */
-export function CustomInventoryQueryInput({ storeId, insights, onUpgrade, onToast }: { storeId: string; insights: InventoryInsightsResult | null; onUpgrade: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
-  const locked = lockedInsightByFeature(insights, 'custom_ai_queries')
-
-  if (locked) return <PlanLockedFeature featureName={locked.name} requiredPlan={locked.required_plan} onUpgrade={onUpgrade}><InsightMask /></PlanLockedFeature>
-  if (!insights || insights.plan !== 'commander') return null
-
-  const ask = async () => {
-    const trimmed = question.trim()
-    if (!trimmed) return
-    setPending(true)
-    try {
-      const result = await queryInventoryInsights(storeId, trimmed)
-      const data = record(result.available[0]?.data)
-      setAnswer(text(data.text) ?? text(data.message) ?? 'No answer was returned.')
-    } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : 'That question could not be answered', 'error')
-    } finally { setPending(false) }
-  }
-
-  return <article className="inventory-ai-tile query">
-    <div className="inventory-card-label"><Boxes size={16} /><span>Ask about your inventory</span></div>
-    <div className="inventory-query-row">
-      <input
-        value={question}
-        maxLength={500}
-        placeholder="Which products should I discount?"
-        aria-label="Ask a question about your inventory"
-        onChange={(event) => setQuestion(event.target.value)}
-        onKeyDown={(event) => { if (event.key === 'Enter') void ask() }}
-      />
-      <Button type="button" className="button primary" disabled={pending || question.trim().length === 0} onClick={() => void ask()}>
-        {pending ? <Loader2 size={13} className="spin" /> : <Send size={13} />} Ask
-      </Button>
-    </div>
-    {answer && <p className="inventory-ai-suggestion">{answer}</p>}
-    <small className="inventory-ai-footnote">Questions are stripped of product names, SKUs, and ids before they reach the model. 20 questions per day.</small>
-  </article>
-}
 
 function InsightMask({ tall = false }: { tall?: boolean }) { return <span className={`insight-mask ${tall ? 'tall' : ''}`}><i /><i /><i /></span> }
 function InsightAwaiting({ message }: { message: string }) { return <div className="insight-unavailable"><span>—</span><small>{message}</small></div> }

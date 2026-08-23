@@ -29,7 +29,7 @@ import {
   X,
 } from './icons.js'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { fetchCampaignTemplates, fetchCustomer, fetchCustomerInsights, fetchCustomers, previewTargetedCampaign, queryCustomerInsights, sendTargetedCampaign } from './api.js'
+import { fetchCampaignTemplates, fetchCustomer, fetchCustomerInsights, fetchCustomers, previewTargetedCampaign, sendTargetedCampaign } from './api.js'
 import type { CampaignTemplateRecord, TargetedCampaignPreview, TargetedCampaignResult } from './api.js'
 import type { WorkspaceContext } from './model.js'
 import { PlanLockedFeature } from './orders.js'
@@ -152,17 +152,12 @@ export function CustomerStatsGrid({ data, insights, loading, onUpgrade }: { data
 
 export function AICustomerInsightsCard({ storeId, result, loading, onUpgrade, onToast }: { storeId: string; result: CustomerInsightsResult | null; loading: boolean; onUpgrade: () => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [open, setOpen] = useState(true)
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState<string | null>(null)
-  const [asking, setAsking] = useState(false)
   const retention = insightData(result, 'retention_suggestion')
   const segments = insightData(result, 'premium_segments')
   const patterns = insightData(result, 'purchase_patterns')
-  const ask = async () => { if (!question.trim()) return; setAsking(true); try { const response = await queryCustomerInsights(storeId, question); const data = insightData(response, 'custom_ai_queries'); setAnswer(typeof data?.text === 'string' ? data.text : typeof data?.message === 'string' ? data.message : 'Insufficient data for this question.') } catch (reason: unknown) { onToast(errorText(reason), 'error') } finally { setAsking(false) } }
   return <section className="card customer-ai-card"><div className="customer-ai-heading"><span><Users size={17} /><span><small>CUSTOMER INSIGHTS</small><strong>AI retention insights</strong></span></span><span className="customer-ai-heading-actions">{result && <UpgradePlanButton plan={result.plan} onUpgrade={onUpgrade} />}<Button onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={open ? 'Collapse customer insights' : 'Expand customer insights'}>{open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</Button></span></div>{open && <div className="customer-ai-body">{loading ? <div className="customer-ai-skeleton"><span /><span /><span /></div> : !result ? null : <>{result.available.length > 0 && <div className="customer-insight-grid"><InsightMetric label="Churn risk" value={numberValue(segments?.churnRisk)} detail={result.coverage.knownComplete90Days ? '60-day rule · coverage proven' : 'Unknown until coverage is proven'} /><InsightMetric label="New buyers" value={numberValue(segments?.newBuyer)} detail="Exactly one matched order in 30 days" /><InsightMetric label="Purchase cadence" value={patterns?.status === 'available' ? `${numberValue(patterns.averageCadenceDays)} days` : 'Insufficient data'} detail={patterns?.status === 'available' ? `${numberValue(patterns.customersWithPattern)} customers measured` : 'Needs 2+ dated orders'} /></div>}
     {result.available.some((item) => item.feature === 'retention_suggestion') && <div className="retention-suggestion"><Sparkles size={16} /><div><strong>Retention suggestion</strong><p>{typeof retention?.text === 'string' ? retention.text : typeof retention?.message === 'string' ? retention.message : 'No generated suggestion is available yet.'}</p><small>{result.usage.limit === null ? 'Unlimited AI insights' : `${result.usage.used}/${result.usage.limit} AI insights today`}</small></div></div>}
     {result.locked.length > 0 && <div className="customer-locked-insights">{result.locked.map((item) => <PlanLockedFeature key={item.feature} featureName={item.name} requiredPlan={item.required_plan} onUpgrade={onUpgrade}><div className="customer-insight-mask"><span /><span /><span /></div></PlanLockedFeature>)}</div>}
-    {result.plan === 'commander' && <div className="customer-ai-query"><div><Sparkles size={15} /><span><strong>Ask customer intelligence</strong><small>Known PII is removed before the question reaches OpenRouter.</small></span></div><div><input maxLength={500} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What retention pattern should I review?" /><Button disabled={!question.trim() || asking} onClick={() => void ask()}>{asking ? <RefreshCw className="spin" size={14} /> : <Send size={14} />}</Button></div>{answer && <p>{answer}</p>}</div>}
   </>}</div>}</section>
 }
 
