@@ -19,6 +19,7 @@ export const AI_COMMAND_WRITE_TOOLS = [
   'tag_customers',
   'create_discount',
   'approve_recommendation',
+  'create_workflow',
   'trigger_workflow',
   'pause_workflow',
   'resume_workflow',
@@ -36,6 +37,7 @@ export const AI_COMMAND_ACTION_TYPES = [
   'CREATE_DISCOUNT',
   'GENERATE_REPORT',
   'APPROVE_RECOMMENDATION',
+  'CREATE_WORKFLOW',
   'TRIGGER_WORKFLOW',
   'PAUSE_WORKFLOW',
   'RESUME_WORKFLOW',
@@ -301,6 +303,7 @@ export const AI_COMMAND_TOOL_DEFINITIONS: readonly AiCommandToolDefinition[] = [
   { name: 'tag_customers', description: 'Preview then add or remove Shopify customer tags.', commanderOnly: true, parameters: { type: 'object', properties: { customer_ids: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } }, action: { type: 'string' } } } },
   { name: 'create_discount', description: 'Preview then create a Shopify discount with safety caps.', commanderOnly: true, parameters: { type: 'object', properties: { title: { type: 'string' }, type: { type: 'string' }, value: { type: 'number' }, usage_limit: { type: 'number' }, expires_at: { type: 'string' } } } },
   { name: 'approve_recommendation', description: 'CAS-approve a pending recommendation.', commanderOnly: true, parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, expected_version: { type: 'number' } } } },
+  { name: 'create_workflow', description: 'Preview then create a governed automation workflow from a supported template.', commanderOnly: true, parameters: { type: 'object', properties: { template_id: { type: 'string' }, name: { type: 'string' }, activate: { type: 'boolean' } } } },
   { name: 'trigger_workflow', description: 'Trigger an existing automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
   { name: 'pause_workflow', description: 'Pause an active automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
   { name: 'resume_workflow', description: 'Resume a paused automation workflow.', commanderOnly: true, parameters: { type: 'object', properties: { workflow_id: { type: 'string' } } } },
@@ -322,6 +325,7 @@ const WRITE_INTENT: Readonly<Record<AiCommandWriteTool, RegExp>> = {
   tag_customers: /\b(tag|untag|label)\b.*\bcustomer/i,
   create_discount: /\b(create|make|generate)\b.*\b(discount|coupon|promo code)\b/i,
   approve_recommendation: /\b(approve|accept)\b.*\brecommend/i,
+  create_workflow: /\b(create|make|build|set up)\b.*\b(workflow|automation)\b/i,
   trigger_workflow: /\b(trigger|run|start)\b.*\b(workflow|automation)\b/i,
   pause_workflow: /\b(pause|stop|disable|turn off)\b.*\b(workflow|automation)\b/i,
   resume_workflow: /\b(resume|enable|turn on|unpause)\b.*\b(workflow|automation)\b/i,
@@ -341,6 +345,7 @@ export function toolToActionType(name: AiCommandToolName): AiCommandActionType {
   if (name === 'create_discount') return 'CREATE_DISCOUNT'
   if (name === 'generate_report') return 'GENERATE_REPORT'
   if (name === 'approve_recommendation') return 'APPROVE_RECOMMENDATION'
+  if (name === 'create_workflow') return 'CREATE_WORKFLOW'
   if (name === 'trigger_workflow') return 'TRIGGER_WORKFLOW'
   if (name === 'pause_workflow') return 'PAUSE_WORKFLOW'
   if (name === 'resume_workflow') return 'RESUME_WORKFLOW'
@@ -1262,6 +1267,7 @@ export function actionPreviewCopy(type: AiCommandActionType, params: Readonly<Re
     return `Action: Create discount "${String(params.title ?? 'Untitled')}" at ${String(params.value ?? '?')}% off, max ${String(params.usage_limit ?? '?')} uses.`
   }
   if (type === 'APPROVE_RECOMMENDATION') return `Action: Approve recommendation ${String(params.recommendation_id ?? '')}.`
+  if (type === 'CREATE_WORKFLOW') return `Action: Create ${String(params.name ?? 'automation')} from the governed ${String(params.template_id ?? '')} template. It will be saved as a draft until you activate it.`
   if (type === 'TRIGGER_WORKFLOW') return `Action: Trigger workflow ${workflowName(params)}.`
   if (type === 'PAUSE_WORKFLOW') return `Action: Pause workflow ${workflowName(params)}.`
   if (type === 'RESUME_WORKFLOW') return `Action: Resume workflow ${workflowName(params)}.`
@@ -1360,6 +1366,7 @@ export function validateActionPreview(tool: AiCommandWriteTool, params: Readonly
   if (tool === 'tag_customers' && stringArray(params.customer_ids).length === 0) return 'No customers matched this command, so there is nothing to tag.'
   if (tool === 'tag_customers' && stringArray(params.tags).length === 0) return 'Add a tag name before I prepare this action.'
   if (tool === 'approve_recommendation' && !nonEmptyString(params.recommendation_id)) return 'There is no pending recommendation available to approve.'
+  if (tool === 'create_workflow' && !nonEmptyString(params.template_id)) return 'I could not map that request to a safe automation template. Try “Create a low-stock alert automation”.'
   if ((tool === 'trigger_workflow' || tool === 'pause_workflow' || tool === 'resume_workflow') && !nonEmptyString(params.workflow_id)) return 'I could not identify an automation. Name the workflow you want me to use.'
   if (tool === 'send_notification' && !nonEmptyString(params.message)) return 'A notification message is required.'
   return null
@@ -2003,6 +2010,18 @@ export class AiCommandService {
       const first = items[0] ?? {}
       return { recommendation_id: String(first.id ?? ''), expected_version: Number(first.version ?? 0) }
     }
+    if (tool === 'create_workflow') {
+      const lower = text.toLowerCase()
+      const templateId = /low[ -]?stock|inventory (?:is )?low/.test(lower) ? 'low-stock-alert'
+        : /welcome/.test(lower) ? 'welcome-customer'
+          : /abandon(?:ed)? (?:cart|checkout)/.test(lower) ? 'abandoned-checkout'
+            : /high[ -]?value order/.test(lower) ? 'high-value-order'
+              : /back[ -]?in[ -]?stock/.test(lower) ? 'back-in-stock'
+                : ''
+      const requestedName = /(?:called|named)\s+["']?([^"'\n]+?)["']?(?:\s+that|\s+when|$)/i.exec(text)?.[1]?.trim()
+      const defaultNames: Readonly<Record<string, string>> = { 'low-stock-alert': 'Low-Stock Alert', 'welcome-customer': 'Welcome New Customer', 'abandoned-checkout': 'Abandoned Checkout Recovery', 'high-value-order': 'High-Value Order Alert', 'back-in-stock': 'Back-in-Stock Notification' }
+      return { template_id: templateId, name: requestedName || defaultNames[templateId] || 'AI-created automation', activate: false }
+    }
     if (tool === 'trigger_workflow' || tool === 'pause_workflow' || tool === 'resume_workflow') {
       return this.resolveWorkflowParams(storeId, conversation, text)
     }
@@ -2215,6 +2234,10 @@ export function summarizeActionResult(action: AiCommandActionRecord): string {
     if (!code) return 'Shopify did not return a discount code. The discount was not created.'
     return `Discount created. Code: ${code}.`
   }
+  if (action.actionType === 'CREATE_WORKFLOW' && isRecord(action.executionResult)) {
+    const name = typeof action.executionResult.name === 'string' ? action.executionResult.name : 'Automation'
+    return `${name} was created as a draft and now appears in Automation. Review it there before activation.`
+  }
   if (action.actionType === 'PAUSE_WORKFLOW') return 'Workflow paused.'
   if (action.actionType === 'RESUME_WORKFLOW') return 'Workflow resumed.'
   if (isRecord(action.executionResult) && typeof action.executionResult.message === 'string') return action.executionResult.message
@@ -2357,6 +2380,7 @@ function humanAction(tool: AiCommandWriteTool): string {
   if (tool === 'tag_customers') return 'tagging customers'
   if (tool === 'create_discount') return 'creating a discount'
   if (tool === 'approve_recommendation') return 'approving a recommendation'
+  if (tool === 'create_workflow') return 'creating an automation'
   if (tool === 'trigger_workflow') return 'triggering a workflow'
   if (tool === 'pause_workflow') return 'pausing a workflow'
   if (tool === 'resume_workflow') return 'resuming a workflow'

@@ -184,6 +184,22 @@ function discountAction(): AiCommandActionRecord {
   } as AiCommandActionRecord
 }
 
+describe('ProductionCommandActions workflow creation', () => {
+  it('persists the selected governed template through the workflow controller', async () => {
+    const created: Array<{ templateId: string; name: string }> = []
+    const actions = new ProductionCommandActions({ workflows: {
+      create: async (_store, input) => { created.push(input); return { id: 'wf-1', name: input.name, status: 'DRAFT' } },
+      trigger: async () => ({ runId: 'run-1', status: 'QUEUED' }),
+      setStatus: async () => null,
+    } })
+    const action = { ...discountAction(), actionType: 'CREATE_WORKFLOW', actionParams: { template_id: 'low-stock-alert', name: 'Low stock email' } } as AiCommandActionRecord
+    const result = await actions.execute(tenant, action)
+    expect(result.status).toBe('SUCCESS')
+    expect(created).toEqual([{ templateId: 'low-stock-alert', name: 'Low stock email' }])
+    expect(result.result).toMatchObject({ id: 'wf-1', status: 'DRAFT' })
+  })
+})
+
 describe('ProductionCommandActions discount execution (SC-2)', () => {
   it('forwards GraphQL userErrors into errorDetails.message', async () => {
     const restore = shopifyDeps(['read_products', 'write_discounts'], {
