@@ -101,19 +101,42 @@ export function revenuePoints(snapshot: AnalyticsSnapshot | null, period: ChartP
     .map((row) => ({ day: row.day, value: row.grossRevenue }))
 }
 
-export function storeHealthView(snapshot: AnalyticsSnapshot | null, catalogCount = 0): StoreHealthView {
+/**
+ * Store health / Performance Score.
+ *
+ * Recency-aware: a store's score is driven by activity in the last 7 and 30
+ * days, never by all-time totals alone. A store with zero sales in the last
+ * 7 days can NEVER score above 50 (and above 30 when the last 30 days are
+ * also empty) — "no recent data" is treated as a problem, not as perfection.
+ */
+export function storeHealthView(snapshot: AnalyticsSnapshot | null, catalogCount = 0, nowMs: number = Date.now()): StoreHealthView {
   if (!snapshot || (snapshot.revenue.length === 0 && snapshot.orders.length === 0)) {
     return { score: null, grade: '—', label: 'No data', tone: 'muted' }
   }
-  const revenue = sumRevenue(snapshot) ?? 0
-  const orders = sumOrders(snapshot) ?? 0
-  let score = 35
-  if (revenue > 0) score += 25
-  if (orders > 0) score += 20
+  const day7 = new Date(nowMs - 7 * 86_400_000).toISOString().slice(0, 10)
+  const day30 = new Date(nowMs - 30 * 86_400_000).toISOString().slice(0, 10)
+  const revenue7 = snapshot.revenue.reduce((total, row) => total + (row.day >= day7 ? row.grossRevenue : 0), 0)
+  const orders7 = snapshot.orders.reduce((total, row) => total + (row.day >= day7 ? row.orderCount : 0), 0)
+  const revenue30 = snapshot.revenue.reduce((total, row) => total + (row.day >= day30 ? row.grossRevenue : 0), 0)
+  const orders30 = snapshot.orders.reduce((total, row) => total + (row.day >= day30 ? row.orderCount : 0), 0)
+
+  let score = 20 // has synced analytics rows at all
+  if (revenue7 > 0) score += 25
+  if (orders7 > 0) score += 20
+  if (revenue30 > 0) score += 10
+  if (orders30 > 0) score += 5
   if (snapshot.productSales.length > 0 || catalogCount > 0) score += 10
   if (snapshot.customerCohorts.length > 0) score += 10
+
+  // Data-freshness caps: no orders AND no revenue in the last 7 days is never
+  // "Healthy"; a fully stale 30-day window is Critical.
+  const stale7 = orders7 === 0 && revenue7 === 0
+  const stale30 = orders30 === 0 && revenue30 === 0
+  if (stale30) score = Math.min(score, 30)
+  else if (stale7) score = Math.min(score, 45)
+
   score = Math.min(100, score)
-  const tone = score >= 75 ? 'healthy' : score >= 50 ? 'warning' : 'critical'
+  const tone = score >= 75 ? 'healthy' : score >= 45 ? 'warning' : 'critical'
   const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D'
   return { score, grade, label: tone === 'healthy' ? 'Healthy' : tone === 'warning' ? 'Needs attention' : 'Critical', tone }
 }

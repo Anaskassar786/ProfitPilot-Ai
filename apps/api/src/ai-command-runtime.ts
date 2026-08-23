@@ -215,14 +215,30 @@ export class ProductionCommandTools implements AiCommandToolRuntime {
     const inventory = this.deps.inventory ? await this.deps.inventory.list(storeId) : null
     const revenue = analytics?.revenue.reduce((sum, row) => sum + row.grossRevenue, 0) ?? 0
     const orders = analytics?.orders.reduce((sum, row) => sum + row.orderCount, 0) ?? 0
+    // Recency-aware (mirrors the dashboard's storeHealthView): only the last
+    // 7/30 days drive the score, and a silent week caps it — a store with no
+    // recent sales must never read "Healthy" here while the dashboard flags it.
+    const day7 = utcDayOffset(-7)
+    const day30 = utcDayOffset(-30)
+    const revenue7 = analytics?.revenue.reduce((sum, row) => sum + (row.day >= day7 ? row.grossRevenue : 0), 0) ?? 0
+    const orders7 = analytics?.orders.reduce((sum, row) => sum + (row.day >= day7 ? row.orderCount : 0), 0) ?? 0
+    const revenue30 = analytics?.revenue.reduce((sum, row) => sum + (row.day >= day30 ? row.grossRevenue : 0), 0) ?? 0
+    const orders30 = analytics?.orders.reduce((sum, row) => sum + (row.day >= day30 ? row.orderCount : 0), 0) ?? 0
     const stock = inventory ? inventoryHealth(inventory.items) : null
-    let score = 35
-    if (revenue > 0) score += 25
-    if (orders > 0) score += 20
-    if ((analytics?.productSales.length ?? 0) > 0) score += 10
+    let score = 20
+    if (revenue7 > 0) score += 25
+    if (orders7 > 0) score += 20
+    if (revenue30 > 0) score += 10
+    if (orders30 > 0) score += 5
+    if ((analytics?.productSales.length ?? 0) > 0) score += 20
     if (stock?.score !== null && stock) score = Math.round((score + stock.score) / 2)
+    const stale7 = orders7 === 0 && revenue7 === 0
+    const stale30 = orders30 === 0 && revenue30 === 0
+    const hasAnyAnalyticsRows = (analytics?.revenue.length ?? 0) > 0 || (analytics?.orders.length ?? 0) > 0
+    if (hasAnyAnalyticsRows && stale30) score = Math.min(score, 30)
+    else if (hasAnyAnalyticsRows && stale7) score = Math.min(score, 45)
     score = Math.min(100, score)
-    const label = score >= 75 ? 'Healthy' : score >= 50 ? 'Needs attention' : 'Critical'
+    const label = score >= 75 ? 'Healthy' : score >= 45 ? 'Needs attention' : 'Critical'
     if (!analytics && !inventory) return missing('get_store_health', 'Store health cannot be scored until analytics or inventory rows exist.')
     return ok('get_store_health', { score, label, revenue, orders, inventoryScore: stock?.score ?? null }, '✨ Verified Store Data')
   }

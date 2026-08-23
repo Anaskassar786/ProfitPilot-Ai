@@ -104,6 +104,42 @@ describe('Production AI Command tools', () => {
     if (!result.ok) return
     expect(result.data).toMatchObject({ revenue: 50, previousRevenue: 30, orders: 1, previousOrders: 1 })
   })
+
+  // BUG-1 regression: get_store_health must never report "Healthy" for a
+  // store whose last sale was weeks ago, no matter how big historic totals are.
+  it('caps get_store_health when there are zero orders in the last 7 days', async () => {
+    const staleDay = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10)
+    const snapshot: AnalyticsSnapshot = {
+      revenue: [{ storeId: tenant, day: staleDay, grossRevenue: 25_000, discounts: 0, orderCount: 300 }],
+      orders: [{ storeId: tenant, day: staleDay, orderCount: 300, fulfilledCount: 300, cancelledCount: 0, averageOrderValue: 83 }],
+      productSales: [{ storeId: tenant, day: staleDay, productId: 'p1', unitsSold: 300, grossRevenue: 25_000 }],
+      customerCohorts: [],
+    }
+    const tools = new ProductionCommandTools({ analytics: analyticsReader(snapshot, []) })
+    const result = await tools.run(tenant, { name: 'get_store_health', params: {} })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const data = result.data as { score: number; label: string }
+    expect(data.score).toBeLessThan(60)
+    expect(data.label).not.toBe('Healthy')
+  })
+
+  it('scores get_store_health from recent activity when the store is selling', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const snapshot: AnalyticsSnapshot = {
+      revenue: [{ storeId: tenant, day: today, grossRevenue: 900, discounts: 0, orderCount: 9 }],
+      orders: [{ storeId: tenant, day: today, orderCount: 9, fulfilledCount: 8, cancelledCount: 0, averageOrderValue: 100 }],
+      productSales: [{ storeId: tenant, day: today, productId: 'p1', unitsSold: 9, grossRevenue: 900 }],
+      customerCohorts: [],
+    }
+    const tools = new ProductionCommandTools({ analytics: analyticsReader(snapshot, []) })
+    const result = await tools.run(tenant, { name: 'get_store_health', params: {} })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const data = result.data as { score: number; label: string }
+    expect(data.score).toBeGreaterThanOrEqual(75)
+    expect(data.label).toBe('Healthy')
+  })
 })
 
 /* ── QA 2026-08-22: discount error details + preflight scope check (SC-2) ── */

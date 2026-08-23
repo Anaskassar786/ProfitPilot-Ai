@@ -43,10 +43,46 @@ describe('F3 workspace model', () => {
   })
   it('falls back to the stable product id when Shopify has no usable title', () => expect(catalogProductTitle({ storeId: 's', productId: 'p1', payload: {}, syncedAt: 100 })).toBe('p1'))
   it('scores store health from real analytics coverage', () => {
-    const health = storeHealthView(snapshot, 2)
+    // Fresh snapshot: same shape as `snapshot` but with activity inside the last 7 days.
+    const today = new Date().toISOString().slice(0, 10)
+    const fresh: AnalyticsSnapshot = {
+      revenue: [{ storeId: 's', day: today, grossRevenue: 180, discounts: 5, orderCount: 3 }],
+      orders: [{ storeId: 's', day: today, orderCount: 3, fulfilledCount: 2, cancelledCount: 0, averageOrderValue: 60 }],
+      productSales: [],
+      customerCohorts: [],
+    }
+    const health = storeHealthView(fresh, 2)
     expect(health.score).toBeGreaterThan(70)
     expect(health.tone).toBe('healthy')
     expect(storeHealthView(null).score).toBeNull()
+  })
+  it('never scores 100 when there are zero orders in the last 7 days (BUG-1)', () => {
+    const now = Date.parse('2026-08-23T12:00:00Z')
+    const staleDay = '2026-08-10' // 13 days before now: inside 30d, outside 7d
+    const stale: AnalyticsSnapshot = {
+      revenue: [{ storeId: 's', day: staleDay, grossRevenue: 5_000, discounts: 0, orderCount: 40 }],
+      orders: [{ storeId: 's', day: staleDay, orderCount: 40, fulfilledCount: 40, cancelledCount: 0, averageOrderValue: 125 }],
+      productSales: [{ storeId: 's', day: staleDay, productId: 'p1', unitsSold: 40, grossRevenue: 5_000 }],
+      customerCohorts: [{ storeId: 's', cohortDay: staleDay, activityDay: staleDay, customerCount: 12, grossRevenue: 5_000 }],
+    }
+    const health = storeHealthView(stale, 25, now)
+    expect(health.score).not.toBeNull()
+    expect(health.score!).toBeLessThan(60)
+    expect(health.score!).toBeLessThanOrEqual(45)
+    expect(health.tone).not.toBe('healthy')
+  })
+  it('caps the score at 30 when the whole last 30 days are silent', () => {
+    const now = Date.parse('2026-08-23T12:00:00Z')
+    const ancient: AnalyticsSnapshot = {
+      revenue: [{ storeId: 's', day: '2026-01-05', grossRevenue: 9_000, discounts: 0, orderCount: 90 }],
+      orders: [{ storeId: 's', day: '2026-01-05', orderCount: 90, fulfilledCount: 90, cancelledCount: 0, averageOrderValue: 100 }],
+      productSales: [],
+      customerCohorts: [],
+    }
+    const health = storeHealthView(ancient, 10, now)
+    expect(health.score).not.toBeNull()
+    expect(health.score!).toBeLessThanOrEqual(30)
+    expect(health.tone).toBe('critical')
   })
   it('filters revenue points by closed period', () => {
     expect(revenuePoints(snapshot, 'all')).toHaveLength(2)
