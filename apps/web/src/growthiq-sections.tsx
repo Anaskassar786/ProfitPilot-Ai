@@ -11,7 +11,7 @@
  * components render honest education — never fabricated figures. Upgrade
  * CTAs always read "Upgrade Plan".
  */
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import type { ReactNode } from 'react'
 import { ArrowUpRight, Crosshair, DollarSign, FileBarChart, Flag, Gem, Globe, Lightbulb, ListChecks, LockKeyhole, Mountain, Newspaper, Package, Quote, TrendingUp, Users, Zap } from './icons.js'
 import type { PlanTier } from '@profitpilot/types'
@@ -372,12 +372,14 @@ export function GrowthIqActionsPanel({ onNavigate }: { onNavigate: (route: strin
       <div className="gq-action-grid">
         {actions.map((action) => {
           const Icon = action.icon
+          // RichButton: composite card content (icon + title + description)
+          // would be flattened by the plain Button shim.
           return (
-            <Button key={action.key} type="button" className="gq-action-card" onClick={() => onNavigate(action.route)}>
+            <RichButton key={action.key} type="button" className="gq-action-card" onClick={() => onNavigate(action.route)}>
               <span className="gq-action-icon"><Icon size={16} /></span>
               <strong>{action.title}</strong>
               <span>{action.description}</span>
-            </Button>
+            </RichButton>
           )
         })}
       </div>

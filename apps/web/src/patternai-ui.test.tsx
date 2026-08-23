@@ -89,8 +89,8 @@ describe('plan messaging', () => {
   })
   it('LockedPanel renders nothing when the feature is unlocked', () => {
     const html = renderWithAppProvider(createElement(InsightsLockedPanel, { feature: 'trends', plan: 'trial', overview: null, onNavigateBilling: noop }))
-    // The AppProvider always SSRs its portals container — the panel itself
-    // renders nothing beyond it.
+    // The AppProvider always SSRs its portals container — when unlocked the
+    // panel contributes no locked markup of its own, nothing beyond it.
     expect(html).toBe('<div id="PolarisPortalsContainer"></div>')
   })
   it('UpgradeCta button says exactly Upgrade Plan', () => {
@@ -133,10 +133,13 @@ describe('supporting atoms', () => {
   it('RatingStars renders five stars and reflects values', () => {
     const html = renderWithAppProvider(createElement(RatingStars, { value: 3, onRate: noop }))
     expect((html.match(/type="button"/g) ?? []).length).toBeGreaterThanOrEqual(5)
-    // The lit/unlit distinction rides per-star classes the Button shim
-    // consumes; the pinned accessible contract is the labeled radiogroup.
+    // The group is a labeled radiogroup; a 3-star rating marks stars 1-3 as
+    // lit (aria-pressed) and leaves 4-5 unlit. Per-star labels cover 1-5.
     expect(html).toContain('role="radiogroup"')
+    expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(3)
+    expect((html.match(/aria-pressed="false"/g) ?? []).length).toBe(2)
     expect(html).toContain('aria-label="3 stars"')
+    expect(html).toContain('aria-label="5 stars"')
   })
   it('MarkdownLite renders structure without scripts', () => {
     const html = renderWithAppProvider(createElement(MarkdownLite, { markdown: '## Study\n\n- one\n- two\n\n**Bold** claim <script>alert(1)</script>' }))

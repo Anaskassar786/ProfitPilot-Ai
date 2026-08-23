@@ -132,44 +132,92 @@ export function isApiPath(requestPath: string): boolean {
 }
 
 /**
- * Client-side routes inside the Automation module. They share their path
- * prefix with the JSON API (`/automation` is an API prefix), so the general
- * SPA fallback below refuses to serve them. Browser navigations — which
- * always request HTML — must still reach the app shell, otherwise a hard
- * refresh or deep link to /automation (or a workflow) shows "Cannot GET".
+ * Client-side routes that share their path prefix with the JSON API. Every
+ * page route below exists in the web router (apps/web/src/App.tsx
+ * SECTION_PATHS + the Automation/GrowthIQ sub-routes), while the same path
+ * prefixes (`/orders`, `/billing`, `/settings`, …) are JSON APIs listed in
+ * API_PATH_PREFIXES — so the general SPA fallback below historically refused
+ * to serve them. Browser navigations — which always request HTML — must
+ * still reach the app shell, otherwise a hard refresh or deep link to
+ * `/orders`, `/billing`, `/settings`, etc. shows raw JSON ("storeId is
+ * required") instead of the page. Content negotiation keeps this safe: real
+ * API calls never send `Accept: text/html`, and only the exact client paths
+ * (never `/billing/plans`, `/exports/:id/download`, …) are intercepted.
  */
-const AUTOMATION_SPA_PATH_PATTERN =
-  /^\/automation(?:\/(?:templates|approvals|runs\/[^/]+|workflows\/[^/]+(?:\/runs)?))?$/
+const CLIENT_ROUTE_EXACT_PATHS: ReadonlySet<string> = new Set([
+  '/',
+  '/products',
+  '/orders',
+  '/customers',
+  '/inventory',
+  '/analytics',
+  '/recommendations',
+  '/reports',
+  '/exports',
+  '/support',
+  '/billing',
+  '/settings',
+  '/ai-command',
+  '/campaigns',
+])
 
+const CLIENT_ROUTE_PATTERNS: readonly RegExp[] = [
+  // AI Center command surface and its sub-pages.
+  /^\/command(?:\/[^/]+)?$/,
+  // Automation module deep links.
+  /^\/automation(?:\/(?:templates|approvals|runs\/[^/]+|workflows\/[^/]+(?:\/runs)?))?$/,
+  // AI Growth Command module (Store Coach / GrowthIQ / PatternAI).
+  /^\/ai-growth-command(?:\/(?:coach|growthiq|executive|patternai)(?:\/[^/]+)*)?$/,
+]
+
+/** Pure path check for client-side routes (ignores method/Accept). */
+export function isClientRoutePath(requestPath: string): boolean {
+  const path = requestPath === '/' ? '/' : requestPath.replace(/\/+$/, '')
+  if (CLIENT_ROUTE_EXACT_PATHS.has(path)) return true
+  return CLIENT_ROUTE_PATTERNS.some((pattern) => pattern.test(path))
+}
+
+export function isClientRouteNavigation(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false
+  if (extname(request.path) !== '') return false
+  const accept = request.header('accept') ?? ''
+  if (!accept.includes('text/html')) return false
+  return isClientRoutePath(request.path)
+}
+
+/** Backwards-compatible alias for the original Automation-only guard. */
 export function isAutomationSpaNavigation(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false
   if (extname(request.path) !== '') return false
   const accept = request.header('accept') ?? ''
   if (!accept.includes('text/html')) return false
-  return AUTOMATION_SPA_PATH_PATTERN.test(request.path)
+  return /^\/automation(?:\/(?:templates|approvals|runs\/[^/]+|workflows\/[^/]+(?:\/runs)?))?$/.test(request.path)
 }
 
 /**
- * Serves the app shell for Automation deep links BEFORE the API routers run,
- * so the JSON endpoints keep answering API clients while the browser still
- * gets index.html for `/automation`, `/automation/templates`,
- * `/automation/workflows/:id`, and friends. Returns false when the web build
- * is absent (API-only development and tests).
+ * Serves the app shell for client-side routes BEFORE the API routers run, so
+ * the JSON endpoints keep answering API clients while the browser gets
+ * index.html for every page route (`/orders`, `/analytics`, `/billing`,
+ * `/settings`, `/automation`, …). TheShopify App Bridge API key is injected
+ * exactly like the late fallback, so embedded auth boots on deep links too.
+ * Returns false when the web build is absent (API-only development/tests).
  */
-export function mountAutomationSpaFallback(app: Express, distPath = defaultWebDistPath()): boolean {
+export function mountClientRouteFallback(app: Express, distPath = defaultWebDistPath()): boolean {
   const indexPath = resolve(resolve(distPath), 'index.html')
   if (!existsSync(indexPath)) return false
   app.use((request, response, next): void => {
-    if (!isAutomationSpaNavigation(request)) {
+    if (!isClientRouteNavigation(request)) {
       next()
       return
     }
-    setWebHeaders(response, indexPath)
-    response.sendFile(indexPath, { cacheControl: false }, (error) => {
-      if (error) next(error)
-    })
+    sendShopifyIndex(response, indexPath, next)
   })
   return true
+}
+
+/** @deprecated Use {@link mountClientRouteFallback} (serves every client route). */
+export function mountAutomationSpaFallback(app: Express, distPath = defaultWebDistPath()): boolean {
+  return mountClientRouteFallback(app, distPath)
 }
 
 function isWebNavigation(request: Request): boolean {

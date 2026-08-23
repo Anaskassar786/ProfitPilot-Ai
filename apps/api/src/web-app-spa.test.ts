@@ -95,3 +95,83 @@ describe('Automation SPA deep links', () => {
     expect(asset.status).not.toBe(200)
   })
 })
+
+/**
+ * Deep-link / refresh regression (deep QA 2026-08-22): every page route below
+ * used to return raw JSON 400/404 on a hard reload because the path is ALSO a
+ * JSON API prefix and the terminal SPA fallback skips API prefixes. The early
+ * client-route fallback must serve the app shell for browser navigations and
+ * keep JSON answers for API clients on the exact same paths.
+ */
+describe('Client page routes (all pages load on refresh/deep link)', () => {
+  const dist = mkdtempSync(join(tmpdir(), 'profitpilot-web-pages-'))
+  writeFileSync(join(dist, 'index.html'), SPA_HTML)
+  const server = createServer(
+    createApi({
+      logger: new Logger(),
+      readinessChecks: [],
+      webDistPath: dist,
+      automation: {
+        workflows: new InMemoryWorkflowRepository(),
+        templates: new InMemoryTemplateRepository(),
+        emailVerifier: new MerchantEmailVerifier('secret'),
+        tickets: new ThreadLedger(),
+      },
+    }),
+  )
+  let base = ''
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('No address')
+    base = `http://127.0.0.1:${address.port}`
+  })
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  const PAGE_ROUTES = [
+    '/',
+    '/products',
+    '/orders',
+    '/customers',
+    '/inventory',
+    '/analytics',
+    '/command',
+    '/ai-command',
+    '/recommendations',
+    '/automation',
+    '/reports',
+    '/exports',
+    '/billing',
+    '/support',
+    '/settings',
+    '/ai-growth-command/coach',
+    '/ai-growth-command/growthiq',
+    '/ai-growth-command/patternai',
+  ]
+
+  it('serves the app shell for every client page on a browser navigation', async () => {
+    for (const path of PAGE_ROUTES) {
+      const response = await fetch(`${base}${path}`, { headers: { accept: 'text/html,application/xhtml+xml' } })
+      expect(response.status, path).toBe(200)
+      expect(response.headers.get('content-type'), path).toContain('text/html')
+      expect(await response.text(), path).toContain('PROFITPILOT SPA SHELL')
+    }
+  })
+
+  it('never serves the SPA shell without an HTML Accept header', async () => {
+    // Harness only wires the automation router: /automation/* proves the API
+    // still answers JSON; the unrouted API prefixes must fall to the Express
+    // JSON/404 pipeline ("Cannot GET …") and NEVER to the app shell.
+    const json = await fetch(`${base}/automation/templates`, { headers: { accept: 'application/json' } })
+    expect(json.headers.get('content-type')).toContain('application/json')
+    expect((await json.json() as { ok: boolean }).ok).toBe(false)
+    for (const path of ['/billing', '/settings', '/orders', '/customers', '/inventory', '/analytics', '/recommendations']) {
+      const response = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } })
+      expect(await response.text(), path).not.toContain('PROFITPILOT SPA SHELL')
+    }
+  })
+})

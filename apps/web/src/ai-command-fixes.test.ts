@@ -1,9 +1,12 @@
 import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { AiCommandPage } from './ai-command-page.js'
 import { AiCommandWorkspace, PostChatActivity } from './ai-command.js'
 import type { AiCommandUsage } from './ai-command-model.js'
@@ -15,7 +18,6 @@ import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json
 function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
-
 
 const context = { storeId: 'store-1', shop: 'demo.myshopify.com' }
 const toast = vi.fn()

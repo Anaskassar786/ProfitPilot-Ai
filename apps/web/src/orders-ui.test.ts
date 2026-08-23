@@ -2,20 +2,19 @@ import './jsdom-polaris-setup.js'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { describe, expect, it, vi } from 'vitest'
 import { OrdersEmptyState, PlanLockedFeature } from './orders.js'
 import { initials, insightByFeature, lockedInsightByFeature, orderStatusLabel, paymentStatusLabel } from './orders-model.js'
 import type { OrderInsightsResult } from './orders-model.js'
 import { EXPORT_DATASET_DEFINITIONS } from '@profitpilot/types'
-import { AppProvider } from '@shopify/polaris'
-import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 /** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
  *  components using the Polaris shims render outside an app shell. */
 function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
-
 
 describe('Orders UI regressions', () => {
   it('renders a graceful empty state without invented order rows', () => {

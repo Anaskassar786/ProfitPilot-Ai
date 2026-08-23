@@ -136,6 +136,9 @@ describe('Inventory toolbar', () => {
     const primary = html.slice(html.indexOf('inventory-toolbar-primary'), html.indexOf('inventory-toolbar-filters'))
     expect(primary).toContain('inventory-search')
     expect(primary).toContain('inventory-sort-control')
+    // The sort CustomSelect renders a native Polaris <select> named by its
+    // visible "Sort by" label (the old ariaLabel-only trigger is gone).
+    expect(primary).toContain('<select')
     expect(primary).not.toContain('All categories')
   })
 
@@ -153,9 +156,12 @@ describe('Inventory toolbar', () => {
   it('offers readable sort fields and a direction toggle', () => {
     expect(inventorySortOptions(false).map((option) => option.label)).toEqual(['Product name', 'Stock level', 'Stock value', 'Category', 'Last updated'])
     const html = renderWithAppProvider(createElement(InventoryToolbar, toolbarProps))
-    // The Button shim maps the explicit aria-label to the accessible name
-    // (it wins over the supplementary title tooltip).
+    // Ascending state: the toggle offers the flip to descending (visible icon)
+    // and names itself for assistive tech — the Button shim maps the explicit
+    // aria-label to the accessible name (it wins over the supplementary title
+    // tooltip). Flipping the prop flips the label.
     expect(html).toContain('aria-label="Sort descending"')
+    expect(renderWithAppProvider(createElement(InventoryToolbar, { ...toolbarProps, direction: 'desc' }))).toContain('aria-label="Sort ascending"')
   })
 
   it('shows a clear-filters action only when a filter or search is active', () => {
@@ -315,7 +321,12 @@ describe('Inventory wiring regressions', () => {
   })
 
   it('keeps the inventory route in the dev proxy so it never falls through to the SPA shell', () => {
-    expect(readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8')).toContain("'/inventory': 'http://127.0.0.1:3000'")
+    // The vite dev proxy registers /inventory through the page-aware proxy
+    // list (browser navigations bypass to the SPA shell, API calls to 3000).
+    const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8')
+    expect(viteConfig).toContain("'/inventory'")
+    expect(viteConfig).toContain('pageProxy')
+    expect(viteConfig).toContain("target: 'http://127.0.0.1:3000'")
   })
 
   it('loads the inventory stylesheet after the other workspace styles', () => {

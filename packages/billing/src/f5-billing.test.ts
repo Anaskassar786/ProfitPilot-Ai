@@ -138,6 +138,19 @@ describe('trial and gift redemption', () => {
     const redemption = ledger.redeemGift('z', 'SECONDARY-TEST')
     expect(redemption.code).toBe('SECONDARY-TEST')
   })
+  it('an inactive custom code at the primary sequence never shadows the live primary', () => {
+    // Regression: an expired/inactive admin-seeded code sharing sequence 1
+    // used to be picked as "the primary" and — being unavailable — disabled
+    // the guard, so the secondary code redeemed while the primary was still
+    // active. The guard must inspect EVERY lower-sequence row.
+    const registry: readonly GiftCode[] = [
+      { code: 'EXPIREDQA', maxUses: 10, uses: 0, active: false, durationDays: 3, accessLevel: 'commander', expiresAt: null, sequence: 1 },
+      ...TEST_GIFT_CODES,
+    ]
+    const ledger = new TrialAndGiftLedger(registry)
+    expect(() => ledger.redeemGift('s', 'SECONDARY-TEST')).toThrow('primary promotion code')
+    expect(ledger.redeemGift('s2', 'PRIMARY-TEST').code).toBe('PRIMARY-TEST')
+  })
   it('auto-deactivates an exhausted code', () => { const ledger = giftLedger(); for (let i = 0; i < 100; i += 1) ledger.redeemGift(`s-${i}`, 'PRIMARY-TEST'); expect(ledger.gift('PRIMARY-TEST')?.active).toBe(false) })
   it('supports an admin kill switch', () => { const ledger = giftLedger(); ledger.setGiftKillSwitch(true); expect(() => ledger.redeemGift('s', 'PRIMARY-TEST')).toThrow('disabled') })
   it('rejects invalid codes', () => expect(() => giftLedger().redeemGift('s', 'NOPE')).toThrow('invalid'))

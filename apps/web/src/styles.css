@@ -49,6 +49,12 @@ ui-nav-menu, ui-title-bar, ui-save-bar {
 .page-scroll { padding-top: 0; }
 body { font-size: 14px; font-family: var(--p-font-family-sans, system-ui, sans-serif); }
 .pp-icon .Polaris-Icon, .pp-icon svg { width: 100%; height: 100%; display: block; }
+/* Native control chrome (select dropdown popups, date inputs, scrollbars)
+   follows the UA color scheme, not author CSS. Without this, dark mode shows
+   a blinding white OS popup for every native <select> (CustomSelect wraps the
+   Polaris Select). The app is dark by default; .light-mode opts back out. */
+:root { color-scheme: dark; }
+.app-shell.light-mode, .light-mode { color-scheme: light; }
 
 :root {
   font-family: var(--p-font-family-sans, system-ui, sans-serif);

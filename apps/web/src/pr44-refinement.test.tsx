@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { DashboardLayout } from './dashboard.js'
 import { CancellationRateCard, FulfillmentRateCard, OrderHealthInsight } from './orders.js'
 import type { AnalyticsSnapshot } from './model.js'
@@ -16,7 +18,9 @@ function renderWithAppProvider(element: import('react').ReactElement) {
 }
 
 
-const shell = (light: boolean, child: ReactNode) => <div className={light ? 'app-shell light-mode' : 'app-shell'}>{child}</div>
+// main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+// Polaris-powered components render the same way under test.
+const shell = (light: boolean, child: ReactNode) => <AppProvider i18n={enTranslations as never}><div className={light ? 'app-shell light-mode' : 'app-shell'}>{child}</div></AppProvider>
 const insight = (feature: AvailableOrderInsight['feature'], data: Record<string, unknown>): AvailableOrderInsight => ({ feature, name: feature, data })
 const orders = [
   { id: 'o1', orderNumber: '#1', createdAt: '2026-08-01T00:00:00Z', updatedAt: '2026-08-03T12:00:00Z', status: 'completed', paymentStatus: 'paid', totalPrice: 100, currency: 'USD', lineItems: [{ productId: 'p1', quantity: 2, price: 50 }] },

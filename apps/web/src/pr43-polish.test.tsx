@@ -10,6 +10,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { periodTrend } from './analytics-model.js'
 import { RevenueTrendChart } from './analytics.js'
 import { InventoryHealthCard } from './inventory.js'
@@ -18,8 +20,6 @@ import type { AvailableOrderInsight } from './orders-model.js'
 import { EMPTY_INVENTORY_PAGE } from './inventory-model.js'
 import type { InventoryPageResult } from './inventory-model.js'
 import type { AnalyticsSnapshot } from './model.js'
-import { AppProvider } from '@shopify/polaris'
-import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 /** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
  *  components using the Polaris shims render outside an app shell. */
@@ -28,7 +28,9 @@ function renderWithAppProvider(element: import('react').ReactElement) {
 }
 
 
-const shell = (light: boolean, children: unknown) => <div className={appShellClass(light)}>{children as never}</div>
+// main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
+// Polaris-powered components render the same way under test.
+const shell = (light: boolean, children: unknown) => <AppProvider i18n={enTranslations as never}><div className={appShellClass(light)}>{children as never}</div></AppProvider>
 function appShellClass(light: boolean): string { return light ? 'app-shell light-mode' : 'app-shell' }
 
 // Latest order: 2026-08-14. Refunds in the trailing 30 days (o3, o4) total

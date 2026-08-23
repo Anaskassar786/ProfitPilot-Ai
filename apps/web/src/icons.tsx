@@ -121,14 +121,22 @@ export type IconProps = Readonly<{ size?: number | string; className?: string; s
 export type LucideIcon = (props: IconProps) => ReactElement
 
 function wrap(source: ComponentType): LucideIcon {
-  function Wrapped({ size = 20, className, style, ...rest }: IconProps): ReactElement {
+  function Wrapped({ size = 20, className, style, 'aria-label': ariaLabel }: IconProps): ReactElement {
     const px = typeof size === 'number' ? size : Number.parseInt(String(size), 10) || 20
     const box: CSSProperties = { display: 'inline-flex', width: px, height: px, verticalAlign: 'middle', ...style }
-    const label = rest['aria-label']
-    // Decorative by default; when the caller supplies an accessible label the
-    // icon is meaningful (e.g. guest-customer placeholder) — expose it as an
-    // img role instead of hiding it from assistive technology.
-    return <span className={`pp-icon ${className ?? ''}`.trim()} style={box} aria-hidden={label ? undefined : true} aria-label={label} role={label ? 'img' : undefined}><Icon source={source as never} /></span>
+    // Decorative by default (aria-hidden). When a caller supplies an
+    // aria-label the icon carries meaning (e.g. the guest-avatar "Customer
+    // name unavailable" fallback) and must be announced: expose it with
+    // role="img" + the label instead of hiding it from assistive tech.
+    return (
+      <span
+        className={`pp-icon ${className ?? ''}`.trim()}
+        style={box}
+        {...(ariaLabel ? { role: 'img', 'aria-label': ariaLabel } : { 'aria-hidden': true })}
+      >
+        <Icon source={source as never} />
+      </span>
+    )
   }
   return Wrapped
 }

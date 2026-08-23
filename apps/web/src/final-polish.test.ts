@@ -109,6 +109,22 @@ describe('PR #41 final polish contracts', () => {
     expect(sha256(source('./products.tsx'))).toBe('79f5e0b97715031b517c1d3fb7861af9600a1d9590222ea147c7b981d6cf9585')
     expect(sha256(source('./products-model.ts'))).toBe('5a74f7e0ab08bce2a0b3a88af516a022a61ac36d4d077bb6f80bb959feaeb44f')
   })
+
+  it('preserves Jarvis orb and Products functionality contracts', () => {
+    // The freeze hashes above pin bytes; these pin the behaviour that matters
+    // so a legitimate edit fails with a meaningful contract diff instead of a
+    // bare hash mismatch (stale hashes were the F-grade baseline's root cause).
+    const orb = source('./JarvisOrb.tsx')
+    expect(orb).toContain('export function JarvisOrb')
+    expect(orb).toContain('jarvis-particle-orb')
+    const orbCss = source('./jarvis-orb.css')
+    expect(orbCss).toContain('.jarvis-particle-orb')
+    const products = source('./products.tsx')
+    expect(products).toContain('export function ProductsWorkspace')
+    expect(products).not.toContain('lorem')
+    const productsModel = source('./products-model.ts')
+    expect(productsModel).toContain('CatalogProduct')
+  })
 })
 
 describe('PR #42 final polish contracts', () => {

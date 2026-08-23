@@ -1,4 +1,4 @@
-import { Button } from './polaris-ui.js'
+import { Button, RichButton } from './polaris-ui.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
@@ -572,13 +572,15 @@ function TicketHistory({ open, past, loading, onRefresh, responseBadge }: { open
               const expanded = expandedId === ticket.id
               return (
                 <div className={`support-past-item ${expanded ? 'expanded' : ''}`} key={ticket.id}>
-                  <Button type="button" className="support-past-row" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
+                  // RichButton: composite row (status dot, subject, meta, badge,
+                  // chevron) — the plain Button shim flattens it into label text.
+                  <RichButton type="button" className="support-past-row" onClick={() => setExpandedId(expanded ? null : ticket.id)} aria-expanded={expanded}>
                     <span className={`support-ticket-status-dot ${status.tone}`} aria-hidden="true" />
                     <strong>{ticket.subject}</strong>
                     <small>Resolved {formatTicketDate(ticket.updatedAt)} · {ticketPriorityLabel(ticket.priority)} priority</small>
                     <span className={`support-status-badge ${status.tone}`}>{status.label}</span>
                     <span className="support-ticket-chevron" aria-hidden="true"><ChevronDown size={15} className={expanded ? 'flipped' : ''} /></span>
-                  </Button>
+                  </RichButton>
                   {expanded && (
                     <div className="support-past-details">
                       <TicketDetailsBody ticket={ticket} />

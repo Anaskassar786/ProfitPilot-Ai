@@ -445,7 +445,10 @@ describe('insights sidebar', () => {
     expect(html).toContain('Approve or skip recommendations to build history')
     expect(html).not.toContain('Everyday Hoodie')
     expect(html).toContain('Stockout Alerts')
-    expect(html).toMatch(/Stockout Alerts0|🚨 Stockout Alerts0/)
+    // Each rule row renders the label and its real count as distinct elements
+    // (<span>label</span><strong>0</strong>) — assert the count honestly sits
+    // at zero beside the label rather than as concatenated text.
+    expect(html).toMatch(/🚨 Stockout Alerts<\/span><strong>0<\/strong>/)
   })
 })
 

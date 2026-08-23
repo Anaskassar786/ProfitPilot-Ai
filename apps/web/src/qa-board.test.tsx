@@ -4,10 +4,10 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { QaChartBoard } from './qa-board.js'
-import { QA_AREAS, QA_BUGS, QA_FAKE_AUDIT } from './qa-data.js'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import { QaChartBoard } from './qa-board.js'
+import { QA_AREAS, QA_BUGS, QA_FAKE_AUDIT } from './qa-data.js'
 
 /**
  * QA Chart Board smoke test.
@@ -55,6 +55,7 @@ describe('QA Chart Board', () => {
     document.body.appendChild(host)
     root = createRoot(host)
     await act(async () => {
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
       root?.render(createElement(StrictMode, null, createElement(AppProvider, { i18n: enTranslations as never }, createElement(QaChartBoard, { context: { storeId: null, shop: null } }))))
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })

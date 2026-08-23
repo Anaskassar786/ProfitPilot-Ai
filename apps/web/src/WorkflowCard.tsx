@@ -111,13 +111,16 @@ export function WorkflowCard({
         )}
       </RichButton>
       <div className="workflow-card-actions workflow-actions">
-        <Button className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</Button>
-        <Button className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</Button>
+        {/* RichButton: the per-action classes (.edit/.view-report/.pause/.resume)
+            drive state-colored styling in automation.css; the plain Button shim
+            drops className, which silently erased those colors. */}
+        <RichButton className="workflow-action-btn edit" onClick={onOpen}><Pencil size={15} /> Edit</RichButton>
+        <RichButton className="workflow-action-btn view-report" onClick={() => onCommand('history')}><BarChart3 size={15} /> View Report</RichButton>
         {workflow.status === 'ACTIVE' && (
-          <Button className="workflow-action-btn pause" onClick={() => onCommand('pause')}><Pause size={15} /> Pause</Button>
+          <RichButton className="workflow-action-btn pause" onClick={() => onCommand('pause')}><Pause size={15} /> Pause</RichButton>
         )}
         {workflow.status === 'PAUSED' && (
-          <Button className="workflow-action-btn resume" onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</Button>
+          <RichButton className="workflow-action-btn resume" onClick={() => onCommand('resume')}><RotateCcw size={15} /> Resume</RichButton>
         )}
         <div className="workflow-more workflow-more-menu">
           <Button aria-label="More automation actions" onClick={() => setMenu((value) => !value)}>

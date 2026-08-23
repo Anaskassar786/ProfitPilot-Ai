@@ -393,8 +393,10 @@ const INSTRUCTIONAL_TOPICS: readonly Readonly<{ topic: string; pattern: RegExp }
 // Store metrics and entities a merchant can look up. A "what is/what are"
 // question that mentions one of these ("What is my revenue this month?") is a
 // data lookup that parseInfoTools can answer from live data — mirroring its
-// patterns — not a generic "what can this app do" guide.
-const DATA_LOOKUP_SIGNAL = /\b(?:revenue|sales|aov|average order value|analytics|profit(?:s|ability)?|margins?|earnings?|income|orders?|customers?|products?|catalog|skus?|inventory|stock(?:out)?|conversion|traffic|refunds?|performance|trends?|recap|summar(?:y|ies)|overview|this month|today)\b/i
+// patterns — not a generic "what can this app do" guide. It must be answered
+// from real analytics (INTENT B), never with the generic instructional help
+// card.
+const DATA_LOOKUP_SIGNAL = /\b(?:revenue|sales?|aov|average order value|analytics|metrics?|profit(?:s|ability)?|margins?|earnings?|income|orders?|customers?|products?|catalog|skus?|inventory|stock(?:out)?|conversion|traffic|refunds?|performance|trends?|recap|summar(?:y|ies)|overview|this month|today|payouts?|best[ -]?sellers?|purchases?|spend|sold)\b/i
 
 /**
  * Detects instructional / how-to questions (INTENT C). Returns a topic key or
@@ -411,6 +413,9 @@ export function detectInstructionalIntent(query: string): string | null {
   for (const entry of INSTRUCTIONAL_TOPICS) {
     if (entry.pattern.test(text)) return entry.topic
   }
+  // A "what is / how much / how many" question about measurable store data is
+  // a lookup, not guidance — fall through so the tools path answers it with
+  // real numbers (e.g. "What is my revenue this month?" → get_analytics).
   if (DATA_LOOKUP_SIGNAL.test(text)) return null
   return 'generic'
 }

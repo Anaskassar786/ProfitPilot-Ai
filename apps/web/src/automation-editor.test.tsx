@@ -13,10 +13,10 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WorkflowEditor } from './WorkflowEditor.js'
-import type { AutomationUsage, WorkflowNode, WorkflowRecord } from './automation-model.js'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import { WorkflowEditor } from './WorkflowEditor.js'
+import type { AutomationUsage, WorkflowNode, WorkflowRecord } from './automation-model.js'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -160,6 +160,8 @@ async function mount(store: ReturnType<typeof setup>): Promise<HTMLElement> {
   document.body.appendChild(container)
   const renderEditor = (): void => {
     root?.render(
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it
+      // here so Polaris-powered components render the same way under test.
       <StrictMode>
         <AppProvider i18n={enTranslations as never}>
           <WorkflowEditor
@@ -314,8 +316,9 @@ describe('WorkflowEditor — simple mode add / remove / configure', () => {
       ],
     })
     const container = await mount(store)
-    // The Polaris Button shim translates className into variant/tone props, so
-    // the stable hook is the aria label, not the old `.danger` class.
+    // The Polaris Button shim maps the legacy `danger` class to a critical
+    // tone/variant prop (not a DOM class), so the stable hook is the aria
+    // label, not the old `.danger` class.
     const trash = container.querySelector('.simple-step [aria-label="Remove step"]') as HTMLButtonElement
     expect(trash).toBeTruthy()
     await click(trash)

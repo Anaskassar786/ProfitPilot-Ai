@@ -99,13 +99,20 @@ export function expiredGiftRevert(record: BillingRecord | null, trial: TrialReco
  * capacity.
  */
 export function assertGiftSequence(gifts: Iterable<GiftCode>, target: GiftCode, now: number): void {
-  let primary: GiftCode | null = null
+  // Block while ANY lower-sequence code is still redeemable. Only an
+  // available (active, under cap, unexpired) earlier code blocks — an
+  // inactive/exhausted/expired one is exactly the state that unlocks the
+  // next code. Checking every row matters: previously the caller passed a
+  // single lowest-sequence row, so one inactive custom code sharing the
+  // primary sequence silently disabled the whole guard and let AFRIDI786
+  // redeem while KASSAR786 was still active.
+  let blocker: GiftCode | null = null
   for (const gift of gifts) {
-    if (!primary || gift.sequence < primary.sequence) primary = gift
+    if (gift.sequence >= target.sequence) continue
+    const available = gift.active && gift.uses < gift.maxUses && (gift.expiresAt === null || gift.expiresAt > now)
+    if (available && (!blocker || gift.sequence < blocker.sequence)) blocker = gift
   }
-  if (!primary || target.sequence <= primary.sequence) return
-  const primaryAvailable = primary.active && primary.uses < primary.maxUses && (primary.expiresAt === null || primary.expiresAt > now)
-  if (primaryAvailable) throw new AppError('VALIDATION_ERROR', USE_PRIMARY_PROMO_FIRST, 400, { primary: primary.code, requested: target.code, reason: 'PRIMARY_CODE_ACTIVE' })
+  if (blocker) throw new AppError('VALIDATION_ERROR', USE_PRIMARY_PROMO_FIRST, 400, { primary: blocker.code, requested: target.code, reason: 'PRIMARY_CODE_ACTIVE' })
 }
 
 /**
@@ -365,12 +372,14 @@ export class PostgresTrialGiftStore {
       if (invalid) throw invalid
       const activeGift = gift as GiftCode
       // Sequencing (strict Postgres check): a secondary code is only valid once
-      // the active primary (lowest `sequence`) is exhausted/inactive/expired.
-      const primaryResult = await client.query<GiftCodeRow>(
-        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes ORDER BY sequence ASC NULLS LAST, code ASC LIMIT 1',
-        [],
+      // every earlier `sequence` code is exhausted/inactive/expired. All
+      // earlier codes are loaded — never LIMIT 1 — so one inactive custom code
+      // at the primary sequence cannot shadow the live primary.
+      const earlierResult = await client.query<GiftCodeRow>(
+        'SELECT code, max_uses, uses, active, duration_days, access_level, expires_at, sequence FROM gift_codes WHERE sequence < $1 ORDER BY sequence ASC, code ASC',
+        [activeGift.sequence],
       )
-      if (primaryResult.rows[0]) assertGiftSequence([mapGift(primaryResult.rows[0])], activeGift, now)
+      assertGiftSequence(earlierResult.rows.map(mapGift), activeGift, now)
 
       const existing = await client.query<GiftRedemptionRow>(
         'SELECT shop_id, code, redeemed_at, expires_at FROM gift_redemptions WHERE shop_id = $1 LIMIT 1',

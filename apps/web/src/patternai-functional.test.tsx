@@ -511,8 +511,9 @@ describe('plan gating on a trial store', () => {
     expect(text()).toContain('SAMPLE')
     expect(text()).toContain('Upgrade Plan')
     expect(text()).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
-    // Locked nav entries announce themselves through the title→aria-label
-    // mapping (the lock icon wrapper is flattened into the button text).
+    expect(document.querySelectorAll('.pa-nav-item.locked').length).toBeGreaterThan(3)
+    // The rich-content button maps `title` to an accessible label (aria-label),
+    // so locked sections announce the upgrade path to assistive tech.
     const lockedNav = [...document.querySelectorAll<HTMLElement>('.pa-nav-group button')].filter((entry) => (entry.getAttribute('aria-label') ?? '').startsWith('Locked on your current plan'))
     expect(lockedNav.length).toBeGreaterThan(3)
     expect(navItem('Customer personas')?.getAttribute('aria-label')).toContain('Upgrade Plan')

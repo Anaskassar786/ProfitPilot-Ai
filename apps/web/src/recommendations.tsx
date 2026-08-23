@@ -513,12 +513,11 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
                 </select>
               </span>
               <div className="recs-group-toggle" role="group" aria-label="Group recommendations">
-                {/* The Button shim consumes className, so the active mode is
-                    exposed as aria-pressed (rendered by Polaris pressed) —
-                    keeps the affordance for assistive tech and the DOM. */}
-                <Button className={groupMode === 'none' ? 'active' : ''} aria-pressed={groupMode === 'none'} onClick={() => setGroupMode('none')}>List</Button>
-                <Button className={groupMode === 'agent' ? 'active' : ''} aria-pressed={groupMode === 'agent'} onClick={() => setGroupMode('agent')}>By agent</Button>
-                <Button className={groupMode === 'rule' ? 'active' : ''} aria-pressed={groupMode === 'rule'} onClick={() => setGroupMode('rule')}>By rule</Button>
+                {/* RichButton: keeps the .active selected-state styling; the plain
+                    Button shim drops the class and the toggle looks unselected. */}
+                <RichButton className={groupMode === 'none' ? 'active' : ''} aria-pressed={groupMode === 'none'} onClick={() => setGroupMode('none')}>List</RichButton>
+                <RichButton className={groupMode === 'agent' ? 'active' : ''} aria-pressed={groupMode === 'agent'} onClick={() => setGroupMode('agent')}>By agent</RichButton>
+                <RichButton className={groupMode === 'rule' ? 'active' : ''} aria-pressed={groupMode === 'rule'} onClick={() => setGroupMode('rule')}>By rule</RichButton>
               </div>
               <div className="recs-dates">
                 <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} onInput={(event) => setDateFrom(event.currentTarget.value)} aria-label="From date" />
@@ -528,14 +527,16 @@ export function RecommendationsWorkspace({ context, onToast, onNavigateBilling, 
               <Button className="icon-button recs-refresh" onClick={() => void load()} title={refreshedAt ? `Refreshed ${formatRelativeTime(new Date(refreshedAt).toISOString())}` : 'Refresh'} aria-label="Refresh recommendations"><RefreshCw size={15} /></Button>
             </div>
             <div className="recs-agent-chips" role="group" aria-label="Filter by agent">
-              <Button className={`recs-chip ${agentFilter === null ? 'active' : ''}`} onClick={() => setAgentFilter(null)}>All agents</Button>
+              {/* RichButton: chips keep .active/.locked state classes and the
+                  --chip-color accent var; the plain Button shim drops them. */}
+              <RichButton className={`recs-chip ${agentFilter === null ? 'active' : ''}`} aria-pressed={agentFilter === null} onClick={() => setAgentFilter(null)}>All agents</RichButton>
               {AGENT_UNLOCK_ORDER.map((agent) => {
                 const Icon = AGENT_ICONS[agent]
                 const locked = agentLockedForPlan(agent, plan)
                 if (locked) {
-                  return <Button key={agent} className="recs-chip locked" onClick={onNavigateBilling} title={`${agentLabel(agent)} unlocks on a higher plan. Upgrade Plan to add this teammate.`}><LockKeyhole size={11} /> {agentLabel(agent)}<small>{PLAN_LABELS[planRequiredForAgent(agent)]}</small></Button>
+                  return <RichButton key={agent} className="recs-chip locked" onClick={onNavigateBilling} title={`${agentLabel(agent)} unlocks on a higher plan. Upgrade Plan to add this teammate.`}><LockKeyhole size={11} /> {agentLabel(agent)}<small>{PLAN_LABELS[planRequiredForAgent(agent)]}</small></RichButton>
                 }
-                return <Button key={agent} className={`recs-chip ${agentFilter === agent ? 'active' : ''}`} style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }} onClick={() => setAgentFilter((current) => (current === agent ? null : agent))}><Icon size={12} /> {agentLabel(agent)}</Button>
+                return <RichButton key={agent} className={`recs-chip ${agentFilter === agent ? 'active' : ''}`} aria-pressed={agentFilter === agent} style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }} onClick={() => setAgentFilter((current) => (current === agent ? null : agent))}><Icon size={12} /> {agentLabel(agent)}</RichButton>
               })}
             </div>
           </div>
@@ -1072,10 +1073,12 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
               {verification?.verified === false && <span className="recs-verify-status bad"><AlertTriangle size={13} /> Verification incomplete — this pack predates field-level sealing</span>}
               {verifyFailed && <span className="recs-verify-status bad"><AlertTriangle size={13} /> Verification service unavailable right now</span>}
               {sha && (
-                <Button className="recs-hash" onClick={() => copy('sha', sha)} title="Copy full SHA-256">
+                // RichButton: mono hash label + copy-state icon — flattened by
+                // the plain Button shim otherwise.
+                <RichButton className="recs-hash" onClick={() => copy('sha', sha)} title="Copy full SHA-256">
                   <span className="mono">SHA-256: {sha.slice(0, 18)}…</span>
                   {copied === 'sha' ? <Check size={12} /> : <Copy size={12} />}
-                </Button>
+                </RichButton>
               )}
               <small>Generated {new Date(generatedAt).toLocaleString()}{typeof recommendation.evidencePack.ruleVersion === 'string' ? ` · Rule ${ruleLabel(recommendation.ruleId)} v${recommendation.evidencePack.ruleVersion}` : ''}</small>
             </div>
@@ -1160,7 +1163,7 @@ function RejectReasonSheet({ recommendation, onCancel, onReject }: { recommendat
         <p className="recs-confirm-what">Telling your AI team <em>why</em> makes future recommendations better — skipping lowers a teammate's confidence until it earns your trust back.</p>
         <div className="recs-reason-chips" role="group" aria-label="Rejection reason">
           {REJECT_REASON_OPTIONS.map((option) => (
-            <Button key={option} className={`recs-chip ${reason === option ? 'active' : ''}`} onClick={() => setReason((current) => (current === option ? null : option))}>{REJECT_REASON_LABELS[option]}</Button>
+            <RichButton key={option} className={`recs-chip ${reason === option ? 'active' : ''}`} aria-pressed={reason === option} onClick={() => setReason((current) => (current === option ? null : option))}>{REJECT_REASON_LABELS[option]}</RichButton>
           ))}
         </div>
         <div className="modal-actions">
@@ -1217,15 +1220,18 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
             const pending = byAgent.get(agent)?.pending ?? 0
             if (locked) {
               return (
-                <Button key={agent} className="recs-agent-row locked" onClick={onUpgrade} title={`${agentLabel(agent)} unlocks on a higher plan. ${AGENT_DESCRIPTIONS[agent]}`}>
+                // RichButton: the roster row is a composite control (icon, name,
+                // description, plan chip); the plain Button shim flattens all of
+                // it into a single text label.
+                <RichButton key={agent} className="recs-agent-row locked" onClick={onUpgrade} title={`${agentLabel(agent)} unlocks on a higher plan. ${AGENT_DESCRIPTIONS[agent]}`}>
                   <span className="recs-agent-row-icon"><LockKeyhole size={13} /></span>
                   <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
                   <span className="recs-agent-row-plan">{PLAN_LABELS[planRequiredForAgent(agent)]}</span>
-                </Button>
+                </RichButton>
               )
             }
             return (
-              <Button key={agent} className="recs-agent-row" onClick={() => onFilterAgent(agent)} title={`${AGENT_DESCRIPTIONS[agent]} — click to see only ${agentLabel(agent)}.`}>
+              <RichButton key={agent} className="recs-agent-row" onClick={() => onFilterAgent(agent)} title={`${AGENT_DESCRIPTIONS[agent]} — click to see only ${agentLabel(agent)}.`}>
                 <span className="recs-agent-row-icon" style={{ ['--chip-color' as never]: AGENT_COLORS[agent] }}>
                   <Icon size={13} />
                   <i className={`recs-live-dot ${pending > 0 ? 'on' : ''}`} aria-hidden />
@@ -1233,7 +1239,7 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
                 <span className="recs-agent-row-copy"><strong>{agentLabel(agent)}</strong><small>{AGENT_DESCRIPTIONS[agent]}</small></span>
                 <span className="recs-agent-row-count">{pending}<small>waiting</small></span>
                 <span className="recs-agent-row-bar" aria-hidden><i style={{ width: `${maxPending > 0 ? Math.max(0, (pending / maxPending) * 100) : 0}%`, background: AGENT_COLORS[agent] }} /></span>
-              </Button>
+              </RichButton>
             )
           })}
         </div>
@@ -1263,21 +1269,22 @@ function InsightsSidebar({ summary, plan, onFilterAgent, onInspectRule, onUpgrad
         {summary.byRule.length > 0 ? (
           <div className="recs-rule-list">
             {summary.byRule.slice(0, 5).map((entry) => (
-              <Button key={entry.ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(entry.ruleId)} title={`${RULE_DESCRIPTIONS[entry.ruleId]} — click to learn more.`}>
+              // RichButton: label + share bar + count must not be flattened.
+              <RichButton key={entry.ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(entry.ruleId)} title={`${RULE_DESCRIPTIONS[entry.ruleId]} — click to learn more.`}>
                 <span>{RULE_EMOJIS[entry.ruleId]} {ruleLabel(entry.ruleId)}</span>
                 <span className="recs-rule-row-share" aria-hidden><i style={{ width: `${maxRuleTotal > 0 ? Math.max(6, (entry.total / maxRuleTotal) * 100) : 0}%` }} /></span>
                 <strong>{entry.total}</strong>
-              </Button>
+              </RichButton>
             ))}
           </div>
         ) : (
           <>
             <div className="recs-rule-list">
               {RULE_ORDER.map((ruleId) => (
-                <Button key={ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click to learn more.`}>
+                <RichButton key={ruleId} className="recs-rule-row interactive" onClick={() => onInspectRule(ruleId)} title={`${RULE_DESCRIPTIONS[ruleId]} — click to learn more.`}>
                   <span>{RULE_EMOJIS[ruleId]} {RULE_LABELS[ruleId]}</span>
                   <strong>0</strong>
-                </Button>
+                </RichButton>
               ))}
             </div>
             <p className="recs-side-empty">We alert you when something important happens — each trigger shows up here.</p>

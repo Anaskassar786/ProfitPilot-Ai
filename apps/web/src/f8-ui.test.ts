@@ -1,8 +1,11 @@
 import './jsdom-polaris-setup.js'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { JarvisExperience } from './f8.js'
 import { AppProvider } from '@shopify/polaris'
 import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
@@ -12,7 +15,6 @@ import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json
 function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
-
 
 describe('Jarvis voice-strip UI', () => {
   it('renders the orb launcher instead of a chat panel when closed', () => {

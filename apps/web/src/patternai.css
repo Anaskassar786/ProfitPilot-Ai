@@ -518,9 +518,10 @@
 }
 
 .pa-stars { display: inline-flex; align-items: center; gap: 2px; }
-.pa-star { width: 26px; height: 26px; display: grid; place-items: center; color: var(--pa-text-tertiary); border-radius: 6px; background: transparent; }
+.pa-star { width: 30px; height: 30px; display: inline-grid; place-items: center; color: var(--pa-text-tertiary); border-radius: 6px; background: transparent; }
 .pa-star.lit { color: var(--pa-warning); }
-.pa-star:disabled { cursor: default; }
+.pa-star button { color: inherit; }
+.pa-stars button:disabled { cursor: default; }
 
 .pa-meter { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .pa-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--pa-text-secondary); }

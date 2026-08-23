@@ -1,17 +1,45 @@
-import { JSDOM } from 'jsdom'
+// @vitest-environment jsdom
 import { createElement } from 'react'
+import { JSDOM } from 'jsdom'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import { CustomSelect, customSelectKeyAction } from './CustomSelect.js'
-import { AppProvider } from '@shopify/polaris'
-import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
- *  components using the Polaris Button shim render outside an app shell. */
-function renderWithAppProvider(element: import('react').ReactElement) {
-  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
-}
+// jsdom does not implement matchMedia; Polaris' breakpoints module reads it at
+// import time. Stub BEFORE dynamically importing any Polaris-touching module.
+;(window as unknown as { matchMedia: unknown }).matchMedia = (query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: () => {},
+  removeListener: () => {},
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => false,
+})
 
+/**
+ * CustomSelect contract (post-Polaris-migration): it is a thin wrapper around
+ * the Polaris Select, so every dropdown across Products/Inventory/Orders/
+ * Customers/Automation/Settings/Support shares one accessible, themeable
+ * control. The wrapper guarantees:
+ *   - a native <select> (keyboard + screen-reader complete) with all options,
+ *   - a visible label when `label` is given and a visually hidden Polaris
+ *     label otherwise (so the accessible name always exists),
+ *   - `placeholder` support for "no value selected" states,
+ *   - controlled `value` + `onChange` wiring.
+ */
+let CustomSelect: typeof import('./CustomSelect.js').CustomSelect
+let customSelectKeyAction: typeof import('./CustomSelect.js').customSelectKeyAction
+let AppProvider: typeof import('@shopify/polaris').AppProvider
+let enTranslations: typeof import('@shopify/polaris/locales/en.json')
+
+beforeAll(async () => {
+  const module = await import('./CustomSelect.js')
+  CustomSelect = module.CustomSelect
+  customSelectKeyAction = module.customSelectKeyAction
+  AppProvider = (await import('@shopify/polaris')).AppProvider
+  enTranslations = (await import('@shopify/polaris/locales/en.json', { with: { type: 'json' } })) as never
+})
 
 const OPTIONS = [
   { value: 'name', label: 'Sort: Name' },
@@ -23,31 +51,39 @@ type SortValue = 'name' | 'stock' | 'value'
 
 function render(props: Partial<Parameters<typeof CustomSelect<SortValue>>[0]> = {}): string {
   const base: Parameters<typeof CustomSelect<SortValue>>[0] = { value: 'name', options: OPTIONS, onChange: vi.fn(), ariaLabel: 'Sort inventory' }
-  return renderWithAppProvider(createElement(CustomSelect<SortValue>, { ...base, ...props }))
+  return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, createElement(CustomSelect<SortValue>, { ...base, ...props })))
 }
 
-describe('polaris select markup contract', () => {
+describe('Polaris select markup contract', () => {
   // The shared control is a thin wrapper over Polaris Select — the native
-  // popup matches the embedded adminchrome instead of a custom listbox.
-  it('renders a Polaris select carrying the current value and option labels', () => {
+  // popup matches the embedded admin chrome instead of a custom listbox.
+  it('renders a real native select carrying the current value and every option', () => {
     const html = render()
     expect(html).toContain('Polaris-Select')
     expect(html).toContain('<select')
-    expect(html).toContain('Sort: Name')
-    expect(html).toContain('Sort: Stock')
+    for (const label of ['Sort: Name', 'Sort: Stock', 'Sort: Value']) expect(html).toContain(label)
+    expect(html).toContain('value="name"')
+    expect(html).toContain('value="stock"')
+    expect(html).toContain('value="value"')
   })
 
-  it('exposes the accessible label and an optional prefix label', () => {
-    // ariaLabel becomes the (visually hidden) Polaris label…
-    expect(render()).toContain('Sort inventory')
-    // …and an explicit visible label replaces it as the accessible name.
-    const html = render({ label: 'Sort by' })
-    expect(html).toContain('Sort by')
-    expect(html).not.toContain('Sort inventory')
+  it('always has an accessible name — visible label or visually hidden labelled-by', () => {
+    // With an explicit label: a visible <label> programmatically tied (for/id)
+    // replaces the ariaLabel as the accessible name.
+    const withLabel = render({ label: 'Sort by' })
+    expect(withLabel).toContain('Sort by')
+    expect(withLabel).toContain('<label')
+    expect(withLabel).toContain(' for="')
+    expect(withLabel).not.toContain('Sort inventory')
+    // Without a label the ariaLabel still names the control (visually hidden).
+    const hidden = render()
+    expect(hidden).toContain('Polaris-Labelled--hidden')
+    expect(hidden).toContain('Sort inventory')
   })
 
-  it('falls back to a placeholder when the value matches no option', () => {
-    expect(render({ value: '' as 'name', placeholder: 'All categories' })).toContain('All categories')
+  it('renders the placeholder as the leading option when provided', () => {
+    const html = render({ value: '' as SortValue, placeholder: 'All categories' })
+    expect(html).toContain('All categories')
   })
 
   it('forwards className and icon to a wrapper so page layout css keeps applying', () => {
@@ -57,7 +93,36 @@ describe('polaris select markup contract', () => {
   })
 })
 
-describe('listbox keyboard contract', () => {
+describe('native interaction contract (keyboard complete by construction)', () => {
+  it('fires onChange with the chosen value', async () => {
+    const onChange = vi.fn()
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const { createRoot } = await import('react-dom/client')
+    const { act } = await import('react')
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const reactRoot = createRoot(root)
+    await act(async () => {
+      reactRoot.render(
+        createElement(AppProvider, {
+          i18n: enTranslations as never,
+          children: createElement(CustomSelect<SortValue>, { value: 'name', options: OPTIONS, onChange, ariaLabel: 'Sort inventory' }),
+        }),
+      )
+    })
+    const select = root.querySelector('select')
+    if (!select) throw new Error('missing native select')
+    await act(async () => {
+      select.value = 'stock'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(onChange).toHaveBeenCalledWith('stock')
+    await act(async () => reactRoot.unmount())
+    root.remove()
+  })
+})
+
+describe('legacy keyboard-mapper contract (kept for API stability)', () => {
   it('opens on the arrow, enter, and space keys', () => {
     for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ']) {
       expect(customSelectKeyAction(key, false, 0, 3)).toEqual({ type: 'open' })
@@ -89,10 +154,12 @@ describe('listbox keyboard contract', () => {
 })
 
 describe('dark theme styling contract', () => {
-  const css = new URL('./styles.css', import.meta.url)
+  // In the jsdom environment import.meta.url is an http URL, so resolve
+  // sources from the repository working directory instead.
+  const readSource = (name: string) => import('node:fs/promises').then((fs) => fs.readFile(`apps/web/src/${name}`, 'utf8'))
 
   it('paints the popup from the card variable instead of the OS palette', async () => {
-    const source = await (await import('node:fs/promises')).readFile(css, 'utf8')
+    const source = await readSource('styles.css')
     expect(source).toContain('.custom-select-menu { position: absolute;')
     expect(source).toContain('background: var(--card)')
     expect(source).toContain('.custom-select-menu li:hover, .custom-select-menu li.highlighted { color: var(--text); background: rgba(59,130,246,.12); }')
@@ -111,8 +178,11 @@ describe('dark theme styling contract', () => {
 })
 
 describe('page wiring', () => {
-  it('replaces every native inventory dropdown with the shared listbox', async () => {
-    const source = await (await import('node:fs/promises')).readFile(new URL('./inventory.tsx', import.meta.url), 'utf8')
+  // In the jsdom environment import.meta.url is an http URL, so resolve
+  // sources from the repository working directory instead.
+  const readSource = (name: string) => import('node:fs/promises').then((fs) => fs.readFile(`apps/web/src/${name}`, 'utf8'))
+  it('keeps every inventory dropdown on the shared CustomSelect', async () => {
+    const source = await readSource('inventory.tsx')
     expect(source).not.toContain('<select')
     expect(source).not.toContain('<option')
     expect(source.match(/<CustomSelect/g) ?? []).toHaveLength(4)
@@ -123,11 +193,20 @@ describe('page wiring', () => {
   })
 
   it('keeps the Products page on the same shared component', async () => {
-    const source = await (await import('node:fs/promises')).readFile(new URL('./products.tsx', import.meta.url), 'utf8')
+    const source = await readSource('products.tsx')
     expect(source).toContain("import { CustomSelect } from './CustomSelect.js'")
     expect(source).toContain('<CustomSelect icon={<SlidersHorizontal size={14} />}')
     expect(source).not.toContain('function ProductsDropdown')
     expect(source).not.toContain('<select')
+  })
+
+  it('keeps the dark app readable for native popups via color-scheme', async () => {
+    // Native select popups follow the UA color scheme, not author CSS. The app
+    // is dark by default, so :root must opt into dark or every dropdown would
+    // open a blinding white OS popup in dark mode.
+    const source = await readSource('styles.css')
+    expect(source).toContain('color-scheme: dark')
+    expect(source).toContain('color-scheme: light')
   })
 })
 

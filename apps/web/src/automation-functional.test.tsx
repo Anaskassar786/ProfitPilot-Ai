@@ -397,10 +397,13 @@ describe('Automation page — header, banner, navigation', () => {
     const create = button(container, 'Create Automation')
     expect(create).toBeTruthy()
     // Limit reached → create is disabled with an explanatory tooltip. The
-    // Polaris Button shim expresses disabled as aria-disabled (plus the
-    // disabled class) and maps title → accessibilityLabel → aria-label.
+    // Polaris Button shim soft-disables (aria-disabled + click suppression,
+    // not the native attribute) and maps title → accessibilityLabel →
+    // aria-label. Clicking must be suppressed — the modal stays closed.
     expect(create.getAttribute('aria-disabled')).toBe('true')
     expect(create.getAttribute('aria-label')).toContain('upgrade')
+    await click(create)
+    expect(container.textContent).not.toContain('Create New Automation')
   })
 
   it('opens and closes the How it works modal without errors', async () => {
@@ -545,9 +548,9 @@ describe('Automation page — featured templates (all 8 cards)', () => {
     setup()
     const container = await mount()
     const cards = Array.from(container.querySelectorAll('.template-card'))
-    // Icons are lucide components nested inside the `.template-icon` wrapper —
-    // the distinguishing signal is each icon's rendered path markup, not an
-    // svg class (the shim carries classes on the wrapper, not the svg).
+    // All Polaris icons render the same svg class — the distinguishing
+    // signal is each icon's rendered glyph (the path markup inside the
+    // `.template-icon` wrapper).
     const iconClass = (card: Element) => (card.querySelector('.template-icon svg') as SVGElement).innerHTML
     const byCategory = new Map<string, Set<string>>()
     for (const card of cards) {
@@ -958,8 +961,9 @@ describe('Automation page — states, resilience, and accessibility', () => {
     const container = await mount()
     await click(button(container, 'Create Automation'))
     expect(container.textContent).toContain('Create New Automation')
-    // `.automation-primary` is consumed by the Button shim; the submit is the
-    // footer's "Continue →" action and its disabled state rides aria-disabled.
+    // `.automation-primary` is consumed by the Button shim; Polaris
+    // soft-disables via aria-disabled + click suppression (not the native
+    // attribute). Locate the submit by its visible "Continue →" label.
     const submit = button(container, 'Continue →')
     expect(submit.getAttribute('aria-disabled')).toBe('true')
     await click(button(container, 'Cancel'))
@@ -970,6 +974,8 @@ describe('Automation page — states, resilience, and accessibility', () => {
     await act(async () => {
       setInput(nameInput as HTMLInputElement, 'My new automation')
     })
+    // The template picker is a native Polaris <select> inside the
+    // `.create-template-select` wrapper — drive its change event.
     const templateSelect = container.querySelector<HTMLSelectElement>('.create-template-select select')
     expect(templateSelect).toBeTruthy()
     await setSelect(templateSelect as HTMLSelectElement, 'welcome-customer')

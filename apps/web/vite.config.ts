@@ -10,6 +10,25 @@ export default defineConfig(({ mode }) => {
   const root = loadEnv(mode, repoRoot, '')
   const shopifyApiKey = (local.VITE_SHOPIFY_API_KEY || local.SHOPIFY_API_KEY || root.VITE_SHOPIFY_API_KEY || root.SHOPIFY_API_KEY || '').trim()
 
+  /**
+   * Dev proxy for prefixes that are simultaneously a client page route and a
+   * JSON API (e.g. /billing). Browser navigations (GET, Accept: text/html, no
+   * file extension, exact page path) are bypassed to the SPA shell; every
+   * API call — which never accepts HTML — proxies through to the API.
+   */
+  const pageProxy = (pagePath: string) => ({
+    target: 'http://127.0.0.1:3000',
+    bypass: (req: { method?: string; url?: string; headers: Record<string, string | string[] | undefined> }) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return undefined
+      const path = (req.url ?? '').split('?')[0]?.replace(/\/+$/, '') || '/'
+      if (/\.\w+$/.test(path)) return undefined
+      const accept = req.headers.accept
+      const acceptHeader = Array.isArray(accept) ? accept.join(',') : accept ?? ''
+      if (!acceptHeader.includes('text/html')) return undefined
+      return path === pagePath ? '/index.html' : undefined
+    },
+  })
+
   return {
     plugins: [
       react(),
@@ -72,29 +91,30 @@ export default defineConfig(({ mode }) => {
           bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
         },
         '/sync': 'http://127.0.0.1:3000',
-        '/analytics': 'http://127.0.0.1:3000',
+        // These prefixes are BOTH page routes and JSON APIs (e.g. /orders is
+        // the Orders page AND GET /orders?storeId=…). pageProxy bypasses to
+        // the SPA shell only for real browser navigations to the exact page
+        // path (GET + Accept: text/html, no extension); every API call keeps
+        // proxying to the API. /orders was previously missing entirely, so
+        // the Orders page could not load data in dev.
+        ...Object.fromEntries(
+          ['/orders', '/customers', '/inventory', '/analytics', '/recommendations', '/billing', '/exports', '/support', '/settings', '/reports', '/ai-command'].map(
+            (page) => [page, pageProxy(page)],
+          ),
+        ),
         '/catalog': 'http://127.0.0.1:3000',
         '/live': 'http://127.0.0.1:3000',
         '/ready': 'http://127.0.0.1:3000',
         '/ai': 'http://127.0.0.1:3000',
-        '/ai-command': 'http://127.0.0.1:3000',
         '/ai-executive': 'http://127.0.0.1:3000',
-        '/recommendations': 'http://127.0.0.1:3000',
-        '/billing': 'http://127.0.0.1:3000',
         '/admin': 'http://127.0.0.1:3000',
         '/campaigns': 'http://127.0.0.1:3000',
-        '/customers': 'http://127.0.0.1:3000',
-        '/inventory': 'http://127.0.0.1:3000',
-        '/exports': 'http://127.0.0.1:3000',
-        '/support': 'http://127.0.0.1:3000',
-        '/settings': 'http://127.0.0.1:3000',
         '/security': 'http://127.0.0.1:3000',
         '/session': 'http://127.0.0.1:3000',
         '/legal': 'http://127.0.0.1:3000',
         '/jarvis': 'http://127.0.0.1:3000',
         '/copilot': 'http://127.0.0.1:3000',
         '/forecasting': 'http://127.0.0.1:3000',
-        '/reports': 'http://127.0.0.1:3000',
         '/store-coach': 'http://127.0.0.1:3000',
         // PatternAI (formerly Insights Hub): both prefixes are proxied so the
         // dev server never answers module API calls with the SPA shell.

@@ -216,14 +216,17 @@ describe('ticket creation (FIX 5)', () => {
     await click('New ticket')
     expect(document.querySelector('.support-form-card')?.textContent).toContain('CREATE SUPPORT TICKET')
 
-    // Category via the shared Polaris select (native change event).
-    const category = document.querySelector<HTMLSelectElement>('.support-form-card select')
-    expect(category).toBeTruthy()
-    expect([...(category as HTMLSelectElement).options].some((option) => option.textContent?.includes('Billing & Plans'))).toBe(true)
+    // Category picker is now a native Polaris <select> — drive a change event.
+    // Locate the select by its options (robust to additional selects on the
+    // page) and take the value from the option itself rather than hardcoding.
+    const categorySelect = [...document.querySelectorAll('select')].find((select) =>
+      [...select.options].some((option) => option.textContent?.includes('Billing & Plans')))
+    expect(categorySelect).toBeTruthy()
+    const billingOption = [...(categorySelect as HTMLSelectElement).options].find((option) => option.textContent?.includes('Billing & Plans'))
+    expect(billingOption).toBeTruthy()
     await act(async () => {
-      const field = category as HTMLSelectElement
-      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), 'value')?.set?.call(field, 'billing-plans')
-      field.dispatchEvent(new Event('change', { bubbles: true }))
+      (categorySelect as HTMLSelectElement).value = billingOption!.value
+      categorySelect!.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
     // Priority: High (blocking issue).

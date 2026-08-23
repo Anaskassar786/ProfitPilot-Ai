@@ -1,6 +1,8 @@
 import './jsdom-polaris-setup.js'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AppProvider } from '@shopify/polaris'
+import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 import { describe, expect, it, vi } from 'vitest'
 import {
   AISuggestionCard,
@@ -15,8 +17,6 @@ import {
 } from './inventory-insights.js'
 import { EMPTY_INVENTORY_INSIGHTS, awaitingMessage, formatCurrency, formatDay, insightByFeature, lockedInsightByFeature, usageLabel } from './inventory-insights-model.js'
 import type { InventoryInsightsResult } from './inventory-insights-model.js'
-import { AppProvider } from '@shopify/polaris'
-import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json' }
 
 /** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here so
  *  components using the Polaris shims render outside an app shell. */
@@ -38,6 +38,9 @@ function locked(feature: string, name: string, plan: 'growth' | 'commander'): In
 }
 
 const noop = vi.fn()
+
+/** main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it so
+ *  Polaris components render outside the app shell in SSR markup tests. */
 
 describe('Dead stock card', () => {
   it('renders real frozen products and the stuck value', () => {

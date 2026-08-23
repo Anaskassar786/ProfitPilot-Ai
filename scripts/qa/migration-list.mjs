@@ -30,4 +30,8 @@ export const ALL_MIGRATIONS = [
   { id: '0027', filename: '0027_gift_code_expiry.sql' },
   { id: '0028', filename: '0028_billing_charge_id.sql' },
   { id: '0029', filename: '0029_app_uninstalled_webhook.sql' },
+  { id: '0030', filename: '0030_gdpr_data_request_export.sql' },
+  // 0031 adds gift_codes.sequence + trials.trial_forfeited. Without it every
+  // /billing/gift redemption 500s ("column sequence does not exist").
+  { id: '0031', filename: '0031_gift_sequence_trial_forfeit.sql' },
 ];

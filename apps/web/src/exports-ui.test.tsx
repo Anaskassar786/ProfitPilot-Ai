@@ -233,6 +233,7 @@ describe('page load', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     await act(async () => {
+      // main.tsx wraps every page in Polaris AppProvider (i18n) — mirror it here.
       root!.render(createElement(AppProvider, { i18n: enTranslations as never }, createElement(ExportsWorkspace, { context: { storeId: 'exports-test', shop: null }, onToast: () => undefined, onNavigateBilling: () => undefined })))
     })
     expect(document.querySelector('.dx-skeleton')).not.toBeNull()
@@ -292,6 +293,8 @@ describe('export cards', () => {
     const orders = cardFor('orders')
     expect(orders.textContent).toContain('No rows yet')
     const button = buttonIn(orders, /Nothing to export yet/)
+    // Polaris buttons soft-disable (aria-disabled + click suppression), not the
+    // native attribute.
     expect(button.getAttribute('aria-disabled')).toBe('true')
   })
 })
@@ -368,7 +371,9 @@ describe('plan gating', () => {
     mockBackend({ plan: 'trial' })
     await mountWorkspace()
     const revenue = cardFor('revenue')
+    expect(revenue.querySelector('.dx-download')).toBeNull()
     expect([...revenue.querySelectorAll('button')].some((candidate) => /Download Now/.test(candidate.textContent ?? ''))).toBe(false)
+    // Shared CTA renders inside the `.upgrade-plan-button-wrap` span.
     expect(revenue.querySelector('.upgrade-plan-button-wrap button')?.textContent).toContain('Upgrade Plan')
     expect(revenue.textContent).not.toMatch(/Upgrade to (Start|Growth|Commander)/)
   })

@@ -68,8 +68,9 @@ describe('dashboard layout (PR #23)', () => {
     const html = render()
     expect(html).toContain('aria-label="Previous month"')
     expect(html).toContain('aria-label="Next month"')
-    // The month label button's consumer class is consumed by the Button
-    // shim; its accessible name is the jump-to-today label.
+    // The month label button keeps its "jump to current month" behaviour: the
+    // Button shim maps title→accessibilityLabel, rendered by Polaris as the
+    // aria-label (the custom CSS class is consumed during the migration).
     expect(html).toContain('aria-label="Jump to current month"')
     expect(html).toContain('cal-total-block')
     expect(html).toContain('Total revenue')
