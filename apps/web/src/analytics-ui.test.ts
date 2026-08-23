@@ -255,12 +255,21 @@ describe('world-class analytics composition', () => {
     for (const component of [
       'AnalyticsHero', 'RevenueTrendChart', 'OrdersAOVCorrelation', 'SalesByChannel',
       'CategoryDistribution', 'AIIntelligence', 'CohortAnalysis', 'GeographicDistribution',
-      'ProductPerformance', 'TemporalPatterns', 'ConversionFunnel', 'Benchmarks', 'CustomAIQuery',
+      'ProductPerformance', 'TemporalPatterns', 'ConversionFunnel', 'Benchmarks',
     ]) expect(source).toContain(`function ${component}`)
     expect(source).toContain('RichEmpty')
     expect(source).toContain('Custom')
     expect(source).toContain('Brain')
     expect(source).not.toContain('No data')
+  })
+
+  it('no longer ships the bottom AI Assistant / Commander Copilot box', async () => {
+    const source = await (await import('node:fs/promises')).readFile(new URL('./analytics.tsx', import.meta.url), 'utf8')
+    // The bottom query widget was removed from the Analytics page entirely:
+    // no component, no widget styling hook, and no leftover query API call.
+    expect(source).not.toContain('CustomAIQuery')
+    expect(source).not.toContain('ai-query-widget')
+    expect(source).not.toContain('queryAnalyticsInsights')
   })
 })
 

@@ -60,7 +60,10 @@ export async function streamAiCommandMessage(storeId: string, text: string, conv
   if (!result) throw new ApiClientError('AI Command stream ended without a result', response.status)
   return result
 }
-export function approveAiCommandAction(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> {
+/** Approve resolves with the executed action record — `executionStatus` may be
+ *  SUCCESS, PARTIAL_SUCCESS, or FAILED (e.g. a blocked Shopify permission), so
+ *  callers must read the status instead of assuming the write succeeded. */
+export function approveAiCommandAction(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<Readonly<Record<string, unknown>>> {
   return requestJson(`/ai-command/actions/${encodeURIComponent(id)}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId }) }, fetcher)
 }
 export function cancelAiCommandAction(storeId: string, id: string, fetcher: Fetcher = fetch): Promise<unknown> {
