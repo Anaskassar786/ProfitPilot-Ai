@@ -72,13 +72,13 @@ describe('Orders UI regressions', () => {
     expect(answerFor({ status: 'ready', answer: null })).not.toContain('custom-query-answer')
   })
 
-  it('only clears the question box after a successful generation', () => {
+  it('has removed the inline Ask order intelligence input', () => {
     const source = readFileSync(new URL('./orders.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("if (status === 'generated') setQuestion('')")
-    // A native form makes Enter and the labelled send button share one path.
-    expect(source).toContain('<form onSubmit=')
-    expect(source).toContain('event.preventDefault()')
-    expect(source).toContain('aria-label="Ask order intelligence"')
+    expect(source).not.toContain('<strong>Ask order intelligence</strong>')
+    expect(source).not.toContain('What should I review in my orders?')
+    expect(source).not.toContain('orders-custom-query')
+    expect(source).not.toContain('aria-label="Custom order insight query"')
+    expect(source).not.toContain('Commander answers from aggregate order facts only.')
   })
 })
 
