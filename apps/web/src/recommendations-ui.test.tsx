@@ -473,3 +473,17 @@ describe('how-it-works modal', () => {
     expect(html).toContain('monthly limit')
   })
 })
+
+describe('modal a11y contract (C4)', () => {
+  it('every custom modal renders role=dialog with aria-modal', () => {
+    const dialogProps = (html: string): void => {
+      expect(html).toContain('role="dialog"')
+      expect(html).toContain('aria-modal="true"')
+    }
+    dialogProps(renderWithAppProvider(createElement(ApproveConfirmSheet, { recommendation: view(), onCancel: noop, onConfirm: noop })))
+    dialogProps(renderWithAppProvider(createElement(RejectReasonSheet, { recommendation: view(), onCancel: noop, onReject: noop })))
+    dialogProps(renderWithAppProvider(createElement(RuleDetailModal, { ruleId: 'STOCKOUT_RISK', plan: 'growth', onClose: noop, onUpgrade: noop })))
+    dialogProps(renderWithAppProvider(createElement(AnalysisProgressModal, { step: 1, elapsedMs: 1200, onHide: noop })))
+    dialogProps(renderWithAppProvider(createElement(HowItWorksModal, { onClose: noop })))
+  })
+})

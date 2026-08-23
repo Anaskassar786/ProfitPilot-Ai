@@ -64,6 +64,7 @@ import {
   undoRecommendationDecision,
   verifyRecommendationEvidence,
 } from './api.js'
+import { useModalDialog } from './modal-a11y.js'
 import type { SectionId, WorkspaceContext } from './model.js'
 import {
   ACTION_TYPE_PREVIEWS,
@@ -1122,9 +1123,11 @@ function EvidenceDrawer({ recommendation, storeId, onClose }: { recommendation: 
 // ---------------------------------------------------------------------------
 
 function ApproveConfirmSheet({ recommendation, onCancel, onConfirm }: { recommendation: RecommendationView; onCancel: () => void; onConfirm: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onCancel)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card" role="dialog" aria-label="Confirm approval">
+      <div ref={dialogRef} className="modal-card recs-confirm-card" role="dialog" aria-modal="true" aria-label="Confirm approval">
         <div className="section-kicker"><ShieldCheck size={13} /> CONFIRM & APPROVE</div>
         <h2>{recommendation.title}</h2>
         <p className="recs-confirm-what"><strong>What happens next:</strong> {ACTION_TYPE_PREVIEWS[recommendation.actionType]}</p>
@@ -1144,9 +1147,11 @@ function ApproveConfirmSheet({ recommendation, onCancel, onConfirm }: { recommen
 
 function RejectReasonSheet({ recommendation, onCancel, onReject }: { recommendation: RecommendationView; onCancel: () => void; onReject: (reason: RejectReason | null) => void }) {
   const [reason, setReason] = useState<RejectReason | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onCancel)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card" role="dialog" aria-label="Reject recommendation">
+      <div ref={dialogRef} className="modal-card recs-confirm-card" role="dialog" aria-modal="true" aria-label="Reject recommendation">
         <div className="section-kicker"><XCircle size={13} /> SKIP THIS ONE</div>
         <h2>{recommendation.title}</h2>
         <p className="recs-confirm-what">Telling your AI team <em>why</em> makes future recommendations better — skipping lowers a teammate's confidence until it earns your trust back.</p>
@@ -1470,9 +1475,11 @@ function RuleDetailModal({ ruleId, plan, onClose, onUpgrade }: { ruleId: RuleId;
   const locked = agentLockedForPlan(agent, plan)
   const Icon = RULE_ICONS[ruleId]
   const AgentIcon = AGENT_ICONS[agent]
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
+      <div ref={dialogRef} className="modal-card recs-confirm-card recs-rule-modal" role="dialog" aria-modal="true" aria-label={`Rule detail: ${RULE_LABELS[ruleId]}`}>
         <div className="modal-card-top">
           <span className="recs-rule-modal-icon"><Icon size={17} /></span>
           <Button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></Button>
@@ -1507,9 +1514,11 @@ function AnalysisProgressModal({ step, elapsedMs, onHide }: { step: number; elap
   const total = ANALYSIS_STEPS.length
   const bounded = Math.min(step, total - 1)
   const progress = ((bounded + 1) / (total + 1)) * 100
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onHide)
   return (
     <div className="modal-overlay recs-analysis-overlay">
-      <div className="modal-card recs-analysis-modal" role="dialog" aria-label="Analysis in progress" aria-live="polite">
+      <div ref={dialogRef} className="modal-card recs-analysis-modal" role="dialog" aria-modal="true" aria-label="Analysis in progress" aria-live="polite">
         <div className="modal-card-top">
           <div className="section-kicker"><Sparkles size={13} /> YOUR AI TEAM IS ON IT</div>
           <span className="recs-analysis-elapsed" title="Elapsed time"><Clock3 size={12} /> {(elapsedMs / 1000).toFixed(0)}s</span>
@@ -1649,9 +1658,11 @@ function SidebarSkeleton() {
 // ---------------------------------------------------------------------------
 
 function HowItWorksModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useModalDialog(dialogRef, onClose)
   return (
     <div className="modal-overlay">
-      <div className="modal-card recs-how-modal" role="dialog" aria-label="How recommendations work">
+      <div ref={dialogRef} className="modal-card recs-how-modal" role="dialog" aria-modal="true" aria-label="How recommendations work">
         <div className="modal-card-top">
           <div>
             <div className="section-kicker"><ShieldCheck size={13} /> HOW RECOMMENDATIONS WORK</div>

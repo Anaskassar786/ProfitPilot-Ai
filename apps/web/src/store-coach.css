@@ -524,10 +524,10 @@
 .coach-review-snapshot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
 .coach-review-snapshot-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .coach-review-snapshot-row strong { font-size: 15px; font-weight: 700; color: var(--c-text); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.coach-review-snapshot-row small { font-size: 11.5px; color: var(--c-text-3); overflow-wrap: anywhere; }
+.coach-review-snapshot-row small { font-size: 12px; color: var(--c-text-3); overflow-wrap: anywhere; }
 .coach-review-snapshot-row small.positive { color: var(--c-green); font-weight: 600; }
 .coach-review-snapshot-row small.negative { color: var(--c-red); font-weight: 600; }
-.coach-review-snapshot-note { margin: 4px 0 0; font-size: 11.5px; color: var(--c-text-3); display: flex; align-items: center; gap: 5px; }
+.coach-review-snapshot-note { margin: 4px 0 0; font-size: 12px; color: var(--c-text-3); display: flex; align-items: center; gap: 5px; }
 .coach-review-snapshot-note svg { color: var(--c-purple); flex: none; }
 
 /* ── FIX 12 · Plan card ────────────────────────────────────────────────── */
@@ -851,7 +851,7 @@
 .coach-badge-radar-ring { fill: none; stroke: var(--c-border-strong); stroke-width: 1; }
 .coach-badge-radar-axis { stroke: var(--c-border); stroke-width: 1; }
 .coach-badge-radar-data { fill: var(--c-purple-soft); stroke: var(--c-purple); stroke-width: 2; stroke-linejoin: round; }
-.coach-badge-radar-label { font-size: 10.5px; font-weight: 650; fill: var(--c-text-3); letter-spacing: 0.02em; }
+.coach-badge-radar-label { font-size: 12px; font-weight: 650; fill: var(--c-text-3); letter-spacing: 0.02em; }
 .coach-badge-radar-center { position: absolute; left: 50%; top: 46.4%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
 .coach-badge-radar-center strong { font-size: 22px; font-weight: 800; color: var(--c-text); letter-spacing: -0.03em; }
 .coach-badge-radar-center small { font-size: 12px; color: var(--c-text-3); }
