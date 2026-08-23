@@ -711,6 +711,12 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo
   const mine = message.role === 'user'
   const undoLeft = remainingUndoSeconds(message.action?.rollbackDeadline, now)
   const copyable = !mine && message.contentType !== 'action_result'
+  // Blocked actions: the permission sentence lives inside the yellow
+  // ActionBlockedBlock only — strip it from the plain copy so it never
+  // renders twice, while any extra summary detail still shows above the card.
+  const companion = message.structuredData?.type === 'action_blocked'
+    ? actionBlockedCompanionText(message.content, message.structuredData.data)
+    : message.content
 
   const copy = async () => {
     try {
@@ -759,7 +765,7 @@ function MessageBubble({ message, now, busy, onApprove, onCancel, onEdit, onUndo
           ? <OffTopicBlock content={message.content} onPrompt={onPrompt} />
           : (
             <>
-              <p>{message.content}</p>
+              {companion ? <p>{companion}</p> : null}
               {message.structuredData && <StructuredBlock data={message.structuredData} onPrompt={onPrompt} onNavigateSection={onNavigateSection ?? (() => undefined)} />}
             </>
           )}
@@ -865,13 +871,19 @@ function StructuredBlock({ data, onPrompt, onNavigateSection }: { data: NonNulla
  * with the app's current (updated) scope list.
  */
 export function ActionBlockedBlock({ data }: { data: Record<string, unknown> }) {
-  const message = typeof data.message === 'string' && data.message.trim()
+  const rawMessage = typeof data.message === 'string' && data.message.trim()
     ? data.message.trim()
     : typeof data.reason === 'string' && data.reason.trim()
       ? data.reason.trim()
       : SHOPIFY_PERMISSION_MESSAGE
   const missingScope = typeof data.missingScope === 'string' && data.missingScope.trim() ? data.missingScope.trim() : null
   const reauthorizeUrl = typeof data.reauthorizeUrl === 'string' && data.reauthorizeUrl.trim() ? data.reauthorizeUrl.trim() : null
+  // The server appends " Missing permission: write_x." to the sentence, and
+  // the card renders that scope as its own tag below — strip the inline
+  // repeat so each part of the warning is shown exactly once.
+  const message = missingScope
+    ? rawMessage.replace(new RegExp(`\\s*missing permission:?\\s*${escapeRegExp(missingScope)}\\.?\\s*$`, 'i'), '').trim() || rawMessage
+    : rawMessage
   return (
     <div className="aic-blocked-card" role="alert">
       <div className="aic-blocked-head">
@@ -1385,6 +1397,34 @@ function asCurrency(value: unknown): string | null {
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Regex-safe version of a scope name before it is interpolated into a pattern. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * A blocked action used to print the full permission sentence twice: once as
+ * the bubble's plain copy and again inside the yellow ActionBlockedBlock.
+ * The card is the single home for that sentence — the bubble keeps only any
+ * extra summary detail the server appended after it (e.g. a partial-success
+ * count), so the warning renders cleanly once.
+ */
+export function actionBlockedCompanionText(content: string, data: unknown): string {
+  const trimmed = content.trim()
+  const record = isRecord(data) ? data : null
+  const blockMessage = record
+    ? typeof record.message === 'string' && record.message.trim()
+      ? record.message.trim()
+      : typeof record.reason === 'string' && record.reason.trim()
+        ? record.reason.trim()
+        : ''
+    : ''
+  if (!trimmed || !blockMessage) return trimmed
+  if (trimmed === blockMessage) return ''
+  if (trimmed.startsWith(blockMessage)) return trimmed.slice(blockMessage.length).trim()
+  return trimmed
 }
 
 export function resolveAiCommandPlan(raw: string | null | undefined): AiCommandPlan {

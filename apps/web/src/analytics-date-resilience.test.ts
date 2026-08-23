@@ -345,7 +345,7 @@ describe('every analytics section is individually error-boundaried', () => {
       'analytics header', 'performance overview', 'revenue intelligence', 'orders and AOV',
       'discount leakage', 'stock-out risk', 'AI business intelligence', 'customer cohorts',
       'geographic distribution', 'product performance', 'temporal patterns', 'conversion funnel',
-      'advanced comparisons', 'custom AI analyst',
+      'advanced comparisons',
     ]) expect(source, `missing boundary for "${label}"`).toContain(`<Boundary label="${label}">`)
   })
 

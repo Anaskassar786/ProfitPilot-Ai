@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { ActionBlockedBlock, AiCommandWorkspace, startReauthorize } from './ai-command.js'
+import { ActionBlockedBlock, AiCommandWorkspace, actionBlockedCompanionText, startReauthorize } from './ai-command.js'
+import { aiCommandApprovalToast } from './ai-command-hooks.js'
 import { AiCommandMark } from './ai-command-logo.js'
 import { SHOPIFY_PERMISSION_MESSAGE } from './ai-command-model.js'
 import type { AiCommandConversation } from './ai-command-model.js'
@@ -142,6 +143,38 @@ describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
     expect(html).toContain('Re-authorize ProfitPilot')
   })
 
+  it('renders each part of the warning exactly once (scope folds into the tag, not the sentence)', () => {
+    const html = renderWithAppProvider(createElement(ActionBlockedBlock, {
+      data: {
+        actionType: 'TAG_CUSTOMER',
+        missingScope: 'write_customers',
+        // The server appends the inline " Missing permission: …" suffix to the
+        // sentence; the card renders that scope as its own tag, so the copy
+        // must not repeat it.
+        message: `${SHOPIFY_PERMISSION_MESSAGE} Missing permission: write_customers.`,
+        reauthorizeUrl: '/shopify/install?shop=demo.myshopify.com',
+      },
+    }))
+    expect(html.match(/requires additional Shopify permissions/g)?.length).toBe(1)
+    expect(html.match(/[Mm]issing permission:?/g)?.length).toBe(1)
+    // The scope tag and the re-authorize CTA stay prominent.
+    expect(html).toContain('<code>write_customers</code>')
+    expect(html).toContain('Re-authorize ProfitPilot')
+  })
+
+  it('bubble companion text drops the duplicated permission sentence but keeps extra summary detail', () => {
+    const permission = `${SHOPIFY_PERMISSION_MESSAGE} Missing permission: write_customers.`
+    // Identical content and block message: nothing renders above the card.
+    expect(actionBlockedCompanionText(permission, { message: permission })).toBe('')
+    // Partial-success detail appended by the server still renders once.
+    expect(actionBlockedCompanionText(`${permission} 3 customer(s) were updated before Shopify refused the rest.`, { message: permission }))
+      .toBe('3 customer(s) were updated before Shopify refused the rest.')
+    // Unrelated content and missing payloads render verbatim.
+    expect(actionBlockedCompanionText('Something else entirely', { message: permission })).toBe('Something else entirely')
+    expect(actionBlockedCompanionText('Plain summary', null)).toBe('Plain summary')
+    expect(actionBlockedCompanionText('  ', null)).toBe('')
+  })
+
   it('re-authorize hands the install URL to the top-level window (embedded) or navigates directly (standalone)', () => {
     // This suite runs in the node environment, so `window` is stubbed rather
     // than mutated: only the two branches of the OAuth handoff are asserted.
@@ -166,5 +199,20 @@ describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
       if (original === undefined) delete globals.window
       else globals.window = original
     }
+  })
+})
+
+describe('AI Command approval toast contract', () => {
+  it('celebrates only a genuinely successful execution', () => {
+    expect(aiCommandApprovalToast('SUCCESS')).toEqual({ message: 'Action completed. Review the verified result below.', kind: 'success' })
+  })
+
+  it('never claims a blocked or failed action completed — warns or stays silent instead', () => {
+    // A permission-blocked run lands as FAILED: no contradictory "completed" banner.
+    expect(aiCommandApprovalToast('FAILED')).toEqual({ message: 'Action was not completed. Review the result below.', kind: 'warning' })
+    expect(aiCommandApprovalToast('PARTIAL_SUCCESS')).toEqual({ message: 'Action partially completed. Review the verified result below.', kind: 'warning' })
+    expect(aiCommandApprovalToast(null)).toBeNull()
+    expect(aiCommandApprovalToast('PENDING')).toBeNull()
+    expect(aiCommandApprovalToast('CANCELLED')).toBeNull()
   })
 })

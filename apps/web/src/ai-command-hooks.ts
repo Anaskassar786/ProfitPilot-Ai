@@ -34,9 +34,22 @@ import type {
   AiCommandSavedCommand,
   AiCommandUsage,
 } from './ai-command-model.js'
-import { merchantSafeAiCommandError } from './ai-command-model.js'
+import { isRecord, merchantSafeAiCommandError } from './ai-command-model.js'
 
 type ToastFn = (message: string, kind?: 'success' | 'info' | 'warning' | 'error') => void
+
+/**
+ * Toast decision for an approved action. The approve endpoint resolves at
+ * transport level even when Shopify blocked or failed the write, so the
+ * banner is driven by the action's execution status — never a blanket
+ * "completed" message. Returns null when no toast should be shown at all.
+ */
+export function aiCommandApprovalToast(executionStatus: string | null): Readonly<{ message: string; kind: 'success' | 'warning' }> | null {
+  if (executionStatus === 'SUCCESS') return { message: 'Action completed. Review the verified result below.', kind: 'success' }
+  if (executionStatus === 'PARTIAL_SUCCESS') return { message: 'Action partially completed. Review the verified result below.', kind: 'warning' }
+  if (executionStatus === 'FAILED') return { message: 'Action was not completed. Review the result below.', kind: 'warning' }
+  return null
+}
 
 export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) {
   const [conversations, setConversations] = useState<readonly AiCommandConversation[]>([])
@@ -198,10 +211,14 @@ export function useAiCommandWorkspace(storeId: string | null, onToast: ToastFn) 
     if (!storeId) return
     setBusy(true)
     try {
-      await approveAiCommandAction(storeId, actionId)
+      const approval = await approveAiCommandAction(storeId, actionId)
       if (conversation && conversation.id !== 'pending') await openConversation(conversation.id)
       await refreshSide()
-      if (preferences?.notificationOnActionComplete !== false) onToast('Action completed. Review the verified result below.', 'success')
+      // The toast is driven by the action's execution status, not the HTTP
+      // result — a blocked or failed write never gets a "completed" banner.
+      const status = isRecord(approval) && typeof approval.executionStatus === 'string' ? approval.executionStatus : null
+      const toast = aiCommandApprovalToast(status)
+      if (toast && (toast.kind !== 'success' || preferences?.notificationOnActionComplete !== false)) onToast(toast.message, toast.kind)
     } catch (failure: unknown) {
       onToast(failure instanceof Error ? failure.message : 'The action could not be approved.', 'error')
     } finally { setBusy(false) }
