@@ -121,6 +121,12 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     plan: async (tenant) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial',
   }
   const planFor = async (tenant: import('@profitpilot/types').StoreId) => (await f7.billing.repository.get(tenant))?.plan ?? 'trial'
+  // Commander enforcement uses plan AND billing state (STEP 3 of the AI
+  // Commander scope): an expired/pending/past-due/cancelled subscription is
+  // refused with the reactivate/upgrade message, TRIAL_LIMITED answers data
+  // questions only, and only ACTIVE_* states unlock Commander actions. A
+  // missing record normalizes to trial-limited (never full access).
+  const billingStateFor = async (tenant: import('@profitpilot/types').StoreId): Promise<string | null> => (await f7.billing.repository.get(tenant))?.state ?? null
   const pageMetrics = new AiCommandPageMetricsService({
     customers: customerRepository,
     inventory: inventoryRepository,
@@ -224,6 +230,7 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
     tools: commandTools,
     actions: commandActions,
     planFor,
+    stateFor: billingStateFor,
     shopFor: async (tenant: import('@profitpilot/types').StoreId) => (await f7.storeDirectory.get(tenant))?.shopDomain ?? null,
     enabled: env.AI_COMMAND_ENABLED !== 'false',
     actionsEnabled: env.AI_COMMAND_ACTIONS_ENABLED !== 'false',

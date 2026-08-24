@@ -393,6 +393,83 @@ export function limitsForPlan(plan: PlanTier): AiCommandPlanLimits {
   return AI_COMMAND_PLAN_LIMITS[plan]
 }
 
+/* ── Plan & billing-state gating ────────────────────────────────────── */
+
+/**
+ * Billing states that gate Commander, mirroring `BillingState` in
+ * @profitpilot/billing. Duplicated here (and validated by normalize below)
+ * so the AI package never imports the billing package.
+ */
+export type AiCommandBillingState =
+  | 'ACTIVE_MONTHLY'
+  | 'ACTIVE_ANNUAL'
+  | 'GIFT_ACCESS_UNLIMITED'
+  | 'TRIAL_LIMITED'
+  | 'TRIAL_EXPIRED'
+  | 'PENDING_CONFIRMATION'
+  | 'PAST_DUE'
+  | 'SUSPENDED'
+  | 'CANCELLED'
+
+export const AI_COMMAND_BILLING_STATES: readonly AiCommandBillingState[] = [
+  'ACTIVE_MONTHLY',
+  'ACTIVE_ANNUAL',
+  'GIFT_ACCESS_UNLIMITED',
+  'TRIAL_LIMITED',
+  'TRIAL_EXPIRED',
+  'PENDING_CONFIRMATION',
+  'PAST_DUE',
+  'SUSPENDED',
+  'CANCELLED',
+]
+
+/** Commander is fully active — the plan tier alone decides answers vs actions. */
+export const AI_COMMAND_ACTIVE_BILLING_STATES: readonly AiCommandBillingState[] = ['ACTIVE_MONTHLY', 'ACTIVE_ANNUAL', 'GIFT_ACCESS_UNLIMITED']
+/** Answers only: data queries allowed, actions never execute. */
+export const AI_COMMAND_LIMITED_BILLING_STATES: readonly AiCommandBillingState[] = ['TRIAL_LIMITED']
+/** Commander is refused: expired / pending / past-due / cancelled / suspended. */
+export const AI_COMMAND_BLOCKED_BILLING_STATES: readonly AiCommandBillingState[] = ['TRIAL_EXPIRED', 'PENDING_CONFIRMATION', 'PAST_DUE', 'SUSPENDED', 'CANCELLED']
+
+export type AiCommandBillingMode = 'active' | 'limited' | 'blocked'
+
+export function aiCommandBillingMode(state: AiCommandBillingState): AiCommandBillingMode {
+  if ((AI_COMMAND_BLOCKED_BILLING_STATES as readonly string[]).includes(state)) return 'blocked'
+  if ((AI_COMMAND_LIMITED_BILLING_STATES as readonly string[]).includes(state)) return 'limited'
+  return 'active'
+}
+
+/**
+ * Unknown or missing billing records degrade to `TRIAL_LIMITED`, never to
+ * full access — a store we cannot identify gets the safest minimal surface.
+ */
+export function normalizeAiCommandBillingState(value: unknown): AiCommandBillingState {
+  return typeof value === 'string' && (AI_COMMAND_BILLING_STATES as readonly string[]).includes(value)
+    ? (value as AiCommandBillingState)
+    : 'TRIAL_LIMITED'
+}
+
+/** The resolved Commander access decision for one store. */
+export type AiCommandAccess = Readonly<{
+  plan: PlanTier
+  billingState: AiCommandBillingState | null
+  mode: AiCommandBillingMode
+  actionsEnabled: boolean
+}>
+
+/**
+ * Merchant-facing message when the billing state blocks Commander (trial
+ * expired / pending / past-due / cancelled / suspended). One honest sentence
+ * per state, each ending on the way back in, never a fake capability.
+ */
+export function renderBillingBlockedResponse(state: AiCommandBillingState): string {
+  if (state === 'TRIAL_EXPIRED') return 'Your ProfitPilot trial has expired, so Commander is paused. Your store data, conversations, and settings are exactly as you left them — Upgrade Plan to bring your AI Commander back.'
+  if (state === 'PENDING_CONFIRMATION') return 'Your plan change is waiting for payment confirmation. Commander unlocks automatically as soon as the charge is confirmed — please check back in a few minutes.'
+  if (state === 'PAST_DUE') return 'A payment issue has paused Commander for this store. Update your payment method in Billing to restore full access.'
+  if (state === 'SUSPENDED') return 'This store is currently suspended. Resolve the billing hold or contact support from the Billing page to bring Commander back.'
+  if (state === 'CANCELLED') return 'Your subscription is cancelled. Reactivate a plan from Billing to bring Commander back — your data and settings are waiting for you.'
+  return 'Commander is not active on this store right now. Upgrade Plan from the Billing page to unlock it.'
+}
+
 export function toolToActionType(name: AiCommandToolName): AiCommandActionType {
   if (name === 'send_email') return 'SEND_EMAIL'
   if (name === 'tag_customers') return 'TAG_CUSTOMER'
@@ -549,11 +626,27 @@ export function parseInfoTools(query: string): readonly ToolCall[] {
   if (/\b(stock|inventory|stockout|low stock)\b/.test(normalized)) push('get_inventory_status', { filter: /low|out/.test(normalized) ? 'low' : 'all' })
   if (/\b(health|how is my store|store status)\b/.test(normalized)) push('get_store_health', {})
   if (/\b(automations?|workflows?)\b/.test(normalized)) push('list_workflows', {})
-  if (calls.length === 0) {
-    push('get_store_health', {})
-    push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
-  }
+  // Allowlist-first (STEP 6 of the Commander scope): there is NO default
+  // fallback to store_health + analytics anymore. When nothing matches, the
+  // intent is unknown — callers must refuse with the out-of-scope template
+  // rather than guessing a data mix and dressing it up as an answer.
   return calls
+}
+
+/**
+ * In-scope queries that no deterministic info pattern claimed (regex gaps,
+ * planner silences, unparseable Hindi) are answered from the two safest
+ * grounded signals — store health and period analytics — instead of an
+ * invented tool mix. Off-topic queries never reach it: the allowlist scope
+ * gate (detectOffTopic) refuses them first, so this pair can only ever
+ * service queries Commander already classified as store-related.
+ */
+export function ambientToolsWhenUnmapped(query: string, calls: readonly ToolCall[]): readonly ToolCall[] {
+  if (calls.length > 0) return calls
+  return [
+    { name: 'get_store_health', params: {} },
+    { name: 'get_analytics', params: { metric: 'summary', date_range: inferRange(query.toLowerCase()) } },
+  ]
 }
 
 function inferRange(normalized: string): string {
@@ -579,10 +672,44 @@ export function renderBlockedResponse(blocked: Readonly<{ action: string; reason
   ].join('\n')
 }
 
-// A query mentioning any of these is clearly about the merchant's store and is
-// always in scope, even if it also contains an off-topic keyword (for example
-// "help me code a Shopify theme" is about Shopify, not general coding).
-const STORE_SCOPE_SIGNALS = /\b(shopify|shop|store|revenue|sales?|orders?|customers?|products?|inventory|stock|aov|analytics|discount|coupon|promo|emails?|mail|tags?|recommend|report|marketing|campaign|workflow|automation|sync|traffic|conversion|cart|checkout|bestsellers?|refund|fulfil|churn|vips?|segments?|subscriber|catalog|skus?)\b/i
+/* ── Commander scope: allowlist-first ─────────────────────────────── */
+
+export const AI_COMMAND_SCOPE_INTENTS = [
+  'store_data_query',
+  'store_analytics',
+  'store_action',
+  'app_feature_help',
+  'capability_discovery',
+] as const
+export type AiCommandScopeIntent = (typeof AI_COMMAND_SCOPE_INTENTS)[number]
+export type AiCommandScope =
+  | Readonly<{ inScope: true; intent: AiCommandScopeIntent }>
+  | Readonly<{ inScope: false; topic: string }>
+
+/**
+ * Hard-forbidden domains. Every pattern is deliberately multi-word or
+ * domain-specific so a legitimate store query can never trip it: bare words
+ * such as "code" or "health" are NOT forbidden, so "create a discount code"
+ * and "store health check" stay in scope. These run BEFORE the allowlist so
+ * store-side words inside a forbidden-domain question ("how to build a
+ * Shopify theme", "give me stock market advice") cannot smuggle it in.
+ */
+const FORBIDDEN_TOPICS: readonly Readonly<{ pattern: RegExp; topic: string }>[] = [
+  { pattern: /\b(?:weather|temperature\s+(?:in|at|today)|is it raining|rain(?:ing|y)?|snow(?:ing)?|sunny|humid(?:ity)?|climate)\b/i, topic: 'the weather' },
+  { pattern: /\b(?:politics?|elections?|president|prime minister|pm of|government|parliament|congress|senator|democrat|republican|breaking news|news headlines?|current events?)\b/i, topic: 'politics' },
+  { pattern: /\b(?:tell|write|share|recite|make up|suno|suna)\b.{0,30}\b(?:joke|poem|poetry|song|story|riddle|haiku|shayari|limerick)\b|\b(?:jokes?|riddles?|haiku|limerick|shayari|knock knock)\b/i, topic: 'creative writing' },
+  { pattern: /\b(?:javascript|typescript|python|java|c\+\+|c#|ruby|rust|golang|php|swift|kotlin|sql queri?|programming|coding|debug(?:ging)?|algorithms?|regex(?:es)?|unit tests?|data structures?)\b|\bwrite (?:me )?(?:a|an|some) (?:function|program|script|class|snippet|code)\b/i, topic: 'general coding' },
+  { pattern: /\b(?:build|code|develop|create|design|make|customi[sz]e|edit|write)\b.{0,40}\b(?:theme|shopify (?:theme|app|store|site|storefront)|storefront|landing page|website|web app|mobile app|plugin|liquid)\b/i, topic: 'theme or general Shopify development' },
+  { pattern: /\b(?:stock market|share market|wall street|bitcoin|crypto(?:currency| )?|nft|forex|mutual funds?|stock tips?|trading strategy|investment advice|investing|my portfolio)\b/i, topic: 'investing or the stock market' },
+  { pattern: /\b(?:medical advice|health advice|symptoms?|diagnos(?:is|e|ed)|disease|medicine|doctor|illness|therapy|treatment|fever|headache|depress(?:ed|ion)|anxiety|mental health|diet plan|weight loss|workout routine)\b/i, topic: 'health or medical advice' },
+  { pattern: /\b(?:legal advice|lawyer|attorney|lawsuit|sue\b|contract law|court case|divorce|trademark dispute)\b/i, topic: 'legal advice' },
+  { pattern: /\b(?:football|basketball|cricket|soccer|nba|fifa|ipl|match score|world cup|super bowl|olympics?)\b/i, topic: 'sports' },
+  { pattern: /\b(?:movies?|netflix|tv (?:series|show)|web series|celebrit(?:y|ies)|bollywood|hollywood|box office)\b/i, topic: 'entertainment' },
+  { pattern: /\b(?:life advice|relationship advice|dating|breakup|marriage advice|horoscope|zodiac|astrology|tarot|meaning of life)\b/i, topic: 'personal advice' },
+  { pattern: /\b(?:capital of|who invented|who wrote|who painted|history of|population of|distance from|how far is|tallest mountain|largest country|longest river)\b/i, topic: 'general knowledge' },
+  { pattern: /\b(?:homework|school essay|school project|solve (?:this|the)? ?(?:equation|math(?:ematics)? problem)|what is \d+\s*[+*/-]\s*\d+)\b/i, topic: 'homework or general problem-solving' },
+  { pattern: /\b(?:chatgpt|openai|anthropic|claude|gemini|grok|deepseek|llama|language model|which ai (?:model )?are you|what model are you|are you (?:an?\s+)?(?:ai|robot|chatbot|human))\b/i, topic: 'questions about AI assistants' },
+]
 
 const OFF_TOPIC_PATTERNS: readonly Readonly<{ pattern: RegExp; topic: string }>[] = [
   { pattern: /weather|forecast|temperature|rain|snow|sunny|climate|humidity/i, topic: 'the weather' },
@@ -603,48 +730,94 @@ const OFF_TOPIC_PATTERNS: readonly Readonly<{ pattern: RegExp; topic: string }>[
   { pattern: /(horoscope|zodiac|astrology|tarot|fortune|meaning of life|religion|philosophy)/i, topic: 'that topic' },
 ]
 
+// Store metrics and analytics vocabulary: a match here means the merchant is
+// clearly asking for this store's numbers (trends, growth, health, revenue).
+const STORE_METRIC_SIGNAL = /\b(?:revenue|sales?|aov|average order value|analytics|metrics?|growth|growing|trend(?:s|ing)?|performance|profit(?:s|ability)?|margins?|earnings?|income|conversions?|cvr|health(?:y)?|score|recap|summar(?:y|ies)|overview|payouts?|forecast(?:s|ing)?|roas|ltv|retention)\b/i
+
+// Explicit "my/our/this store" phrasing keeps genuine store questions in
+// scope even when they use words the metric list does not cover ("how is my
+// store doing").
+const STORE_CONTEXT_SIGNAL = /\b(?:my|our|this|the)\s+(?:store|shop|business|catalog)\b|\bstore(?:'s|s)?\s+(?:data|health|sales|revenue|orders|performance|analytics|growth|status)\b/i
+
+// ProfitPilot feature names are always app-feature-help territory.
+const APP_FEATURE_SIGNAL = /\b(?:profitpilot|pattern\s?ai|insight hub|approval inbox|quick commands?|saved commands?)\b/i
+
+const DEVANAGARI = /[\u0900-\u097F]/
+
 /**
- * Detects off-topic questions so AI Command can politely refuse anything that
- * is not about the merchant's Shopify store. Returns the human-readable topic
- * that was asked about, or `null` when the query is in scope (store-related)
- * or ambiguous enough that we should attempt to answer from store data.
+ * Allowlist-first scope classification (Commander product spec): a request is
+ * answered only when it clearly matches one allowed intent —
+ * store_data_query, store_analytics, store_action, app_feature_help, or
+ * capability_discovery. Hard-forbidden domains are checked first so store
+ * words inside a forbidden question cannot smuggle it in; anything that
+ * matches no allowed intent is out of scope and gets refused.
+ *
+ * Devanagari (Hindi) text is intentionally allowed through: the regex
+ * allowlist cannot parse it and the product treats Hindi as a first-class
+ * language, so the data path answers it honestly from tools (and refuses
+ * nothing a Hindi merchant could legitimately ask).
+ */
+export function classifyCommandScope(query: string): AiCommandScope {
+  const text = query.trim()
+  if (!text) return { inScope: true, intent: 'store_data_query' }
+  // Deliberately unsafe store operations stay in scope — the blocked-action
+  // flow renders a page-specific alternative instead of an off-topic refusal.
+  if (detectBlockedAction(text)) return { inScope: true, intent: 'store_action' }
+  for (const entry of FORBIDDEN_TOPICS) {
+    if (entry.pattern.test(text)) return { inScope: false, topic: entry.topic }
+  }
+  if (detectWriteTool(text)) return { inScope: true, intent: 'store_action' }
+  if (CAPABILITY_TRIGGER.test(text)) return { inScope: true, intent: 'capability_discovery' }
+  const instructional = detectInstructionalIntent(text)
+  if (instructional) return { inScope: true, intent: instructional === 'generic' ? 'capability_discovery' : 'app_feature_help' }
+  if (APP_FEATURE_SIGNAL.test(text)) return { inScope: true, intent: 'app_feature_help' }
+  if (detectGrowthIntent(text) || STORE_METRIC_SIGNAL.test(text)) return { inScope: true, intent: 'store_analytics' }
+  if (queryDomain(text) !== null || STORE_CONTEXT_SIGNAL.test(text) || DATA_LOOKUP_SIGNAL.test(text)) return { inScope: true, intent: 'store_data_query' }
+  if (DEVANAGARI.test(text)) return { inScope: true, intent: 'store_data_query' }
+  // No allowed intent matched: out of scope. Reuse the legacy denylist purely
+  // to label the refusal; otherwise fall back to the generic label.
+  for (const entry of OFF_TOPIC_PATTERNS) {
+    if (entry.pattern.test(text)) return { inScope: false, topic: entry.topic }
+  }
+  return { inScope: false, topic: 'that topic' }
+}
+
+/**
+ * Detects out-of-scope questions so Commander can politely refuse anything
+ * that is not about the merchant's store data or ProfitPilot features.
+ * Returns the human-readable topic that was asked about, or `null` when the
+ * query matches an allowed intent (see classifyCommandScope).
  */
 export function detectOffTopic(query: string): string | null {
-  const normalized = query.trim()
-  if (!normalized) return null
-  if (STORE_SCOPE_SIGNALS.test(normalized)) return null
-  for (const entry of OFF_TOPIC_PATTERNS) {
-    if (entry.pattern.test(normalized)) return entry.topic
-  }
-  return null
+  if (!query.trim()) return null
+  const scope = classifyCommandScope(query)
+  return scope.inScope ? null : scope.topic
 }
+
+/** The canonical out-of-scope refusal (Commander product spec, verbatim). */
+export const COMMANDER_REFUSAL_TEMPLATE = "I'm your store's Commander — I can only help with your store data and ProfitPilot features."
 
 export function renderOffTopicResponse(topic: string): string {
   return [
-    `I'm here specifically to help with your Shopify store. I can't help with ${topic}, but I'd love to help you with:`,
+    `${COMMANDER_REFUSAL_TEMPLATE} I can't help with ${topic}.`,
     '',
-    '• Store performance analysis',
-    '• Customer insights',
-    '• Product recommendations',
-    '• Sales trends',
-    '• Inventory management',
-    '• And much more about your store',
-    '',
-    'What would you like to know about your store?',
+    'Would you like to see your latest sales, top products, or customer insights instead?',
   ].join('\n')
 }
 
 export const STORE_SCOPE_GUIDANCE = [
-  'You are a specialized assistant for Shopify merchants. You answer ONLY questions about the merchant\'s Shopify store.',
-  'Allowed topics: store revenue, orders, customers, product management, inventory, customer insights, marketing, business analytics, store performance, recommendations, and actions inside their store.',
-  'Forbidden topics — politely refuse and redirect back to store help: general knowledge (weather, news), general coding, personal advice, other businesses or platforms, politics, health/medical advice, legal advice, and questions about yourself or other AI systems.',
-  'When the user asks an off-topic question, say you can only help with their Shopify store and list the store areas you can help with.',
+  'You are Commander (store ka AI Commander): the merchant\'s store leader and controller inside ProfitPilot. You answer ONLY requests about this store\'s data or ProfitPilot features.',
+  'Allowed intents (allowlist-first): this store\'s orders, products, customers, inventory, and sales; this store\'s revenue, analytics, growth trends, metrics, and health; this store\'s automations and actions (Commander plan only); ProfitPilot feature help; and capability discovery ("what can you do?").',
+  'Everything else is out of scope — refuse and redirect back to the store: weather, news, politics, jokes, trivia, general knowledge, coding or programming, Shopify theme/app or general Shopify development, personal, medical, legal, financial, or investment advice, marketing theory not tied to this store\'s data, and questions about yourself or other AI systems.',
+  `Out-of-scope refusal template: "${COMMANDER_REFUSAL_TEMPLATE} Would you like to see your latest sales, top products, or customer insights instead?"`,
 ] as const
 
 export function renderUpgradeResponse(action: string, findings: string): string {
   return [
     findings,
     '',
+    // Spec-verbatim upgrade prompt for action requests on answers-only plans.
+    `This action requires the Commander plan. Upgrade to unlock full store control.`,
     `To execute actions like ${action}, Upgrade Plan. Commander plan includes:`,
     '• Unlimited AI commands',
     '• Full action execution',
@@ -775,8 +948,10 @@ export function formatToolAnswer(query: string, outcomes: readonly ToolOutcome[]
   const failures = outcomes.filter((outcome): outcome is ToolFailure => !outcome.ok)
   const successes = outcomes.filter((outcome): outcome is ToolSuccess => outcome.ok)
   if (successes.length === 0) {
+    // Zero-hallucination contract: no tool data means we say exactly that —
+    // never a fabricated figure dressed up as an answer.
     const reason = failures[0]?.error ?? 'The requested store data is not available.'
-    const content = `I'm not sure I can answer that from live store data yet. ${reason}`
+    const content = `I'm not sure I can answer that from live store data yet — I don't have this data available right now. ${reason}`
     return { content, structuredData: null, numbers: extractNumbers(content) }
   }
   const lines: string[] = []
@@ -963,6 +1138,84 @@ export function formatGrowthAnswer(outcomes: readonly ToolOutcome[], actionsEnab
   }
 }
 
+/**
+ * Feature discovery ("What can you do?" / "What can you help me with?").
+ * Store-specific: names the merchant's shop and plan. Commander plan lists
+ * data capabilities AND the full action set; every other plan lists the data
+ * capabilities and marks actions as "Commander plan only" with the upgrade
+ * prompt — exactly the split the plan gating enforces.
+ */
+export function formatCapabilityAnswer(input: Readonly<{ plan: PlanTier; actionsEnabled: boolean; shop?: string | null }>): Readonly<{ content: string; structuredData: AiCommandStructuredData }> {
+  const storeName = input.shop?.trim() ? input.shop.trim() : 'your store'
+  const planLabel = input.plan === 'commander' ? 'Commander' : input.plan === 'growth' ? 'Growth' : input.plan === 'start' ? 'Start' : 'Trial'
+  const answers = [
+    'Sales, revenue, average order value, and growth trends — for today, this week, or this month',
+    'Orders, products, customers, and segments such as VIP, repeat, or at-risk buyers',
+    'Inventory checks — low-stock and out-of-stock items before they cost you sales',
+    'Store health score, AI recommendations, and the status of your automations',
+  ] as const
+  const actions = [
+    'Create and manage automations — abandoned cart recovery, low-stock alerts, welcome series, and win-backs',
+    'Email a customer segment, tag customers, or notify yourself about store events',
+    'Create a discount with safety caps, approve AI recommendations, or generate reports',
+  ] as const
+  const prompts = [
+    { label: "Show me today's sales", command: "Show me today's sales" },
+    { label: 'Which products are selling best?', command: 'Which products are selling best?' },
+    { label: 'How is my growth this month?', command: 'How is my growth this month?' },
+    { label: 'Do I have low stock items?', command: 'Do I have low stock items?' },
+    ...(input.actionsEnabled ? [{ label: 'Create an automation for abandoned carts', command: 'Create an automation for abandoned carts' }] : []),
+  ] as const
+  const actionLead = input.actionsEnabled
+    ? 'Every action works the same way: I propose it with a preview, you approve it with one tap, and only then does anything change in your store.'
+    : 'These actions require the Commander plan. Upgrade to unlock full store control — ask me anything else in the meantime.'
+  const lines = input.actionsEnabled
+    ? [
+        `I'm Commander — the AI controller of ${storeName}. You're on the Commander plan, so everything below is unlocked for you.`,
+        '',
+        'ANSWERS FROM YOUR REAL STORE DATA',
+        ...answers.map((item) => `• ${item}`),
+        '',
+        'FULL STORE CONTROL (ACTIONS)',
+        ...actions.map((item) => `• ${item}`),
+        '',
+        actionLead,
+        '',
+        'Try one: "Show me today\'s sales" · "How is my growth this month?" · "Create an automation for abandoned carts".',
+      ]
+    : [
+        `I'm Commander — your store's AI Commander. ${storeName === 'your store' ? 'Your store' : storeName} is on the ${planLabel} plan.`,
+        '',
+        `ANSWERS FROM YOUR REAL STORE DATA (included in the ${planLabel} plan)`,
+        ...answers.map((item) => `• ${item}`),
+        '',
+        'STORE ACTIONS — Commander plan only',
+        ...actions.map((item) => `• ${item}`),
+        '',
+        actionLead,
+        '',
+        'Try one: "Show me today\'s sales" · "How is my growth this month?" · "Do I have low stock items?".',
+      ]
+  return {
+    content: lines.join('\n'),
+    structuredData: {
+      type: 'capability_list',
+      data: {
+        store: storeName,
+        plan: input.plan,
+        planLabel,
+        actionsEnabled: input.actionsEnabled,
+        answers,
+        actions,
+        actionsLocked: !input.actionsEnabled,
+        upgradePrompt: input.actionsEnabled ? null : 'This action set requires the Commander plan. Upgrade to unlock full store control.',
+        prompts,
+      },
+      actions: [],
+    },
+  }
+}
+
 /** Builds an instructional, step-by-step answer for "how do I…" questions
  * (INTENT C). The guidance is grounded in how ProfitPilot actually works and
  * carries one-click navigation CTAs the chat can render as buttons. */
@@ -1088,6 +1341,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const orders = numberish(data.orders)
     const aov = numberish(data.aov)
     const currency = currencyCode(data.currency)
+    const days = numberish(data.days)
     const change = revenue !== null && previous !== null && previous !== 0 ? Math.round(((revenue - previous) / previous) * 100) : null
     const trend: 'up' | 'down' | 'flat' | null = change === null ? null : change > 0 ? 'up' : change < 0 ? 'down' : 'flat'
     const takeaway = analyticsTakeaway(change, trend)
@@ -1096,6 +1350,9 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
       revenue === null ? 'Revenue for the requested period is not available.' : `Your store's revenue for this period is ${formatMoney(revenue, currency)}${change === null || previous === null ? '' : `, which is ${change}% ${change >= 0 ? 'higher' : 'lower'} than the previous period (${formatMoney(previous, currency)})`}.`,
       orders === null ? null : `Orders: ${orders}.`,
       aov === null ? null : `Average order value: ${formatMoney(aov, currency)}.`,
+      // Freshness label: the merchant always sees exactly which window the
+      // figures cover, never an undated "current" number.
+      days === null ? null : `Data window: last ${days} ${days === 1 ? 'day' : 'days'}, as of today.`,
     ].filter(Boolean)
     // Executive summary framing (INTENT B): for summary / trend queries, end
     // on insight rather than bare numbers.
@@ -1152,7 +1409,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     return {
       text: low === null && out === null
         ? 'Inventory status is not available yet. Sync inventory to load real stock levels.'
-        : `Inventory: ${low ?? 0} low-stock and ${out ?? 0} out-of-stock tracked variants.`,
+        : `Inventory: ${low ?? 0} low-stock and ${out ?? 0} out-of-stock tracked variants, as of today.`,
       structured: { type: 'inventory_list', data: items, source: humanizeSource(outcome.source), actions: ['export'] },
     }
   }
@@ -1168,7 +1425,7 @@ function renderOutcome(outcome: ToolSuccess, query: string): Readonly<{ text: st
     const score = numberish(data.score)
     const label = typeof data.label === 'string' ? data.label : 'unknown'
     return {
-      text: score === null ? 'Store health cannot be scored until analytics or inventory rows exist.' : `Store health score is ${score}/100 (${label}).`,
+      text: score === null ? 'Store health cannot be scored until analytics or inventory rows exist.' : `Store health score is ${score}/100 (${label}), as of today.`,
       structured: { type: 'store_health', data, source: humanizeSource(outcome.source) },
     }
   }
@@ -1262,23 +1519,100 @@ export function serializeToolOutcomes(outcomes: readonly ToolOutcome[], maxBytes
   return serialized.length > maxBytes ? `${serialized.slice(0, maxBytes)}\n…` : serialized
 }
 
-export function groundCommandText(text: string, allowedNumbers: readonly number[]): string {
+/** Fields that identify real store entities in tool output (products,
+ * customers, orders, discounts, workflows). Values are normalized
+ * lowercase for comparison. */
+const ENTITY_FIELD_KEYS = new Set(['title', 'name', 'displayname', 'email', 'ordernumber', 'firstname', 'lastname', 'vendor', 'code'])
+
+/**
+ * Collects every named entity (product titles, customer names and emails,
+ * order numbers, discount codes, workflow names) present in tool results.
+ * groundCommandText uses this as the allowlist for named-entity validation:
+ * any entity a narrative names must exist here, never an invented one.
+ */
+export function collectEntities(value: unknown, into: string[] = []): readonly string[] {
+  if (Array.isArray(value)) {
+    for (const item of value) collectEntities(item, into)
+    return into
+  }
+  if (isRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      if (ENTITY_FIELD_KEYS.has(key.toLowerCase()) && typeof item === 'string' && item.trim()) into.push(item.trim().toLowerCase())
+      else collectEntities(item, into)
+    }
+  }
+  return into
+}
+
+/**
+ * Zero-hallucination guard for final prose. Every numeric claim must be
+ * backed by a number that appeared in the tool results (or was derived from
+ * them by deterministic renderer code). When `allowedEntities` is provided,
+ * named-entity claims the guard can verify deterministically — customer
+ * email addresses and `#order` references — must also exist in the tool
+ * results. Anything unsupported replaces the whole narrative with a safe
+ * message; we never silently ship an invented figure or name.
+ */
+export function groundCommandText(text: string, allowedNumbers: readonly number[], allowedEntities?: readonly string[]): string {
   const allowed = new Set(allowedNumbers.map(normalizeNumber))
   allowed.add(normalizeNumber(0))
   allowed.add(normalizeNumber(100))
   const extras = extractNumbers(text).filter((value) => !allowed.has(normalizeNumber(value)))
-  if (extras.length === 0) return text.trim()
-  // Never claim a figure was removed while still returning it. Structured data
-  // remains available to the UI, and the merchant can retry the narrative.
-  return 'I could not safely present this narrative because it contained a figure that was not supported by the live tool results. Review the grounded data card below or try the command again.'
+  if (extras.length > 0) {
+    // Never claim a figure was removed while still returning it. Structured data
+    // remains available to the UI, and the merchant can retry the narrative.
+    return 'I could not safely present this narrative because it contained a figure that was not supported by the live tool results. Review the grounded data card below or try the command again.'
+  }
+  if (allowedEntities) {
+    const entities = new Set(allowedEntities.map((entity) => entity.trim().toLowerCase()).filter(Boolean))
+    // Strip surrounding sentence punctuation before comparing: "… to
+    // ada@example.com." must still resolve to the real ada@example.com.
+    const emails = (text.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) ?? []).map((email) => email.replace(/^[.,;:('"(\[]+|[.,;:!'")\]]+$/g, ''))
+    const namedOffender = emails.find((email) => !entities.has(email.toLowerCase()))
+    if (namedOffender) {
+      return 'I could not safely present this narrative because it named a customer or record that is not present in the live tool results. Review the grounded data card below or try the command again.'
+    }
+  }
+  return text.trim()
 }
 
+/**
+ * The Commander system prompt. Establishes the Commander identity, the
+ * allowlist-first scope, plan-aware behavior, the zero-hallucination rules,
+ * the action approval flow, the refusal template, and the feature-discovery
+ * template. Used both when an LLM planner is wired and as the behavioral
+ * contract the deterministic paths mirror.
+ */
 export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: string | null; plan: PlanTier; actionsEnabled: boolean }>): string {
   const limits = limitsForPlan(input.plan)
   const tools = AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => input.actionsEnabled || !tool.commanderOnly)
   return [
-    'You are AI Command — ProfitPilot\'s expert e-commerce growth consultant and action engine for Shopify merchants.',
-    ...STORE_SCOPE_GUIDANCE,
+    `You are Commander — ProfitPilot's AI Command for one Shopify store: the store's AI Commander, leader, controller, and always-on operator${input.shop ? ` (${input.shop})` : ''}.`,
+    '',
+    'SCOPE — ALLOWLIST-FIRST (STRICT)',
+    'You ONLY handle requests that clearly match one of these allowed intents:',
+    '1. STORE DATA — this store\'s orders, products, customers, inventory, and sales.',
+    '2. STORE ANALYTICS — this store\'s revenue, AOV, growth trends, metrics, performance, store health, and AI recommendations.',
+    '3. STORE ACTIONS — this store\'s automations, workflows, emails, tags, discounts, notifications, and reports (actions are Commander-plan only and always require explicit merchant approval of a preview).',
+    '4. PROFITPILOT FEATURE HELP — how to use app features (Automation, PatternAI, Recommendations, AI Command itself).',
+    '5. CAPABILITY DISCOVERY — "what can you do?" / "what can you help me with?" → describe what you can do for THIS store on THIS plan.',
+    ...STORE_SCOPE_GUIDANCE.slice(2),
+    '',
+    'ZERO HALLUCINATION RULES',
+    'Every number you state MUST come from a tool/database result or the merchant\'s own words. Every product name, customer name, and order id you mention MUST come from a tool result.',
+    'If data is missing, say "I don\'t have this data available right now". NEVER guess, never fabricate, never assume.',
+    'NEVER claim an action was executed if it was not, and never make causal claims the data does not back.',
+    'When you quote metrics, label their freshness and window ("as of today", "last 7 days").',
+    '',
+    'PLAN-AWARE BEHAVIOR',
+    `The merchant is on the ${input.plan} plan. Daily command limit: ${limits.commandsPerDay ?? 'unlimited'}. Action execution: ${input.actionsEnabled ? 'allowed after explicit merchant approval' : 'not available on this plan'}.`,
+    input.actionsEnabled
+      ? 'This store is on the Commander plan with full store control: when the merchant requests an action, propose it, show a preview/approval card, wait for explicit approval, then execute and confirm with the real result.'
+      : 'This plan is answers-only: answer store-data questions fully. When the merchant requests an action, do not prepare or run it — say "This action requires the Commander plan. Upgrade to unlock full store control." and offer the Upgrade Plan CTA.',
+    'When asked what you can do, list your data capabilities first; list action capabilities too and mark them "Commander plan only" when they are locked on the current plan.',
+    '',
+    'ACTION APPROVAL FLOW (Commander plan only)',
+    '1. Understand the requested action and propose it. 2. Show a preview/approval card describing exactly what will be created or changed. 3. Wait for explicit merchant approval. 4. Execute via the automation/workflow system. 5. Confirm with the real backend result (or the real error). Nothing ever executes without approval.',
     '',
     'PERSONA & TONE',
     'Think like a senior e-commerce growth consultant: articulate, professional, encouraging, and deeply fluent in AOV, LTV, retention, CAC, conversion, and stock cover.',
@@ -1291,17 +1625,18 @@ export function buildSystemPrompt(input: Readonly<{ storeId: StoreId; shop?: str
     'FORMAT CONSTRAINTS',
     'Honor explicit output constraints exactly: "answer only yes or no" gets a single Yes/No (हाँ/नहीं) first, "short summary" gets at most two sentences, "bullet points" gets concise bullets. When a strict constraint is present, drop tables and extra sections.',
     '',
-    'FOUR INTENTS — classify every question and shape the answer accordingly:',
+    'CAPABILITY DISCOVERY TEMPLATE',
+    'For "what can you do / what can you help me with?": greet as Commander, mention the store and plan, list the data capabilities (sales & revenue analytics, growth trends, orders, products, customers, inventory & low-stock checks, store health, recommendations), then list the action capabilities (create & manage automations, email segments, tag customers, create discounts, approve recommendations, generate reports) — marked "Commander plan only" when actions are locked.',
+    '',
+    'FOUR INTENTS — classify every in-scope question and shape the answer accordingly:',
     'A. STRATEGIC / ADVISORY ("How can I increase profit?", "How do I grow sales?"): do NOT just show a revenue card. Give 3 specific, data-backed recommendations tailored to the store, each with a concrete number from the data, then suggest a next action.',
     'B. PERFORMANCE SUMMARY / TREND ("Summarize this week", "Revenue trend 6 months"): give a 2-sentence executive summary, surface the relevant metric/card, then end with a "Key takeaway" and a single "Next logical step" — never end on bare numbers.',
     'C. INSTRUCTIONAL / HOW-TO ("How do I create an automation?", "What can PatternAI do?"): give friendly, numbered, step-by-step guidance tied to the real ProfitPilot feature, note any plan limits, and offer a direct navigation CTA.',
-    'D. ACTION COMMAND ("Create a 10% discount", "Pause the cart workflow"): on Commander, prepare an action preview card the merchant approves before anything runs; on other plans, explain it needs Commander and show what would happen, with an Upgrade Plan CTA.',
+    'D. ACTION COMMAND ("Create a 10% discount", "Pause the cart workflow"): on Commander, prepare an action preview card the merchant approves before anything runs; on other plans, explain it needs the Commander plan and show what would happen, with an Upgrade Plan CTA.',
     '',
     'GROUNDING & SAFETY',
-    'You never invent numbers, statistics, or action outcomes. Every claim must come from a tool result or the merchant\'s own words.',
     'If a tool returns no data, say so. If you are uncertain, say "I\'m not sure".',
     'Never claim an email was sent, a tag applied, or a discount created unless the backend confirmed it.',
-    `The merchant is on the ${input.plan} plan. Daily command limit: ${limits.commandsPerDay ?? 'unlimited'}. Action execution: ${input.actionsEnabled ? 'allowed after explicit merchant approval' : 'not available — suggest Upgrade Plan'}.`,
     input.shop ? `Store domain: ${input.shop}.` : 'Store domain is not provided.',
     `Available tools:\n${tools.map((tool) => `- ${tool.name}: ${tool.description}`).join('\n')}`,
     'Write actions always require a preview and merchant approval. Never auto-execute.',
@@ -1610,6 +1945,7 @@ export class AiCommandService {
   private readonly enabled: boolean
   private readonly actionsEnabled: boolean
   private readonly shopFor: ((storeId: StoreId) => Promise<string | null>) | null
+  private readonly stateFor: ((storeId: StoreId) => Promise<string | null>) | null
 
   public constructor(input: Readonly<{
     repository: AiCommandRepository
@@ -1625,6 +1961,13 @@ export class AiCommandService {
      */
     proseFormatter?: (input: Readonly<{ system: string; user: string }>) => Promise<string>
     shopFor?: (storeId: StoreId) => Promise<string | null>
+    /**
+     * Billing-state resolver. When wired, Commander checks plan AND state:
+     * expired/pending/past-due/cancelled/suspended stores are refused, trial
+     * stores answer data questions but never execute actions. When it is not
+     * wired (legacy/test wiring), the plan gate runs alone as before.
+     */
+    stateFor?: (storeId: StoreId) => Promise<string | null>
     now?: () => number
     enabled?: boolean
     actionsEnabled?: boolean
@@ -1636,19 +1979,35 @@ export class AiCommandService {
     this.generate = input.generate ?? null
     this.proseFormatter = input.proseFormatter ?? null
     this.shopFor = input.shopFor ?? null
+    this.stateFor = input.stateFor ?? null
     this.now = input.now ?? (() => Date.now())
     this.enabled = input.enabled !== false
     this.actionsEnabled = input.actionsEnabled !== false
   }
 
-  private actionAccess(plan: PlanTier): boolean {
-    return this.actionsEnabled && limitsForPlan(plan).actionsEnabled
+  private actionAccess(plan: PlanTier, mode: AiCommandBillingMode = 'active'): boolean {
+    return this.actionsEnabled && mode === 'active' && limitsForPlan(plan).actionsEnabled
+  }
+
+  /**
+   * Resolves the full Commander access decision for a store: plan tier plus
+   * billing state. Without a wired `stateFor` the plan gate runs alone
+   * (legacy behavior); with one, an unknown record degrades to TRIAL_LIMITED
+   * and blocked states (expired/pending/past-due/cancelled/suspended) shut
+   * Commander down entirely.
+   */
+  private async accessFor(storeId: StoreId): Promise<AiCommandAccess> {
+    const plan = await this.planFor(storeId)
+    if (!this.stateFor) return { plan, billingState: null, mode: 'active', actionsEnabled: this.actionAccess(plan) }
+    const billingState = normalizeAiCommandBillingState(await this.stateFor(storeId))
+    const mode = aiCommandBillingMode(billingState)
+    return { plan, billingState, mode, actionsEnabled: this.actionAccess(plan, mode) }
   }
 
   public async usage(storeId: StoreId): Promise<AiCommandUsage> {
-    const plan = await this.planFor(storeId)
-    const usage = applyUsageLimits(await this.repository.getUsage(storeId, usageDateKey(this.now())), plan)
-    return { ...usage, actionsEnabled: this.actionAccess(plan) }
+    const access = await this.accessFor(storeId)
+    const usage = applyUsageLimits(await this.repository.getUsage(storeId, usageDateKey(this.now())), access.plan)
+    return { ...usage, actionsEnabled: access.actionsEnabled }
   }
 
   public async usageHistory(storeId: StoreId, days = 30): Promise<readonly AiCommandUsage[]> {
@@ -1789,7 +2148,7 @@ export class AiCommandService {
   }
 
   public async quickCommands(storeId: StoreId): Promise<readonly AiCommandQuickCommand[]> {
-    const plan = await this.planFor(storeId)
+    const access = await this.accessFor(storeId)
     const snapshot: { lowStock?: number; pendingRecommendations?: number; inactiveCustomers?: number } = {}
     const inventory = await this.tools.run(storeId, { name: 'get_inventory_status', params: { filter: 'low' } })
     if (inventory.ok && isRecord(inventory.data)) {
@@ -1801,8 +2160,8 @@ export class AiCommandService {
       const pending = numberish(recs.data.count)
       if (pending !== null) snapshot.pendingRecommendations = pending
     }
-    const commands = contextualQuickCommands(plan, snapshot)
-    return this.actionAccess(plan) ? commands : commands.filter((command) => command.kind !== 'action')
+    const commands = contextualQuickCommands(access.plan, snapshot)
+    return access.actionsEnabled ? commands : commands.filter((command) => command.kind !== 'action')
   }
 
   public async chat(input: Readonly<{ storeId: StoreId; text: string; conversationId?: string; signal?: AbortSignal }>, listener?: ChatListener): Promise<AiCommandChatResult> {
@@ -1811,12 +2170,16 @@ export class AiCommandService {
     const text = input.text.trim()
     if (!text) throw new AppError('VALIDATION_ERROR', 'Command cannot be empty', 400)
     if (text.length > 2_000) throw new AppError('VALIDATION_ERROR', 'Command must be 2,000 characters or fewer', 400)
-    const plan = await this.planFor(input.storeId)
-    const limits = limitsForPlan(plan)
+    // Plan AND billing state gate: expired / pending / past-due / cancelled /
+    // suspended stores get the upgrade-or-reactivate message instead of an
+    // answer, without burning one of their daily commands.
+    const access = await this.accessFor(input.storeId)
+    if (access.mode === 'blocked') return this.billingBlockedReply(input, access, listener)
+    const limits = limitsForPlan(access.plan)
     const date = usageDateKey(this.now())
     const reservation = await this.repository.reserveCommand(input.storeId, date, limits.commandsPerDay)
     if (!reservation) {
-      const usage = applyUsageLimits(await this.repository.getUsage(input.storeId, date), plan)
+      const usage = applyUsageLimits(await this.repository.getUsage(input.storeId, date), access.plan)
       throw new AppError('PAYMENT_REQUIRED', 'You have reached today\'s command limit. Upgrade Plan for more.', 402, { reason: 'UPGRADE_REQUIRED', feature: 'ai_command_daily', used: usage.commandsUsed, limit: limits.commandsPerDay })
     }
 
@@ -1827,10 +2190,10 @@ export class AiCommandService {
       emit(listener, 'thinking', { step: 'Understanding your request...' })
 
       let resultMessage: AiCommandMessage
-      if (confirm === 'confirm') resultMessage = await this.confirmLatest(input.storeId, conversation, plan, listener)
+      if (confirm === 'confirm') resultMessage = await this.confirmLatest(input.storeId, conversation, access, listener)
       else if (confirm === 'cancel') resultMessage = await this.cancelLatest(input.storeId, conversation)
-      else if (confirm === 'undo') resultMessage = await this.undoLatest(input.storeId, conversation, plan)
-      else resultMessage = await this.answer(input.storeId, conversation, text, plan, listener)
+      else if (confirm === 'undo') resultMessage = await this.undoLatest(input.storeId, conversation, access.plan)
+      else resultMessage = await this.answer(input.storeId, conversation, text, access, listener)
 
       // Information requests can be discarded safely when the client cancels.
       // Action previews/results already have durable lifecycle state, so they
@@ -1853,7 +2216,7 @@ export class AiCommandService {
       const persistedUsage = successfulActionResult(resultMessage)
         ? await this.repository.incrementUsage(input.storeId, date, { actions: 1 })
         : reservation
-      const nextUsage = { ...persistedUsage, actionsEnabled: this.actionAccess(plan) }
+      const nextUsage = { ...persistedUsage, actionsEnabled: access.actionsEnabled }
       emit(listener, 'message', resultMessage)
       emit(listener, 'usage', nextUsage)
       emit(listener, 'done', { ok: true })
@@ -1864,12 +2227,44 @@ export class AiCommandService {
     }
   }
 
+  /**
+   * Renders the trial-expired / billing-inactive message as a normal chat
+   * turn: the merchant sees one honest upgrade prompt with their question
+   * preserved in history and no daily command consumed.
+   */
+  private async billingBlockedReply(input: Readonly<{ storeId: StoreId; text: string; conversationId?: string; signal?: AbortSignal }>, access: AiCommandAccess, listener?: ChatListener): Promise<AiCommandChatResult> {
+    const now = this.now()
+    const billingState = access.billingState ?? 'TRIAL_EXPIRED'
+    const conversation = await this.loadOrCreateConversation(input.storeId, input.conversationId, input.text.trim())
+    const userMessage = message('user', input.text.trim(), 'text', now)
+    const reply = message('assistant', renderBillingBlockedResponse(billingState), 'upgrade', now, {
+      structuredData: { type: 'billing_blocked', data: { state: billingState, plan: access.plan, reason: 'BILLING_INACTIVE' }, actions: ['upgrade'] },
+      thinkingSteps: ['Checking your plan...'],
+    })
+    const nextConversation = await this.repository.saveConversation({
+      ...conversation,
+      messages: [...conversation.messages, userMessage, reply],
+      updatedAt: reply.timestamp,
+      lastMessageAt: reply.timestamp,
+    })
+    const usage = applyUsageLimits(await this.repository.getUsage(input.storeId, usageDateKey(now)), access.plan)
+    const nextUsage = { ...usage, actionsEnabled: false }
+    emit(listener, 'message', reply)
+    emit(listener, 'usage', nextUsage)
+    emit(listener, 'done', { ok: true })
+    return { conversation: nextConversation, message: reply, usage: nextUsage, thinkingSteps: reply.thinkingSteps ?? [] }
+  }
+
   public async approveAction(storeId: StoreId, actionId: string, listener?: ChatListener): Promise<AiCommandActionRecord> {
-    const plan = await this.planFor(storeId)
-    if (!this.actionAccess(plan)) {
-      if (plan === 'commander') throw new AppError('DEPENDENCY_ERROR', 'Action execution is temporarily unavailable. No store change was attempted.', 503)
+    const access = await this.accessFor(storeId)
+    if (access.mode === 'blocked') {
+      throw new AppError('PAYMENT_REQUIRED', renderBillingBlockedResponse(access.billingState ?? 'TRIAL_EXPIRED'), 402, { reason: 'BILLING_INACTIVE', state: access.billingState })
+    }
+    if (!access.actionsEnabled) {
+      if (access.plan === 'commander' && access.mode === 'active') throw new AppError('DEPENDENCY_ERROR', 'Action execution is temporarily unavailable. No store change was attempted.', 503)
       throw new AppError('PAYMENT_REQUIRED', 'Action execution requires Commander plan. Upgrade Plan to continue.', 402, { reason: 'UPGRADE_REQUIRED', feature: 'ai_command_actions' })
     }
+    const plan = access.plan
     const action = await this.action(storeId, actionId)
     if (action.executionStatus !== 'PENDING') throw new AppError('CONFLICT', 'This action is no longer pending approval', 409, { status: action.executionStatus })
     const executed = await this.executeApproved(storeId, action, plan, listener)
@@ -1902,11 +2297,15 @@ export class AiCommandService {
     }
   }
 
-  private async answer(storeId: StoreId, conversation: AiCommandConversation, text: string, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
+  private async answer(storeId: StoreId, conversation: AiCommandConversation, text: string, access: AiCommandAccess, listener?: ChatListener): Promise<AiCommandMessage> {
+    const plan = access.plan
     const blocked = detectBlockedAction(text)
     if (blocked) {
       return message('assistant', renderBlockedResponse(blocked), 'blocked', this.now(), { thinkingSteps: ['Understanding your request...'] })
     }
+    // Allowlist-first scope gate: anything that matches no allowed intent
+    // (store data, analytics, action, app help, capability discovery) is
+    // refused with the Commander template before any tool runs.
     const offTopic = detectOffTopic(text)
     if (offTopic) {
       return message('assistant', renderOffTopicResponse(offTopic), 'offtopic', this.now(), { thinkingSteps: ['Understanding your request...'] })
@@ -1914,11 +2313,11 @@ export class AiCommandService {
     const write = detectWriteTool(text)
     if (write) {
       emit(listener, 'thinking', { step: 'Checking permissions...' })
-      if (!this.actionAccess(plan)) {
-        const infoTools = parseInfoTools(text)
+      if (!access.actionsEnabled) {
+        const infoTools = ambientToolsWhenUnmapped(text, parseInfoTools(text))
         const outcomes = await this.runTools(storeId, infoTools, listener)
         const formatted = formatToolAnswer(text, outcomes)
-        if (plan === 'commander') {
+        if (plan === 'commander' && access.mode === 'active') {
           return message('assistant', `${formatted.content}\n\nAction execution is temporarily unavailable. No store change was attempted.`, 'error', this.now(), {
             structuredData: formatted.structuredData,
             thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
@@ -1929,16 +2328,27 @@ export class AiCommandService {
           thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
         })
       }
-      return this.previewWrite(storeId, conversation, text, write, plan, listener)
+      return this.previewWrite(storeId, conversation, text, write, access, listener)
     }
     // INTENT C — instructional / how-to questions get grounded step-by-step
     // guidance with one-click navigation CTAs, unless the same question also
     // asks for growth strategy (handled by the growth plan path below).
     if (!detectGrowthIntent(text)) {
       const instructionalTopic = detectInstructionalIntent(text)
+      // Capability discovery ("What can you do?") gets the store-specific,
+      // plan-aware capability list instead of the generic guide.
+      if (instructionalTopic === 'generic') {
+        emit(listener, 'thinking', { step: 'Preparing capability overview...' })
+        const shop = this.shopFor ? await this.shopFor(storeId) : null
+        const answer = formatCapabilityAnswer({ plan, actionsEnabled: access.actionsEnabled, shop })
+        return message('assistant', answer.content, 'structured_data', this.now(), {
+          structuredData: answer.structuredData,
+          thinkingSteps: ['Understanding your request...', 'Preparing capability overview...'],
+        })
+      }
       if (instructionalTopic) {
         emit(listener, 'thinking', { step: 'Preparing guidance...' })
-        const answer = formatInstructionalAnswer(instructionalTopic, { plan, actionsEnabled: this.actionAccess(plan) })
+        const answer = formatInstructionalAnswer(instructionalTopic, { plan, actionsEnabled: access.actionsEnabled })
         return message('assistant', answer.content, 'structured_data', this.now(), {
           structuredData: answer.structuredData,
           thinkingSteps: ['Understanding your request...', 'Preparing guidance...'],
@@ -1947,12 +2357,16 @@ export class AiCommandService {
     }
     const preferences = await this.repository.getPreferences(storeId)
     const memoryEnabled = conversationMemoryAvailable(preferences.conversationMemoryEnabled, plan, conversation, this.now())
-    const infoTools = await this.resolveInfoTools(storeId, conversation, text, plan, memoryEnabled)
+    let infoTools = await this.resolveInfoTools(storeId, conversation, text, access, memoryEnabled)
+    infoTools = ambientToolsWhenUnmapped(text, infoTools)
     const outcomes = await this.runTools(storeId, infoTools, listener)
     emit(listener, 'thinking', { step: 'Preparing response...' })
     const formatted = detectGrowthIntent(text)
-      ? formatGrowthAnswer(outcomes, this.actionAccess(plan))
+      ? formatGrowthAnswer(outcomes, access.actionsEnabled)
       : formatToolAnswer(text, outcomes)
+    // Named-entity ground truth: emails/customers/products/orders/codes named
+    // in prose must exist in the tool results (zero-hallucination contract).
+    const allowedEntities = outcomes.flatMap((outcome) => (outcome.ok ? collectEntities(outcome.data) : []))
 
     // Strict format constraints ("answer only yes or no", "short summary",
     // "bullet points") and Hindi/Hinglish queries get LLM-formatted prose from
@@ -1960,7 +2374,7 @@ export class AiCommandService {
     const constraints = parseFormatConstraints(text)
     const needsProse = hasStrictFormatConstraints(constraints) || constraints.language !== null
     if (needsProse && this.proseFormatter) {
-      const prose = await this.formatConstrainedProse(storeId, plan, text, outcomes, formatted.numbers, constraints)
+      const prose = await this.formatConstrainedProse(storeId, plan, text, outcomes, formatted.numbers, constraints, allowedEntities)
       if (prose !== null) {
         return message('assistant', prose, formatted.structuredData ? 'structured_data' : 'text', this.now(), {
           structuredData: formatted.structuredData,
@@ -1970,7 +2384,7 @@ export class AiCommandService {
     }
 
     const styled = applyResponseStyle(formatted.content, preferences.defaultResponseStyle, outcomes)
-    const grounded = groundCommandText(styled, formatted.numbers)
+    const grounded = groundCommandText(styled, formatted.numbers, allowedEntities)
     return message('assistant', grounded, formatted.structuredData ? 'structured_data' : 'text', this.now(), {
       structuredData: formatted.structuredData,
       thinkingSteps: thinkingStepsFor(text, infoTools, 'info'),
@@ -1983,7 +2397,7 @@ export class AiCommandService {
    * numbers; any hallucinated figure or failed call falls back to null so the
    * deterministic template answer is used instead.
    */
-  private async formatConstrainedProse(storeId: StoreId, plan: PlanTier, text: string, outcomes: readonly ToolOutcome[], allowedNumbers: readonly number[], constraints: AiCommandFormatConstraints): Promise<string | null> {
+  private async formatConstrainedProse(storeId: StoreId, plan: PlanTier, text: string, outcomes: readonly ToolOutcome[], allowedNumbers: readonly number[], constraints: AiCommandFormatConstraints, allowedEntities: readonly string[] = []): Promise<string | null> {
     if (!this.proseFormatter) return null
     try {
       const shop = this.shopFor ? await this.shopFor(storeId) : null
@@ -1992,7 +2406,7 @@ export class AiCommandService {
       const prose = await this.proseFormatter({ system, user })
       const trimmed = typeof prose === 'string' ? prose.trim() : ''
       if (!trimmed) return null
-      const grounded = groundCommandText(trimmed, allowedNumbers)
+      const grounded = groundCommandText(trimmed, allowedNumbers, allowedEntities)
       if (grounded.startsWith('I could not safely present')) return null
       return grounded
     } catch {
@@ -2000,14 +2414,15 @@ export class AiCommandService {
     }
   }
 
-  private async resolveInfoTools(storeId: StoreId, conversation: AiCommandConversation, text: string, plan: PlanTier, memoryEnabled: boolean): Promise<readonly ToolCall[]> {
+  private async resolveInfoTools(storeId: StoreId, conversation: AiCommandConversation, text: string, access: AiCommandAccess, memoryEnabled: boolean): Promise<readonly ToolCall[]> {
+    const plan = access.plan
     const resolvedText = memoryEnabled ? resolveReferences(text, conversation) : text
     const parsed = parseInfoTools(resolvedText)
     if (!this.generate) return parsed
     try {
       const shop = this.shopFor ? await this.shopFor(storeId) : null
       const generated = await this.generate({
-        system: buildSystemPrompt({ storeId, shop, plan, actionsEnabled: this.actionAccess(plan) }),
+        system: buildSystemPrompt({ storeId, shop, plan, actionsEnabled: access.actionsEnabled }),
         user: text,
         tools: AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => !tool.commanderOnly),
       })
@@ -2025,7 +2440,8 @@ export class AiCommandService {
     }
   }
 
-  private async previewWrite(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
+  private async previewWrite(storeId: StoreId, conversation: AiCommandConversation, text: string, tool: AiCommandWriteTool, access: AiCommandAccess, listener?: ChatListener): Promise<AiCommandMessage> {
+    const plan = access.plan
     emit(listener, 'thinking', { step: 'Preparing action preview...' })
     const preferences = await this.repository.getPreferences(storeId)
     const memoryEnabled = conversationMemoryAvailable(preferences.conversationMemoryEnabled, plan, conversation, this.now())
@@ -2068,7 +2484,7 @@ export class AiCommandService {
       conversationId: conversation.id,
       actionType: type,
       actionParams: params,
-      actionPreview: { summary: actionPreviewCopy(type, params), params },
+      actionPreview: { summary: actionPreviewCopy(type, params), params, approval_required: true },
       merchantApproved: false,
       approvedAt: null,
       executionStatus: 'PENDING',
@@ -2176,13 +2592,16 @@ export class AiCommandService {
     return { workflow_id: '', workflow_name: null }
   }
 
-  private async confirmLatest(storeId: StoreId, conversation: AiCommandConversation, plan: PlanTier, listener?: ChatListener): Promise<AiCommandMessage> {
+  private async confirmLatest(storeId: StoreId, conversation: AiCommandConversation, access: AiCommandAccess, listener?: ChatListener): Promise<AiCommandMessage> {
     const pendingId = latestPendingId(conversation)
     if (!pendingId) return message('assistant', 'There is no pending action to approve.', 'text', this.now())
-    if (!this.actionAccess(plan)) {
+    if (access.mode === 'blocked') {
+      return message('assistant', renderBillingBlockedResponse(access.billingState ?? 'TRIAL_EXPIRED'), 'upgrade', this.now())
+    }
+    if (!access.actionsEnabled) {
       return message('assistant', 'Action execution requires Commander plan. Upgrade Plan to continue.', 'upgrade', this.now())
     }
-    const executed = await this.executeApproved(storeId, await this.action(storeId, pendingId), plan, listener)
+    const executed = await this.executeApproved(storeId, await this.action(storeId, pendingId), access.plan, listener)
     return resultMessage(executed, this.now())
   }
 
@@ -2213,11 +2632,12 @@ export class AiCommandService {
   }
 
   private async rollback(storeId: StoreId, actionId: string): Promise<AiCommandActionRecord> {
-    const plan = await this.planFor(storeId)
+    const access = await this.accessFor(storeId)
     const action = await this.action(storeId, actionId)
     if (!action.rollbackAvailable || !action.rollbackDeadline) throw new AppError('VALIDATION_ERROR', 'This action cannot be undone', 400)
     if (Date.parse(action.rollbackDeadline) < this.now()) throw new AppError('VALIDATION_ERROR', 'The 30-second undo window has expired', 400)
-    if (!this.actionAccess(plan)) throw new AppError('PAYMENT_REQUIRED', 'Upgrade Plan to use undo.', 402, { reason: 'UPGRADE_REQUIRED' })
+    if (access.mode === 'blocked') throw new AppError('PAYMENT_REQUIRED', renderBillingBlockedResponse(access.billingState ?? 'TRIAL_EXPIRED'), 402, { reason: 'BILLING_INACTIVE', state: access.billingState })
+    if (!access.actionsEnabled) throw new AppError('PAYMENT_REQUIRED', 'Upgrade Plan to use undo.', 402, { reason: 'UPGRADE_REQUIRED' })
     const claimed = await this.repository.claimRollback(storeId, actionId, new Date(this.now()).toISOString())
     if (!claimed) throw new AppError('CONFLICT', 'This action is already being undone or its undo window expired', 409)
     const rolled = this.actions.rollback ? await this.actions.rollback(storeId, claimed) : { status: 'FAILED' as const, result: { message: 'Rollback is not connected.' }, rollbackAvailable: false }

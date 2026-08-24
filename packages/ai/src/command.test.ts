@@ -7,9 +7,13 @@ import {
   InMemoryCommandActions,
   InMemoryCommandTools,
   actionPreviewCopy,
+  aiCommandBillingMode,
+  ambientToolsWhenUnmapped,
   applyResponseStyle,
   applyUsageLimits,
   buildSystemPrompt,
+  classifyCommandScope,
+  collectEntities,
   collectNumbers,
   contextualFollowUps,
   detectGrowthIntent,
@@ -23,14 +27,17 @@ import {
   detectWriteTool,
   emptyUsage,
   formatGrowthAnswer,
+  formatCapabilityAnswer,
   formatInstructionalAnswer,
   formatToolAnswer,
   groundCommandText,
   humanizeSource,
   humanizeSources,
   limitsForPlan,
+  normalizeAiCommandBillingState,
   parseConfirmIntent,
   parseInfoTools,
+  renderBillingBlockedResponse,
   renderBlockedResponse,
   renderOffTopicResponse,
   renderUpgradeResponse,
@@ -76,6 +83,9 @@ function service(plan: 'trial' | 'start' | 'growth' | 'commander' = 'trial', ext
     ...(extras.enabled !== undefined ? { enabled: extras.enabled } : {}),
     ...(extras.actionsEnabled !== undefined ? { actionsEnabled: extras.actionsEnabled } : {}),
     ...(extras.generate ? { generate: extras.generate } : {}),
+    ...(extras.shopFor ? { shopFor: extras.shopFor } : {}),
+    ...(extras.stateFor ? { stateFor: extras.stateFor } : {}),
+    ...(extras.proseFormatter ? { proseFormatter: extras.proseFormatter } : {}),
   })
 }
 
@@ -157,22 +167,58 @@ describe('AI Command safety parsers', () => {
     expect(detectOffTopic("What's my revenue this month?")).toBeNull()
     expect(detectOffTopic('Which products are low stock?')).toBeNull()
     expect(detectOffTopic('Show me inactive customers')).toBeNull()
-    expect(detectOffTopic('Help me code a Shopify theme')).toBeNull()
     expect(detectOffTopic('Create a discount code')).toBeNull()
   })
 
-  it('renders a polite off-topic refusal that redirects to store help', () => {
+  it('allowlist-first: refuses every spec-blocked query even when it mentions Shopify or the store', () => {
+    // The full BLOCKED list from the Commander product spec — none of these
+    // may be answered just because they touch store vocabulary.
+    expect(detectOffTopic("What's the weather in Delhi?")).toBe('the weather')
+    expect(detectOffTopic('Who is the PM of America?')).toBe('politics')
+    expect(detectOffTopic('Write me a JavaScript function')).toBe('general coding')
+    expect(detectOffTopic('Tell me a joke')).toBe('creative writing')
+    // Theme development and general Shopify development are out of scope even
+    // though they mention Shopify itself.
+    expect(detectOffTopic('How to build a Shopify theme?')).toBe('theme or general Shopify development')
+    expect(detectOffTopic('Help me code a Shopify theme')).toBe('theme or general Shopify development')
+    expect(detectOffTopic('How to build a Shopify store?')).toBe('theme or general Shopify development')
+    expect(detectOffTopic('Give me stock market advice')).toBe('investing or the stock market')
+    // Random questions with no allowed intent are refused without a label.
+    expect(detectOffTopic('hmm what do you think about bananas')).toBe('that topic')
+    expect(detectOffTopic('What is 2 + 2?')).toBe('homework or general problem-solving')
+  })
+
+  it('allowlist-first: keeps every spec-allowed query in scope with the right intent', () => {
+    const intentOf = (query: string): string | null => {
+      const scope = classifyCommandScope(query)
+      return scope.inScope ? scope.intent : null
+    }
+    expect(classifyCommandScope("Show me today's sales")).toEqual({ inScope: true, intent: 'store_analytics' })
+    expect(intentOf('Which products are selling best?')).toBe('store_data_query')
+    expect(intentOf('How is my growth this month?')).toBe('store_analytics')
+    expect(classifyCommandScope('Create an automation for abandoned carts')).toEqual({ inScope: true, intent: 'store_action' })
+    expect(classifyCommandScope('What can you help me with?')).toEqual({ inScope: true, intent: 'capability_discovery' })
+    expect(intentOf('What can you do?')).toBe('capability_discovery')
+    expect(intentOf('Do I have low stock items?')).toBe('store_data_query')
+    expect(intentOf('How healthy is my store?')).toBe('store_analytics')
+    expect(intentOf('How do I set up an automated email?')).toBe('app_feature_help')
+    expect(detectOffTopic('Please refund order 1001')).toBeNull() // store op → blocked-action flow, not off-topic
+  })
+
+  it('renders the spec refusal template with a redirect back to the store', () => {
     const response = renderOffTopicResponse('the weather')
-    expect(response).toContain('Shopify store')
+    expect(response).toContain("I'm your store's Commander")
+    expect(response).toContain('your store data and ProfitPilot features')
     expect(response).toContain('the weather')
-    expect(response).toContain('Store performance analysis')
+    expect(response).toContain('latest sales, top products, or customer insights')
     expect(response).not.toContain('Upgrade to Commander')
   })
 
   it('refuses off-topic questions at the service boundary', async () => {
     const result = await service().chat({ storeId: tenant, text: 'Tell me a joke' })
     expect(result.message.contentType).toBe('offtopic')
-    expect(result.message.content).toContain('Shopify store')
+    expect(result.message.content).toContain("I'm your store's Commander")
+    expect(result.message.content).toContain('ProfitPilot features')
     expect(result.message.structuredData).toBeNull()
   })
 
@@ -298,6 +344,7 @@ describe('AI Command action approval', () => {
     const result = await command.chat({ storeId: tenant, text: 'Send email to VIP customers' })
     expect(result.message.contentType).toBe('upgrade')
     expect(result.message.content).toContain('Upgrade Plan')
+    expect(result.message.content).toContain('This action requires the Commander plan')
     expect(result.message.content).toContain('Commander plan includes')
     expect(executed).toBe(false)
   })
@@ -615,16 +662,38 @@ describe('AI Command strategic advisor overhaul', () => {
     expect(detectInstructionalIntent('What are my recent orders?')).toBeNull()
   })
 
-  it('routes Hinglish and natural-language capability prompts to the capability card without store metrics', async () => {
+  it('routes Hinglish and natural-language capability prompts to the store-specific capability card without store metrics', async () => {
     for (const text of ['tum meri help kaise karoge', 'what can you do for me']) {
       const result = await service('growth').chat({ storeId: tenant, text })
       expect(result.message.contentType).toBe('structured_data')
-      expect(result.message.structuredData?.type).toBe('instructional')
-      expect(result.message.content).toContain('How ProfitPilot Can Help Your Store')
-      expect(result.message.content).toContain('Create & Manage Discounts')
+      expect(result.message.structuredData?.type).toBe('capability_list')
+      expect(result.message.content).toContain("I'm Commander")
+      expect(result.message.content).toContain('Growth')
+      expect(result.message.content).toContain('Commander plan only')
       expect(result.message.content).not.toMatch(/\$8,940|81\/100|revenue today/i)
       expect(result.message.thinkingSteps).not.toContain('Reading live store data...')
     }
+  })
+
+  it('feature discovery is store-specific and plan-aware', async () => {
+    const shopFor = async () => 'demo.myshopify.com'
+    const commander = await service('commander', { shopFor }).chat({ storeId: tenant, text: 'What can you help me with?' })
+    expect(commander.message.structuredData?.type).toBe('capability_list')
+    expect(commander.message.content).toContain('demo.myshopify.com')
+    expect(commander.message.content).toContain('FULL STORE CONTROL')
+    expect(commander.message.content).not.toContain('Commander plan only')
+    const data = commander.message.structuredData?.data as { actionsEnabled: boolean; actionsLocked: boolean; prompts: readonly { command: string }[] }
+    expect(data.actionsEnabled).toBe(true)
+    expect(data.actionsLocked).toBe(false)
+    expect(data.prompts.some((prompt) => /automation/i.test(prompt.command))).toBe(true)
+
+    const start = await service('start', { shopFor }).chat({ storeId: tenant, text: 'What can you do?' })
+    expect(start.message.content).toContain('Start')
+    expect(start.message.content).toContain('Commander plan only')
+    const startData = start.message.structuredData?.data as { actionsEnabled: boolean; actionsLocked: boolean; upgradePrompt: string | null }
+    expect(startData.actionsEnabled).toBe(false)
+    expect(startData.actionsLocked).toBe(true)
+    expect(startData.upgradePrompt).toContain('Commander plan')
   })
 
   it('stages cancel-all automation as a bulk deactivation preview with no order-tool noise', async () => {
@@ -845,5 +914,198 @@ describe('actionFailureDetails', () => {
     expect(actionFailureDetails(failedAction({ errorDetails: { reasons: ['one', 'two'] } }))).toBe('one; two')
     expect(actionFailureDetails(failedAction({ executionResult: { message: 'from result' } }))).toBe('from result')
     expect(actionFailureDetails(failedAction())).toBe('The backend did not confirm success.')
+  })
+})
+
+/* ── Commander product spec: billing gating, allowlist, grounding ──── */
+
+describe('Commander plan & billing-state gating', () => {
+  it('maps billing states to the three access modes', () => {
+    expect(aiCommandBillingMode('ACTIVE_MONTHLY')).toBe('active')
+    expect(aiCommandBillingMode('ACTIVE_ANNUAL')).toBe('active')
+    expect(aiCommandBillingMode('GIFT_ACCESS_UNLIMITED')).toBe('active')
+    expect(aiCommandBillingMode('TRIAL_LIMITED')).toBe('limited')
+    for (const state of ['TRIAL_EXPIRED', 'PENDING_CONFIRMATION', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'] as const) {
+      expect(aiCommandBillingMode(state)).toBe('blocked')
+    }
+    // Unknown / missing records never unlock full access.
+    expect(normalizeAiCommandBillingState(undefined)).toBe('TRIAL_LIMITED')
+    expect(normalizeAiCommandBillingState(null)).toBe('TRIAL_LIMITED')
+    expect(normalizeAiCommandBillingState('SOMETHING_NEW')).toBe('TRIAL_LIMITED')
+    expect(normalizeAiCommandBillingState('ACTIVE_MONTHLY')).toBe('ACTIVE_MONTHLY')
+  })
+
+  it('expired trial: any query gets the trial-expired message, no data leaks, no quota burned', async () => {
+    const command = service('trial', { stateFor: async () => 'TRIAL_EXPIRED' })
+    const result = await command.chat({ storeId: tenant, text: 'Show me today\'s revenue' })
+    expect(result.message.contentType).toBe('upgrade')
+    expect(result.message.content).toContain('trial has expired')
+    expect(result.message.content).toContain('Upgrade Plan')
+    expect(result.message.content).not.toMatch(/\$8,940|81\/100/)
+    expect(result.message.structuredData?.type).toBe('billing_blocked')
+    expect((await command.usage(tenant)).commandsUsed).toBe(0)
+  })
+
+  it('past-due, pending, suspended, and cancelled stores are also refused with state-specific copy', async () => {
+    for (const [state, snippet] of [['PAST_DUE', 'payment issue'], ['PENDING_CONFIRMATION', 'payment confirmation'], ['SUSPENDED', 'suspended'], ['CANCELLED', 'cancelled']] as const) {
+      const command = service('growth', { stateFor: async () => state })
+      const result = await command.chat({ storeId: tenant, text: 'How is my growth this month?' })
+      expect(result.message.contentType).toBe('upgrade')
+      expect(result.message.content.toLowerCase()).toContain(snippet)
+    }
+  })
+
+  it('trial-limited billing state: answers data questions but never executes actions', async () => {
+    const command = service('commander', { stateFor: async () => 'TRIAL_LIMITED' })
+    const info = await command.chat({ storeId: tenant, text: "What's my revenue this month?" })
+    expect(info.message.contentType).toBe('structured_data')
+    expect(info.message.content).toContain('$8,940')
+    const upgrade = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    expect(upgrade.message.contentType).toBe('upgrade')
+    expect(upgrade.message.content).toContain('Commander plan includes')
+    expect(upgrade.message.action).toBeNull()
+    expect((await command.usage(tenant)).actionsEnabled).toBe(false)
+  })
+
+  it('commander plan + ACTIVE billing state unlocks the full approval flow', async () => {
+    let executed = 0
+    const command = service('commander', {
+      stateFor: async () => 'ACTIVE_ANNUAL',
+      actions: new InMemoryCommandActions(async () => { executed += 1; return { status: 'SUCCESS', result: { updated: 1, failed: 0 }, rollbackAvailable: true } }),
+    })
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    expect(preview.message.contentType).toBe('action_preview')
+    expect(executed).toBe(0)
+    const confirmed = await command.chat({ storeId: tenant, text: 'confirm', conversationId: preview.conversation.id })
+    expect(confirmed.message.contentType).toBe('action_result')
+    expect(executed).toBe(1)
+  })
+
+  it('approveAction refuses a billing-blocked store even when a pending action exists', async () => {
+    let billing = 'ACTIVE_MONTHLY'
+    const command = service('commander', { stateFor: async () => billing })
+    const preview = await command.chat({ storeId: tenant, text: 'Tag new customers as vip' })
+    billing = 'CANCELLED'
+    await expect(command.approveAction(tenant, preview.message.action!.id!)).rejects.toMatchObject({ status: 402, code: 'PAYMENT_REQUIRED' })
+  })
+})
+
+describe('Commander data-query flow integrity', () => {
+  it('parseInfoTools returns nothing for unknown queries (no default health+analytics guess)', () => {
+    expect(parseInfoTools('blah blah blah')).toEqual([])
+    expect(parseInfoTools('Create a 15% weekend discount').map((call) => call.name)).toEqual([])
+    // The service turns the empty parse into grounded ambient tools for
+    // in-scope queries, while off-topic queries are refused before tools run.
+    expect(ambientToolsWhenUnmapped('blah blah blah', []).map((call) => call.name)).toEqual(['get_store_health', 'get_analytics'])
+    expect(ambientToolsWhenUnmapped('Show revenue', parseInfoTools('Show revenue')).map((call) => call.name)).toEqual(['get_analytics'])
+  })
+
+  it('unparseable-but-in-scope store questions get grounded ambient data, not a refusal', async () => {
+    const result = await service('growth').chat({ storeId: tenant, text: 'How healthy is my store?' })
+    expect(result.message.content).toContain('81/100')
+    expect(result.message.contentType).not.toBe('offtopic')
+  })
+
+  it('no orders in DB → honest empty answer, never fake orders', async () => {
+    const noOrders = new InMemoryCommandTools({ search_orders: { count: 0, total: 0, items: [] } })
+    const result = await service('growth', { tools: noOrders }).chat({ storeId: tenant, text: 'Show my recent orders' })
+    expect(result.message.content).toContain('No orders matched')
+    expect(result.message.content).not.toMatch(/#10\d\d/)
+  })
+
+  it('no products synced → honest sync prompt, never fake product names', async () => {
+    const empty = new InMemoryCommandTools({ search_products: { count: 0, items: [] } })
+    const result = await service('growth', { tools: empty }).chat({ storeId: tenant, text: 'Which products are selling best?' })
+    expect(result.message.content).toContain('No products matched')
+    expect(result.message.content).not.toContain('Mug')
+  })
+
+  it('freshness labels ride along on analytics, health, and inventory answers', async () => {
+    const withDays = new InMemoryCommandTools({
+      get_analytics: { currency: 'USD', revenue: 500, previousRevenue: 400, orders: 10, aov: 50, days: 7 },
+      get_inventory_status: { lowStockCount: 2, outOfStockCount: 0, items: [] },
+      get_store_health: { score: 70, label: 'Needs attention' },
+    })
+    const revenue = await service('growth', { tools: withDays }).chat({ storeId: tenant, text: "Show this week's revenue" })
+    expect(revenue.message.content).toContain('last 7 days')
+    expect(revenue.message.content).toContain('as of today')
+    const stock = await service('growth', { tools: withDays }).chat({ storeId: tenant, text: 'Do I have low stock items?' })
+    expect(stock.message.content).toContain('as of today')
+  })
+
+  it('an approval-required preview card names the workflow template and changes nothing until approval', async () => {
+    let created = 0
+    const command = service('commander', {
+      tools: new InMemoryCommandTools({
+        list_workflows: { count: 0, items: [] },
+      }),
+      actions: new InMemoryCommandActions(async () => { created += 1; return { status: 'SUCCESS', result: { id: 'wf-1', name: 'Abandoned Checkout Recovery', status: 'DRAFT' }, rollbackAvailable: false } }),
+    })
+    const preview = await command.chat({ storeId: tenant, text: 'Create an automation for abandoned cart recovery' })
+    expect(preview.message.contentType).toBe('action_preview')
+    expect(preview.message.content).toContain('Nothing has been executed')
+    expect(preview.message.action?.type).toBe('CREATE_WORKFLOW')
+    expect(preview.message.action?.params.template_id).toBe('abandoned-checkout')
+    expect((preview.message.action?.preview as { approval_required?: boolean }).approval_required).toBe(true)
+    expect(preview.message.structuredData?.actions).toEqual(['approve', 'edit', 'cancel'])
+    expect(created).toBe(0)
+    const actionId = preview.message.action!.id!
+    const executed = await command.approveAction(tenant, actionId)
+    expect(executed.executionStatus).toBe('SUCCESS')
+    expect(created).toBe(1)
+    const conversation = await command.conversation(tenant, preview.conversation.id)
+    expect(conversation.messages.some((item) => item.contentType === 'action_result' && item.action?.id === actionId)).toBe(true)
+  })
+
+  it('basic/start/growth action requests get the upgrade prompt wording from the spec', async () => {
+    for (const plan of ['start', 'growth'] as const) {
+      const result = await service(plan).chat({ storeId: tenant, text: 'Create an automation for abandoned cart recovery' })
+      expect(result.message.contentType).toBe('upgrade')
+      expect(result.message.content).toContain('Upgrade Plan')
+      expect(result.message.content).toContain('Commander plan includes')
+    }
+  })
+})
+
+describe('Commander zero-hallucination guards', () => {
+  it('collectEntities pulls every verifiable named entity from tool output', () => {
+    const entities = collectEntities({
+      items: [
+        { id: 'p1', title: 'Coffee Mug', vendor: 'Acme' },
+        { id: 'c1', displayName: 'Ada Lovelace', email: 'ada@example.com' },
+        { orderNumber: '#1001', customer: 'Ada' },
+      ],
+    })
+    expect(entities).toContain('coffee mug')
+    expect(entities).toContain('ada lovelace')
+    expect(entities).toContain('ada@example.com')
+    expect(entities).toContain('#1001')
+    expect(entities).toContain('acme')
+  })
+
+  it('groundCommandText rejects emails that never appeared in the tool results', () => {
+    const safe = groundCommandText('Revenue is $10 and I emailed ada@example.com.', [10], ['coffee mug', 'ada@example.com'])
+    expect(safe).toContain('ada@example.com')
+    const blocked = groundCommandText('Revenue is $10 and I emailed ghost@example.com.', [10], ['coffee mug', 'ada@example.com'])
+    expect(blocked).not.toContain('ghost@example.com')
+    expect(blocked).toContain('not present in the live tool results')
+  })
+
+  it('numbers sourced from tools pass while invented figures are still rejected', () => {
+    expect(groundCommandText('AOV is $213.', [213, 8940])).toContain('$213')
+    expect(groundCommandText('AOV will hit $500 next week.', [213, 8940])).toContain('not supported')
+  })
+
+  it('the rewritten system prompt establishes Commander identity, allowlist scope, and zero-hallucination rules', () => {
+    const prompt = buildSystemPrompt({ storeId: tenant, shop: 'demo.myshopify.com', plan: 'commander', actionsEnabled: true })
+    expect(prompt).toContain('Commander')
+    expect(prompt).toContain('ALLOWLIST-FIRST')
+    expect(prompt).toContain('ZERO HALLUCINATION RULES')
+    expect(prompt).toContain('ACTION APPROVAL FLOW')
+    expect(prompt).toContain("I'm your store's Commander")
+    expect(prompt).toContain('demo.myshopify.com')
+    const locked = buildSystemPrompt({ storeId: tenant, plan: 'start', actionsEnabled: false })
+    expect(locked).toContain('answers-only')
+    expect(locked).toContain('This action requires the Commander plan. Upgrade to unlock full store control.')
   })
 })
