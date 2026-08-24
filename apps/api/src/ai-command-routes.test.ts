@@ -9,7 +9,7 @@ import type { AiCommandPageMetricsProvider } from './ai-command-page-metrics.js'
 
 const tenant = storeId('store-1')
 
-function commandService(plan: 'trial' | 'start' | 'growth' | 'commander') {
+function commandService(plan: 'trial' | 'start' | 'growth' | 'commander', billingState?: string) {
   return new AiCommandService({
     repository: new InMemoryAiCommandRepository(plan),
     tools: new InMemoryCommandTools({
@@ -25,12 +25,13 @@ function commandService(plan: 'trial' | 'start' | 'growth' | 'commander') {
       return { status: 'FAILED', result: { message: 'Backend did not confirm success.' }, rollbackAvailable: false }
     }),
     planFor: async () => plan,
+    ...(billingState !== undefined ? { stateFor: async () => billingState } : {}),
     now: () => Date.parse('2026-08-18T12:00:00.000Z'),
   })
 }
 
-async function withServer<T>(plan: 'trial' | 'start' | 'growth' | 'commander', handler: (base: string) => Promise<T>, pageMetrics?: AiCommandPageMetricsProvider): Promise<T> {
-  const app = createApi({ logger: new Logger(), readinessChecks: [], aiCommand: { service: commandService(plan), ...(pageMetrics ? { pageMetrics } : {}) } })
+async function withServer<T>(plan: 'trial' | 'start' | 'growth' | 'commander', handler: (base: string) => Promise<T>, pageMetrics?: AiCommandPageMetricsProvider, billingState?: string): Promise<T> {
+  const app = createApi({ logger: new Logger(), readinessChecks: [], aiCommand: { service: commandService(plan, billingState), ...(pageMetrics ? { pageMetrics } : {}) } })
   const server = createServer(app)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -117,6 +118,62 @@ describe('AI Command API', () => {
     expect(history.status).toBe(200)
     const historyBody = await history.json() as { data: readonly { usageDate: string; commandsUsed: number }[] }
     expect(historyBody.data.every((row) => Number.isInteger(row.commandsUsed) && row.commandsUsed >= 0)).toBe(true)
+  }))
+
+  it('trial-expired stores get the upgrade message instead of data, over HTTP and SSE', async () => await withServer('trial', async (base) => {
+    const plain = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'What is my revenue this month?' }) })
+    expect(plain.status).toBe(200)
+    const body = await plain.json() as { data: { message: { contentType: string; content: string; structuredData: { type: string } }; usage: { commandsUsed: number } } }
+    expect(body.data.message.contentType).toBe('upgrade')
+    expect(body.data.message.content).toContain('trial has expired')
+    expect(body.data.message.content).not.toContain('$500')
+    expect(body.data.message.structuredData.type).toBe('billing_blocked')
+    // No daily command is consumed while billing blocks the store.
+    expect(body.data.usage.commandsUsed).toBe(0)
+
+    const streamed = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Tell me a joke', stream: true }) })
+    expect(streamed.status).toBe(200)
+    const sse = await streamed.text()
+    expect(sse).toContain('trial has expired')
+    expect(sse).not.toContain('$500')
+  }, undefined, 'TRIAL_EXPIRED'))
+
+  it('a commander store with a cancelled subscription cannot chat or approve actions', async () => await withServer('commander', async (base) => {
+    const refused = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Tag new customers as vip' }) })
+    const body = await refused.json() as { data: { message: { contentType: string; content: string } } }
+    expect(body.data.message.contentType).toBe('upgrade')
+    expect(body.data.message.content.toLowerCase()).toContain('cancelled')
+    expect(body.data.message.content).not.toContain('Nothing has been executed')
+  }, undefined, 'CANCELLED'))
+
+  it('commander plan with an ACTIVE billing state still previews actions end-to-end', async () => await withServer('commander', async (base) => {
+    const response = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'Tag new customers as vip' }) })
+    const body = await response.json() as { data: { message: { contentType: string; action: { id: string }; structuredData: { data: { approval_required?: boolean } } } } }
+    expect(body.data.message.contentType).toBe('action_preview')
+    expect(body.data.message.structuredData.data.approval_required).toBe(true)
+    const approved = await fetch(`${base}/ai-command/actions/${body.data.message.action.id}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant }) })
+    expect(approved.status).toBe(200)
+  }, undefined, 'ACTIVE_MONTHLY'))
+
+  it('out-of-scope chat is refused politely over HTTP with the Commander template', async () => await withServer('growth', async (base) => {
+    for (const text of ["What's the weather in Delhi?", 'Who is the PM of America?', 'Write me a JavaScript function', 'Tell me a joke', 'How to build a Shopify theme?', 'Give me stock market advice']) {
+      const response = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text }) })
+      expect(response.status).toBe(200)
+      const body = await response.json() as { data: { message: { contentType: string; content: string } } }
+      expect(body.data.message.contentType).toBe('offtopic')
+      expect(body.data.message.content).toContain("I'm your store's Commander")
+      expect(body.data.message.content).toContain('ProfitPilot features')
+      expect(body.data.message.content).not.toContain('$500')
+    }
+  }))
+
+  it('capability discovery is store-specific and plan-aware over HTTP', async () => await withServer('start', async (base) => {
+    const response = await fetch(`${base}/ai-command/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: tenant, text: 'What can you help me with?' }) })
+    const body = await response.json() as { data: { message: { contentType: string; content: string; structuredData: { type: string; data: { actionsLocked: boolean; upgradePrompt: string | null } } } } }
+    expect(body.data.message.structuredData.type).toBe('capability_list')
+    expect(body.data.message.content).toContain('Commander plan only')
+    expect(body.data.message.structuredData.data.actionsLocked).toBe(true)
+    expect(body.data.message.structuredData.data.upgradePrompt).toContain('Commander plan')
   }))
 
   it('returns all real-store page metrics from one no-cache endpoint', async () => {

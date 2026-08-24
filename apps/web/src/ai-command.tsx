@@ -835,6 +835,7 @@ function StructuredBlock({ data, onPrompt, onNavigateSection }: { data: NonNulla
   if (data.type === 'analytics') return <AnalyticsBlock data={record} source={data.source} />
   if (data.type === 'store_health') return <HealthBlock data={record} source={data.source} />
   if (data.type === 'growth_plan') return <GrowthPlanBlock data={record} source={data.source} onPrompt={onPrompt} />
+  if (data.type === 'capability_list') return <CapabilityBlock data={record} onPrompt={onPrompt} />
   if (data.type === 'instructional') return <InstructionalBlock data={record} onPrompt={onPrompt} onNavigateSection={onNavigateSection} />
   if (data.type === 'action_blocked') return <ActionBlockedBlock data={record} />
 
@@ -935,6 +936,7 @@ const STRUCTURED_LABELS: Readonly<Record<string, string>> = {
   action_blocked: 'Permission required',
   growth_plan: 'Growth plan',
   instructional: 'How-to guide',
+  capability_list: 'What Commander can do',
 }
 
 function GrowthPlanBlock({ data, source, onPrompt }: { data: Record<string, unknown>; source: string | undefined; onPrompt: (value: string) => void }) {
@@ -1060,6 +1062,46 @@ function HealthBlock({ data, source }: { data: Record<string, unknown>; source: 
         <small>Computed from live analytics and inventory.</small>
         <SourceBadge source={source} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Capability discovery card ("What can you do?") — Commander lists the data
+ * it can answer from this store, the actions it can run, and marks the action
+ * set as Commander-plan-only when the current plan cannot execute. Prompt
+ * chips send the suggested command straight back into the composer.
+ */
+function CapabilityBlock({ data, onPrompt }: { data: Record<string, unknown>; onPrompt: (value: string) => void }) {
+  const store = typeof data.store === 'string' && data.store.trim() ? data.store : 'your store'
+  const planLabel = typeof data.planLabel === 'string' && data.planLabel.trim() ? data.planLabel : 'Trial'
+  const answers = Array.isArray(data.answers) ? data.answers.map(String) : []
+  const actions = Array.isArray(data.actions) ? data.actions.map(String) : []
+  const locked = data.actionsLocked === true
+  const upgradePrompt = typeof data.upgradePrompt === 'string' ? data.upgradePrompt : null
+  const prompts = Array.isArray(data.prompts) ? data.prompts.filter(isRecord) : []
+  const section = (title: string, items: readonly string[]) => (
+    <>
+      <p className="aic-instructional-note"><strong>{title}</strong></p>
+      <ul className="aic-growth-priorities">{items.map((item) => <li key={item}>{item}</li>)}</ul>
+    </>
+  )
+  return (
+    <div className="aic-instructional">
+      <div className="aic-instructional-head"><span className="aic-instructional-icon"><Command size={15} /></span><strong>Commander for {store}</strong></div>
+      <p className="aic-instructional-intro">Your plan: <strong>{planLabel}</strong></p>
+      {answers.length > 0 && section('Answers from your real store data', answers)}
+      {actions.length > 0 && section(locked ? 'Store actions — Commander plan only' : 'Full store control (actions)', actions)}
+      {locked && upgradePrompt && <p className="aic-instructional-note">{upgradePrompt}</p>}
+      {prompts.length > 0 && (
+        <div className="aic-instructional-ctas">
+          {prompts.map((prompt, index) => {
+            const label = typeof prompt.label === 'string' ? prompt.label : 'Try it'
+            const command = typeof prompt.command === 'string' ? prompt.command : ''
+            return <Button key={`${label}-${index}`} type="button" className="aic-instructional-cta" disabled={!command} onClick={() => onPrompt(command)}>{label}<ChevronRight size={13} /></Button>
+          })}
+        </div>
+      )}
     </div>
   )
 }
