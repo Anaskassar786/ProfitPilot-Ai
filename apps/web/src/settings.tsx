@@ -5,7 +5,7 @@
  * Every control either writes to a real API, persists locally for this store,
  * or is honestly plan-gated. Nothing is decorative.
  */
-import { Button, AppSaveBar, RichButton } from './polaris-ui.js'
+import { Button, AppSaveBar, RichButton, SimpleModal } from './polaris-ui.js'
 import { Page } from '@shopify/polaris'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -28,11 +28,13 @@ import {
   Sun,
   Trash2,
   Users,
+  WalletCards,
   Settings as SettingsIcon,
 } from './icons.js'
 import type { LucideIcon } from './icons.js'
 import {
   ApiClientError,
+  cancelBillingSubscription,
   exportRows,
   fetchBilling,
   fetchCoachPreferences,
@@ -204,6 +206,15 @@ export function SettingsPage({ context, lightMode, onTheme, onToast, onNavigateB
           )}
           {tab === 'team' && (
             <TeamTab context={context} plan={plan} onUpgrade={goBilling} />
+          )}
+          {tab === 'billing' && (
+            <BillingSettingsTab
+              context={context}
+              account={account}
+              onAccount={setAccount}
+              onToast={onToast}
+              onManagePlans={goBilling}
+            />
           )}
           {tab === 'security' && (
             <SecurityTab
@@ -765,6 +776,66 @@ function SecurityTab({
   )
 }
 
+function BillingSettingsTab({
+  context,
+  account,
+  onAccount,
+  onToast,
+  onManagePlans,
+}: {
+  context: WorkspaceContext
+  account: BillingAccount | null
+  onAccount: (account: BillingAccount | null) => void
+  onToast: (message: string, kind?: SettingsToastKind) => void
+  onManagePlans: () => void
+}) {
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const subscription = account?.subscription ?? null
+  const activePaid = subscription?.state === 'ACTIVE_MONTHLY' || subscription?.state === 'ACTIVE_ANNUAL'
+  const planName = subscription?.plan ? subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1).toLowerCase() : 'paid'
+
+  const cancel = async () => {
+    if (!context.storeId || !activePaid) return
+    setCancelling(true)
+    try {
+      const result = await cancelBillingSubscription(context.storeId)
+      onAccount(account ? { ...account, subscription: result.subscription } : account)
+      setCancelOpen(false)
+      onToast('Subscription cancelled', 'success')
+      window.dispatchEvent(new Event('profitpilot:billing-updated'))
+    } catch (error: unknown) {
+      onToast(errorMessage(error), 'error')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  return (
+    <>
+      <SettingsPanel icon={WalletCards} title="Billing" description="Manage your Shopify-billed ProfitPilot subscription.">
+        <SettingRow label={`${planName} plan`} description={subscription?.currentPeriodEnd ? `Current period ends ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}.` : 'Choose a plan securely through Shopify.'}>
+          <span className={`settings-badge ${activePaid ? 'verified' : ''}`}>{subscription?.state === 'CANCELLED' ? 'Cancelled' : activePaid ? 'Active' : 'No active plan'}</span>
+        </SettingRow>
+        <div className="settings-actions-row">
+          {activePaid && <Button type="button" className="button danger" onClick={() => setCancelOpen(true)}>Cancel Subscription</Button>}
+          {!activePaid && <Button type="button" className="button primary" onClick={onManagePlans}>Re-subscribe / Upgrade</Button>}
+          {activePaid && <Button type="button" className="button secondary" onClick={onManagePlans}>View plans</Button>}
+        </div>
+      </SettingsPanel>
+      <SimpleModal
+        open={cancelOpen}
+        title="Cancel ProfitPilot Subscription?"
+        onClose={() => !cancelling && setCancelOpen(false)}
+        primaryAction={{ content: 'Confirm Cancellation', destructive: true, loading: cancelling, onAction: () => void cancel() }}
+        secondaryActions={[{ content: 'Keep Plan', onAction: () => setCancelOpen(false) }]}
+      >
+        <p>Are you sure you want to cancel your {planName} plan? You will retain access until the end of your current billing period.</p>
+      </SimpleModal>
+    </>
+  )
+}
+
 function DangerTab({
   context,
   onToast,
@@ -956,6 +1027,7 @@ function tabIcon(tab: SettingsTab): LucideIcon {
   if (tab === 'notifications') return Bell
   if (tab === 'ai') return Bot
   if (tab === 'team') return Users
+  if (tab === 'billing') return WalletCards
   if (tab === 'security') return ShieldCheck
   if (tab === 'danger') return Trash2
   return SettingsIcon

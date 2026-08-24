@@ -658,6 +658,14 @@ export function createBillingCharge(storeId: string, plan: BillingPlan['code'], 
   }, fetcher)
 }
 
+export function cancelBillingSubscription(storeId: string, fetcher: Fetcher = fetch): Promise<Readonly<{ message: string; subscription: NonNullable<BillingAccount['subscription']> }>> {
+  return requestJson(`/billing/cancel?shopId=${encodeURIComponent(storeId)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  }, fetcher)
+}
+
 export function verifyBillingCharge(storeId: string, chargeId: string, extras: Readonly<{ plan?: BillingPlan['code']; interval?: 'MONTHLY' | 'ANNUAL' }> = {}, fetcher: Fetcher = fetch): Promise<Readonly<{ charge?: Readonly<Record<string, unknown>>; subscription?: BillingAccount['subscription'] } & RecurringChargeLike>> {
   return requestJson(`/billing/charge/verify?shopId=${encodeURIComponent(storeId)}`, {
     method: 'POST',

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, openAdminUrlInNewTab, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, openAdminUrlInNewTab, redirectToShopifyCheckout, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -163,6 +163,22 @@ describe('ensureEmbeddedAppBridgeRedirect', () => {
     expect(redirected).toBe(true)
     expect(replace).toHaveBeenCalledWith('https://admin.shopify.com/store/demo/apps/client-id/recommendations?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvZGVtbw==')
     Object.defineProperty(window, 'location', { configurable: true, value: original })
+  })
+})
+
+describe('redirectToShopifyCheckout', () => {
+  it('uses App Bridge top-level navigation from an embedded iframe', () => {
+    const navigate = vi.fn()
+    Object.defineProperty(window, 'top', { configurable: true, value: {} })
+    ;(window as unknown as { shopify: unknown }).shopify = { navigate }
+    redirectToShopifyCheckout('https://admin.shopify.com/store/demo/charges/1')
+    expect(navigate).toHaveBeenCalledWith({ url: 'https://admin.shopify.com/store/demo/charges/1', target: '_top' })
+    Object.defineProperty(window, 'top', { configurable: true, value: window.self })
+    delete (window as unknown as { shopify?: unknown }).shopify
+  })
+
+  it('rejects non-HTTPS checkout URLs', () => {
+    expect(() => redirectToShopifyCheckout('http://example.com/charge')).toThrow('HTTPS')
   })
 })
 

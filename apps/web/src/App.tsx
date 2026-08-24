@@ -84,7 +84,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
+import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -132,6 +132,7 @@ import { GrowthIqNavIcon } from './growthiq-logo.js'
 import { AiCommandIcon } from './ai-command-logo.js'
 import { SettingsPage } from './settings.js'
 import { SETTINGS_EVENT, readWorkspaceSettings } from './settings-model.js'
+import { redirectToShopifyCheckout } from './shopify-app-bridge.js'
 
 /* ═══════════════════════════════════════════════════════════════════════
  * TODO(jarvis): re-enable when voice is ready.
@@ -381,6 +382,7 @@ export default function App() {
   //   'unavailable' — bootstrap failed transiently; offer a retry, never an
   //                   "install from scratch" flow.
   const [authState, setAuthState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [verifyingSubscription, setVerifyingSubscription] = useState(false)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
   /** True only when the bootstrap settled and the app is genuinely not
@@ -515,12 +517,16 @@ export default function App() {
     const chargeId = params.get('charge_id')?.trim() || params.get('chargeId')?.trim()
     if (!chargeId || !context.storeId) return
     let cancelled = false
+    setVerifyingSubscription(true)
     void (async () => {
       try {
         await initializeCsrf()
-        await verifyBillingCharge(context.storeId!, chargeId)
+        const verified = await verifyBillingCharge(context.storeId!, chargeId)
         if (cancelled) return
-        showToast('Plan activated successfully!', 'success')
+        const activatedPlan = verified.subscription?.plan
+          ? verified.subscription.plan.charAt(0).toUpperCase() + verified.subscription.plan.slice(1).toLowerCase()
+          : 'your plan'
+        showToast(`🎉 Subscription Active! Welcome to ${activatedPlan}!`, 'success')
         params.delete('charge_id')
         params.delete('chargeId')
         const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
@@ -528,6 +534,8 @@ export default function App() {
         window.dispatchEvent(new Event('profitpilot:billing-updated'))
       } catch (error: unknown) {
         if (!cancelled) showToast(errorMessage(error), 'error')
+      } finally {
+        if (!cancelled) setVerifyingSubscription(false)
       }
     })()
     return () => { cancelled = true }
@@ -798,7 +806,12 @@ export default function App() {
       <AppTitleBar title={pageMeta[activePage].title} />
       <HeaderNavigation activePage={activePage} onNavigate={navigate} />
       <main id="main-content" tabIndex={-1} className="page-scroll">
-          {showGlobalBanners && (
+          {verifyingSubscription && (
+            <div className="auth-gate" role="status" aria-live="polite">
+              <LoadingSpinner label="Verifying your subscription…" />
+            </div>
+          )}
+          {!verifyingSubscription && showGlobalBanners && (
             <Layout>
               <Layout.Section>
                 {(data.loadState === 'offline' || data.loadState === 'partial') && <OfflineBanner error={data.error} partial={data.loadState === 'partial'} onRetry={() => void loadData()} />}
@@ -816,7 +829,7 @@ export default function App() {
               </Layout.Section>
             </Layout>
           )}
-          {(authState === 'ready' || urlContext.storeId) ? <PageRouter
+          {!verifyingSubscription && ((authState === 'ready' || urlContext.storeId) ? <PageRouter
             active={activePage}
             context={context}
             data={data}
@@ -834,7 +847,7 @@ export default function App() {
             onTheme={() => setLightMode((value) => !value)}
             onOpenJarvis={() => setJarvisOpen(true)}
             workspaceSettings={workspacePrefs}
-          /> : <div className="auth-gate"><LoadingSpinner label="Connecting your Shopify store…" /></div>}
+          /> : <div className="auth-gate"><LoadingSpinner label="Connecting your Shopify store…" /></div>)}
       </main>
       {/* TODO(jarvis): re-enable when voice is ready — JarvisExperience mount */}
       {/* <JarvisExperience open={jarvisOpen} context={context} page={activePage} workspaceSettings={workspacePrefs} onOpen={() => setJarvisOpen(true)} onClose={() => setJarvisOpen(false)} onEvidence={(evidence) => { setSelectedRecommendation(null); setJarvisEvidence(evidence ?? null); setEvidenceOpen(true) }} onToast={showToast} onPreferenceChange={setJarvisPreference} onNavigate={(page) => navigate(page as SectionId)} /> */}
@@ -1306,6 +1319,8 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const [roiPeriod, setRoiPeriod] = useState<'this_month' | 'last_month' | 'all_time'>('this_month')
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [loading, setLoading] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelLoading, setCancelLoading] = useState(false)
 
   const reload = async () => {
     if (!context.storeId) return
@@ -1351,15 +1366,37 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
   const giftExpired = giftRecord !== null && (giftRecord.expiresAt ?? 0) <= now
   const trialExpired = account?.trial?.state === 'EXPIRED' && !giftActive
   const isGift = giftActive
+  const activePaid = account?.subscription?.state === 'ACTIVE_MONTHLY' || account?.subscription?.state === 'ACTIVE_ANNUAL'
+
+  const cancelSubscription = async () => {
+    if (!context.storeId || !activePaid) return
+    setCancelLoading(true)
+    try {
+      const result = await cancelBillingSubscription(context.storeId)
+      setAccount((current) => current ? { ...current, subscription: result.subscription } : current)
+      setCancelOpen(false)
+      onToast('Subscription cancelled', 'success')
+      window.dispatchEvent(new Event('profitpilot:billing-updated'))
+    } catch (error: unknown) {
+      onToast(errorMessage(error), 'error')
+    } finally {
+      setCancelLoading(false)
+    }
+  }
 
   const startCharge = async (plan: 'START' | 'GROWTH' | 'COMMANDER') => {
     if (!context.storeId) { onToast('Connect Shopify before choosing a plan.', 'info'); return }
     if (activeTier === plan.toLowerCase() && !isGift) return
     setUpgradeLoading(plan)
     try {
-      const charge = await createBillingCharge(context.storeId, plan, billingInterval, `${window.location.origin}/billing`)
+      const returnUrl = new URL('/billing', window.location.origin)
+      for (const key of ['host', 'shop', 'storeId']) {
+        const value = new URLSearchParams(window.location.search).get(key)
+        if (value) returnUrl.searchParams.set(key, value)
+      }
+      const charge = await createBillingCharge(context.storeId, plan, billingInterval, returnUrl.toString())
       if (charge.confirmationUrl) {
-        window.location.assign(charge.confirmationUrl)
+        redirectToShopifyCheckout(charge.confirmationUrl)
         return
       }
       onToast(charge.message ?? `Upgraded to ${plan.charAt(0) + plan.slice(1).toLowerCase()}. Billed securely through Shopify when you upgrade.`, 'success')
@@ -1477,11 +1514,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                 )}
               </div>
             </div>
-            <div className="billing-interval-toggle" role="group" aria-label="Billing interval">
-              <Button type="button" className={billingInterval === 'MONTHLY' ? 'active' : ''} onClick={() => setBillingInterval('MONTHLY')}>Monthly</Button>
-              <Button type="button" className={billingInterval === 'ANNUAL' ? 'active' : ''} onClick={() => setBillingInterval('ANNUAL')}>
-                Annual <span className="billing-save-badge">2 Months Free</span>
-              </Button>
+            <div>
+              <div className="billing-interval-toggle" role="group" aria-label="Billing interval">
+                <Button type="button" className={billingInterval === 'MONTHLY' ? 'active' : ''} onClick={() => setBillingInterval('MONTHLY')}>Monthly</Button>
+                <Button type="button" className={billingInterval === 'ANNUAL' ? 'active' : ''} onClick={() => setBillingInterval('ANNUAL')}>
+                  Annual <span className="billing-save-badge">2 Months Free</span>
+                </Button>
+              </div>
+              {activePaid && <Button type="button" tone="critical" variant="plain" onClick={() => setCancelOpen(true)}>Cancel Subscription</Button>}
+              {account?.subscription?.state === 'CANCELLED' && <Button type="button" variant="primary" onClick={() => document.querySelector('.billing-plans-section')?.scrollIntoView({ behavior: 'smooth' })}>Re-subscribe / Upgrade</Button>}
             </div>
           </section>
 
@@ -1495,7 +1536,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
             </div>
             <div className="billing-plan-grid">
               {displayPlans.map((plan) => {
-                const isCurrent = activeTier === plan.tier && !isGift
+                const isCurrent = activePaid && activeTier === plan.tier && !isGift
                 const price = billingInterval === 'ANNUAL' ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice
                 const annualSave = plan.monthlyPrice * 12 - plan.annualPrice
                 const features = (plan.features ?? []).filter((feature) => !feature.toLowerCase().includes('jarvis') && !feature.toLowerCase().includes('campaign'))
@@ -1694,6 +1735,15 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
           </section>
         </div>
       )}
+      <SimpleModal
+        open={cancelOpen}
+        title="Cancel ProfitPilot Subscription?"
+        onClose={() => !cancelLoading && setCancelOpen(false)}
+        primaryAction={{ content: 'Confirm Cancellation', destructive: true, loading: cancelLoading, onAction: () => void cancelSubscription() }}
+        secondaryActions={[{ content: 'Keep Plan', onAction: () => setCancelOpen(false) }]}
+      >
+        <p>Are you sure you want to cancel your {labelForPlan(activeTier)} plan? You will retain access until the end of your current billing period.</p>
+      </SimpleModal>
     </PageLayout>
   )
 }

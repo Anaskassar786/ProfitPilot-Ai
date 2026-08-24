@@ -51,7 +51,8 @@ function setupFetch() {
     const url = String(input)
     const method = (init?.method ?? 'GET').toUpperCase()
     if (url.startsWith('/security/csrf')) return json({ csrfToken: 'test-csrf' })
-    if (url.startsWith('/billing?')) return json({ subscription: { plan: 'START', state: 'ACTIVE', currentPeriodEnd: Date.parse('2026-09-01'), version: 1 }, trial: null, gift: null })
+    if (url.startsWith('/billing?')) return json({ subscription: { plan: 'START', state: 'ACTIVE_MONTHLY', currentPeriodEnd: Date.parse('2026-09-01'), version: 1 }, trial: null, gift: null })
+    if (url.startsWith('/billing/cancel') && method === 'POST') return json({ message: 'Subscription cancelled successfully.', subscription: { plan: 'START', state: 'CANCELLED', currentPeriodEnd: Date.parse('2026-09-01'), version: 2 } })
     if (url.startsWith('/sync/status')) return json({ storeId: 's1', shopDomain: 'commander-pilot.myshopify.com', registered: true, hasAccessToken: true, circuit: null, canSync: true })
     if (url.startsWith('/settings/merchant-email') && method === 'GET') {
       return json(savedEmail ? { shopId: savedEmail.shopId, merchantEmail: savedEmail.email, fromName: savedEmail.fromName, verified, verificationSentAt: Date.now(), verifiedAt: verified ? Date.now() : null } : null)
@@ -183,16 +184,34 @@ function tabButton(container: HTMLElement, label: string): HTMLButtonElement {
       expect(consoleErrors).toHaveLength(0)
     })
 
-    it('navigates all six tabs and highlights the active one', async () => {
+    it('navigates all seven tabs and highlights the active one', async () => {
       const container = await mount(true)
-      for (const label of ['Notifications', 'AI Preferences', 'Team Members', 'Security', 'Danger Zone', 'General']) {
+      for (const label of ['Notifications', 'AI Preferences', 'Team Members', 'Billing', 'Security', 'Danger Zone', 'General']) {
         await act(async () => { tabButton(container, label).click() })
         expect(tabButton(container, label).className).toContain('active')
       }
     })
   })
 
-  describe('2. General tab', () => {
+  describe('2. Billing tab', () => {
+    it('renders the cancellation confirmation and triggers the cancel API', async () => {
+      const container = await mount(true)
+      await act(async () => { tabButton(container, 'Billing').click() })
+      const cancel = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Cancel Subscription')) as HTMLButtonElement
+      expect(cancel).toBeTruthy()
+      await act(async () => { cancel.click() })
+      expect(container.textContent).toContain('Cancel ProfitPilot Subscription?')
+      expect(container.textContent).toContain('retain access until the end of your current billing period')
+      const confirm = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Confirm Cancellation')) as HTMLButtonElement
+      await act(async () => { confirm.click() })
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(toasts).toContain('Subscription cancelled')
+      expect(container.textContent).toContain('Re-subscribe / Upgrade')
+      expect(window.fetch).toHaveBeenCalledWith(expect.stringContaining('/billing/cancel?shopId=s1'), expect.objectContaining({ method: 'POST' }))
+    })
+  })
+
+  describe('3. General tab', () => {
     it('shows the real Shopify store as a clickable admin link and hides fabricated names', async () => {
       const container = await mount(true)
       expect(container.textContent).toContain('commander-pilot.myshopify.com')

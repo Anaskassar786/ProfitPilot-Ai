@@ -20,10 +20,10 @@ async function withServer<T>(handler: (base: string) => Promise<T>): Promise<T> 
 }
 
 /** Builds the billing API over a caller-provided repository + trial/gift store. */
-async function withLedgerServer<T>(repository: InMemoryBillingRepository, trials: TrialAndGiftLedger, handler: (base: string) => Promise<T>): Promise<T> {
+async function withLedgerServer<T>(repository: InMemoryBillingRepository, trials: TrialAndGiftLedger, handler: (base: string) => Promise<T>, billingOverrides: Partial<BillingRouteDependencies> = {}): Promise<T> {
   const funnel = new FunnelLedger()
   const roi: RoiMetrics = { attributedRevenue: 0, aiCostDollars: 0, netReturn: 0, multiple: null }
-  const app = createApi({ logger: new Logger(), readinessChecks: [], billing: { repository, trials, funnel, createCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'pending', confirmationUrl: 'https://confirm', billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), verifyCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'active', confirmationUrl: null, billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), usage: async () => [], roi: async () => roi } })
+  const app = createApi({ logger: new Logger(), readinessChecks: [], billing: { repository, trials, funnel, createCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'pending', confirmationUrl: 'https://confirm', billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), verifyCharge: async () => ({ id: 'charge-1', name: 'GROWTH MONTHLY', price: '149', status: 'active', confirmationUrl: null, billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), cancelCharge: async (_shopId, subscriptionId) => ({ id: subscriptionId, name: 'GROWTH MONTHLY', price: '149', status: 'cancelled', confirmationUrl: null, billingOn: null, trialDays: 14, test: true, createdAt: 'now' }), usage: async () => [], roi: async () => roi, ...billingOverrides } })
   const server = createServer(app); await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error('No address')
   try { return await handler(`http://127.0.0.1:${address.port}`) } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
 }
@@ -38,6 +38,21 @@ describe('F5 billing API routes', () => {
   it('rejects gift redemption without code', async () => await withServer(async (base) => expect((await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', body: '{}' })).status).toBe(400)))
   it('validates missing shop context', async () => await withServer(async (base) => expect((await fetch(`${base}/billing`)).status).toBe(400)))
   it('verifies a created charge and stores active state', async () => await withServer(async (base) => { const response = await fetch(`${base}/billing/charge/verify?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chargeId: 'charge-1', plan: 'GROWTH', interval: 'MONTHLY' }) }); expect(response.status).toBe(200); expect((await (await fetch(`${base}/billing?shopId=s`)).json()).data.subscription.state).toBe('ACTIVE_MONTHLY') }))
+  it('cancels the active tenant subscription through Shopify and persists CANCELLED', async () => {
+    const repository = new InMemoryBillingRepository()
+    await repository.put({ storeId: 's', plan: 'growth', state: 'ACTIVE_MONTHLY', currentPeriodEnd: Date.now() + 86_400_000, version: 3, interval: 'MONTHLY', chargeId: 'gid://shopify/AppSubscription/123' })
+    await withLedgerServer(repository, giftLedger(), async (base) => {
+      const response = await fetch(`${base}/billing/cancel?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      expect(response.status).toBe(200)
+      const payload = await response.json()
+      expect(payload.data.message).toBe('Subscription cancelled successfully.')
+      expect(payload.data.subscription.state).toBe('CANCELLED')
+    })
+    expect((await repository.get('s'))?.state).toBe('CANCELLED')
+  })
+  it('rejects cancellation when no active subscription exists', async () => await withServer(async (base) => {
+    expect((await fetch(`${base}/billing/cancel?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(409)
+  }))
   it('verifies a charge_id-only return payload and activates the subscription', async () => await withServer(async (base) => {
     const response = await fetch(`${base}/billing/charge/verify?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chargeId: 'gid://shopify/AppSubscription/1' }) })
     expect(response.status).toBe(200)
@@ -45,6 +60,18 @@ describe('F5 billing API routes', () => {
     expect(account.state).toBe('ACTIVE_MONTHLY')
     expect(account.chargeId).toBe('charge-1')
   }))
+  it('rejects an invalid empty charge ID without mutating billing state', async () => await withServer(async (base) => {
+    const response = await fetch(`${base}/billing/charge/verify?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chargeId: '   ' }) })
+    expect(response.status).toBe(400)
+  }))
+  it('rejects a Shopify-invalid charge ID and does not activate it', async () => {
+    const repository = new InMemoryBillingRepository()
+    await withLedgerServer(repository, giftLedger(), async (base) => {
+      const response = await fetch(`${base}/billing/charge/verify?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chargeId: '999999999' }) })
+      expect(response.status).toBe(409)
+    }, { verifyCharge: async () => { throw new ShopifyBillingError(409, 'Shopify charge verification failed') } })
+    expect(await repository.get('s')).toBeNull()
+  })
   it('rejects a malformed gift code payload', async () => await withServer(async (base) => expect((await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 12 }) })).status).toBe(400)))
   it('rejects an invalid gift code with a 400, not 500', async () => await withServer(async (base) => {
     const response = await fetch(`${base}/billing/gift?shopId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'NOT-A-REAL-CODE' }) })

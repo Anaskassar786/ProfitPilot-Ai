@@ -120,6 +120,43 @@ export function ensureEmbeddedAppBridgeRedirect(search: string = currentSearch()
 }
 
 /**
+ * Escapes the embedded Admin iframe for Shopify's subscription confirmation
+ * page. Shopify checkout sends X-Frame-Options: DENY, so assigning the iframe's
+ * own location produces a blank page. App Bridge navigation is preferred when
+ * available; `_top` is the standards-based fallback.
+ */
+export function redirectToShopifyCheckout(confirmationUrl: string): void {
+  if (typeof window === 'undefined') return
+  let url: URL
+  try {
+    url = new URL(confirmationUrl)
+  } catch {
+    throw new TypeError('Shopify checkout URL must be absolute')
+  }
+  if (url.protocol !== 'https:') throw new TypeError('Shopify checkout URL must use HTTPS')
+
+  let embedded = false
+  try { embedded = window.top !== window.self } catch { embedded = true }
+  if (!embedded) {
+    window.location.assign(url.toString())
+    return
+  }
+
+  try {
+    const bridge = readShopifyGlobal()
+    const navigate = bridge?.navigate
+    if (typeof navigate === 'function') {
+      ;(navigate as (options: Readonly<{ url: string; target: '_top' }>) => void)({ url: url.toString(), target: '_top' })
+      return
+    }
+  } catch {
+    // Fall through to a top-level browser navigation when App Bridge is still
+    // booting or exposes a different navigation surface.
+  }
+  window.open(url.toString(), '_top')
+}
+
+/**
  * Opens a Shopify admin deep link (e.g. /admin/orders/… or /admin/products/…)
  * from the app without navigating the app's own frame.
  *
