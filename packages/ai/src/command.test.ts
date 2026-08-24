@@ -595,6 +595,9 @@ describe('AI Command strategic advisor overhaul', () => {
     expect(detectInstructionalIntent('How do I create an automation?')).toBe('automation')
     expect(detectInstructionalIntent('What can PatternAI do?')).toBe('patternai')
     expect(detectInstructionalIntent('What can you do?')).toBe('generic')
+    expect(detectInstructionalIntent('tum meri help kaise karoge')).toBe('generic')
+    expect(detectInstructionalIntent('kya kar sakte ho')).toBe('generic')
+    expect(detectInstructionalIntent('what can you do for me')).toBe('generic')
     // "Show automation status" is a lookup, not guidance — must not be instructional.
     expect(detectInstructionalIntent('Show automation status')).toBeNull()
     // Growth questions are handled by the growth plan path in the service, not
@@ -610,6 +613,45 @@ describe('AI Command strategic advisor overhaul', () => {
     expect(detectInstructionalIntent('What are my top products?')).toBeNull()
     expect(detectInstructionalIntent('What is my AOV?')).toBeNull()
     expect(detectInstructionalIntent('What are my recent orders?')).toBeNull()
+  })
+
+  it('routes Hinglish and natural-language capability prompts to the capability card without store metrics', async () => {
+    for (const text of ['tum meri help kaise karoge', 'what can you do for me']) {
+      const result = await service('growth').chat({ storeId: tenant, text })
+      expect(result.message.contentType).toBe('structured_data')
+      expect(result.message.structuredData?.type).toBe('instructional')
+      expect(result.message.content).toContain('How ProfitPilot Can Help Your Store')
+      expect(result.message.content).toContain('Create & Manage Discounts')
+      expect(result.message.content).not.toMatch(/\$8,940|81\/100|revenue today/i)
+      expect(result.message.thinkingSteps).not.toContain('Reading live store data...')
+    }
+  })
+
+  it('stages cancel-all automation as a bulk deactivation preview with no order-tool noise', async () => {
+    const calls: string[] = []
+    const seeded = new InMemoryCommandTools({
+      list_workflows: {
+        items: [
+          { id: 'wf-active-1', name: 'Welcome', status: 'ACTIVE' },
+          { id: 'wf-paused', name: 'Win Back', status: 'PAUSED' },
+          { id: 'wf-active-2', name: 'Cart Recovery', enabled: true },
+        ],
+      },
+    })
+    const tools = {
+      run: async (store: typeof tenant, call: Parameters<typeof seeded.run>[1]) => {
+        calls.push(call.name)
+        return seeded.run(store, call)
+      },
+    }
+    const result = await service('commander', { tools }).chat({ storeId: tenant, text: 'cancel all automation' })
+    expect(result.message.contentType).toBe('action_preview')
+    expect(result.message.action?.type).toBe('PAUSE_WORKFLOW')
+    expect(result.message.action?.params.workflow_ids).toEqual(['wf-active-1', 'wf-active-2'])
+    expect(result.message.content).toContain('Action: Deactivate 2 active automations')
+    expect(result.message.structuredData?.actions).toEqual(['approve', 'edit', 'cancel'])
+    expect(calls).toEqual(['list_workflows'])
+    expect(result.message.content).not.toMatch(/orders?|order table/i)
   })
 
   it('answers a "what is my revenue" question from live analytics, not the generic capability guide', async () => {

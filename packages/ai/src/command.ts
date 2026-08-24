@@ -333,7 +333,10 @@ const WRITE_INTENT: Readonly<Record<AiCommandWriteTool, RegExp>> = {
   approve_recommendation: /\b(approve|accept)\b.*\brecommend/i,
   create_workflow: /\b(create|make|build|set up)\b.*\b(workflow|automation)\b/i,
   trigger_workflow: /\b(trigger|run|start)\b.*\b(workflow|automation)\b/i,
-  pause_workflow: /\b(pause|stop|disable|turn off)\b.*\b(workflow|automation)\b/i,
+  // Automation shutdown language is deliberately matched before any read-tool
+  // parsing. In particular, "cancel" belongs to workflow control when its
+  // target is an automation; it must never be interpreted as an order search.
+  pause_workflow: /\b(pause|stop|disable|deactivate|cancel|turn off|shut down)\b.*\b(workflows?|automations?)\b|\b(workflows?|automations?)\b.*\b(pause|stop|disable|deactivate|cancel|turn off|shut down)\b/i,
   resume_workflow: /\b(resume|enable|turn on|unpause)\b.*\b(workflow|automation)\b/i,
   send_notification: /\b(notify|notification|alert me|send a notification)\b/i,
   generate_report: /\b(generate|create|build)\b.*\breport\b/i,
@@ -438,7 +441,12 @@ export function detectGrowthIntent(query: string): boolean {
 
 // "How do I / how to / what is / explain" phrasing that signals the merchant
 // wants guidance on using a feature rather than a data lookup.
-const HOW_TO_TRIGGER = /\b(?:how\s+(?:do|to|can|does|should|would)|set\s?up|create an?|guide me|walk me|explain|what is|what are|what can|tell me about|how does)\b/i
+const HOW_TO_TRIGGER = /\b(?:how\s+(?:do|to|can|does|should|would)|set\s?up|create an?|guide me|walk me|explain|help me|what is|what are|what can|tell me about|how does|kaise\s+help\s+karoge|help\s+kaise\s+karoge|kya\s+kar\s+sakte\s+ho|tum\s+kya\s+karoge)\b/i
+
+// General assistant-capability questions need an explicit fast path. These are
+// intentionally language patterns rather than a broad `help` keyword so
+// "help increase revenue" remains a data-backed growth request.
+const CAPABILITY_TRIGGER = /\b(?:what can you do(?: for me)?|how can you help(?: me)?|what are your capabilities|show (?:me )?(?:your )?capabilities|how to use profitpilot|help me|tum meri help kaise karoge|kya kar sakte ho|tum kya karoge|kaise help karoge)\b/i
 
 const INSTRUCTIONAL_TOPICS: readonly Readonly<{ topic: string; pattern: RegExp }>[] = [
   { topic: 'automation', pattern: /\b(?:automation|automations|automate|workflow|workflows|abandoned cart|win[ -]?back|welcome (?:email|series|flow)|drip|automated email|email (?:automation|flow|sequence|campaign)|broadcast|sequence)\b/i },
@@ -465,19 +473,42 @@ const DATA_LOOKUP_SIGNAL = /\b(?:revenue|sales?|aov|average order value|analytic
 export function detectInstructionalIntent(query: string): string | null {
   const text = query.trim()
   if (!text) return null
-  if (!HOW_TO_TRIGGER.test(text)) return null
+  if (!HOW_TO_TRIGGER.test(text) && !CAPABILITY_TRIGGER.test(text)) return null
+  // An explicit measurable target always wins over general help wording:
+  // "help me with revenue" is not a capabilities prompt.
+  if (DATA_LOOKUP_SIGNAL.test(text)) return null
   for (const entry of INSTRUCTIONAL_TOPICS) {
     if (entry.pattern.test(text)) return entry.topic
   }
-  // A "what is / how much / how many" question about measurable store data is
-  // a lookup, not guidance — fall through so the tools path answers it with
-  // real numbers (e.g. "What is my revenue this month?" → get_analytics).
-  if (DATA_LOOKUP_SIGNAL.test(text)) return null
   return 'generic'
+}
+
+type QueryDomain = 'automation' | 'order' | 'customer' | 'inventory' | 'product' | 'analytics' | null
+
+/** Entity words, not generic verbs such as "cancel", own domain routing. */
+function queryDomain(query: string): QueryDomain {
+  if (/\b(?:automations?|workflows?)\b/i.test(query)) return 'automation'
+  if (/\b(?:orders?|fulfil(?:lment|ment|led|l)?|purchases?)\b/i.test(query)) return 'order'
+  if (/\b(?:customers?|vips?|subscribers?|segments?|churn)\b/i.test(query)) return 'customer'
+  if (/\b(?:inventory|stock(?:out)?|low stock)\b/i.test(query)) return 'inventory'
+  if (/\b(?:products?|catalog|skus?|best[ -]?sellers?)\b/i.test(query)) return 'product'
+  if (/\b(?:revenue|sales?|aov|analytics|metrics?|store health)\b/i.test(query)) return 'analytics'
+  return null
+}
+
+function toolDomain(name: AiCommandToolName): QueryDomain {
+  if (name === 'list_workflows') return 'automation'
+  if (name === 'search_orders') return 'order'
+  if (name === 'search_customers') return 'customer'
+  if (name === 'get_inventory_status') return 'inventory'
+  if (name === 'search_products') return 'product'
+  if (name === 'get_analytics' || name === 'get_store_health') return 'analytics'
+  return null
 }
 
 export function parseInfoTools(query: string): readonly ToolCall[] {
   const normalized = query.toLowerCase()
+  const domain = queryDomain(query)
   const calls: ToolCall[] = []
   const push = (name: AiCommandToolName, params: Readonly<Record<string, unknown>> = {}) => {
     if (!calls.some((call) => call.name === name)) calls.push({ name, params })
@@ -499,9 +530,17 @@ export function parseInfoTools(query: string): readonly ToolCall[] {
     return calls
   }
 
+  // Domain-specific reads are isolated. This also makes the deterministic
+  // fallback safe if an LLM tool planner is unavailable.
+  if (domain === 'automation') return [{ name: 'list_workflows', params: {} }]
+  if (domain === 'order') return [{ name: 'search_orders', params: { query, limit: 20 } }]
+  if (domain === 'customer') return [{ name: 'search_customers', params: { query, limit: 20 } }]
+  if (domain === 'inventory') return [{ name: 'get_inventory_status', params: { filter: /low|out/.test(normalized) ? 'low' : 'all' } }]
+  if (domain === 'product') return [{ name: 'search_products', params: { query, limit: 20 } }]
+
   if (/\b(customers?|vips?|churn|inactive|repeat buyers?|subscribers?)\b/.test(normalized)) push('search_customers', { query, limit: 20 })
   if (/\b(products?|catalog|skus?|best[ -]?sellers?|top products?|underperform)/.test(normalized)) push('search_products', { query, limit: 20 })
-  if (/\b(orders?|fulfil|fulfill|cancel)\b/.test(normalized)) push('search_orders', { query, limit: 20 })
+  if (/\b(orders?|fulfil|fulfill)\b/.test(normalized)) push('search_orders', { query, limit: 20 })
   // Performance summaries / trends are analytics-led so the response can end
   // on a key takeaway rather than a bare health score.
   if (/\b(summari[sz]e|summary|overview|trend|trending|performance|recap|review)\b/.test(normalized)) push('get_analytics', { metric: 'summary', date_range: inferRange(normalized) })
@@ -964,13 +1003,13 @@ type InstructionalGuide = Readonly<{
 }>
 
 const GENERIC_GUIDE: InstructionalGuide = {
-  title: 'What AI Command can do for your store',
-  intro: 'I am your store\'s command center. Ask me anything in plain English (or Hindi) and I answer from your real Shopify data — and on Commander I can take safe, approved actions without you leaving this chat.',
+  title: 'How ProfitPilot Can Help Your Store',
+  intro: 'I am your store\'s command center. Ask in plain English, Hindi, or Hinglish. I can explain features, answer from synced Shopify data, and prepare safe actions that never run before your approval.',
   steps: [
-    'Ask about performance: "What is my revenue this month?" or "Show revenue trend for the last 6 months".',
-    'Ask for strategy: "How can I increase profit?" and I will give you a grounded growth plan with next steps.',
-    'Ask about customers, products, inventory, or automations any time.',
-    'On Commander, ask me to act: "Draft an email to VIP customers" or "Create a 10% discount" — you approve before anything runs.',
+    '1. Create & Manage Discounts — prepare governed discount actions and review them before approval.',
+    '2. Automations & Workflows — create, inspect, trigger, pause, or resume store workflows.',
+    '3. Customer Tagging & VIP Segmentation — find customer segments and preview tagging or outreach actions.',
+    '4. Store Analytics & Inventory Insights — inspect revenue, sales, store health, products, and stock from synced data.',
   ],
   target: 'dashboard',
   ctas: [
@@ -1320,7 +1359,11 @@ export function actionPreviewCopy(type: AiCommandActionType, params: Readonly<Re
   if (type === 'APPROVE_RECOMMENDATION') return `Action: Approve recommendation ${String(params.recommendation_id ?? '')}.`
   if (type === 'CREATE_WORKFLOW') return `Action: Create ${String(params.name ?? 'automation')} from the governed ${String(params.template_id ?? '')} template. It will be saved as a draft until you activate it.`
   if (type === 'TRIGGER_WORKFLOW') return `Action: Trigger workflow ${workflowName(params)}.`
-  if (type === 'PAUSE_WORKFLOW') return `Action: Pause workflow ${workflowName(params)}.`
+  if (type === 'PAUSE_WORKFLOW') {
+    const ids = stringArray(params.workflow_ids)
+    if (ids.length > 0) return `Action: Deactivate ${ids.length} active automation${ids.length === 1 ? '' : 's'}.`
+    return `Action: Deactivate workflow ${workflowName(params)}.`
+  }
   if (type === 'RESUME_WORKFLOW') return `Action: Resume workflow ${workflowName(params)}.`
   if (type === 'SEND_NOTIFICATION') return `Action: Send notification "${String(params.title ?? '')}".`
   if (type === 'GENERATE_REPORT') return `Action: Generate ${String(params.report_type ?? 'weekly')} report.`
@@ -1418,7 +1461,8 @@ export function validateActionPreview(tool: AiCommandWriteTool, params: Readonly
   if (tool === 'tag_customers' && stringArray(params.tags).length === 0) return 'Add a tag name before I prepare this action.'
   if (tool === 'approve_recommendation' && !nonEmptyString(params.recommendation_id)) return 'There is no pending recommendation available to approve.'
   if (tool === 'create_workflow' && !nonEmptyString(params.template_id)) return 'I could not map that request to a safe automation template. Try “Create a low-stock alert automation”.'
-  if ((tool === 'trigger_workflow' || tool === 'pause_workflow' || tool === 'resume_workflow') && !nonEmptyString(params.workflow_id)) return 'I could not identify an automation. Name the workflow you want me to use.'
+  if ((tool === 'trigger_workflow' || tool === 'resume_workflow') && !nonEmptyString(params.workflow_id)) return 'I could not identify an automation. Name the workflow you want me to use.'
+  if (tool === 'pause_workflow' && !nonEmptyString(params.workflow_id) && stringArray(params.workflow_ids).length === 0) return 'No active automations matched this request, so there is nothing to deactivate.'
   if (tool === 'send_notification' && !nonEmptyString(params.message)) return 'A notification message is required.'
   return null
 }
@@ -1967,7 +2011,14 @@ export class AiCommandService {
         user: text,
         tools: AI_COMMAND_TOOL_DEFINITIONS.filter((tool) => !tool.commanderOnly),
       })
-      const calls = generated.toolCalls.filter((call) => !isWriteTool(call.name))
+      const domain = queryDomain(resolvedText)
+      const calls = generated.toolCalls.filter((call) => {
+        if (isWriteTool(call.name)) return false
+        // Once an entity domain is explicit, reject planner calls from every
+        // other domain. This prevents order/customer noise from being appended
+        // to automation answers (and vice versa).
+        return domain === null || toolDomain(call.name) === domain
+      })
       return calls.length > 0 ? calls : parsed
     } catch {
       return parsed
@@ -2097,6 +2148,18 @@ export class AiCommandService {
     const explicitId = /workflow[:\s]+([a-z0-9-]+)/i.exec(text)?.[1]
     const listed = await this.tools.run(storeId, { name: 'list_workflows', params: {} })
     const workflows = listed.ok && isRecord(listed.data) ? arrayOfRecords(listed.data.items ?? listed.data.workflows) : []
+    const bulkPause = /\b(?:all|every|automations|workflows)\b/i.test(text) && /\b(?:pause|stop|disable|deactivate|cancel|turn off|shut down)\b/i.test(text)
+    if (bulkPause) {
+      const active = workflows.filter((workflow) => {
+        const status = String(workflow.status ?? workflow.state ?? '').toUpperCase()
+        return status === 'ACTIVE' || status === 'ENABLED' || workflow.active === true || workflow.enabled === true
+      })
+      return {
+        workflow_ids: active.map((workflow) => String(workflow.id ?? '')).filter(Boolean),
+        workflow_names: active.map((workflow) => String(workflow.name ?? '')).filter(Boolean),
+        active_count: active.length,
+      }
+    }
     if (explicitId) {
       const match = workflows.find((workflow) => String(workflow.id ?? '') === explicitId)
       return { workflow_id: explicitId, workflow_name: match && typeof match.name === 'string' ? match.name : null }
