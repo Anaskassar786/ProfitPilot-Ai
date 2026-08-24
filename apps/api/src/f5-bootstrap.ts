@@ -69,6 +69,7 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
       isProduction: env.NODE_ENV === 'production',
       createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
       verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, plan && interval ? { plan, interval } : undefined),
+      cancelCharge: async (shopId, subscriptionId) => (await billingClient(shopId)).cancelCharge(subscriptionId),
       usage: async (shopId) => usage(f4.database, shopId, giftStore),
       roi: async (shopId) => roi(f4.database, f4.ai, shopId),
       ensureTrial,
@@ -244,6 +245,11 @@ function featureLimit(plan: 'trial' | 'start' | 'growth' | 'commander', feature:
  * 422 when a live charge is requested.
  */
 function billingTestMode(env: Readonly<Record<string, string | undefined>>): boolean | 'auto' {
+  // Never create a real-money charge outside production. SHOPIFY_BILLING_TEST
+  // is the App Store/review-friendly explicit switch; TEST_MODE remains
+  // supported for existing deployments, with auto shop-plan detection as the
+  // safest production default.
+  if (env.NODE_ENV !== 'production' || env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
   const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
   if (value === 'true') return true
   if (value === 'false') return false

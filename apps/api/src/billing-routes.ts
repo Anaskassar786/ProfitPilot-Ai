@@ -64,6 +64,8 @@ export type BillingRouteDependencies = Readonly<{
   funnel: FunnelLedger
   createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>
   verifyCharge: (shopId: string, chargeId: string, plan?: PlanCode, interval?: BillingInterval) => Promise<RecurringCharge>
+  /** Cancels the store's active Shopify AppSubscription. */
+  cancelCharge?: (shopId: string, subscriptionId: string) => Promise<RecurringCharge>
   usage: (shopId: string) => Promise<readonly Readonly<{ feature: string; used: number; limit: number | null }>[]>
   roi: (shopId: string) => Promise<RoiMetrics>
   ensureTrial?: (shopId: string) => Promise<TrialRecord>
@@ -223,6 +225,36 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
     } catch (error: unknown) { next(error) }
   })
 
+  router.post('/billing/cancel', async (request, response, next) => {
+    try {
+      const shopId = queryShop(request)
+      const existing = await dependencies.repository.get(shopId)
+      if (!existing || (existing.state !== 'ACTIVE_MONTHLY' && existing.state !== 'ACTIVE_ANNUAL') || !existing.chargeId) {
+        throw new AppError('CONFLICT', 'No active paid subscription was found for this store.', 409, { shopId })
+      }
+
+      if (!dependencies.cancelCharge) throw new AppError('DEPENDENCY_ERROR', 'Shopify Billing cancellation is not configured.', 503)
+      let cancelledCharge: RecurringCharge
+      try {
+        cancelledCharge = await dependencies.cancelCharge(shopId, existing.chargeId)
+      } catch (error: unknown) {
+        throw translateBillingOperationError(error, 'cancel')
+      }
+      if (cancelledCharge.status !== 'cancelled' && cancelledCharge.status !== 'expired') {
+        throw new ShopifyBillingError(409, 'Shopify did not confirm subscription cancellation')
+      }
+      const subscription: BillingRecord = {
+        ...existing,
+        state: 'CANCELLED',
+        version: existing.version + 1,
+      }
+      // PostgresBillingRepository.put writes updated_at = now() on conflict;
+      // other repository implementations receive the same authoritative state.
+      await dependencies.repository.put(subscription)
+      response.status(200).json(success({ message: 'Subscription cancelled successfully.', subscription }, requestIdFrom(request)))
+    } catch (error: unknown) { next(error) }
+  })
+
   router.post('/billing/charge/verify', async (request, response, next) => {
     try {
       const shopId = queryShop(request)
@@ -234,7 +266,12 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       const plan = isPlan(body.plan) ? body.plan : planFromRecord(existing, chargeNameHint(body))
       const interval = body.interval === 'ANNUAL' || body.interval === 'MONTHLY' ? body.interval : intervalFromRecord(existing)
       const known = isPlan(body.plan) || Boolean(existing?.plan)
-      const charge = await dependencies.verifyCharge(shopId, body.chargeId, known ? plan : undefined, known ? interval : undefined)
+      let charge: RecurringCharge
+      try {
+        charge = await dependencies.verifyCharge(shopId, body.chargeId, known ? plan : undefined, known ? interval : undefined)
+      } catch (error: unknown) {
+        throw translateBillingOperationError(error, 'verify')
+      }
       const resolvedPlan = planFromRecord(existing, charge.name || chargeNameHint(body))
       const resolvedInterval = charge.name.includes('ANNUAL') ? 'ANNUAL' : interval
       const state = resolvedInterval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
@@ -297,6 +334,21 @@ async function createChargeOrExplain(dependencies: BillingRouteDependencies, sho
     appError.cause = error
     throw appError
   }
+}
+
+function translateBillingOperationError(error: unknown, operation: 'verify' | 'cancel'): unknown {
+  if (!(error instanceof ShopifyBillingError)) return error
+  const invalid = error.status === 400 || error.status === 404 || error.status === 409 || error.status === 422
+  const translated = new AppError(
+    invalid ? 'CONFLICT' : 'DEPENDENCY_ERROR',
+    invalid
+      ? operation === 'verify' ? 'Shopify could not verify this subscription charge.' : 'Shopify could not cancel this subscription.'
+      : 'Shopify Billing is unavailable right now. Retry in a moment.',
+    invalid ? (error.status === 404 ? 409 : error.status) : 502,
+    { upstreamStatus: error.status, operation },
+  )
+  translated.cause = error
+  return translated
 }
 
 function describeValidation(errors: Readonly<Record<string, readonly string[]>>): string {

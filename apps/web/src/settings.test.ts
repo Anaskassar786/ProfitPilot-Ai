@@ -30,8 +30,8 @@ describe('Settings model', () => {
     try { window.localStorage.clear() } catch { /* jsdom storage */ }
   })
 
-  it('keeps all six merchant-facing tabs including the renamed AI Preferences', () => {
-    expect(SETTINGS_TABS.map((tab) => tab.id)).toEqual(['general', 'notifications', 'ai', 'team', 'security', 'danger'])
+  it('keeps all seven merchant-facing tabs including Billing and the renamed AI Preferences', () => {
+    expect(SETTINGS_TABS.map((tab) => tab.id)).toEqual(['general', 'notifications', 'ai', 'team', 'billing', 'security', 'danger'])
     expect(SETTINGS_TABS.find((tab) => tab.id === 'ai')?.label).toBe('AI Preferences')
     expect(SETTINGS_TABS.every((tab) => isSettingsTab(tab.id))).toBe(true)
     expect(isSettingsTab('jarvis')).toBe(false)

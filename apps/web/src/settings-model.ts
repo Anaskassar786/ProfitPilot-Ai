@@ -9,7 +9,7 @@ import type { BillingAccount } from './model.js'
 import type { JarvisEngagementMode } from './f8-model.js'
 import type { CoachPersonality } from './store-coach-model.js'
 
-export type SettingsTab = 'general' | 'notifications' | 'ai' | 'team' | 'security' | 'danger'
+export type SettingsTab = 'general' | 'notifications' | 'ai' | 'team' | 'billing' | 'security' | 'danger'
 export type WorkspacePlan = 'trial' | 'start' | 'growth' | 'commander'
 export type BubblePosition = 'bottom-right' | 'bottom-left'
 export type AssistantMode = 'active' | 'balanced' | 'quiet'
@@ -67,6 +67,7 @@ export const SETTINGS_TABS: readonly Readonly<{ id: SettingsTab; label: string; 
   { id: 'notifications', label: 'Notifications' },
   { id: 'ai', label: 'AI Preferences' },
   { id: 'team', label: 'Team Members' },
+  { id: 'billing', label: 'Billing' },
   { id: 'security', label: 'Security' },
   { id: 'danger', label: 'Danger Zone', danger: true },
 ]
@@ -105,7 +106,7 @@ export function defaultWorkspaceSettings(lightMode = false): WorkspaceSettings {
 }
 
 export function isSettingsTab(value: unknown): value is SettingsTab {
-  return value === 'general' || value === 'notifications' || value === 'ai' || value === 'team' || value === 'security' || value === 'danger'
+  return value === 'general' || value === 'notifications' || value === 'ai' || value === 'team' || value === 'billing' || value === 'security' || value === 'danger'
 }
 
 export function isEmailValid(value: string): boolean {
