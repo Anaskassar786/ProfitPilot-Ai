@@ -512,11 +512,21 @@ export class ProductionCommandActions implements AiCommandActionRuntime {
   private async setWorkflowStatus(storeId: StoreId, action: AiCommandActionRecord, status: 'PAUSED' | 'ACTIVE'): Promise<ActionExecutionResult> {
     if (!this.deps.workflows) return { status: 'FAILED', result: { message: 'Workflow control is not connected.' }, rollbackAvailable: false }
     const workflowId = String(action.actionParams.workflow_id ?? '')
-    if (!workflowId) return { status: 'FAILED', result: { message: 'I could not tell which automation you mean. Try naming it, e.g. "Pause the welcome email automation".' }, rollbackAvailable: false }
+    const workflowIds = Array.isArray(action.actionParams.workflow_ids)
+      ? action.actionParams.workflow_ids.map(String).filter(Boolean)
+      : []
+    const ids = workflowIds.length > 0 ? workflowIds : workflowId ? [workflowId] : []
+    if (ids.length === 0) return { status: 'FAILED', result: { message: 'I could not tell which automation you mean. Try naming it, e.g. "Pause the welcome email automation".' }, rollbackAvailable: false }
     try {
-      const updated = await this.deps.workflows.setStatus(storeId, workflowId, status)
-      if (!updated) return { status: 'FAILED', result: { message: 'That automation was not found. Check the Automation page for its current name and status.' }, rollbackAvailable: false }
-      return { status: 'SUCCESS', result: { workflowId, status, name: isRecord(updated) && typeof updated.name === 'string' ? updated.name : null }, rollbackAvailable: false }
+      const updates = await Promise.all(ids.map(async (id) => ({ id, updated: await this.deps.workflows!.setStatus(storeId, id, status) })))
+      const succeeded = updates.filter((entry) => entry.updated !== null)
+      const failed = updates.filter((entry) => entry.updated === null)
+      return {
+        status: failed.length === 0 ? 'SUCCESS' : succeeded.length > 0 ? 'PARTIAL_SUCCESS' : 'FAILED',
+        result: { workflowIds: succeeded.map((entry) => entry.id), status, updated: succeeded.length, failed: failed.map((entry) => entry.id) },
+        ...(failed.length > 0 ? { errorDetails: { reason: 'WORKFLOWS_NOT_FOUND', workflowIds: failed.map((entry) => entry.id) } } : {}),
+        rollbackAvailable: false,
+      }
     } catch (error: unknown) {
       return { status: 'FAILED', result: { message: error instanceof Error ? error.message : 'Workflow status could not be changed.' }, rollbackAvailable: false }
     }
