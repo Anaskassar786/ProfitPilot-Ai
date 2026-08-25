@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY, isTestChargeOnlyRejection, shouldForceTestCharge } from './shopify-billing.js'
+import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, isTestChargeOnlyRejection, shouldForceTestCharge } from './shopify-billing.js'
 
 function isShopProbe(init: RequestInit | undefined): boolean {
   if (!init?.body) return false
@@ -173,14 +173,14 @@ describe('Shopify billing 422 diagnostics and payload shape', () => {
   })
 })
 
-describe('automatic test-charge detection', () => {
-  // The shop-plan probe only runs when SHOPIFY_BILLING_FORCE_LIVE=true — otherwise
-  // we default to test:true for seamless dev-store operation (emergency fix).
-  // These two tests stub FORCE_LIVE=true so they exercise the probe path.
-  it('forces test:true on a development store via GraphQL ShopProbe', async () => {
+describe('test flag is hardcoded from SHOPIFY_BILLING_FORCE_LIVE (2026-08-25 mandatory fix)', () => {
+  // The `test` GraphQL variable is now decided by a single hardcoded
+  // expression at the mutation-payload site: FORCE_LIVE unset → true,
+  // FORCE_LIVE=true → false. No shop-plan probe runs from
+  // createRecurringCharge, no NODE_ENV checks, no testMode config.
+  it('sends a live charge (test:false) with NO shop probe when SHOPIFY_BILLING_FORCE_LIVE=true', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
-    // SHOPIFY_BILLING_TEST=false is the legacy escape hatch that disables forcing
     vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     const queries: string[] = []
     let body: { variables: { test: boolean } } | undefined
@@ -194,15 +194,13 @@ describe('automatic test-charge detection', () => {
         return new Response(JSON.stringify(graphqlCreate), { status: 201 })
       } })
       await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
-      expect(body?.variables.test).toBe(true)
-      expect(queries.some((query) => query.includes('ShopProbe'))).toBe(true)
-      expect(SHOP_PROBE_QUERY).toContain('displayName')
-      expect(queries.join('')).not.toContain('/shop.json')
+      expect(body?.variables.test).toBe(false)
+      expect(queries).toEqual([])
     } finally {
       vi.unstubAllEnvs()
     }
   })
-  it('allows a live charge on a paid store and caches the lookup', async () => {
+  it('sends live charges deterministically when FORCE_LIVE is set (no probe, no cache)', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
@@ -217,7 +215,7 @@ describe('automatic test-charge detection', () => {
       await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
       await client.createRecurringCharge('GROWTH', 'ANNUAL', 'https://app.example/return', 14)
       expect(body?.variables.test).toBe(false)
-      expect(shopLookups).toBe(1)
+      expect(shopLookups).toBe(0)
     } finally {
       vi.unstubAllEnvs()
     }
@@ -235,17 +233,22 @@ describe('automatic test-charge detection', () => {
     expect(body?.variables.test).toBe(true)
     expect(probes).toEqual([])
   })
-  it('falls back to a test charge when the shop lookup fails', async () => {
-    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
+  it('sends test:true by default with no shop probe (Railway: NODE_ENV=production, FORCE_LIVE unset)', async () => {
+    // The exact Railway deployment shape: NODE_ENV=production but no
+    // SHOPIFY_BILLING_FORCE_LIVE. The mutation MUST go out as test:true
+    // regardless of what a shop-plan probe would answer (even a failing one).
+    vi.stubEnv('NODE_ENV', 'production')
+    let probeAttempts = 0
     let body: { variables: { test: boolean } } | undefined
     try {
       const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
-        if (isShopProbe(init)) return new Response('', { status: 403 })
+        if (isShopProbe(init)) { probeAttempts += 1; return new Response('', { status: 403 }) }
         body = JSON.parse(String(init.body))
         return new Response(JSON.stringify(graphqlCreate), { status: 201 })
       } })
       await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
       expect(body?.variables.test).toBe(true)
+      expect(probeAttempts).toBe(0)
     } finally {
       vi.unstubAllEnvs()
     }

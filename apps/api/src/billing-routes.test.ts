@@ -298,9 +298,9 @@ describe('billing charge failure translation', () => {
   it('retries with testMode:true when Shopify answers "can only accept test charges"', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
-    const modes: (boolean | undefined)[] = []
+    const modes: boolean[] = []
     const createCharge: BillingRouteDependencies['createCharge'] = async (_shop, _plan, _interval, _url, trialDays, testMode) => {
-      modes.push(testMode)
+      modes.push(Boolean(testMode))
       if (testMode !== true) {
         throw new ShopifyBillingError(422, 'Shopify Billing API failed with 422', { test: ['Development and partner-test stores can only accept test charges'] }, '{}')
       }
@@ -310,7 +310,9 @@ describe('billing charge failure translation', () => {
       await withCharge(createCharge, async (base) => {
         const response = await fetch(`${base}/billing/charge?shopId=live-store.example`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: chargeBody })
         expect(response.status).toBe(201)
-        expect(modes).toEqual([undefined, true])
+        // FORCE_LIVE=true → the route now passes an explicit testMode:false
+        // (never undefined); the retry passes testMode:true.
+        expect(modes).toEqual([false, true])
       })
     } finally { vi.unstubAllEnvs() }
   })
