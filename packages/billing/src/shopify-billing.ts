@@ -319,18 +319,23 @@ export function testChargeForcedByEnv(env: Readonly<Record<string, string | unde
 }
 
 /**
- * True when a charge failure is specifically Shopify telling us this shop can
- * only accept TEST charges ("Custom apps cannot use the Billing API ... can
- * only accept test charges" and equivalents). Only these failures trigger
- * the automatic `test: true` retry — any other 422 (price, name, ...) is
- * rethrown so real validation problems still surface.
+ * True when Shopify specifically says that this shop can only accept TEST
+ * charges. Keep this predicate deliberately narrow: retrying an arbitrary
+ * billing error with `test: true` could hide a real merchant configuration
+ * problem or create the wrong kind of subscription.
+ *
+ * GraphQL userErrors are converted to a 422 by `chargeFromGraphqlCreate`,
+ * while an HTTP-level rejection is converted by `billingErrorFrom`. Checking
+ * the status here prevents a coincidental message in a network/5xx response
+ * from causing a second charge attempt.
  */
 export function isTestChargeOnlyRejection(error: unknown): boolean {
-  if (!(error instanceof ShopifyBillingError)) return false
+  if (!(error instanceof ShopifyBillingError) || error.status !== 422) return false
   const fragments: string[] = [error.message, error.upstreamBody]
   for (const messages of Object.values(error.validationErrors)) fragments.push(...messages)
   const text = fragments.join(' ')
-  return /test charges/i.test(text) || /custom apps cannot use the billing api/i.test(text)
+  return /can only accept test charges/i.test(text)
+    || /custom apps cannot use the billing api/i.test(text)
 }
 
 async function billingErrorFrom(response: Response, path: string): Promise<ShopifyBillingError> {
