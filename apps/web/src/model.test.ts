@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, latestSyncLabel, revenuePoints, revenueSeries, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
+import { averageOrderValue, catalogProductTitle, formatMoney, formatNumber, healthGaugeSweep, latestSyncLabel, revenuePoints, revenueSeries, storeHealthView, sumOrders, sumRevenue, workspaceContext } from './model.js'
 import type { AnalyticsSnapshot } from './model.js'
 
 const snapshot: AnalyticsSnapshot = {
@@ -87,5 +87,59 @@ describe('F3 workspace model', () => {
   it('filters revenue points by closed period', () => {
     expect(revenuePoints(snapshot, 'all')).toHaveLength(2)
     expect(revenuePoints(snapshot, '7d')).toEqual([])
+  })
+})
+
+describe('Performance Score honesty + ring math', () => {
+  const now = Date.parse('2026-08-23T12:00:00Z')
+  const today = '2026-08-23'
+  const fresh = (day: string, revenue: number, orders: number): AnalyticsSnapshot => ({
+    revenue: [{ storeId: 's', day, grossRevenue: revenue, discounts: 0, orderCount: orders }],
+    orders: [{ storeId: 's', day, orderCount: orders, fulfilledCount: orders, cancelledCount: 0, averageOrderValue: revenue / Math.max(1, orders) }],
+    productSales: [{ storeId: 's', day, productId: 'p1', unitsSold: orders, grossRevenue: revenue }],
+    customerCohorts: [{ storeId: 's', cohortDay: day, activityDay: day, customerCount: 5, grossRevenue: revenue }],
+  })
+
+  it('returns null (NO DATA) for a store with no synced data — never a fake 100', () => {
+    expect(storeHealthView(null).score).toBeNull()
+    expect(storeHealthView({ revenue: [], orders: [], productSales: [], customerCohorts: [] }).score).toBeNull()
+  })
+
+  it('zero-value rows cannot inflate the score (0 sales ≠ 100)', () => {
+    const zeroed = fresh(today, 0, 0)
+    const health = storeHealthView(zeroed, 10, now)
+    expect(health.score).not.toBeNull()
+    expect(health.score!).toBeLessThanOrEqual(45) // no 7-day activity → capped
+    expect(health.tone).not.toBe('healthy')
+  })
+
+  it('never scores 100 without real recent activity', () => {
+    const stale7 = storeHealthView(fresh('2026-08-10', 5_000, 40), 25, now)
+    expect(stale7.score!).toBeLessThan(100)
+    const stale30 = storeHealthView(fresh('2026-01-05', 9_000, 90), 10, now)
+    expect(stale30.score!).toBeLessThanOrEqual(30)
+  })
+
+  it('scores 100 only when every signal is real, current, and bounded', () => {
+    const perfect = storeHealthView(fresh(today, 10_000, 100), 50, now)
+    expect(perfect.score).toBe(100)
+    expect(perfect.grade).toBe('A+')
+    // The score can never exceed 100 no matter how large the inputs are.
+    const huge = storeHealthView(fresh(today, 1e9, 1e6), 1e6, now)
+    expect(huge.score).toBeLessThanOrEqual(100)
+  })
+
+  it('maps the score onto a FULL 360° ring: 100 closes the circle', () => {
+    expect(healthGaugeSweep(100)).toBe(360) // the regression: was 240 (open ring)
+    expect(healthGaugeSweep(0)).toBe(8) // visibility floor for a live score
+    expect(healthGaugeSweep(null)).toBe(0)
+    expect(healthGaugeSweep(75)).toBe(270)
+    // Monotonic: a better store always fills at least as much ring.
+    for (let score = 1; score <= 100; score += 5) {
+      expect(healthGaugeSweep(score)).toBeLessThanOrEqual(healthGaugeSweep(Math.min(100, score + 5)))
+    }
+    // Out-of-range scores are clamped, never overflow the ring.
+    expect(healthGaugeSweep(150)).toBe(360)
+    expect(healthGaugeSweep(-20)).toBe(8)
   })
 })

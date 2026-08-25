@@ -6,6 +6,13 @@ export type BillingEvent = 'trial_expired' | 'charge_confirmed_monthly' | 'charg
 
 export type Subscription = Readonly<{ storeId?: string; plan: PlanTier; state: BillingState; currentPeriodEnd: number | null; version: number; priceLockedAt?: number | null; grandfathered?: boolean }>
 
+// Gift expiry is NOT a plain event here: resolving `GIFT_ACCESS_UNLIMITED`
+// after the window closes is context-dependent (was the trial forfeited?),
+// so it runs through `expiredGiftRevert` in trials.ts — which reads the trial
+// record and lands on TRIAL_LIMITED only when a real, un-forfeited trial is
+// still running, and on TRIAL_EXPIRED (upgrade required) otherwise.
+// `GIFT_ACCESS_UNLIMITED → trial_expired → TRIAL_EXPIRED` below is the
+// forfeited-trial outcome of that resolution.
 const transitions: Readonly<Record<BillingState, Partial<Record<BillingEvent, BillingState>>>> = {
   TRIAL_LIMITED: { trial_expired: 'TRIAL_EXPIRED', charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', gift_redeemed: 'GIFT_ACCESS_UNLIMITED' },
   GIFT_ACCESS_UNLIMITED: { charge_confirmed_monthly: 'ACTIVE_MONTHLY', charge_confirmed_annual: 'ACTIVE_ANNUAL', trial_expired: 'TRIAL_EXPIRED' },

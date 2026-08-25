@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY } from './shopify-billing.js'
+import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY, isTestChargeOnlyRejection } from './shopify-billing.js'
 
 function isShopProbe(init: RequestInit | undefined): boolean {
   if (!init?.body) return false
@@ -174,35 +174,62 @@ describe('Shopify billing 422 diagnostics and payload shape', () => {
 })
 
 describe('automatic test-charge detection', () => {
+  // The shop-plan probe only runs in production — outside production the
+  // environment (NODE_ENV / SHOPIFY_BILLING_TEST) forces test charges before
+  // any probe. Stub production for these two tests so they exercise the
+  // production probe path.
   it('forces test:true on a development store via GraphQL ShopProbe', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
     const queries: string[] = []
     let body: { variables: { test: boolean } } | undefined
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+        if (isShopProbe(init)) {
+          queries.push(String((JSON.parse(String(init.body)) as { query: string }).query))
+          return shopProbeResponse('Developer Preview', true)
+        }
+        body = JSON.parse(String(init.body))
+        return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+      } })
+      await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
+      expect(body?.variables.test).toBe(true)
+      expect(queries.some((query) => query.includes('ShopProbe'))).toBe(true)
+      expect(SHOP_PROBE_QUERY).toContain('displayName')
+      expect(queries.join('')).not.toContain('/shop.json')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('allows a live charge on a paid store and caches the lookup', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    let shopLookups = 0
+    let body: { variables: { test: boolean } } | undefined
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+        if (isShopProbe(init)) { shopLookups += 1; return shopProbeResponse('Shopify Plus') }
+        body = JSON.parse(String(init.body))
+        return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+      } })
+      await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
+      await client.createRecurringCharge('GROWTH', 'ANNUAL', 'https://app.example/return', 14)
+      expect(body?.variables.test).toBe(false)
+      expect(shopLookups).toBe(1)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('forces test:true without any shop probe outside production (NODE_ENV)', async () => {
+    expect(process.env.NODE_ENV).not.toBe('production')
+    const probes: string[] = []
+    let body: { variables: { test: boolean } } | undefined
     const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
-      if (isShopProbe(init)) {
-        queries.push(String((JSON.parse(String(init.body)) as { query: string }).query))
-        return shopProbeResponse('Developer Preview', true)
-      }
+      if (isShopProbe(init)) { probes.push('probe'); return shopProbeResponse('Shopify Plus') }
       body = JSON.parse(String(init.body))
       return new Response(JSON.stringify(graphqlCreate), { status: 201 })
     } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
     expect(body?.variables.test).toBe(true)
-    expect(queries.some((query) => query.includes('ShopProbe'))).toBe(true)
-    expect(SHOP_PROBE_QUERY).toContain('displayName')
-    expect(queries.join('')).not.toContain('/shop.json')
-  })
-  it('allows a live charge on a paid store and caches the lookup', async () => {
-    let shopLookups = 0
-    let body: { variables: { test: boolean } } | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
-      if (isShopProbe(init)) { shopLookups += 1; return shopProbeResponse('Shopify Plus') }
-      body = JSON.parse(String(init.body))
-      return new Response(JSON.stringify(graphqlCreate), { status: 201 })
-    } })
-    await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
-    await client.createRecurringCharge('GROWTH', 'ANNUAL', 'https://app.example/return', 14)
-    expect(body?.variables.test).toBe(false)
-    expect(shopLookups).toBe(1)
+    expect(probes).toEqual([])
   })
   it('falls back to a test charge when the shop lookup fails', async () => {
     let body: { variables: { test: boolean } } | undefined
@@ -222,5 +249,96 @@ describe('automatic test-charge detection', () => {
     } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
     expect(probes).toEqual([])
+  })
+})
+
+describe('automatic test-charge retry fallback (test-charge-only rejections)', () => {
+  // The exact failure live dev stores still produce: a non-test charge is
+  // rejected because the shop can only accept test charges.
+  const testChargeOnlyUserErrors = {
+    data: {
+      appSubscriptionCreate: {
+        userErrors: [{ field: ['test'], message: 'Custom apps cannot use the Billing API and can only accept test charges' }],
+        confirmationUrl: null,
+        appSubscription: null,
+      },
+    },
+  }
+  const testChargeOnlyHttp422 = {
+    errors: { test: ['Custom apps cannot use the Billing API and can only accept test charges'] },
+  }
+
+  it('retries with test:true when a live charge is rejected as test-charge-only (GraphQL userErrors)', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const attempts: boolean[] = []
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, logger, transport: async (_url, init) => {
+        const test = Boolean((JSON.parse(String(init.body)) as { variables: { test: boolean } }).variables.test)
+        attempts.push(test)
+        if (test) return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+        return new Response(JSON.stringify(testChargeOnlyUserErrors), { status: 200 })
+      } })
+      const result = await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
+      expect(result.id).toBe('gid://shopify/AppSubscription/1')
+      expect(attempts).toEqual([false, true])
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('test: true'), expect.objectContaining({ shop: 'demo.myshopify.com' }))
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('retries with test:true on an HTTP-level test-charge-only 422', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const attempts: boolean[] = []
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (_url, init) => {
+        const test = Boolean((JSON.parse(String(init.body)) as { variables: { test: boolean } }).variables.test)
+        attempts.push(test)
+        if (test) return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+        return new Response(JSON.stringify(testChargeOnlyHttp422), { status: 422 })
+      } })
+      const result = await client.createRecurringCharge('START', 'MONTHLY', 'https://app.example/return', 0)
+      expect(result.id).toBe('gid://shopify/AppSubscription/1')
+      expect(attempts).toEqual([false, true])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('does not retry unrelated 422 validation failures (price)', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const attempts: boolean[] = []
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (_url, init) => {
+        const test = Boolean((JSON.parse(String(init.body)) as { variables: { test: boolean } }).variables.test)
+        attempts.push(test)
+        return new Response(JSON.stringify({ data: { appSubscriptionCreate: { userErrors: [{ field: ['price'], message: 'must be greater than zero' }], confirmationUrl: null, appSubscription: null } } }), { status: 200 })
+      } })
+      await expect(client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)).rejects.toThrow('must be greater than zero')
+      expect(attempts).toEqual([false])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('never retries a charge that was already sent as test', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const attempts: boolean[] = []
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: true, transport: async (_url, init) => {
+        const test = Boolean((JSON.parse(String(init.body)) as { variables: { test: boolean } }).variables.test)
+        attempts.push(test)
+        return new Response(JSON.stringify(testChargeOnlyUserErrors), { status: 200 })
+      } })
+      await expect(client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)).rejects.toBeInstanceOf(ShopifyBillingError)
+      expect(attempts).toEqual([true])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('recognizes only the specific test-charge rejections', () => {
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'Shopify Billing API failed with 422 on /graphql.json — test: Custom apps cannot use the Billing API and can only accept test charges', {}, 'x'))).toBe(true)
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'can only accept test charges', {}, ''))).toBe(true)
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'price: must be greater than zero', { price: ['must be greater than zero'] }, ''))).toBe(false)
+    expect(isTestChargeOnlyRejection(new Error('boom'))).toBe(false)
+    expect(isTestChargeOnlyRejection(null)).toBe(false)
   })
 })

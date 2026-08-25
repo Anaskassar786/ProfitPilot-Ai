@@ -39,6 +39,7 @@ import { UpgradePlanButton } from './UpgradePlanButton.js'
 import type { SelectOption } from './CustomSelect.js'
 import { AIInventoryInsightsCard } from './inventory-insights.js'
 import type { InventoryHistoryResult, InventoryInsightsResult } from './inventory-insights-model.js'
+import { healthGaugeSweep } from './model.js'
 import type { WorkspaceContext } from './model.js'
 import type { DaysOfCover, InventoryItem, InventoryPageResult, InventoryQuery, InventoryRowItem, InventorySort, InventoryTab, StockStatus } from './inventory-model.js'
 import { EMPTY_INVENTORY_PAGE, daysOfCoverLabel, daysOfCoverTone, distributionSegments, formatDateTime, formatMoney, formatUnits, locationBreakdown, locationLabel, lockedFeature, quantityLabel, stockStatusLabel } from './inventory-model.js'
@@ -236,7 +237,9 @@ export function InventoryHealthCard({ data, loading, storeId }: { data: Inventor
     return () => { cancelled = true }
   }, [storeId])
   const unavailable = health.score === null
-  const sweep = unavailable ? 0 : Math.max(8, Math.round(health.score * 2.4))
+  // Full 360° ring: healthGaugeSweep maps 100/100 → 360° so a perfect score
+  // closes the circle (the old × 2.4 mapping left it open at 240°).
+  const sweep = unavailable ? 0 : healthGaugeSweep(health.score)
   const gradeColor = health.grade === 'A' || health.grade === 'A+' ? 'green' : health.grade === 'B' ? 'blue' : health.grade === 'C' ? 'amber' : health.grade === 'D' || health.grade === 'F' ? 'red' : 'muted'
   const labelText = unavailable ? 'No inventory data' : `${health.grade ? `${health.grade} · ` : ''}${health.label}`
   const trendPoints = (history?.points ?? []).filter((point) => point && Number.isFinite(point.units)).map((point) => ({ date: point.date, units: point.units }))

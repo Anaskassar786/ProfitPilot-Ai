@@ -34,7 +34,7 @@ import {
   Calendar,
 } from './icons.js'
 import type { AnalyticsSnapshot, StoreHealthView } from './model.js'
-import { formatMoney, formatNumber, storeHealthView, latestSyncLabel } from './model.js'
+import { formatMoney, formatNumber, healthGaugeSweep, storeHealthView, latestSyncLabel } from './model.js'
 import {
   aggregateRevenueByPeriod,
   buildCalendarMonth,
@@ -777,7 +777,9 @@ function OrderRow({ order, detailed }: { order: RecentOrder; detailed?: boolean 
 
 function HealthGaugeWidget({ health, loading }: { health: StoreHealthView; loading?: boolean }) {
   const hasScore = health.score !== null && !loading
-  const sweep = hasScore ? Math.max(8, Math.round((health.score ?? 0) * 2.4)) : 0
+  // Full 360° ring: healthGaugeSweep maps 100/100 → 360° so a perfect score
+  // closes the circle (the old × 2.4 mapping left it open at 240°).
+  const sweep = hasScore ? healthGaugeSweep(health.score) : 0
   const gaugeStyle = hasScore ? { '--health-sweep': `${sweep}deg` } as CSSProperties : undefined
   const accessibleLabel = loading ? 'Store health loading' : health.score === null ? 'Store health unavailable' : `Store health ${health.score} out of 100, grade ${health.grade}, ${health.label}`
 

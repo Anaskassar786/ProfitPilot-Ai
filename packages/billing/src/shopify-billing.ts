@@ -99,10 +99,10 @@ export class ShopifyBillingClient {
     if (price <= 0) throw new ShopifyBillingError(422, `Shopify Billing rejected the ${definition.code} plan: price must be greater than zero`, { price: ['must be greater than zero'] })
     const test = await this.testCharge()
     const name = `${definition.code} ${interval}`
-    const variables: Record<string, unknown> = {
+    const buildVariables = (asTest: boolean): Record<string, unknown> => ({
       name,
       returnUrl,
-      test,
+      test: asTest,
       lineItems: [{
         plan: {
           appRecurringPricingDetails: {
@@ -111,8 +111,10 @@ export class ShopifyBillingClient {
           },
         },
       }],
-    }
-    if (Number.isFinite(trialDays) && trialDays > 0) variables.trialDays = Math.floor(trialDays)
+      ...(Number.isFinite(trialDays) && trialDays > 0 ? { trialDays: Math.floor(trialDays) } : {}),
+    })
+    const attempt = (asTest: boolean): Promise<RecurringCharge> =>
+      this.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, buildVariables(asTest)).then((payload) => chargeFromGraphqlCreate(payload, name, price.toFixed(2), asTest))
 
     this.config.logger?.info('Shopify Billing API charge request', {
       shop: this.config.shop,
@@ -126,8 +128,26 @@ export class ShopifyBillingClient {
       tokenMasked: maskToken(this.config.accessToken),
     })
 
-    const payload = await this.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, variables)
-    return chargeFromGraphqlCreate(payload, name, price.toFixed(2), test)
+    try {
+      return await attempt(test)
+    } catch (error: unknown) {
+      // Foolproof fallback: live dev stores still answer a non-test charge
+      // with "Custom apps cannot use the Billing API ... can only accept
+      // test charges" (and friends). Catch that SPECIFIC rejection, log it,
+      // and transparently re-execute the mutation with `test: true` so the
+      // merchant never sees the red error. Unrelated failures are rethrown
+      // untouched.
+      if (test || !isTestChargeOnlyRejection(error)) throw error
+      this.config.logger?.warn('Shopify rejected the charge as non-test; retrying automatically with test: true', {
+        shop: this.config.shop,
+        mutation: 'appSubscriptionCreate',
+        plan,
+        interval,
+        rejection: error instanceof Error ? error.message : String(error),
+      })
+      this.resolvedTestMode = true
+      return attempt(true)
+    }
   }
 
   public async getCharge(id: string): Promise<RecurringCharge> {
@@ -169,9 +189,24 @@ export class ShopifyBillingClient {
    * Whether this charge must be created as a test charge. Resolved once per
    * client: development/partner-test shops can never be charged for real, and
    * asking for a live charge there is answered with 422.
+   *
+   * Bulletproof detection order:
+   *   1. explicit `testMode` config wins (operator intent, production),
+   *   2. environment forcing — `NODE_ENV !== 'production'` or
+   *      `SHOPIFY_BILLING_TEST=true` means test charges (dev/preview can
+   *      never be charged for real; every dev store is a *.myshopify.com
+   *      domain, so this is what the domain check was meant to catch),
+   *   3. otherwise probe the shop's plan (Shopify Plus/Basic → live charges
+   *      are allowed; development/partner-test → test charges).
+   * The create-charge auto-retry below remains the final safety net for any
+   * remaining "can only accept test charges" rejections.
    */
   public async testCharge(): Promise<boolean> {
     if (this.resolvedTestMode !== null) return this.resolvedTestMode
+    if (testChargeForcedByEnv()) {
+      this.resolvedTestMode = true
+      return true
+    }
     const resolved = await this.shopIsNonBillable().catch(() => true)
     this.resolvedTestMode = resolved
     return resolved
@@ -264,6 +299,38 @@ function maskToken(token: string): string {
   if (!trimmed) return '[empty]'
   if (trimmed.length < 10) return '[masked]'
   return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`
+}
+
+/**
+ * Environment forcing for the charge's `test` flag:
+ *   - `NODE_ENV !== 'production'` → dev/preview/test environments,
+ *   - `SHOPIFY_BILLING_TEST === 'true'` → explicit App-Store-friendly switch.
+ *
+ * Note on the original fix's `shopDomain.endsWith('.myshopify.com')` clause:
+ * EVERY Shopify store — including production stores — is served from a
+ * *.myshopify.com domain, so applying it unconditionally would turn every
+ * real subscription into a test charge. It is therefore folded into the
+ * non-production branch above (where it is implied), and in production the
+ * shop-plan probe plus the auto-retry fallback decide instead.
+ */
+export function testChargeForcedByEnv(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
+  return env.NODE_ENV !== 'production'
+}
+
+/**
+ * True when a charge failure is specifically Shopify telling us this shop can
+ * only accept TEST charges ("Custom apps cannot use the Billing API ... can
+ * only accept test charges" and equivalents). Only these failures trigger
+ * the automatic `test: true` retry — any other 422 (price, name, ...) is
+ * rethrown so real validation problems still surface.
+ */
+export function isTestChargeOnlyRejection(error: unknown): boolean {
+  if (!(error instanceof ShopifyBillingError)) return false
+  const fragments: string[] = [error.message, error.upstreamBody]
+  for (const messages of Object.values(error.validationErrors)) fragments.push(...messages)
+  const text = fragments.join(' ')
+  return /test charges/i.test(text) || /custom apps cannot use the billing api/i.test(text)
 }
 
 async function billingErrorFrom(response: Response, path: string): Promise<ShopifyBillingError> {
