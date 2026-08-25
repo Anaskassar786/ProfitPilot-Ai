@@ -63,21 +63,46 @@ export function giftCodeError(gift: GiftCode | null, now: number): AppError | nu
 }
 
 /**
+ * Single source of truth for the trial-forfeiture invariant:
+ *
+ *   `trialForfeited === true` → the 14-day trial is dead, forever.
+ *
+ * Redeeming a gift permanently voids the trial (see `redeemGift`), so a
+ * forfeited trial can never be resumed — not even when the stored row is
+ * inconsistent (legacy rows may still carry `state = 'ACTIVE'` with a
+ * future `expires_at` because the flag was written without clamping).
+ * Normalizing at every read boundary (ledger + Postgres store) guarantees:
+ *
+ *   1. the API never reports a forfeited trial as `ACTIVE` (so the UI can
+ *      never show "10 of 14 days remaining" after a gift expiry), and
+ *   2. `expiredGiftRevert` resolves the store to `TRIAL_EXPIRED` (upgrade
+ *      required) the moment the gift window closes.
+ */
+export function normalizeForfeitedTrial(trial: TrialRecord | null, now: number): TrialRecord | null {
+  if (!trial || !trial.trialForfeited) return trial
+  if (trial.state !== 'ACTIVE' && trial.consumed) return trial
+  return { ...trial, state: 'CANCELLED', consumed: true, expiresAt: Math.min(trial.expiresAt, now) }
+}
+
+/**
  * Gift expiry enforcement (GA 2026-08-21).
  *
  * A redeemed gift grants Commander for `durationDays`. Once
  * `currentPeriodEnd` passes, the store must NOT keep Commander entitlements
  * and must NEVER be granted any remaining trial time: redeeming a gift
  * permanently forfeits the 14-day trial (see `redeemGift`), so the store
- * reverts to the Trial state only when the trial was never forfeited and is
- * still running, and otherwise transitions directly to the LOCKED state
- * `TRIAL_EXPIRED` (upgrade required) with zero remaining trial days.
+ * reverts to the Trial state only when the trial was never forfeited, was
+ * never consumed, and is still running — and otherwise transitions directly
+ * to the LOCKED state `TRIAL_EXPIRED` (upgrade required) with zero remaining
+ * trial days. In particular, `gift_code_expires_at` in the past AND
+ * `trial_forfeited === true` ALWAYS resolves to `TRIAL_EXPIRED`; a forfeited
+ * trial can never be resumed.
  * Returns the corrected record to persist, or `null` when nothing changed.
  */
 export function expiredGiftRevert(record: BillingRecord | null, trial: TrialRecord | null, now = Date.now()): BillingRecord | null {
   if (!record || record.state !== 'GIFT_ACCESS_UNLIMITED') return null
   if (record.currentPeriodEnd === null || record.currentPeriodEnd > now) return null
-  const trialActive = trial !== null && !trial.trialForfeited && trial.state === 'ACTIVE' && trial.expiresAt > now
+  const trialActive = trial !== null && !trial.trialForfeited && !trial.consumed && trial.state === 'ACTIVE' && trial.expiresAt > now
   return {
     ...record,
     plan: 'trial',
@@ -138,6 +163,15 @@ export class TrialAndGiftLedger {
     // reinstall must never re-initialise it (see ensureTrial/hydrate).
     const existing = this.trials.get(shopId)
     if (existing) return existing
+    // A store that redeemed a gift has permanently consumed its trial —
+    // never hand it a fresh 14-day trial (that would resurrect a forfeited
+    // trial after the gift window closes).
+    const priorRedemption = this.redemptions.get(shopId)
+    if (priorRedemption) {
+      const voided: TrialRecord = { shopId, startedAt: priorRedemption.redeemedAt, expiresAt: Math.min(priorRedemption.redeemedAt, now), consumed: true, state: 'CANCELLED', trialForfeited: true }
+      this.trials.set(shopId, voided)
+      return voided
+    }
     const trial: TrialRecord = { shopId, startedAt: now, expiresAt: now + days * 86_400_000, consumed: false, state: 'ACTIVE', trialForfeited: false }
     this.trials.set(shopId, trial)
     return trial
@@ -151,7 +185,12 @@ export class TrialAndGiftLedger {
       this.trials.set(shopId, expired)
       return expired
     }
-    return current
+    // A forfeited trial can never report as ACTIVE — normalize (and repair
+    // the cached row) so the UI/API can never offer "N of 14 days remaining"
+    // after a gift redemption.
+    const normalized = normalizeForfeitedTrial(current, now) ?? current
+    if (normalized !== current) this.trials.set(shopId, normalized)
+    return normalized
   }
 
   public redeemGift(shopId: string, rawCode: string, now = Date.now()): GiftRedemption {
@@ -289,21 +328,23 @@ export class PostgresTrialGiftStore {
       const live = loaded.state === 'ACTIVE' && loaded.expiresAt <= now
         ? { ...loaded, state: 'EXPIRED' as const }
         : loaded
-      if (live.state === 'EXPIRED' && loaded.state === 'ACTIVE') {
-        await this.persistTrial(live).catch(() => undefined)
+      const normalized = normalizeForfeitedTrial(live, now) ?? live
+      if (live.state === 'EXPIRED' && loaded.state === 'ACTIVE' || normalized !== live) {
+        await this.persistTrial(normalized).catch(() => undefined)
       }
-      this.cache.hydrate(live)
-      return this.cache.trial(shopId, now) ?? live
+      this.cache.hydrate(normalized)
+      return this.cache.trial(shopId, now) ?? normalized
     }
 
-    const created: TrialRecord = {
-      shopId,
-      startedAt: now,
-      expiresAt: now + days * 86_400_000,
-      consumed: false,
-      state: 'ACTIVE',
-      trialForfeited: false,
-    }
+    // A store that redeemed a gift has already permanently consumed its
+    // trial (single-use). If the trial row is somehow missing we must NOT
+    // issue a fresh 14-day trial — that would resurrect a forfeited trial.
+    // Create a voided, forfeited record so the store resolves to
+    // TRIAL_EXPIRED (upgrade required) instead.
+    const priorRedemption = await this.redemption(shopId).catch(() => null)
+    const created: TrialRecord = priorRedemption
+      ? { shopId, startedAt: priorRedemption.redeemedAt, expiresAt: Math.min(priorRedemption.redeemedAt, now), consumed: true, state: 'CANCELLED', trialForfeited: true }
+      : { shopId, startedAt: now, expiresAt: now + days * 86_400_000, consumed: false, state: 'ACTIVE', trialForfeited: false }
     await this.persistTrial(created)
     this.cache.hydrate(created)
     return created
@@ -317,11 +358,15 @@ export class PostgresTrialGiftStore {
     const live = loaded.state === 'ACTIVE' && loaded.expiresAt <= now
       ? { ...loaded, state: 'EXPIRED' as const }
       : loaded
-    if (live.state === 'EXPIRED' && loaded.state === 'ACTIVE') {
-      await this.persistTrial(live).catch(() => undefined)
+    // Repair inconsistent legacy rows on read: a forfeited trial must never
+    // report as ACTIVE with a future window (that is exactly how a store
+    // could "resume" its 14-day trial after a gift expiry).
+    const normalized = normalizeForfeitedTrial(live, now) ?? live
+    if (live.state === 'EXPIRED' && loaded.state === 'ACTIVE' || normalized !== live) {
+      await this.persistTrial(normalized).catch(() => undefined)
     }
-    this.cache.hydrate(live)
-    return this.cache.trial(shopId, now) ?? live
+    this.cache.hydrate(normalized)
+    return this.cache.trial(shopId, now) ?? normalized
   }
 
   public async redemption(shopId: string): Promise<GiftRedemption | null> {

@@ -421,12 +421,80 @@
   color: rgb(16, 185, 129);
 }
 
+/* "Choose plan" CTAs (all three tiers).
+   Polaris Button does NOT accept a className — the `billing-plan-cta` class
+   only drives variant resolution inside our Button wrapper and never reaches
+   the DOM. The CTA is the only <button> that is a direct child of the plan
+   card, so the rules scope there. (The legacy `.billing-plan-cta` selector
+   below is kept as a no-op fallback for when a wrapper forwards the class.) */
+.billing-plan-card > button,
 .billing-plan-cta {
   width: calc(100% - 52px);
   margin: 16px 26px 8px;
   height: 42px;
   font-size: 14px !important;
   font-weight: 600;
+}
+
+/* Vibrant royal-blue/primary-indigo with white text instead of Polaris'
+   default charcoal primary. The Polaris button renders
+   `.Polaris-Button--variantPrimary` and drives its entire palette from
+   `--pc-button-*` custom properties, so overriding the variables here
+   recolors the base, hover, active, disabled, and icon states without
+   fighting the component's specificity. */
+.billing-plan-card > button.Polaris-Button--variantPrimary,
+.billing-plan-cta.Polaris-Button--variantPrimary {
+  --pc-button-bg-gradient: linear-gradient(135deg, rgb(37, 99, 235), rgb(79, 70, 229));
+  --pc-button-bg: var(--pc-button-bg-gradient);
+  --pc-button-bg_hover: var(--pc-button-bg-gradient), rgb(29, 78, 216);
+  --pc-button-bg_active: var(--pc-button-bg-gradient), rgb(30, 64, 175);
+  --pc-button-bg_disabled: rgb(191, 219, 254);
+  --pc-button-color: rgb(255, 255, 255);
+  --pc-button-color_hover: rgb(255, 255, 255);
+  --pc-button-color_disabled: rgb(255, 255, 255);
+  --pc-button-icon-fill: rgb(255, 255, 255);
+  --pc-button-icon-fill_disabled: rgb(255, 255, 255);
+  --pc-button-box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+  --pc-button-box-shadow_hover: 0 6px 18px rgba(37, 99, 235, 0.36);
+}
+
+.billing-plan-card > button.Polaris-Button--variantPrimary:hover:not(:disabled),
+.billing-plan-cta.Polaris-Button--variantPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* ── Billing warning banners — readable in both themes ──────────────────
+   The embedded app runs Polaris with its LIGHT token set even when the app
+   theme is dark, so a Banner's content area resolves to a WHITE surface
+   while the body text inherits the app's near-white text color — invisible
+   white-on-white (same bug class documented in analytics.css for the
+   inventory warning). Force a white banner surface with explicitly dark
+   text for every billing banner ("Gift access ended" & friends) so the
+   message is always readable. `!important` is required because Polaris Box
+   applies background/color as inline styles. */
+.billing-banner-scope .Polaris-Banner {
+  background-color: rgb(255, 255, 255) !important;
+  border: 1px solid rgb(229, 231, 235);
+  box-shadow: none;
+}
+.billing-banner-scope .Polaris-Banner .Polaris-Box {
+  background-color: rgb(255, 255, 255) !important;
+}
+.billing-banner-scope .Polaris-Banner h2 {
+  color: rgb(15, 23, 42) !important;
+}
+.billing-banner-scope .Polaris-Banner p,
+.billing-banner-scope .Polaris-Banner span {
+  color: rgb(15, 23, 42) !important; /* #0f172a — readable dark text on the white box */
+}
+/* Tone-specific icon colors (the tone class lives on the icon span). */
+.billing-banner-scope .Polaris-Banner .Polaris-Banner--textWarningOnBgFill svg {
+  color: rgb(217, 119, 6) !important;
+  fill: rgb(217, 119, 6) !important;
+}
+.billing-banner-scope .Polaris-Banner .Polaris-Banner--textCriticalOnBgFill svg {
+  color: rgb(220, 38, 38) !important;
+  fill: rgb(220, 38, 38) !important;
 }
 
 /* ── Agent matrix ──────────────────────────────────────────────────────── */

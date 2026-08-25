@@ -35,7 +35,7 @@ export type AnalyticsSnapshot = Readonly<{ revenue: readonly RevenueMetric[]; or
 export type CatalogProduct = Readonly<{ storeId: string; productId: string; payload: JsonObject; syncedAt: number }>
 export type AgentStatus = Readonly<{ id: string; label: string; promptVersion: string; enabled: boolean; execution: 'READY' | 'UNCONFIGURED' | 'RUNNING' | 'PAUSED'; languageOnly: true }>
 export type BillingPlan = Readonly<{ code: 'START' | 'GROWTH' | 'COMMANDER'; tier: 'start' | 'growth' | 'commander'; monthlyPrice: number; annualPrice: number; annualMonthsFree: number; recommended?: boolean; headline?: string; storeLimit?: number | null; features?: readonly string[]; limits: Readonly<Record<string, number | null>> }>
-export type BillingAccount = Readonly<{ subscription: Readonly<{ storeId?: string; plan: string; state: string; currentPeriodEnd: number | null; version: number }> | null; trial: Readonly<{ expiresAt: number; state: string; startedAt?: number }> | null; gift: Readonly<{ code: string; expiresAt: number }> | null; trialDays?: number }>
+export type BillingAccount = Readonly<{ subscription: Readonly<{ storeId?: string; plan: string; state: string; currentPeriodEnd: number | null; version: number }> | null; trial: Readonly<{ expiresAt: number; state: string; startedAt?: number; /** True once a gift redemption permanently voided this trial — it can never resume. */ trialForfeited?: boolean }> | null; gift: Readonly<{ code: string; expiresAt: number }> | null; trialDays?: number }>
 export type RevenuePoint = Readonly<{ day: string; value: number }>
 export type StoreHealthView = Readonly<{ score: number | null; grade: string; label: string; tone: 'healthy' | 'warning' | 'critical' | 'muted' }>
 export type ChartPeriod = '7d' | '30d' | '90d' | 'all'
@@ -139,6 +139,21 @@ export function storeHealthView(snapshot: AnalyticsSnapshot | null, catalogCount
   const tone = score >= 75 ? 'healthy' : score >= 45 ? 'warning' : 'critical'
   const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D'
   return { score, grade, label: tone === 'healthy' ? 'Healthy' : tone === 'warning' ? 'Needs attention' : 'Critical', tone }
+}
+
+/**
+ * Maps a 0–100 performance score onto the health ring's conic-gradient
+ * sweep in degrees.
+ *
+ * The ring is a FULL 360° circle, so a perfect score must produce exactly
+ * 360° (a closed, completed circle). The previous `score × 2.4` mapping
+ * capped the arc at 240°, which is why 100/100 rendered as a visibly open
+ * ~2/3 ring. A small floor keeps any non-zero score visible.
+ */
+export function healthGaugeSweep(score: number | null): number {
+  if (score === null || !Number.isFinite(score)) return 0
+  const clamped = Math.min(100, Math.max(0, score))
+  return Math.max(8, Math.round(clamped * 3.6))
 }
 
 function periodCutoff(period: ChartPeriod): string | null {

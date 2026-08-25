@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { UsageMeterRow, visibleMeters } from './App.js'
+import { Banner, Button } from './polaris-ui.js'
 import { HIDDEN_METER_KEYS } from '@profitpilot/types'
 import type { UsageMeter } from './model.js'
 import { AppProvider } from '@shopify/polaris'
@@ -13,6 +14,38 @@ import enTranslations from '@shopify/polaris/locales/en.json' with { type: 'json
 function renderWithAppProvider(element: import('react').ReactElement) {
   return renderToStaticMarkup(createElement(AppProvider, { i18n: enTranslations as never }, element))
 }
+
+describe('Billing — Choose plan CTA DOM contract', () => {
+  // billing.css recolors the "Choose plan" CTAs by scoping to
+  // `.billing-plan-card > button.Polaris-Button--variantPrimary`. This test
+  // pins the DOM contract that override relies on: the wrapper `className`
+  // only drives Polaris variant resolution (→ `Polaris-Button--variantPrimary`)
+  // and is NOT forwarded to the rendered element.
+  it('renders as a Polaris primary button and does not leak the wrapper class', () => {
+    const html = renderWithAppProvider(<Button className="button primary billing-plan-cta">Choose plan</Button>)
+    expect(html).toContain('Polaris-Button--variantPrimary')
+    expect(html).toContain('Choose plan')
+    expect(html).not.toContain('billing-plan-cta')
+  })
+
+  // The "Gift access ended" banner is wrapped in .billing-banner-scope so
+  // billing.css can force a white surface + #0f172a text (the Polaris banner
+  // otherwise renders white-on-white in the app's dark theme). This pins the
+  // wrapper structure that override relies on.
+  it('wraps the gift-ended warning banner in the readability scope', () => {
+    const html = renderWithAppProvider(
+      <div className="billing-banner-scope">
+        <Banner tone="warning" title="Gift access ended — upgrade to keep Commander features">
+          <p>Your promo-code access to Commander has ended.</p>
+        </Banner>
+      </div>,
+    )
+    expect(html).toContain('billing-banner-scope')
+    expect(html).toContain('Polaris-Banner')
+    expect(html).toContain('Gift access ended')
+    expect(html).toContain('Your promo-code access to Commander has ended.')
+  })
+})
 
 
 /**

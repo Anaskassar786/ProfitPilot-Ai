@@ -100,6 +100,7 @@ import {
   formatMoney,
   formatNumber,
   formatStoreDisplayName,
+  healthGaugeSweep,
   latestSyncLabel,
   revenuePoints,
   storeHealthView,
@@ -1215,9 +1216,12 @@ function humanizeBillingStatus(account: import('./model.js').BillingAccount | nu
     if (sub.state === 'CANCELLED') return { label: 'Cancelled', tone: 'neutral', planName }
     return { label: sub.state.replaceAll('_', ' '), tone: 'neutral', planName }
   }
-  if (account?.trial?.state === 'ACTIVE') return { label: 'Free Trial', tone: 'amber', planName: 'Trial' }
+  if (account?.trial?.state === 'ACTIVE' && !account.trial.trialForfeited) return { label: 'Free Trial', tone: 'amber', planName: 'Trial' }
   if (account?.trial?.state === 'EXPIRED') return { label: 'Trial ended', tone: 'neutral', planName: 'Trial' }
-  if (account?.gift) return { label: 'Gift Access', tone: 'purple', planName: 'Commander' }
+  // A forfeited (cancelled) trial with a dead gift is a locked store, not a
+  // "free trial" — only an OPEN gift window shows as Gift Access.
+  if (account?.gift && (account.gift.expiresAt ?? 0) > Date.now()) return { label: 'Gift Access', tone: 'purple', planName: 'Commander' }
+  if (account?.gift) return { label: 'Gift ended — upgrade required', tone: 'neutral', planName: 'None' }
   return { label: 'No plan', tone: 'neutral', planName: 'None' }
 }
 
@@ -1497,14 +1501,23 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
       }
     >
       {giftExpired && (
-        <Banner tone="warning" title="Gift access ended — upgrade to keep Commander features">
-          <p>Your promo-code access to Commander has ended. Basic trial features remain available until you choose Start, Growth, or Commander.</p>
-        </Banner>
+        /* Scoped wrapper: Polaris Banner resolves LIGHT tokens (white content
+           box) even in the app's dark theme, so the body text is forced to a
+           readable dark color in billing.css — never white-on-white. */
+        <div className="billing-banner-scope">
+          <Banner tone="warning" title="Gift access ended — upgrade to keep Commander features">
+            <p>{account?.trial?.trialForfeited
+              ? 'Your promo-code access to Commander has ended, and the free trial was forfeited when the gift was redeemed. Choose Start, Growth, or Commander to keep using ProfitPilot.'
+              : 'Your promo-code access to Commander has ended. Basic trial features remain available until you choose Start, Growth, or Commander.'}</p>
+          </Banner>
+        </div>
       )}
       {trialExpired && (
-        <Banner tone="critical" title="Trial expired — upgrade to continue">
-          <p>Your 14-day free trial has ended. Paid features are locked until you choose a plan; viewing your dashboard and syncing data still work.</p>
-        </Banner>
+        <div className="billing-banner-scope">
+          <Banner tone="critical" title="Trial expired — upgrade to continue">
+            <p>Your 14-day free trial has ended. Paid features are locked until you choose a plan; viewing your dashboard and syncing data still work.</p>
+          </Banner>
+        </div>
       )}
       {!context.storeId ? (
         <EmptyState icon={WalletCards} title="Connect Shopify to view billing" description="Billing never assumes a plan. Complete the signed install flow to load a real subscription." action="Connect from Settings" onAction={() => onToast('Open the Shopify install flow from the workspace context.', 'info')} />
@@ -1533,7 +1546,7 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
                             ? `Gift access expires ${new Date(account.gift.expiresAt).toLocaleDateString()}.`
                             : 'Start a plan or redeem a gift code when you are ready.'}
                 </p>
-                {account?.trial?.state === 'ACTIVE' && trialDaysLeft !== null && (
+                {account?.trial?.state === 'ACTIVE' && !account?.trial?.trialForfeited && trialDaysLeft !== null && (
                   <div className="billing-trial-progress">
                     <div className="billing-trial-progress-meta">
                       <span>Free trial progress</span>
@@ -1715,9 +1728,11 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
               <div className="section-kicker">GIFT ACCESS</div>
               <h3>Have a gift code?</h3>
               <p>Redeem once per store for temporary Commander access.</p>
-              <Banner tone="warning" title="Redeeming forfeits your free trial">
-                <p>⚠️ Redeeming this gift code will permanently forfeit your remaining 14-day free trial. This action cannot be undone. When the gift window ends, paid features lock until you choose a plan.</p>
-              </Banner>
+              <div className="billing-banner-scope">
+                <Banner tone="warning" title="Redeeming forfeits your free trial">
+                  <p>⚠️ Redeeming this gift code will permanently forfeit your remaining 14-day free trial. This action cannot be undone. When the gift window ends, paid features lock until you choose a plan.</p>
+                </Banner>
+              </div>
               <label className="billing-gift-ack">
                 <input
                   type="checkbox"
@@ -1805,7 +1820,9 @@ function CardHeading({ kicker, dot, title, action }: { kicker: string; dot: stri
 function MetricCard({ label, value, detail, icon: Icon, tone, gated }: { label: string; value: string; detail: string; icon: LucideIcon; tone: string; gated?: boolean }) { return <div className="card stat-card"><div className="stat-top"><span className={`stat-icon ${tone}`}><Icon size={17} /></span>{gated ? <span className="phase-tag">F4</span> : <span className="data-mark"><CheckCircle2 size={13} /></span>}</div><div className="stat-value">{value}</div><div className="stat-bottom"><span>{label}<small>{detail}</small></span></div></div> }
 function MiniMetric({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: string }) { return <div className="card mini-metric"><span className={`mini-metric-icon ${tone}`}><span /></span><div><span>{label}</span><strong>{value}</strong><small>{sub}</small></div></div> }
 function HealthGauge({ health }: { health: import('./model.js').StoreHealthView }) {
-  const sweep = health.score === null ? 0 : Math.max(8, Math.round(health.score * 2.4))
+  // Full 360° ring: healthGaugeSweep maps 100/100 → 360° so a perfect score
+  // closes the circle (the old × 2.4 mapping left it open at 240°).
+  const sweep = health.score === null ? 0 : healthGaugeSweep(health.score)
   return <div className={`health-gauge ${health.tone}`} style={health.score !== null ? { background: `conic-gradient(from 220deg, var(--health-color) ${sweep}deg, rgba(107,114,128,.14) 0)` } : undefined}><div className="gauge-inner"><strong>{health.score === null ? '—' : health.score}<small>{health.score === null ? '' : '/100'}</small></strong><span>{health.score === null ? 'NO DATA' : `${health.grade} · ${health.label}`}</span></div></div>
 }
 function HealthLine({ label, value, tone }: { label: string; value: string; tone: string }) { return <div className="health-item"><span><i className={`status-dot ${tone}`} />{label}</span><strong className={tone}>{value}</strong></div> }

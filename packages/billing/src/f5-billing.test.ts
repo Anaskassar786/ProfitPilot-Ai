@@ -3,9 +3,10 @@ import { PLAN_ENTITLEMENT_LIMITS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE,
 import { assertAccess, UpgradeRequiredError, accessGate, limitForPlan } from './entitlements.js'
 import { AdminStepUpSessions, FunnelLedger, FUNNEL_MILESTONES, calculateRoi, lockPrice, priceForRenewal } from './growth.js'
 import { agentsForPlanCount, PLAN_DEFINITIONS, entitlementsFor, planFor, priceFor } from './plans.js'
-import { TrialAndGiftLedger, expiredGiftRevert, giftCodesFromEnv, subscriptionForTrial } from './trials.js'
+import { TrialAndGiftLedger, PostgresTrialGiftStore, expiredGiftRevert, giftCodesFromEnv, normalizeForfeitedTrial, subscriptionForTrial } from './trials.js'
 import type { GiftCode } from './trials.js'
 import type { Subscription } from './billing.js'
+import type { DatabaseResult, QueryResultRow, SqlExecutor } from '@profitpilot/db'
 
 const active: Subscription = { storeId: 's', plan: 'growth', state: 'ACTIVE_MONTHLY', currentPeriodEnd: null, version: 0 }
 
@@ -185,6 +186,91 @@ describe('gift expiry revert (expiredGiftRevert)', () => {
     const reverted = expiredGiftRevert(giftRecord, trial, now)
     expect(reverted?.state).toBe('TRIAL_EXPIRED')
     expect(reverted?.plan).toBe('trial')
+  })
+})
+
+describe('trial forfeiture after gift expiry (never resume the 14-day trial)', () => {
+  const now = Date.parse('2026-08-25T00:00:00.000Z')
+  const giftRecord = { storeId: 's' as const, plan: 'commander' as const, state: 'GIFT_ACCESS_UNLIMITED' as const, currentPeriodEnd: now - 1_000, version: 3, interval: null, chargeId: null }
+
+  it('resolves TRIAL_EXPIRED when the gift window is past AND trial_forfeited is true — even for a legacy row that still looks ACTIVE', () => {
+    // Legacy/inconsistent data: the forfeit flag was written, but the row
+    // still claims an ACTIVE trial with days remaining (the "10 of 14 days
+    // remaining" bug). The resolution must ignore the stale window.
+    const inconsistent = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: false, state: 'ACTIVE' as const, trialForfeited: true }
+    const reverted = expiredGiftRevert(giftRecord, inconsistent, now)
+    expect(reverted?.state).toBe('TRIAL_EXPIRED')
+    expect(reverted?.plan).toBe('trial')
+    expect(reverted?.currentPeriodEnd).toBe(now - 1_000)
+  })
+
+  it('normalizeForfeitedTrial voids any forfeited trial, whatever the stored row says', () => {
+    expect(normalizeForfeitedTrial(null, now)).toBeNull()
+    const fresh = { shopId: 's', startedAt: now - 1_000, expiresAt: now + 1_000, consumed: false, state: 'ACTIVE' as const, trialForfeited: false }
+    expect(normalizeForfeitedTrial(fresh, now)).toBe(fresh)
+    const inconsistent = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: false, state: 'ACTIVE' as const, trialForfeited: true }
+    const voided = normalizeForfeitedTrial(inconsistent, now)
+    expect(voided).toMatchObject({ state: 'CANCELLED', consumed: true, trialForfeited: true, startedAt: inconsistent.startedAt })
+    expect(voided!.expiresAt).toBeLessThanOrEqual(now)
+    // Already-normalized rows pass through untouched (idempotent).
+    expect(normalizeForfeitedTrial(voided, now)).toBe(voided)
+  })
+
+  it('the ledger never reports a forfeited trial as ACTIVE with days remaining', () => {
+    const ledger = giftLedger()
+    ledger.startTrial('s', now - 4 * 86_400_000)
+    ledger.redeemGift('s', 'PRIMARY-TEST', now)
+    const later = now + 5 * 86_400_000
+    const trial = ledger.trial('s', later)
+    expect(trial?.state).not.toBe('ACTIVE')
+    expect(trial?.trialForfeited).toBe(true)
+    const daysLeft = Math.max(0, Math.ceil((trial!.expiresAt - later) / 86_400_000))
+    expect(daysLeft).toBe(0)
+  })
+
+  it('gift expiry after forfeiture locks the store: TRIAL_EXPIRED with zero trial days', () => {
+    const ledger = giftLedger()
+    ledger.startTrial('s', now - 4 * 86_400_000)
+    ledger.redeemGift('s', 'PRIMARY-TEST', now)
+    const later = now + 4 * 86_400_000 // the 3-day gift window is closed
+    const trial = ledger.trial('s', later)
+    const reverted = expiredGiftRevert(giftRecord, trial, later)
+    expect(trial?.state).not.toBe('ACTIVE')
+    expect(reverted?.state).toBe('TRIAL_EXPIRED')
+    expect(reverted?.plan).toBe('trial')
+  })
+
+  it('a consumed (non-forfeited) trial can never be resumed either', () => {
+    const consumed = { shopId: 's', startedAt: now - 10 * 86_400_000, expiresAt: now + 4 * 86_400_000, consumed: true, state: 'EXPIRED' as const, trialForfeited: false }
+    expect(expiredGiftRevert(giftRecord, consumed, now)?.state).toBe('TRIAL_EXPIRED')
+  })
+
+  it('startTrial never resurrects a trial for a store that already redeemed a gift', () => {
+    const ledger = giftLedger()
+    ledger.hydrateRedemption({ shopId: 's', code: 'PRIMARY-TEST', redeemedAt: now, expiresAt: now + 3 * 86_400_000 })
+    const trial = ledger.startTrial('s', now + 5 * 86_400_000)
+    expect(trial.state).toBe('CANCELLED')
+    expect(trial.trialForfeited).toBe(true)
+    expect(trial.consumed).toBe(true)
+    expect(trial.expiresAt).toBeLessThanOrEqual(now + 5 * 86_400_000)
+  })
+
+  it('the Postgres store repairs a legacy ACTIVE/forfeited row on read and persists the fix', async () => {
+    const legacyRow = { shop_id: 's', started_at: new Date(now - 10 * 86_400_000), expires_at: new Date(now + 4 * 86_400_000), consumed: false, state: 'ACTIVE', trial_forfeited: true }
+    const queries: string[] = []
+    const executor: SqlExecutor = {
+      async query<Row extends QueryResultRow>(text: string): Promise<DatabaseResult<Row>> {
+        queries.push(text)
+        if (text.includes('FROM trials')) return { rows: [legacyRow] as unknown as Row[], rowCount: 1 }
+        return { rows: [], rowCount: 0 }
+      },
+    }
+    const store = new PostgresTrialGiftStore(executor, [])
+    const trial = await store.trial('s', now + 1_000)
+    expect(trial?.state).toBe('CANCELLED')
+    expect(trial?.trialForfeited).toBe(true)
+    expect(trial?.expiresAt).toBeLessThanOrEqual(now + 1_000)
+    expect(queries.some((query) => query.includes('INSERT INTO trials'))).toBe(true)
   })
 })
 

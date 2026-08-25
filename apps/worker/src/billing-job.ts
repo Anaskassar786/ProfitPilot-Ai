@@ -56,6 +56,9 @@ export function createBillingJobs(env: Readonly<Record<string, string | undefine
 }
 
 function billingTestMode(env: Readonly<Record<string, string | undefined>>): boolean | 'auto' {
+  // Mirror the API's guard: never create a real-money charge outside
+  // production (and SHOPIFY_BILLING_TEST is the explicit App-Store switch).
+  if (env.NODE_ENV !== 'production' || env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
   const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
   if (value === 'true') return true
   if (value === 'false') return false
