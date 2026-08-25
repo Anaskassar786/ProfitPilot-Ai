@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
 import type { BillingRecord, BillingRepository, BillingInterval, BillingState, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
-import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, billingStatusFor, expiredGiftRevert } from '@profitpilot/billing'
+import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, billingStatusFor, expiredGiftRevert, isTestChargeOnlyRejection, shouldForceTestCharge } from '@profitpilot/billing'
 import { assertGiftSingleUse } from './gift-codes.js'
 
 /**
@@ -62,7 +62,13 @@ export type BillingRouteDependencies = Readonly<{
   repository: BillingRepository
   trials: TrialGiftSurface
   funnel: FunnelLedger
-  createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number) => Promise<RecurringCharge>
+  /**
+   * `testMode` (optional 6th argument) forces Shopify's `test` flag on the
+   * `appSubscriptionCreate` mutation. The route passes `true` for every
+   * development-store session so Shopify never answers
+   * "…can only accept test charges".
+   */
+  createCharge: (shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number, testMode?: boolean) => Promise<RecurringCharge>
   verifyCharge: (shopId: string, chargeId: string, plan?: PlanCode, interval?: BillingInterval) => Promise<RecurringCharge>
   /** Cancels the store's active Shopify AppSubscription. */
   cancelCharge?: (shopId: string, subscriptionId: string) => Promise<RecurringCharge>
@@ -306,9 +312,29 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
  */
 async function createChargeOrExplain(dependencies: BillingRouteDependencies, shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string): Promise<RecurringCharge> {
   if (!/^https:\/\//i.test(returnUrl)) throw new AppError('VALIDATION_ERROR', 'returnUrl must be an absolute https URL', 400, { returnUrl })
+  // Development / partner-test stores (and every non-production deployment)
+  // can ONLY accept test charges — force `test: true` up front instead of
+  // letting Shopify reject the live charge first.
+  const forcedTest = shouldForceTestCharge(shopId) || undefined
   try {
-    return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS)
+    return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, forcedTest)
   } catch (error: unknown) {
+    // Last-resort safety net: Shopify explicitly told us this store can only
+    // accept test charges — retry once with `test: true` before surfacing any
+    // error to the merchant.
+    if (forcedTest !== true && isTestChargeOnlyRejection(error)) {
+      try {
+        return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, true)
+      } catch (retryError: unknown) {
+        return explainChargeFailure(retryError, shopId, plan, interval)
+      }
+    }
+    return explainChargeFailure(error, shopId, plan, interval)
+  }
+}
+
+function explainChargeFailure(error: unknown, shopId: string, plan: PlanCode, interval: BillingInterval): never {
+  {
     if (!(error instanceof ShopifyBillingError)) throw error
     const rawBody = error.upstreamBody || ''
     const validationText = describeValidation(error.validationErrors)

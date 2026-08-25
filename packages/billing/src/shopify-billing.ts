@@ -92,12 +92,16 @@ export class ShopifyBillingClient {
     this.resolvedTestMode = typeof this.config.testMode === 'boolean' ? this.config.testMode : null
   }
 
-  public async createRecurringCharge(plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number): Promise<RecurringCharge> {
+  public async createRecurringCharge(plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number, testOverride?: boolean): Promise<RecurringCharge> {
     if (!returnUrl.startsWith('http')) throw new TypeError('Billing return URL must be absolute')
     const definition = planFor(plan)
     const price = priceFor(plan, interval)
     if (price <= 0) throw new ShopifyBillingError(422, `Shopify Billing rejected the ${definition.code} plan: price must be greater than zero`, { price: ['must be greater than zero'] })
-    const test = await this.testCharge()
+    // `testOverride` lets the caller (e.g. POST /billing/charge for a
+    // development-store session) demand a test charge without waiting for the
+    // shop probe.
+    const test = testOverride === true ? true : await this.testCharge()
+    if (testOverride === true) this.resolvedTestMode = true
     const name = `${definition.code} ${interval}`
     const buildVariables = (asTest: boolean): Record<string, unknown> => ({
       name,
@@ -203,7 +207,7 @@ export class ShopifyBillingClient {
    */
   public async testCharge(): Promise<boolean> {
     if (this.resolvedTestMode !== null) return this.resolvedTestMode
-    if (testChargeForcedByEnv()) {
+    if (shouldForceTestCharge(this.config.shop)) {
       this.resolvedTestMode = true
       return true
     }
@@ -305,17 +309,39 @@ function maskToken(token: string): string {
  * Environment forcing for the charge's `test` flag:
  *   - `NODE_ENV !== 'production'` → dev/preview/test environments,
  *   - `SHOPIFY_BILLING_TEST === 'true'` → explicit App-Store-friendly switch.
- *
- * Note on the original fix's `shopDomain.endsWith('.myshopify.com')` clause:
- * EVERY Shopify store — including production stores — is served from a
- * *.myshopify.com domain, so applying it unconditionally would turn every
- * real subscription into a test charge. It is therefore folded into the
- * non-production branch above (where it is implied), and in production the
- * shop-plan probe plus the auto-retry fallback decide instead.
  */
 export function testChargeForcedByEnv(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
   if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
+  if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'false') return false
   return env.NODE_ENV !== 'production'
+}
+
+/** True for a Shopify-hosted shop domain (`*.myshopify.com`). */
+export function isShopifyManagedDomain(shop: string | null | undefined): boolean {
+  return typeof shop === 'string' && shop.trim().toLowerCase().includes('.myshopify.com')
+}
+
+/**
+ * Single source of truth for "this charge must be created with `test: true`".
+ *
+ * Forced when ANY of the following holds:
+ *   1. `SHOPIFY_BILLING_TEST === 'true'` (explicit operator switch),
+ *   2. `NODE_ENV !== 'production'` (dev/preview/test deployments),
+ *   3. the shop is a `*.myshopify.com` store — development and partner-test
+ *      stores can only ever accept test charges, and Shopify rejects a live
+ *      charge there with "Development and partner-test stores can only accept
+ *      test charges".
+ *
+ * Escape hatch for real-money production billing: set
+ * `SHOPIFY_BILLING_TEST=false`, which disables clauses 2 and 3 and hands the
+ * decision back to the shop-plan probe (`testMode: 'auto'`).
+ */
+export function shouldForceTestCharge(shop: string | null | undefined, env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  const explicit = env.SHOPIFY_BILLING_TEST?.trim().toLowerCase()
+  if (explicit === 'true') return true
+  if (explicit === 'false') return false
+  if (env.NODE_ENV !== 'production') return true
+  return isShopifyManagedDomain(shop)
 }
 
 /**
