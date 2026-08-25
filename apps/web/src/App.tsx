@@ -1304,6 +1304,30 @@ export function visibleMeters(meters: readonly import('./model.js').UsageMeter[]
   return meters.filter((meter) => !HIDDEN_METER_KEYS.has(meter.feature))
 }
 
+/**
+ * Decides what the UI should do after a `POST /billing/charge` succeeds.
+ *
+ * Shopify's GraphQL `appSubscriptionCreate` can return a `null` `confirmationUrl`
+ * (charge not actually initiated). We must NEVER fake a success toast in that
+ * case — only a real checkout URL (redirect) or a dev/test mock charge (which
+ * locally activates with a `mock: true` flag and a message) count as success.
+ *
+ * Returns a discriminated outcome so `startCharge` renders the correct UX:
+ *   - `redirect`     → open Shopify checkout (App Bridge `_top` navigation)
+ *   - `mock-success` → local mock activation with a real message
+ *   - `error`        → show "Unable to initiate Shopify checkout…" and retry
+ */
+export type PlanChargeOutcome =
+  | Readonly<{ kind: 'redirect'; confirmationUrl: string }>
+  | Readonly<{ kind: 'mock-success'; message: string }>
+  | Readonly<{ kind: 'error' }>
+
+export function planChargeOutcome(charge: Readonly<{ confirmationUrl: string | null; mock?: boolean; message?: string }>, planLabel: string): PlanChargeOutcome {
+  if (charge.confirmationUrl) return { kind: 'redirect', confirmationUrl: charge.confirmationUrl }
+  if (charge.mock) return { kind: 'mock-success', message: charge.message ?? `Upgraded to ${planLabel}. Billed securely through Shopify when you upgrade.` }
+  return { kind: 'error' }
+}
+
 function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context: WorkspaceContext; onPhaseGate: (phase: string, capability: string) => void; onToast: (message: string, kind?: ToastKind) => void }) {
   const [plans, setPlans] = useState<readonly import('./model.js').BillingPlan[]>([])
   const [account, setAccount] = useState<import('./model.js').BillingAccount | null>(null)
@@ -1395,11 +1419,19 @@ function BillingPage({ context, onPhaseGate: _onPhaseGate, onToast }: { context:
         if (value) returnUrl.searchParams.set(key, value)
       }
       const charge = await createBillingCharge(context.storeId, plan, billingInterval, returnUrl.toString())
-      if (charge.confirmationUrl) {
-        redirectToShopifyCheckout(charge.confirmationUrl)
+      // A null `confirmationUrl` means Shopify never initiated checkout — we
+      // must NOT show a fake success toast. `planChargeOutcome` returns an
+      // error outcome in that case (unless it is a legit dev/test mock).
+      const outcome = planChargeOutcome(charge, plan.charAt(0) + plan.slice(1).toLowerCase())
+      if (outcome.kind === 'redirect') {
+        redirectToShopifyCheckout(outcome.confirmationUrl)
         return
       }
-      onToast(charge.message ?? `Upgraded to ${plan.charAt(0) + plan.slice(1).toLowerCase()}. Billed securely through Shopify when you upgrade.`, 'success')
+      if (outcome.kind === 'error') {
+        onToast('Unable to initiate Shopify checkout. Please try again or contact support.', 'error')
+        return
+      }
+      onToast(outcome.message, 'success')
       await reload()
       const tier = plan.toLowerCase() as Exclude<PlanTier, 'trial'>
       setUsage((current) => {

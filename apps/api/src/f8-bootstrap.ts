@@ -126,7 +126,18 @@ export function createF8Bootstrap(env: Readonly<Record<string, string | undefine
   // refused with the reactivate/upgrade message, TRIAL_LIMITED answers data
   // questions only, and only ACTIVE_* states unlock Commander actions. A
   // missing record normalizes to trial-limited (never full access).
-  const billingStateFor = async (tenant: import('@profitpilot/types').StoreId): Promise<string | null> => (await f7.billing.repository.get(tenant))?.state ?? null
+  const billingStateFor = async (tenant: import('@profitpilot/types').StoreId): Promise<string | null> => {
+    const record = await f7.billing.repository.get(tenant)
+    if (!record) return null
+    // Cancellation grace period: a CANCELLED store keeps FULL access until the
+    // end of its paid billing period. Report the equivalent active state so the
+    // AI Command Center stays usable during the grace window; once
+    // `now >= current_period_end` it reports CANCELLED (read-only).
+    if (record.state === 'CANCELLED' && record.currentPeriodEnd !== null && record.currentPeriodEnd > Date.now()) {
+      return record.interval === 'ANNUAL' ? 'ACTIVE_ANNUAL' : 'ACTIVE_MONTHLY'
+    }
+    return record.state
+  }
   const pageMetrics = new AiCommandPageMetricsService({
     customers: customerRepository,
     inventory: inventoryRepository,
