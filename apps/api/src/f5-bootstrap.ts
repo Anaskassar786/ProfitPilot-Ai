@@ -245,18 +245,23 @@ function featureLimit(plan: 'trial' | 'start' | 'growth' | 'commander', feature:
  * `auto` lets the billing client read the shop's plan and force `test: true`
  * for development/partner-test stores, which Shopify otherwise rejects with a
  * 422 when a live charge is requested.
+ *
+ * EMERGENCY FIX (2026-08-25): Default to test:true unless
+ * SHOPIFY_BILLING_FORCE_LIVE === 'true'. Railway production still hosts a
+ * development store that can ONLY accept test charges — do NOT check NODE_ENV.
  */
 function billingTestMode(env: Readonly<Record<string, string | undefined>>): boolean | 'auto' {
-  // Never create a real-money charge outside production. SHOPIFY_BILLING_TEST
-  // is the App Store/review-friendly explicit switch; TEST_MODE remains
-  // supported for existing deployments, with auto shop-plan detection as the
-  // safest production default.
-  if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'false') return 'auto'
-  if (env.NODE_ENV !== 'production' || env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
-  const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
-  if (value === 'true') return true
-  if (value === 'false') return false
-  return 'auto'
+  // Real-money escape hatch: only when FORCE_LIVE=true do we allow live charges
+  if (env.SHOPIFY_BILLING_FORCE_LIVE === 'true') {
+    const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
+    if (value === 'true') return true
+    if (value === 'false') return false
+    // When FORCE_LIVE, defer to shop probe if SHOPIFY_BILLING_TEST=false, else auto
+    if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'false') return 'auto'
+    return 'auto'
+  }
+  // Default: always test:true for seamless dev-store operation
+  return true
 }
 
 // Gift codes are read from the environment by @profitpilot/billing
