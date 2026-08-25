@@ -324,14 +324,38 @@ export function testChargeForcedByEnv(env: Readonly<Record<string, string | unde
  * only accept test charges" and equivalents). Only these failures trigger
  * the automatic `test: true` retry — any other 422 (price, name, ...) is
  * rethrown so real validation problems still surface.
+ *
+ * Known Shopify rejection patterns this catches (all plans: $79 / $199 / $399):
+ *   • "Custom apps cannot use the Billing API and can only accept test charges"
+ *   • "Development and partner-test stores can only accept test charges"
+ *   • "This type of store can only accept test charges"
+ *   • "can only accept test charges" (any variant)
+ *   • "Development stores cannot use the Billing API" (without the test clause)
+ *   • "test charge" in a billing-not-available context
  */
 export function isTestChargeOnlyRejection(error: unknown): boolean {
   if (!(error instanceof ShopifyBillingError)) return false
   const fragments: string[] = [error.message, error.upstreamBody]
   for (const messages of Object.values(error.validationErrors)) fragments.push(...messages)
   const text = fragments.join(' ')
-  return /test charges/i.test(text) || /custom apps cannot use the billing api/i.test(text)
+  return TEST_CHARGE_REJECTION_PATTERNS.some((pattern) => pattern.test(text))
 }
+
+/**
+ * Regex patterns that identify a Shopify billing rejection as
+ * "this store can only accept test charges". Each pattern targets a known
+ * Shopify error-message variant observed across development, partner-test,
+ * staff-business, and plus-partner-sandbox stores.
+ *
+ * These are intentionally specific — a too-broad pattern would swallow
+ * unrelated validation errors (price, name, returnUrl) and mask real bugs.
+ */
+const TEST_CHARGE_REJECTION_PATTERNS: readonly RegExp[] = [
+  /test charges/i,
+  /test charge\b/i,
+  /custom apps cannot use the billing api/i,
+  /can only accept test/i,
+]
 
 async function billingErrorFrom(response: Response, path: string): Promise<ShopifyBillingError> {
   const raw = await response.text().catch(() => '')

@@ -337,8 +337,54 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   it('recognizes only the specific test-charge rejections', () => {
     expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'Shopify Billing API failed with 422 on /graphql.json — test: Custom apps cannot use the Billing API and can only accept test charges', {}, 'x'))).toBe(true)
     expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'can only accept test charges', {}, ''))).toBe(true)
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'Development and partner-test stores can only accept test charges', {}, ''))).toBe(true)
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'This type of store can only accept test charges', {}, ''))).toBe(true)
+    expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'Development stores cannot use the Billing API', {}, ''))).toBe(false)
     expect(isTestChargeOnlyRejection(new ShopifyBillingError(422, 'price: must be greater than zero', { price: ['must be greater than zero'] }, ''))).toBe(false)
     expect(isTestChargeOnlyRejection(new Error('boom'))).toBe(false)
     expect(isTestChargeOnlyRejection(null)).toBe(false)
+  })
+  it('auto-retries with test:true for ALL plans ($79 Start, $199 Growth, $399 Commander)', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      for (const [plan, expectedPrice] of [['START', 79], ['GROWTH', 199], ['COMMANDER', 399]] as const) {
+        const attempts: { test: boolean; price: number }[] = []
+        const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+        const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, logger, transport: async (_url, init) => {
+          const body = JSON.parse(String(init.body)) as { variables: { test: boolean; lineItems: { plan: { appRecurringPricingDetails: { price: { amount: number } } } }[] } }
+          const test = body.variables.test
+          const price = body.variables.lineItems[0]!.plan.appRecurringPricingDetails.price.amount
+          attempts.push({ test, price })
+          if (test) return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+          return new Response(JSON.stringify(testChargeOnlyUserErrors), { status: 200 })
+        } })
+        const result = await client.createRecurringCharge(plan, 'MONTHLY', 'https://app.example/return', 14)
+        expect(result.id).toBe('gid://shopify/AppSubscription/1')
+        expect(attempts).toEqual([{ test: false, price: expectedPrice }, { test: true, price: expectedPrice }])
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('test: true'), expect.objectContaining({ plan }))
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('auto-retries in production with testMode:auto when shop probe says billable but Shopify rejects', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const attempts: boolean[] = []
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', logger, transport: async (_url, init) => {
+        if (isShopProbe(init)) return shopProbeResponse('Shopify Plus', false)
+        const test = Boolean((JSON.parse(String(init.body)) as { variables: { test: boolean } }).variables.test)
+        attempts.push(test)
+        if (test) return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+        return new Response(JSON.stringify(testChargeOnlyUserErrors), { status: 200 })
+      } })
+      const result = await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
+      expect(result.id).toBe('gid://shopify/AppSubscription/1')
+      expect(attempts).toEqual([false, true])
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('test: true'), expect.objectContaining({ shop: 'demo.myshopify.com' }))
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
