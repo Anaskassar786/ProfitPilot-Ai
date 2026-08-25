@@ -297,7 +297,7 @@ describe('billing charge failure translation', () => {
 
   it('retries with testMode:true when Shopify answers "can only accept test charges"', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     const modes: (boolean | undefined)[] = []
     const createCharge: BillingRouteDependencies['createCharge'] = async (_shop, _plan, _interval, _url, trialDays, testMode) => {
       modes.push(testMode)

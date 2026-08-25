@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
 import type { BillingRecord, BillingRepository, BillingInterval, BillingState, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
-import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, billingStatusFor, expiredGiftRevert, isTestChargeOnlyRejection, shouldForceTestCharge } from '@profitpilot/billing'
+import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, billingStatusFor, expiredGiftRevert, isTestChargeOnlyRejection } from '@profitpilot/billing'
 import { assertGiftSingleUse } from './gift-codes.js'
 
 /**
@@ -309,24 +309,37 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
  * an actionable message instead of a bare 500. Shopify answers 422 with the
  * offending fields; those are surfaced verbatim (they contain no secrets) and
  * kept on the error cause so the API error log records the upstream body.
+ *
+ * EMERGENCY FIX (2026-08-25): Railway runs with NODE_ENV=production but the
+ * store is a Development Store that can ONLY accept test charges. Previous
+ * logic checked NODE_ENV and sent test:false to Shopify, which rejected it
+ * with \"Custom apps cannot use the Billing API\" / \"can only accept test
+ * charges\". We now ALWAYS force test:true unless SHOPIFY_BILLING_FORCE_LIVE
+ * is explicitly set to 'true' for real-money production.
  */
 async function createChargeOrExplain(dependencies: BillingRouteDependencies, shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string): Promise<RecurringCharge> {
   if (!/^https:\/\//i.test(returnUrl)) throw new AppError('VALIDATION_ERROR', 'returnUrl must be an absolute https URL', 400, { returnUrl })
-  // Development / partner-test stores (and every non-production deployment)
-  // can ONLY accept test charges — force `test: true` up front instead of
-  // letting Shopify reject the live charge first.
-  const forcedTest = shouldForceTestCharge(shopId) || undefined
+  // FORCE TEST CHARGES BY DEFAULT — do NOT check NODE_ENV.
+  // Only when SHOPIFY_BILLING_FORCE_LIVE === 'true' do we allow a live charge
+  // (real-money production). Every other environment, including production
+  // on Railway with a development store, gets test:true seamlessly.
+  const forceLive = process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true'
+  const forcedTest = forceLive ? undefined : true
   try {
     return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, forcedTest)
   } catch (error: unknown) {
     // Last-resort safety net: Shopify explicitly told us this store can only
     // accept test charges — retry once with `test: true` before surfacing any
-    // error to the merchant.
-    if (forcedTest !== true && isTestChargeOnlyRejection(error)) {
-      try {
-        return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, true)
-      } catch (retryError: unknown) {
-        return explainChargeFailure(retryError, shopId, plan, interval)
+    // error to the merchant. This also handles the \"Custom apps\" rejection.
+    if (isTestChargeOnlyRejection(error)) {
+      // If we already tried test:true, still attempt once more to be safe,
+      // but avoid infinite loop — only retry when forcedTest wasn't true.
+      if (forcedTest !== true) {
+        try {
+          return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, true)
+        } catch (retryError: unknown) {
+          return explainChargeFailure(retryError, shopId, plan, interval)
+        }
       }
     }
     return explainChargeFailure(error, shopId, plan, interval)

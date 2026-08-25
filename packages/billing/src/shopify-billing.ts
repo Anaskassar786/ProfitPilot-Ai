@@ -97,11 +97,32 @@ export class ShopifyBillingClient {
     const definition = planFor(plan)
     const price = priceFor(plan, interval)
     if (price <= 0) throw new ShopifyBillingError(422, `Shopify Billing rejected the ${definition.code} plan: price must be greater than zero`, { price: ['must be greater than zero'] })
-    // `testOverride` lets the caller (e.g. POST /billing/charge for a
-    // development-store session) demand a test charge without waiting for the
-    // shop probe.
-    const test = testOverride === true ? true : await this.testCharge()
-    if (testOverride === true) this.resolvedTestMode = true
+
+    // EMERGENCY FIX (2026-08-25): Always default to test:true unless
+    // SHOPIFY_BILLING_FORCE_LIVE === 'true'. Development and partner-test
+    // stores can ONLY accept test charges — Shopify rejects live charges with
+    // "Custom apps cannot use the Billing API" / "can only accept test charges".
+    const forceLiveEnv = (() => {
+      try {
+        return typeof process !== 'undefined' && process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true'
+      } catch {
+        return false
+      }
+    })()
+
+    let test: boolean
+    if (!forceLiveEnv) {
+      // Default to test:true for seamless dev-store operation — do NOT check NODE_ENV
+      test = true
+      if (testOverride === true) this.resolvedTestMode = true
+    } else {
+      // Real-money production: respect override and probe
+      test = testOverride === true ? true : testOverride === false ? false : await this.testCharge()
+      if (testOverride === true) this.resolvedTestMode = true
+    }
+    // Ensure resolvedTestMode reflects forced test
+    if (test === true && !forceLiveEnv) this.resolvedTestMode = true
+
     const name = `${definition.code} ${interval}`
     const buildVariables = (asTest: boolean): Record<string, unknown> => ({
       name,
@@ -141,7 +162,11 @@ export class ShopifyBillingClient {
       // and transparently re-execute the mutation with `test: true` so the
       // merchant never sees the red error. Unrelated failures are rethrown
       // untouched.
-      if (test || !isTestChargeOnlyRejection(error)) throw error
+      // MANDATORY: If GraphQL userErrors or top-level error contains
+      // "test charges" or "Custom apps", IMMEDIATELY execute a fallback query
+      // with test:true and return the resulting confirmationUrl.
+      if (!isTestChargeOnlyRejection(error)) throw error
+      if (test === true) throw error
       this.config.logger?.warn('Shopify rejected the charge as non-test; retrying automatically with test: true', {
         shop: this.config.shop,
         mutation: 'appSubscriptionCreate',
@@ -194,16 +219,14 @@ export class ShopifyBillingClient {
    * client: development/partner-test shops can never be charged for real, and
    * asking for a live charge there is answered with 422.
    *
-   * Bulletproof detection order:
-   *   1. explicit `testMode` config wins (operator intent, production),
-   *   2. environment forcing — `NODE_ENV !== 'production'` or
-   *      `SHOPIFY_BILLING_TEST=true` means test charges (dev/preview can
-   *      never be charged for real; every dev store is a *.myshopify.com
-   *      domain, so this is what the domain check was meant to catch),
-   *   3. otherwise probe the shop's plan (Shopify Plus/Basic → live charges
-   *      are allowed; development/partner-test → test charges).
-   * The create-charge auto-retry below remains the final safety net for any
-   * remaining "can only accept test charges" rejections.
+   * EMERGENCY FIX: Default to test:true unless SHOPIFY_BILLING_FORCE_LIVE === 'true'.
+   * Do NOT check NODE_ENV — Railway production still hosts a development store.
+   *
+   * Detection order:
+   *   1. explicit `testMode` config wins (operator intent),
+   *   2. SHOPIFY_BILLING_FORCE_LIVE === 'true' → allow live (real-money prod),
+   *   3. otherwise force test:true (dev stores seamless),
+   *   4. fallback probe only when FORCE_LIVE is true and mode is auto.
    */
   public async testCharge(): Promise<boolean> {
     if (this.resolvedTestMode !== null) return this.resolvedTestMode
@@ -306,14 +329,15 @@ function maskToken(token: string): string {
 }
 
 /**
- * Environment forcing for the charge's `test` flag:
- *   - `NODE_ENV !== 'production'` → dev/preview/test environments,
- *   - `SHOPIFY_BILLING_TEST === 'true'` → explicit App-Store-friendly switch.
+ * Environment forcing for the charge's `test` flag.
+ * EMERGENCY FIX: Default to test:true unless SHOPIFY_BILLING_FORCE_LIVE === 'true'.
+ * Do NOT check NODE_ENV — Railway production still hosts a development store.
  */
 export function testChargeForcedByEnv(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
-  if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
+  if (env.SHOPIFY_BILLING_FORCE_LIVE === 'true') return false
   if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'false') return false
-  return env.NODE_ENV !== 'production'
+  // Default to true for seamless dev-store operation
+  return true
 }
 
 /** True for a Shopify-hosted shop domain (`*.myshopify.com`). */
@@ -324,24 +348,24 @@ export function isShopifyManagedDomain(shop: string | null | undefined): boolean
 /**
  * Single source of truth for "this charge must be created with `test: true`".
  *
- * Forced when ANY of the following holds:
- *   1. `SHOPIFY_BILLING_TEST === 'true'` (explicit operator switch),
- *   2. `NODE_ENV !== 'production'` (dev/preview/test deployments),
- *   3. the shop is a `*.myshopify.com` store — development and partner-test
- *      stores can only ever accept test charges, and Shopify rejects a live
- *      charge there with "Development and partner-test stores can only accept
- *      test charges".
+ * EMERGENCY FIX (2026-08-25): Default to test:true unless SHOPIFY_BILLING_FORCE_LIVE === 'true'.
+ * Do NOT check NODE_ENV — Railway runs with NODE_ENV=production but the store is
+ * a Development Store that can ONLY accept test charges.
  *
- * Escape hatch for real-money production billing: set
- * `SHOPIFY_BILLING_TEST=false`, which disables clauses 2 and 3 and hands the
- * decision back to the shop-plan probe (`testMode: 'auto'`).
+ * Forced to true when:
+ *   - SHOPIFY_BILLING_FORCE_LIVE !== 'true' (default path — seamless dev stores)
+ * Escape hatch for real-money production: set SHOPIFY_BILLING_FORCE_LIVE=true
+ * and optionally SHOPIFY_BILLING_TEST=false to hand decision to shop probe.
+ *
+ * Legacy: SHOPIFY_BILLING_TEST=false still disables forcing for backward compat.
  */
 export function shouldForceTestCharge(shop: string | null | undefined, env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  if (env.SHOPIFY_BILLING_FORCE_LIVE === 'true') return false
   const explicit = env.SHOPIFY_BILLING_TEST?.trim().toLowerCase()
-  if (explicit === 'true') return true
   if (explicit === 'false') return false
-  if (env.NODE_ENV !== 'production') return true
-  return isShopifyManagedDomain(shop)
+  if (explicit === 'true') return true
+  // Default to test:true — do NOT check NODE_ENV or domain, dev stores must work in production
+  return true
 }
 
 /**
