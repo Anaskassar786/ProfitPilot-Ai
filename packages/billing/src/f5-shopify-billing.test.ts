@@ -174,14 +174,13 @@ describe('Shopify billing 422 diagnostics and payload shape', () => {
 })
 
 describe('automatic test-charge detection', () => {
-  // The shop-plan probe only runs in production — outside production the
-  // environment (NODE_ENV / SHOPIFY_BILLING_TEST) forces test charges before
-  // any probe. Stub production for these two tests so they exercise the
-  // production probe path.
+  // The shop-plan probe only runs when SHOPIFY_BILLING_FORCE_LIVE=true — otherwise
+  // we default to test:true for seamless dev-store operation (emergency fix).
+  // These two tests stub FORCE_LIVE=true so they exercise the probe path.
   it('forces test:true on a development store via GraphQL ShopProbe', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    // SHOPIFY_BILLING_TEST=false is the documented escape hatch that disables
-    // the domain/NODE_ENV forcing and hands the decision to the shop probe.
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
+    // SHOPIFY_BILLING_TEST=false is the legacy escape hatch that disables forcing
     vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     const queries: string[] = []
     let body: { variables: { test: boolean } } | undefined
@@ -205,6 +204,7 @@ describe('automatic test-charge detection', () => {
   })
   it('allows a live charge on a paid store and caches the lookup', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     let shopLookups = 0
     let body: { variables: { test: boolean } } | undefined
@@ -236,14 +236,19 @@ describe('automatic test-charge detection', () => {
     expect(probes).toEqual([])
   })
   it('falls back to a test charge when the shop lookup fails', async () => {
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     let body: { variables: { test: boolean } } | undefined
-    const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
-      if (isShopProbe(init)) return new Response('', { status: 403 })
-      body = JSON.parse(String(init.body))
-      return new Response(JSON.stringify(graphqlCreate), { status: 201 })
-    } })
-    await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
-    expect(body?.variables.test).toBe(true)
+    try {
+      const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', transport: async (_url, init) => {
+        if (isShopProbe(init)) return new Response('', { status: 403 })
+        body = JSON.parse(String(init.body))
+        return new Response(JSON.stringify(graphqlCreate), { status: 201 })
+      } })
+      await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
+      expect(body?.variables.test).toBe(true)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
   it('never performs a shop lookup when the mode is explicit', async () => {
     const probes: string[] = []
@@ -289,6 +294,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
 
   it('retries with test:true when a live charge is rejected as test-charge-only (GraphQL userErrors)', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     const attempts: boolean[] = []
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     try {
@@ -308,6 +314,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   })
   it('retries with test:true on an HTTP-level test-charge-only 422', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     const attempts: boolean[] = []
     try {
       const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (_url, init) => {
@@ -325,6 +332,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   })
   it('does not retry unrelated 422 validation failures (price)', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     const attempts: boolean[] = []
     try {
       const client = new ShopifyBillingClient({ shop: 'demo.myshopify.com', accessToken: 'token', testMode: false, transport: async (_url, init) => {
@@ -365,6 +373,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   })
   it('auto-retries with test:true for ALL plans ($79 Start, $199 Growth, $399 Commander)', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     try {
       for (const [plan, expectedPrice] of [['START', 79], ['GROWTH', 199], ['COMMANDER', 399]] as const) {
         const attempts: { test: boolean; price: number }[] = []
@@ -388,6 +397,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   })
   it('auto-retries in production with testMode:auto when shop probe says billable but Shopify rejects', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_FORCE_LIVE', 'true')
     vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     const attempts: boolean[] = []
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
