@@ -92,42 +92,34 @@ export class ShopifyBillingClient {
     this.resolvedTestMode = typeof this.config.testMode === 'boolean' ? this.config.testMode : null
   }
 
-  public async createRecurringCharge(plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number, testOverride?: boolean): Promise<RecurringCharge> {
+  /**
+   * Creates the recurring charge. The `test` GraphQL variable is HARDCODED
+   * directly in the mutation payload below (one env-var expression — no
+   * helper functions, no NODE_ENV checks, no shop-plan probe, no testMode
+   * config). The optional `_testOverride` argument is accepted for signature
+   * compatibility but deliberately IGNORED: SHOPIFY_BILLING_FORCE_LIVE is the
+   * single source of truth so the deployed payload can never drift.
+   */
+  public async createRecurringCharge(plan: PlanCode, interval: BillingInterval, returnUrl: string, trialDays: number, _testOverride?: boolean): Promise<RecurringCharge> {
     if (!returnUrl.startsWith('http')) throw new TypeError('Billing return URL must be absolute')
     const definition = planFor(plan)
     const price = priceFor(plan, interval)
     if (price <= 0) throw new ShopifyBillingError(422, `Shopify Billing rejected the ${definition.code} plan: price must be greater than zero`, { price: ['must be greater than zero'] })
 
-    // EMERGENCY FIX (2026-08-25): Always default to test:true unless
-    // SHOPIFY_BILLING_FORCE_LIVE === 'true'. Development and partner-test
-    // stores can ONLY accept test charges — Shopify rejects live charges with
-    // "Custom apps cannot use the Billing API" / "can only accept test charges".
-    const forceLiveEnv = (() => {
-      try {
-        return typeof process !== 'undefined' && process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true'
-      } catch {
-        return false
-      }
-    })()
-
-    let test: boolean
-    if (!forceLiveEnv) {
-      // Default to test:true for seamless dev-store operation — do NOT check NODE_ENV
-      test = true
-      if (testOverride === true) this.resolvedTestMode = true
-    } else {
-      // Real-money production: respect override and probe
-      test = testOverride === true ? true : testOverride === false ? false : await this.testCharge()
-      if (testOverride === true) this.resolvedTestMode = true
-    }
-    // Ensure resolvedTestMode reflects forced test
-    if (test === true && !forceLiveEnv) this.resolvedTestMode = true
-
     const name = `${definition.code} ${interval}`
-    const buildVariables = (asTest: boolean): Record<string, unknown> => ({
+
+    // MANDATORY FIX (2026-08-25): the `test` variable is decided HERE, at the
+    // exact spot where the GraphQL mutation variables are built.
+    //   default (SHOPIFY_BILLING_FORCE_LIVE unset):  test = true
+    //     — development and partner-test stores can ONLY accept test charges;
+    //       any other value triggers "Custom apps cannot use the Billing API
+    //       ... can only accept test charges".
+    //   SHOPIFY_BILLING_FORCE_LIVE === 'true':       test = false
+    //     — the only escape hatch for real-money production.
+    const createVariables: Record<string, unknown> = {
       name,
       returnUrl,
-      test: asTest,
+      test: process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true' ? false : true,
       lineItems: [{
         plan: {
           appRecurringPricingDetails: {
@@ -137,9 +129,15 @@ export class ShopifyBillingClient {
         },
       }],
       ...(Number.isFinite(trialDays) && trialDays > 0 ? { trialDays: Math.floor(trialDays) } : {}),
+    }
+    const sendTest = createVariables.test as boolean
+    this.resolvedTestMode = sendTest
+
+    this.config.logger?.info('[ShopifyBilling] Sending appSubscriptionCreate', {
+      shop: this.config.shop,
+      plan,
+      testVariable: process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true' ? false : true,
     })
-    const attempt = (asTest: boolean): Promise<RecurringCharge> =>
-      this.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, buildVariables(asTest)).then((payload) => chargeFromGraphqlCreate(payload, name, price.toFixed(2), asTest))
 
     this.config.logger?.info('Shopify Billing API charge request', {
       shop: this.config.shop,
@@ -148,25 +146,25 @@ export class ShopifyBillingClient {
       plan,
       interval,
       price: price.toFixed(2),
-      test,
+      test: sendTest,
       trialDays,
       tokenMasked: maskToken(this.config.accessToken),
     })
 
+    const attempt = (variables: Record<string, unknown>, asTest: boolean): Promise<RecurringCharge> =>
+      this.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, variables).then((payload) => chargeFromGraphqlCreate(payload, name, price.toFixed(2), asTest))
+
     try {
-      return await attempt(test)
+      return await attempt(createVariables, sendTest)
     } catch (error: unknown) {
-      // Foolproof fallback: live dev stores still answer a non-test charge
-      // with "Custom apps cannot use the Billing API ... can only accept
-      // test charges" (and friends). Catch that SPECIFIC rejection, log it,
-      // and transparently re-execute the mutation with `test: true` so the
-      // merchant never sees the red error. Unrelated failures are rethrown
-      // untouched.
-      // MANDATORY: If GraphQL userErrors or top-level error contains
-      // "test charges" or "Custom apps", IMMEDIATELY execute a fallback query
-      // with test:true and return the resulting confirmationUrl.
+      // Last-resort safety net: if Shopify STILL answers a live charge with a
+      // test-charges-only rejection ("Custom apps cannot use the Billing API
+      // ... can only accept test charges" and friends), log it and
+      // transparently re-execute the mutation with `test: true` hardcoded so
+      // the merchant never sees the red error. Unrelated failures are
+      // rethrown untouched.
       if (!isTestChargeOnlyRejection(error)) throw error
-      if (test === true) throw error
+      if (sendTest === true) throw error
       this.config.logger?.warn('Shopify rejected the charge as non-test; retrying automatically with test: true', {
         shop: this.config.shop,
         mutation: 'appSubscriptionCreate',
@@ -175,7 +173,7 @@ export class ShopifyBillingClient {
         rejection: error instanceof Error ? error.message : String(error),
       })
       this.resolvedTestMode = true
-      return attempt(true)
+      return attempt({ ...createVariables, test: true }, true)
     }
   }
 
@@ -215,18 +213,14 @@ export class ShopifyBillingClient {
   }
 
   /**
-   * Whether this charge must be created as a test charge. Resolved once per
+   * Whether this shop appears to only accept test charges. Resolved once per
    * client: development/partner-test shops can never be charged for real, and
    * asking for a live charge there is answered with 422.
    *
-   * EMERGENCY FIX: Default to test:true unless SHOPIFY_BILLING_FORCE_LIVE === 'true'.
-   * Do NOT check NODE_ENV — Railway production still hosts a development store.
-   *
-   * Detection order:
-   *   1. explicit `testMode` config wins (operator intent),
-   *   2. SHOPIFY_BILLING_FORCE_LIVE === 'true' → allow live (real-money prod),
-   *   3. otherwise force test:true (dev stores seamless),
-   *   4. fallback probe only when FORCE_LIVE is true and mode is auto.
+   * NOTE (2026-08-25 MANDATORY FIX): `createRecurringCharge` no longer
+   * consults this method — the mutation's `test` variable is hardcoded
+   * directly in the GraphQL payload from SHOPIFY_BILLING_FORCE_LIVE. This
+   * method remains as public API for diagnostics/reconciliation lookups.
    */
   public async testCharge(): Promise<boolean> {
     if (this.resolvedTestMode !== null) return this.resolvedTestMode

@@ -319,22 +319,22 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
  */
 async function createChargeOrExplain(dependencies: BillingRouteDependencies, shopId: string, plan: PlanCode, interval: BillingInterval, returnUrl: string): Promise<RecurringCharge> {
   if (!/^https:\/\//i.test(returnUrl)) throw new AppError('VALIDATION_ERROR', 'returnUrl must be an absolute https URL', 400, { returnUrl })
-  // FORCE TEST CHARGES BY DEFAULT — do NOT check NODE_ENV.
-  // Only when SHOPIFY_BILLING_FORCE_LIVE === 'true' do we allow a live charge
-  // (real-money production). Every other environment, including production
-  // on Railway with a development store, gets test:true seamlessly.
-  const forceLive = process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true'
-  const forcedTest = forceLive ? undefined : true
+  // MANDATORY FIX (2026-08-25): the `testMode` passed to the billing client is
+  // the exact same single env-var expression the billing client hardcodes in
+  // its GraphQL variables — one source of truth, no NODE_ENV checks, no
+  // probe, no `undefined`. Default (FORCE_LIVE unset) is test:true because
+  // development and partner-test stores can ONLY accept test charges; only
+  // SHOPIFY_BILLING_FORCE_LIVE === 'true' sends a real-money live charge.
+  const testMode = process.env.SHOPIFY_BILLING_FORCE_LIVE === 'true' ? false : true
   try {
-    return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, forcedTest)
+    return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, testMode)
   } catch (error: unknown) {
     // Last-resort safety net: Shopify explicitly told us this store can only
     // accept test charges — retry once with `test: true` before surfacing any
     // error to the merchant. This also handles the \"Custom apps\" rejection.
     if (isTestChargeOnlyRejection(error)) {
-      // If we already tried test:true, still attempt once more to be safe,
-      // but avoid infinite loop — only retry when forcedTest wasn't true.
-      if (forcedTest !== true) {
+      // Only retry when the first attempt was sent live (test:false).
+      if (testMode !== true) {
         try {
           return await dependencies.createCharge(shopId, plan, interval, returnUrl, DEFAULT_TRIAL_DAYS, true)
         } catch (retryError: unknown) {
