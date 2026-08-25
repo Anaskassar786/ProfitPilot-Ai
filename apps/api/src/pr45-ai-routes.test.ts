@@ -104,9 +104,9 @@ describe('PR45 agent run gating', () => {
     expect(data.recommendations.length).toBeGreaterThan(0)
     expect(data.recommendations.every((item: { agent: string }) => item.agent === 'REVENUE_AGENT')).toBe(true)
   }))
-  it('rejects a locked agent with 403 UPGRADE_REQUIRED and the required plan', async () => await withServer(async ({ base }) => {
+  it('rejects a locked agent with 402 UPGRADE_REQUIRED and the required plan', async () => await withServer(async ({ base }) => {
     const response = await fetch(`${base}/ai/agents/EXECUTIVE_AGENT/run?storeId=s`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-    expect(response.status).toBe(403)
+    expect(response.status).toBe(402)
     const payload = await response.json()
     expect(payload.error.details).toMatchObject({ reason: 'UPGRADE_REQUIRED', requiredPlan: 'commander' })
   }))
@@ -130,7 +130,7 @@ describe('PR45 pause and resume', () => {
     expect(inventory?.execution).toBe('PAUSED')
   }))
   it('cannot pause a locked agent', async () => await withServer(async ({ base }) => {
-    expect((await fetch(`${base}/ai/agents/EXECUTIVE_AGENT?storeId=s`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paused: true }) })).status).toBe(403)
+    expect((await fetch(`${base}/ai/agents/EXECUTIVE_AGENT?storeId=s`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paused: true }) })).status).toBe(402)
   }))
   it('validates the paused body', async () => await withServer(async ({ base }) => {
     expect((await fetch(`${base}/ai/agents/REVENUE_AGENT?storeId=s`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(400)

@@ -225,7 +225,7 @@ export class TargetedCampaignService {
     const account = await this.billing.get(storeId)
     const plan = account?.plan ?? 'trial'
     if (!planAtLeast(plan, 'growth')) { await this.audit.locked(storeId, plan); throw new AppError('FORBIDDEN', 'Upgrade to Growth to send targeted customer email', 403, { locked: true, feature: 'targeted_customer_email', required_plan: 'growth' }) }
-    if (account && isReadOnly(account.state)) throw new AppError('FORBIDDEN', 'Billing account is read-only; campaign sending is disabled', 403, { reason: 'ACCOUNT_READ_ONLY' })
+    if (account && isReadOnly(account.state, account)) throw new AppError('FORBIDDEN', 'Billing account is read-only; campaign sending is disabled', 403, { reason: 'ACCOUNT_READ_ONLY' })
     return account ?? { plan: 'trial' as const, state: 'TRIAL_LIMITED' as const, currentPeriodEnd: null, version: 0, interval: null, chargeId: null }
   }
 

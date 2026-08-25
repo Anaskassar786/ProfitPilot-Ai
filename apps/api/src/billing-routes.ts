@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { Request } from 'express'
 import { AppError, requestId, success } from '@profitpilot/types'
 import type { BillingRecord, BillingRepository, BillingInterval, BillingState, PlanCode, RecurringCharge, RoiMetrics, FunnelLedger, TrialRecord, GiftRedemption } from '@profitpilot/billing'
-import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, expiredGiftRevert } from '@profitpilot/billing'
+import { DEFAULT_TRIAL_DAYS, PLAN_DEFINITIONS, ShopifyBillingError, billingStatusFor, expiredGiftRevert } from '@profitpilot/billing'
 import { assertGiftSingleUse } from './gift-codes.js'
 
 /**
@@ -97,10 +97,14 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       const reverted = expiredGiftRevert(record, trial)
       if (reverted) {
         await dependencies.repository.put(reverted)
-        response.status(200).json(success({ subscription: reverted, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
+        response.status(200).json(success({ subscription: reverted, status: billingStatusFor(reverted), trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
         return
       }
-      response.status(200).json(success({ subscription: record, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
+      // `status` is the grace-aware effective billing status (e.g.
+      // CANCELLED_ACTIVE during the cancellation grace window vs
+      // CANCELLED_EXPIRED read-only) so the UI can react without duplicating
+      // the period-end comparison.
+      response.status(200).json(success({ subscription: record, status: record ? billingStatusFor(record) : null, trial, gift, trialDays: DEFAULT_TRIAL_DAYS }, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
 
@@ -251,7 +255,7 @@ export function createBillingRouter(dependencies: BillingRouteDependencies): Rou
       // PostgresBillingRepository.put writes updated_at = now() on conflict;
       // other repository implementations receive the same authoritative state.
       await dependencies.repository.put(subscription)
-      response.status(200).json(success({ message: 'Subscription cancelled successfully.', subscription }, requestIdFrom(request)))
+      response.status(200).json(success({ message: 'Subscription cancelled successfully.', subscription, status: billingStatusFor(subscription) }, requestIdFrom(request)))
     } catch (error: unknown) { next(error) }
   })
 

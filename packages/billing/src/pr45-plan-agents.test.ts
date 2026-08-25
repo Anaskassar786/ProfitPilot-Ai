@@ -57,7 +57,7 @@ describe('PR45 agent gating', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(UpgradeRequiredError)
       const appError = error as UpgradeRequiredError
-      expect(appError.status).toBe(403)
+      expect(appError.status).toBe(402)
       expect(appError.details).toMatchObject({ reason: 'UPGRADE_REQUIRED', requiredPlan: 'growth' })
     }
   })

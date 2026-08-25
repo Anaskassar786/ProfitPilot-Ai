@@ -24,6 +24,44 @@ export function transition(subscription: Subscription, event: BillingEvent): Sub
   return { ...subscription, state: nextState, version: subscription.version + 1 }
 }
 
-export function isReadOnly(state: BillingState): boolean { return state === 'SUSPENDED' || state === 'PAST_DUE' || state === 'CANCELLED' }
-export function canUseEntitlement(subscription: Subscription, limit: number | null, used: number): boolean { return !isReadOnly(subscription.state) && (limit === null || used < limit) }
+/**
+ * Effective billing status once the cancellation grace period is taken into
+ * account. A store whose plan_status is CANCELLED keeps FULL entitlements
+ * until `currentPeriodEnd` passes, then drops to read-only.
+ *
+ *   - `CANCELLED_ACTIVE`  → cancelled but still inside the paid billing period
+ *                           (now < currentPeriodEnd). The merchant retains
+ *                           every entitlement their plan paid for.
+ *   - `CANCELLED_EXPIRED` → the paid period has ended (now >= currentPeriodEnd)
+ *                           OR there is no period end recorded, so the store
+ *                           drops to ACCOUNT_READ_ONLY.
+ *
+ * All other billing states are returned unchanged.
+ */
+export type EffectiveBillingState = BillingState | 'CANCELLED_ACTIVE' | 'CANCELLED_EXPIRED'
+
+export function effectiveBillingState(subscription: Subscription, now: number = Date.now()): EffectiveBillingState {
+  if (subscription.state !== 'CANCELLED') return subscription.state
+  if (subscription.currentPeriodEnd !== null && now < subscription.currentPeriodEnd) return 'CANCELLED_ACTIVE'
+  return 'CANCELLED_EXPIRED'
+}
+
+/** Alias used by billing status helpers to distinguish the grace window. */
+export function billingStatusFor(subscription: Subscription, now: number = Date.now()): EffectiveBillingState {
+  return effectiveBillingState(subscription, now)
+}
+
+/**
+ * Whether a subscription is read-only. Honors the cancellation grace period:
+ * a CANCELLED subscription is NOT read-only while `now < currentPeriodEnd`,
+ * and only becomes read-only once the paid period has expired.
+ */
+export function isReadOnly(state: BillingState, subscription?: Pick<Subscription, 'currentPeriodEnd'>, now: number = Date.now()): boolean {
+  if (state === 'CANCELLED') {
+    if (subscription && subscription.currentPeriodEnd !== null && now < subscription.currentPeriodEnd) return false
+    return true
+  }
+  return state === 'SUSPENDED' || state === 'PAST_DUE'
+}
+export function canUseEntitlement(subscription: Subscription, limit: number | null, used: number, now: number = Date.now()): boolean { return !isReadOnly(subscription.state, subscription, now) && (limit === null || used < limit) }
 export function assertVersion(subscription: Subscription, expectedVersion: number): void { if (subscription.version !== expectedVersion) throw new AppError('CONFLICT', 'Subscription changed; reload before retrying', 409, { expectedVersion, actualVersion: subscription.version }) }
