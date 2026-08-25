@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { FunnelLedger, InMemoryBillingRepository, ShopifyBillingError, TrialAndGiftLedger } from '@profitpilot/billing'
 import type { GiftCode } from '@profitpilot/billing'
 import type { BillingRouteDependencies } from './billing-routes.js'
@@ -277,6 +277,42 @@ describe('billing charge failure translation', () => {
       expect(response.status).toBe(400)
       expect(called).toBe(false)
     })
+  })
+
+  it('forces testMode:true for a *.myshopify.com development store', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const modes: (boolean | undefined)[] = []
+    const createCharge: BillingRouteDependencies['createCharge'] = async (_shop, _plan, _interval, _url, trialDays, testMode) => {
+      modes.push(testMode)
+      return { id: 'c', name: 'GROWTH MONTHLY', price: '149.00', status: 'pending', confirmationUrl: 'https://confirm', billingOn: null, trialDays, test: true, createdAt: 'now' }
+    }
+    try {
+      await withCharge(createCharge, async (base) => {
+        const response = await fetch(`${base}/billing/charge?shopId=demo.myshopify.com`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: chargeBody })
+        expect(response.status).toBe(201)
+        expect(modes).toEqual([true])
+      })
+    } finally { vi.unstubAllEnvs() }
+  })
+
+  it('retries with testMode:true when Shopify answers "can only accept test charges"', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
+    const modes: (boolean | undefined)[] = []
+    const createCharge: BillingRouteDependencies['createCharge'] = async (_shop, _plan, _interval, _url, trialDays, testMode) => {
+      modes.push(testMode)
+      if (testMode !== true) {
+        throw new ShopifyBillingError(422, 'Shopify Billing API failed with 422', { test: ['Development and partner-test stores can only accept test charges'] }, '{}')
+      }
+      return { id: 'c', name: 'GROWTH MONTHLY', price: '149.00', status: 'pending', confirmationUrl: 'https://confirm', billingOn: null, trialDays, test: true, createdAt: 'now' }
+    }
+    try {
+      await withCharge(createCharge, async (base) => {
+        const response = await fetch(`${base}/billing/charge?shopId=live-store.example`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: chargeBody })
+        expect(response.status).toBe(201)
+        expect(modes).toEqual([undefined, true])
+      })
+    } finally { vi.unstubAllEnvs() }
   })
 
   it('passes the default 14-day trial to the charge factory', async () => {

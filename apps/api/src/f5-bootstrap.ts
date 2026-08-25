@@ -67,7 +67,9 @@ export function createF5Bootstrap(env: Readonly<Record<string, string | undefine
       // the `body.mock`/`body.devMock` flags when `isProduction` is set.
       mockCharges: env.NODE_ENV !== 'production' && env.BILLING_MOCK_CHARGES?.trim().toLowerCase() === 'true',
       isProduction: env.NODE_ENV === 'production',
-      createCharge: async (shopId, plan, interval, returnUrl, trialDays) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays),
+      // `testMode` is forwarded from the route: development-store sessions
+      // demand `test: true` on the appSubscriptionCreate mutation.
+      createCharge: async (shopId, plan, interval, returnUrl, trialDays, testMode) => (await billingClient(shopId)).createRecurringCharge(plan, interval, returnUrl, trialDays, testMode),
       verifyCharge: async (shopId, chargeId, plan, interval) => (await billingClient(shopId)).verifyCharge(chargeId, plan && interval ? { plan, interval } : undefined),
       cancelCharge: async (shopId, subscriptionId) => (await billingClient(shopId)).cancelCharge(subscriptionId),
       usage: async (shopId) => usage(f4.database, shopId, giftStore),
@@ -249,6 +251,7 @@ function billingTestMode(env: Readonly<Record<string, string | undefined>>): boo
   // is the App Store/review-friendly explicit switch; TEST_MODE remains
   // supported for existing deployments, with auto shop-plan detection as the
   // safest production default.
+  if (env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'false') return 'auto'
   if (env.NODE_ENV !== 'production' || env.SHOPIFY_BILLING_TEST?.trim().toLowerCase() === 'true') return true
   const value = env.SHOPIFY_BILLING_TEST_MODE?.trim().toLowerCase()
   if (value === 'true') return true

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY, isTestChargeOnlyRejection } from './shopify-billing.js'
+import { ShopifyBillingClient, ShopifyBillingError, APP_SUBSCRIPTION_CREATE_MUTATION, SHOP_PROBE_QUERY, isTestChargeOnlyRejection, shouldForceTestCharge } from './shopify-billing.js'
 
 function isShopProbe(init: RequestInit | undefined): boolean {
   if (!init?.body) return false
@@ -180,6 +180,9 @@ describe('automatic test-charge detection', () => {
   // production probe path.
   it('forces test:true on a development store via GraphQL ShopProbe', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    // SHOPIFY_BILLING_TEST=false is the documented escape hatch that disables
+    // the domain/NODE_ENV forcing and hands the decision to the shop probe.
+    vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     const queries: string[] = []
     let body: { variables: { test: boolean } } | undefined
     try {
@@ -202,6 +205,7 @@ describe('automatic test-charge detection', () => {
   })
   it('allows a live charge on a paid store and caches the lookup', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     let shopLookups = 0
     let body: { variables: { test: boolean } } | undefined
     try {
@@ -249,6 +253,21 @@ describe('automatic test-charge detection', () => {
     } })
     await client.createRecurringCharge('GROWTH', 'MONTHLY', 'https://app.example/return', 14)
     expect(probes).toEqual([])
+  })
+})
+
+describe('shouldForceTestCharge', () => {
+  it('forces test charges for *.myshopify.com stores in production', () => {
+    expect(shouldForceTestCharge('demo.myshopify.com', { NODE_ENV: 'production' })).toBe(true)
+  })
+  it('forces test charges outside production regardless of domain', () => {
+    expect(shouldForceTestCharge('shop.example.com', { NODE_ENV: 'test' })).toBe(true)
+  })
+  it('forces test charges when SHOPIFY_BILLING_TEST=true', () => {
+    expect(shouldForceTestCharge('shop.example.com', { NODE_ENV: 'production', SHOPIFY_BILLING_TEST: 'true' })).toBe(true)
+  })
+  it('defers to the shop probe when SHOPIFY_BILLING_TEST=false', () => {
+    expect(shouldForceTestCharge('demo.myshopify.com', { NODE_ENV: 'production', SHOPIFY_BILLING_TEST: 'false' })).toBe(false)
   })
 })
 
@@ -369,6 +388,7 @@ describe('automatic test-charge retry fallback (test-charge-only rejections)', (
   })
   it('auto-retries in production with testMode:auto when shop probe says billable but Shopify rejects', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('SHOPIFY_BILLING_TEST', 'false')
     const attempts: boolean[] = []
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     try {
