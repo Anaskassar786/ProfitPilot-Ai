@@ -157,6 +157,98 @@ export function redirectToShopifyCheckout(confirmationUrl: string): void {
 }
 
 /**
+ * The shop this embedded frame belongs to, derived WITHOUT the App Bridge
+ * session token (which is exactly what is unavailable when we need to
+ * re-authorize).
+ *
+ * Sources, in order of trust:
+ *   1. the `shop` query parameter Shopify puts on the app URL,
+ *   2. the base64 `host` parameter (`admin.shopify.com/store/<handle>` →
+ *      `<handle>.myshopify.com`), which survives client-side navigation, and
+ *   3. an explicit hint supplied by the caller (e.g. `details.shop` from the
+ *      API's 401 body, or the resolved workspace context).
+ *
+ * Always returns the canonical `<handle>.myshopify.com` spelling — the same
+ * normalization the API applies — or null.
+ */
+export function embeddedShopDomain(hint?: string | null, search: string = currentSearch()): string | null {
+  const fromQuery = normalizeShopDomainForClient(readQueryParameter('shop', search))
+  if (fromQuery) return fromQuery
+  const fromHost = shopFromEncodedHost(embeddedHost(search))
+  if (fromHost) return fromHost
+  return normalizeShopDomainForClient(hint ?? null)
+}
+
+/** Client-side twin of the server's normalizeShopDomain (packages/shopify). */
+export function normalizeShopDomainForClient(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  let normalized = value.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
+  normalized = (normalized.split(/[/?#]/)[0] ?? '').split('@').pop() ?? ''
+  normalized = (normalized.split(':')[0] ?? '').trim().replace(/\.+$/, '')
+  if (!normalized) return null
+  if (!normalized.includes('.') && /^[a-z0-9][a-z0-9-]*$/.test(normalized)) normalized = `${normalized}.myshopify.com`
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized) ? normalized : null
+}
+
+function readQueryParameter(name: string, search: string): string | null {
+  try {
+    return new URLSearchParams(search).get(name)
+  } catch {
+    return null
+  }
+}
+
+/** `YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvY29tbWFuZGVy` → `commander.myshopify.com`. */
+function shopFromEncodedHost(host: string | null): string | null {
+  if (!host) return null
+  let decoded = ''
+  try {
+    decoded = atob(host.replace(/-/g, '+').replace(/_/g, '/'))
+  } catch {
+    return null
+  }
+  const handle = /^admin\.shopify\.com\/store\/([a-z0-9][a-z0-9-]*)$/i.exec(decoded.trim())?.[1]
+  if (handle) return normalizeShopDomainForClient(handle)
+  return normalizeShopDomainForClient(decoded)
+}
+
+/**
+ * Re-runs the app's install/authorize flow at TOP level after the API says the
+ * session cannot be recovered by minting another token (401 STORE_NOT_FOUND /
+ * "Authentication is required").
+ *
+ * OAuth screens are served with `X-Frame-Options: DENY`, so the navigation
+ * MUST leave the admin iframe: App Bridge `shopify.navigate({ target: '_top' })`
+ * when the bridge exposes it, `window.open(url, '_top')` otherwise. Returns
+ * false when no shop is known (nothing safe to redirect to) so the caller can
+ * fall back to its banner.
+ */
+export function redirectToShopifyReauthorization(shopHint?: string | null, search: string = currentSearch()): boolean {
+  if (typeof window === 'undefined') return false
+  const shop = embeddedShopDomain(shopHint, search)
+  if (!shop) return false
+  const url = `/shopify/install?shop=${encodeURIComponent(shop)}`
+  try {
+    const bridge = readShopifyGlobal()
+    const navigate = bridge?.navigate
+    if (typeof navigate === 'function') {
+      ;(navigate as (options: Readonly<{ url: string; target: '_top' }>) => void)({ url, target: '_top' })
+      return true
+    }
+  } catch {
+    // App Bridge is still booting or exposes a different surface — fall
+    // through to the standards-based top-level navigation.
+  }
+  try {
+    const absolute = new URL(url, window.location.origin).toString()
+    window.open(absolute, '_top')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Opens a Shopify admin deep link (e.g. /admin/orders/… or /admin/products/…)
  * from the app without navigating the app's own frame.
  *

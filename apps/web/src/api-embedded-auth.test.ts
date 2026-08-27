@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiClientError, fetchAnalytics, requestJson, resetApiClientStateForTests, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, warmUpEmbeddedSessionToken } from './api.js'
+import { ApiClientError, fetchAnalytics, isRecoverableAuthFailure, requestJson, resetApiClientStateForTests, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, warmUpEmbeddedSessionToken } from './api.js'
 import type { Fetcher } from './api.js'
-import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
+import { getShopifySessionToken, getShopifySessionTokenWithRetry, redirectToShopifyReauthorization } from './shopify-app-bridge.js'
 import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 
 /**
@@ -13,10 +13,14 @@ import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 vi.mock('./shopify-app-bridge.js', () => ({
   getShopifySessionToken: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
   getShopifySessionTokenWithRetry: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
+  // Standalone/dev default: nothing to redirect to, so the fetcher falls back
+  // to the session banner exactly as before.
+  redirectToShopifyReauthorization: vi.fn((): boolean => false),
 }))
 
 const sessionTokenMock = vi.mocked(getShopifySessionToken)
 const sessionTokenWithRetryMock = vi.mocked(getShopifySessionTokenWithRetry)
+const reauthorizeMock = vi.mocked(redirectToShopifyReauthorization)
 
 function capturingFetcher(calls: Array<{ headers: Headers | null }>) {
   const fetcher: Fetcher = async (_input, init) => {
@@ -40,6 +44,8 @@ beforeEach(() => {
   sessionTokenMock.mockResolvedValue({ status: 'not-embedded' })
   sessionTokenWithRetryMock.mockReset()
   sessionTokenWithRetryMock.mockResolvedValue({ status: 'not-embedded' })
+  reauthorizeMock.mockReset()
+  reauthorizeMock.mockReturnValue(false)
   setEmbeddedAuthFailureHandler(null)
   setEmbeddedAuthRecoveryHandler(null)
 })
@@ -217,5 +223,67 @@ describe('HOTFIX 3 — silent 401 retry and banner auto-clear', () => {
     expect((error as ApiClientError).status).toBe(401)
     expect(calls).toBe(1)
     expect(failures).toEqual(['Your Shopify session expired — reload the app to reconnect.'])
+  })
+})
+
+/**
+ * PERMANENT 401 FIX — a terminal 401 must try to RECOVER the session by
+ * re-running the install flow at top level before anything red is shown. A
+ * merchant whose store row or offline token vanished (STORE_NOT_FOUND) is
+ * re-authorized automatically; a database outage is not, because re-installing
+ * would bounce them through OAuth for nothing.
+ */
+describe('401 auto-recovery via top-level re-authorization', () => {
+  function unauthorizedWithDetails(details: Record<string, unknown>, message = 'Authentication is required'): Response {
+    return new Response(JSON.stringify({ ok: false, error: { code: 'UNAUTHORIZED', message, details } }), { status: 401, headers: { 'content-type': 'application/json' } })
+  }
+
+  it('classifies STORE_NOT_FOUND / "Authentication is required" as recoverable and DB_UNAVAILABLE as not', () => {
+    expect(isRecoverableAuthFailure({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Authentication is required', details: { reason: 'STORE_NOT_FOUND', reauthorize: true } } })).toBe(true)
+    expect(isRecoverableAuthFailure({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Authentication is required', details: {} } })).toBe(true)
+    expect(isRecoverableAuthFailure({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Session expired', details: { reason: 'DB_UNAVAILABLE', reauthorize: false } } })).toBe(false)
+    expect(isRecoverableAuthFailure({ ok: true, data: {} })).toBe(false)
+  })
+
+  it('redirects to the install flow instead of latching a permanent red banner', async () => {
+    sessionTokenMock.mockResolvedValue({ status: 'ok', token: 'any-token' })
+    reauthorizeMock.mockReturnValue(true)
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    const fetcher: Fetcher = async () => unauthorizedWithDetails({ reason: 'STORE_NOT_FOUND', shop: 'commander-pilot.myshopify.com', reauthorize: true })
+    await expect(fetchAnalytics('store-1', fetcher)).rejects.toMatchObject({ status: 401 })
+    expect(reauthorizeMock).toHaveBeenCalledWith('commander-pilot.myshopify.com')
+    // Recovery is in flight — no permanent 401 card.
+    expect(failures).toEqual([])
+  })
+
+  it('attempts the redirect at most once per page load', async () => {
+    sessionTokenMock.mockResolvedValue({ status: 'ok', token: 'any-token' })
+    reauthorizeMock.mockReturnValue(true)
+    const fetcher: Fetcher = async () => unauthorizedWithDetails({ reason: 'STORE_NOT_FOUND', shop: 'commander-pilot.myshopify.com', reauthorize: true })
+    await expect(fetchAnalytics('store-1', fetcher)).rejects.toMatchObject({ status: 401 })
+    await expect(fetchAnalytics('store-1', fetcher)).rejects.toMatchObject({ status: 401 })
+    expect(reauthorizeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the session banner when no redirect is possible', async () => {
+    sessionTokenMock.mockResolvedValue({ status: 'ok', token: 'any-token' })
+    reauthorizeMock.mockReturnValue(false)
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    const fetcher: Fetcher = async () => unauthorizedWithDetails({ reason: 'STORE_NOT_FOUND', reauthorize: true })
+    await expect(fetchAnalytics('store-1', fetcher)).rejects.toMatchObject({ status: 401 })
+    expect(failures).toEqual(['Your Shopify session expired — reload the app to reconnect.'])
+  })
+
+  it('never re-installs for a database outage', async () => {
+    sessionTokenMock.mockResolvedValue({ status: 'ok', token: 'any-token' })
+    reauthorizeMock.mockReturnValue(true)
+    const failures: string[] = []
+    setEmbeddedAuthFailureHandler((message) => failures.push(message))
+    const fetcher: Fetcher = async () => unauthorizedWithDetails({ reason: 'DB_UNAVAILABLE', reauthorize: false }, 'Session expired')
+    await expect(fetchAnalytics('store-1', fetcher)).rejects.toMatchObject({ status: 401 })
+    expect(reauthorizeMock).not.toHaveBeenCalled()
+    expect(failures).toHaveLength(1)
   })
 })

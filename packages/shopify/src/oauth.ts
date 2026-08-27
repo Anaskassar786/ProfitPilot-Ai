@@ -32,12 +32,57 @@ export function sanitizeCredential(value: string | undefined | null): string {
   return cleaned
 }
 
+/**
+ * THE single shop-domain normalizer for the whole app.
+ *
+ * Every entry point that can hand us a shop — the `dest` claim of an App
+ * Bridge session token (`https://commander-pilot.myshopify.com`), the `shop`
+ * query parameter (`commander-pilot.myshopify.com/`), a webhook header, a
+ * merchant-typed value in Settings (`Commander-Pilot`) — spells the same store
+ * differently. When one entry point stores `https://commander-pilot.myshopify.com`
+ * and another looks up `commander-pilot.myshopify.com`, the `stores` /
+ * `shopify_tokens` rows never match and every embedded API call answers 401
+ * ("Authentication is required" / STORE_NOT_FOUND) even though the install
+ * succeeded.
+ *
+ * Normalization steps (order matters):
+ *   1. lowercase + trim              — `  Commander-Pilot.MyShopify.com `
+ *   2. strip the scheme              — `https://commander-pilot.myshopify.com`
+ *   3. strip any path/query/fragment — `commander-pilot.myshopify.com/admin`
+ *   4. strip a trailing slash        — `commander-pilot.myshopify.com/`
+ *   5. append `.myshopify.com` to a bare handle — `commander-pilot`
+ *
+ * Returns '' when nothing usable is left; never throws. Use
+ * `parseShopDomain` when an invalid value must be rejected.
+ */
+export function normalizeShopDomain(value: string | null | undefined): string {
+  if (typeof value !== 'string') return ''
+  let normalized = value.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
+  // Drop anything after the host (path, query, fragment) plus userinfo/port,
+  // so `commander-pilot.myshopify.com/admin/apps?x=1` collapses to the host.
+  normalized = (normalized.split(/[/?#]/)[0] ?? '').split('@').pop() ?? ''
+  normalized = normalized.split(':')[0] ?? ''
+  normalized = normalized.trim().replace(/\.+$/, '')
+  if (!normalized) return ''
+  // A bare store handle ("commander-pilot") is the shape merchants type and
+  // the shape Shopify's admin URL carries; expand it exactly once so it can
+  // never be stored (or queried) without its `.myshopify.com` suffix.
+  if (!normalized.includes('.') && /^[a-z0-9][a-z0-9-]*$/.test(normalized)) return `${normalized}.myshopify.com`
+  return normalized
+}
+
 export function parseShopDomain(value: string): string {
-  const normalized = value.trim().toLowerCase()
+  const normalized = normalizeShopDomain(value)
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) {
     throw new TypeError('Invalid Shopify shop domain')
   }
   return normalized
+}
+
+/** Normalize without throwing: returns null when the value is not a Shopify shop. */
+export function safeParseShopDomain(value: string | null | undefined): string | null {
+  const normalized = normalizeShopDomain(value)
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized) ? normalized : null
 }
 
 /** In-memory state store for single-process development and unit tests. */

@@ -111,6 +111,24 @@ export class InMemoryStoreDirectory implements StoreDirectory {
   }
 }
 
-function normalizeShopDomain(shopDomain: string): string {
-  return shopDomain.trim().toLowerCase()
+/**
+ * Canonical shop-domain normalization for every `stores` read and write.
+ *
+ * This MUST stay byte-identical to `normalizeShopDomain` in
+ * `@profitpilot/shopify` (duplicated rather than imported because the shopify
+ * package depends on this one, not the other way round). A divergence here is
+ * exactly what produces the production symptom: the OAuth callback writes
+ * `commander-pilot.myshopify.com` while a session token whose `dest` is
+ * `https://commander-pilot.myshopify.com` looks up an unnormalized value, the
+ * row is not found, and the embedded app 401s forever.
+ */
+export function normalizeShopDomain(shopDomain: string | null | undefined): string {
+  if (typeof shopDomain !== 'string') return ''
+  let normalized = shopDomain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
+  normalized = (normalized.split(/[/?#]/)[0] ?? '').split('@').pop() ?? ''
+  normalized = normalized.split(':')[0] ?? ''
+  normalized = normalized.trim().replace(/\.+$/, '')
+  if (!normalized) return ''
+  if (!normalized.includes('.') && /^[a-z0-9][a-z0-9-]*$/.test(normalized)) return `${normalized}.myshopify.com`
+  return normalized
 }

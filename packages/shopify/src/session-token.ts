@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { parseShopDomain, sanitizeCredential, verifyOAuthHmac } from './oauth.js'
+import { normalizeShopDomain, safeParseShopDomain, sanitizeCredential, verifyOAuthHmac } from './oauth.js'
 
 /**
  * Verified identity of an embedded app request.
@@ -26,9 +26,71 @@ export type ShopifySessionTokenClaims = Readonly<{
 
 export type SessionTokenConfig = Readonly<{ apiKey: string; apiSecret: string }>
 
+/**
+ * Reads a Shopify credential from the process environment.
+ *
+ * `verifyShopifySessionToken` compares the token's `aud` claim against the
+ * app's client id. When the caller passes an empty/whitespace-only key (a
+ * mis-wired bootstrap, a Railway variable that lost its value on redeploy)
+ * every embedded request 401s with no clue why, so the environment value —
+ * `process.env.SHOPIFY_API_KEY?.trim()` — is used as the last-resort source.
+ */
+function credentialFromEnvironment(name: 'SHOPIFY_API_KEY' | 'SHOPIFY_API_SECRET'): string {
+  try {
+    return sanitizeCredential(typeof process === 'undefined' ? undefined : process.env?.[name]?.trim())
+  } catch {
+    return ''
+  }
+}
+
 /** Sanitize both halves of a session-token config in one call. */
 export function sanitizeSessionTokenConfig(config: Readonly<{ apiKey: string | undefined; apiSecret: string | undefined }>): SessionTokenConfig {
-  return { apiKey: sanitizeCredential(config.apiKey), apiSecret: sanitizeCredential(config.apiSecret) }
+  return {
+    apiKey: sanitizeCredential(config.apiKey) || credentialFromEnvironment('SHOPIFY_API_KEY'),
+    apiSecret: sanitizeCredential(config.apiSecret) || credentialFromEnvironment('SHOPIFY_API_SECRET'),
+  }
+}
+
+/**
+ * Sink for the one-line `[AuthDiagnostics]` record emitted whenever a session
+ * token fails verification. Defaults to stderr so Railway/Render logs explain
+ * a production 401 without extra wiring; the API replaces it with the
+ * structured logger at bootstrap. It never receives a token or a secret —
+ * only the shop (`dest`), the received `aud` and the expected client id, all
+ * of which are public identifiers.
+ */
+export type SessionTokenDiagnosticsSink = (message: string, context: Readonly<Record<string, unknown>>) => void
+
+const defaultDiagnosticsSink: SessionTokenDiagnosticsSink = (message, context) => {
+  // eslint-disable-next-line no-console -- operator-facing diagnostics
+  console.warn(message, context)
+}
+
+let diagnosticsSink: SessionTokenDiagnosticsSink = defaultDiagnosticsSink
+
+export function setSessionTokenDiagnosticsSink(sink: SessionTokenDiagnosticsSink | null): void {
+  diagnosticsSink = sink ?? defaultDiagnosticsSink
+}
+
+/**
+ * The exact production diagnostic asked for by the embedded-401 runbook:
+ *
+ *   [AuthDiagnostics] JWT verification failed for shop=<dest>, aud_received=<aud>, aud_expected=<apiKey>
+ *
+ * Emitted from `verifyShopifySessionToken` on EVERY rejection, so a live 401
+ * names the shop, the client id the token was minted for, and the client id
+ * this deploy is configured with — the three values that settle an
+ * aud/domain mismatch instantly.
+ */
+export function reportSessionTokenFailure(claims: Readonly<{ dest: unknown; aud: unknown }>, apiKey: string, reason: SessionTokenRejection): void {
+  const dest = typeof claims.dest === 'string' && claims.dest.trim() ? claims.dest.trim() : '(absent)'
+  const aud = typeof claims.aud === 'string' && claims.aud.trim() ? claims.aud.trim() : '(absent)'
+  const message = `[AuthDiagnostics] JWT verification failed for shop=${dest}, aud_received=${aud}, aud_expected=${apiKey || '(unset)'}`
+  try {
+    diagnosticsSink(message, { code: REJECTION_CODES[reason], reason, shop: dest, audReceived: aud, audExpected: apiKey || '(unset)' })
+  } catch {
+    /* diagnostics must never break a request */
+  }
 }
 
 /** Clock skew tolerated when checking `exp`/`nbf`. Session tokens live ~60s. */
@@ -44,33 +106,47 @@ const DEFAULT_LEEWAY_SECONDS = 10
  */
 export function verifyShopifySessionToken(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): ShopifySessionTokenClaims | null {
   const config = sanitizeSessionTokenConfig(rawConfig)
-  if (!config.apiKey || !config.apiSecret) return null
+  // `aud` is the app's client id: SHOPIFY_API_KEY, sanitized (and, if the
+  // caller passed nothing, read from process.env.SHOPIFY_API_KEY?.trim()).
+  const apiKey = config.apiKey
+  const payload = decodeJsonSegment(token.trim().split('.')[1] ?? '')
+  const identity = { dest: payload?.dest, aud: payload?.aud }
+  const reject = (reason: SessionTokenRejection): null => {
+    reportSessionTokenFailure(identity, apiKey, reason)
+    return null
+  }
+
+  if (!apiKey || !config.apiSecret) return reject('missing-credentials')
   const parts = token.trim().split('.')
-  if (parts.length !== 3) return null
+  if (parts.length !== 3) return reject('malformed')
   const [encodedHeader, encodedPayload, signature] = parts
-  if (!encodedHeader || !encodedPayload || !signature) return null
+  if (!encodedHeader || !encodedPayload || !signature) return reject('malformed')
 
   const header = decodeJsonSegment(encodedHeader)
-  if (!header || header.alg !== 'HS256' || (header.typ !== undefined && header.typ !== 'JWT')) return null
+  if (!header) return reject('malformed')
+  if (header.alg !== 'HS256' || (header.typ !== undefined && header.typ !== 'JWT')) return reject('unsupported-algorithm')
 
   const expected = createHmac('sha256', config.apiSecret).update(`${encodedHeader}.${encodedPayload}`, 'utf8').digest('base64url')
-  if (!safeEqualString(signature, expected)) return null
+  if (!safeEqualString(signature, expected)) return reject('signature-mismatch')
 
-  const payload = decodeJsonSegment(encodedPayload)
-  if (!payload) return null
+  if (!payload) return reject('malformed')
 
-  // `aud` is the app's client id. Without this check a session token minted for
-  // a different app on the same store would be accepted.
-  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) return null
+  // Without this check a session token minted for a different app on the same
+  // store would be accepted.
+  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, apiKey)) return reject('audience-mismatch')
 
   const seconds = Math.floor(now / 1000)
   const exp = numberClaim(payload.exp)
   const nbf = numberClaim(payload.nbf)
-  if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return null
-  if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return null
+  if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return reject('expired')
+  if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return reject('not-yet-valid')
 
+  // The shop is normalized here (lowercased, scheme/trailing-slash stripped)
+  // so `claims.shop` is ALWAYS the exact spelling used for stores /
+  // shopify_tokens lookups — `https://commander-pilot.myshopify.com` in the
+  // token becomes `commander-pilot.myshopify.com` in every DB query.
   const shop = shopFromDest(payload.dest)
-  if (!shop) return null
+  if (!shop) return reject('missing-shop')
 
   return {
     shop,
@@ -154,19 +230,19 @@ export function verifyEmbeddedRequest(query: Readonly<Record<string, string>>, c
   return null
 }
 
+/**
+ * The shop a session token was minted for, normalized to the canonical
+ * `<handle>.myshopify.com` spelling used by every DB lookup. `dest` arrives as
+ * `https://commander-pilot.myshopify.com`; normalizeShopDomain strips the
+ * scheme, any path, a trailing slash and case.
+ */
 function shopFromDest(dest: unknown): string | null {
   if (typeof dest !== 'string' || !dest.trim()) return null
-  const withoutScheme = dest.trim().replace(/^https?:\/\//, '')
-  const host = withoutScheme.split('/')[0] ?? ''
-  return safeShopDomain(host)
+  return safeShopDomain(normalizeShopDomain(dest))
 }
 
 function safeShopDomain(value: string): string | null {
-  try {
-    return parseShopDomain(value)
-  } catch {
-    return null
-  }
+  return safeParseShopDomain(value)
 }
 
 function decodeJsonSegment(segment: string): Record<string, unknown> | null {

@@ -3,7 +3,7 @@ import type { Request } from 'express'
 import { AppError, PhaseNotImplementedError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import type { Logger } from '@profitpilot/logger'
-import { installStepFromError } from '@profitpilot/shopify'
+import { installStepFromError, normalizeShopDomain } from '@profitpilot/shopify'
 import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookProcessor } from '@profitpilot/shopify'
 import { rawBodyFor } from './security.js'
 import { setSessionCookie } from './cookies.js'
@@ -16,7 +16,13 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
 
   router.get('/install', async (request, response, next) => {
     try {
-      const shop = queryString(request.query.shop)
+      // DOMAIN NORMALIZATION at the entry point: the embedded client's
+      // re-authorization redirect can carry `https://shop.myshopify.com/`,
+      // `Shop.myshopify.com` or the bare handle. All of them must start the
+      // OAuth flow for the SAME canonical domain the callback later writes,
+      // or the install lands on a second, unreachable stores row.
+      const rawShop = queryString(request.query.shop)
+      const shop = normalizeShopDomain(rawShop)
       if (!shop) {
         response.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'shop query parameter is required' } })
         return
@@ -30,6 +36,10 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
   })
 
   router.get('/callback', async (request, response, next) => {
+    // NOTE: the callback query is passed to HMAC verification EXACTLY as
+    // Shopify sent it (normalizing a signed parameter would break the
+    // decoded/encoded signature methods). Canonicalization of `shop` happens
+    // inside installer.complete(), which normalizes before every DB write.
     const callback = callbackQuery(request)
     const rawQuery = rawQueryString(request)
     // Secret-safe HMAC diagnostics on every attempt: if verification fails in
@@ -49,7 +59,17 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       // Persist the tenant context so refreshes of the embedded app keep the
       // workspace attached even when the redirect query string is absent.
       setSessionCookie(response, result.storeId)
-      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, storeId: result.storeId, matchedHmacMethod: diagnostics.matchedMethod, requestId: String(response.getHeader('x-request-id') ?? '') })
+      dependencies.logger?.info('Shopify OAuth callback completed', {
+        shopDomain: result.shop,
+        storeId: result.storeId,
+        // Proof, in the logs, that the offline token AND the ACTIVE store row
+        // were persisted — install.complete() reads the vault back before it
+        // resolves, so `tokenStored: true` cannot be optimistic.
+        tokenStored: result.tokenStored,
+        storeStatus: 'ACTIVE',
+        matchedHmacMethod: diagnostics.matchedMethod,
+        requestId: String(response.getHeader('x-request-id') ?? ''),
+      })
       // OAuth completes in the merchant's browser; send them into the embedded
       // app inside Shopify admin rather than returning a bare JSON body.
       response.redirect(302, location)
@@ -60,6 +80,13 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       dependencies.logger?.error('Shopify OAuth callback failed', {
         step: installStepFromError(error) ?? 'unknown',
         shopDomain: callback.shop ?? '',
+        // Persistence failures (token-storage / tenant-registration /
+        // token-verification) carry the exact PostgreSQL error on the cause
+        // chain; surface its SQLSTATE here so a failed install is one log
+        // line away from a diagnosis instead of a silent later 401.
+        dbCode: dbErrorCode(error),
+        dbDetail: dbErrorField(error, 'detail'),
+        dbConstraint: dbErrorField(error, 'constraint'),
         error: error instanceof Error ? error.message : String(error),
         cause: describeCause(error),
         stack: error instanceof Error ? error.stack ?? '' : '',
@@ -154,6 +181,21 @@ function redactedRawUrl(request: Request): string {
     return segment
   })
   return `${path}?${segments.join('&')}`
+}
+
+/** PostgreSQL SQLSTATE from an error or anywhere on its cause chain. */
+function dbErrorCode(error: unknown): string {
+  return dbErrorField(error, 'code')
+}
+
+function dbErrorField(error: unknown, field: 'code' | 'detail' | 'constraint'): string {
+  let current: unknown = error
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const value = (current as Record<string, unknown>)[field]
+    if (typeof value === 'string' && value.trim()) return value
+    current = current instanceof Error ? current.cause : null
+  }
+  return ''
 }
 
 function requiredHeader(request: Request, name: string): string {

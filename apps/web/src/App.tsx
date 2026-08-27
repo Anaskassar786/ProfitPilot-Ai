@@ -84,7 +84,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
+import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, requestEmbeddedReauthorization, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -439,9 +439,14 @@ export default function App() {
         } catch (error: unknown) {
           if (cancelled) return
           if (error instanceof ApiClientError && error.status === 401) {
-            // Session expired AFTER the fetcher's silent fresh-token retry:
-            // single re-auth banner, NOT an install wall.
-            if (!urlContext.storeId && !context.storeId) setSessionError('Your Shopify session expired — reload the app to reconnect.')
+            // Session lost AFTER the fetcher's silent fresh-token retry.
+            // FIRST try to recover it automatically: a top-level redirect to
+            // /shopify/install re-grants the offline token and re-creates the
+            // store row. Only when no redirect is possible (standalone dev,
+            // unknown shop) does the single re-auth banner appear — never an
+            // install wall, and never a permanent red 401 card.
+            const reconnecting = requestEmbeddedReauthorization(urlContext.shop ?? resolvedContext.shop ?? null)
+            if (!reconnecting && !urlContext.storeId && !context.storeId) setSessionError('Your Shopify session expired — reload the app to reconnect.')
             setAuthState('ready')
             return
           }
@@ -469,7 +474,9 @@ export default function App() {
         setAuthState('ready')
       } catch (error: unknown) {
         if (error instanceof ApiClientError && error.status === 401) {
-          setSessionError('Your Shopify session expired — reload the app to reconnect.')
+          if (!requestEmbeddedReauthorization(urlContext.shop ?? resolvedContext.shop ?? null)) {
+            setSessionError('Your Shopify session expired — reload the app to reconnect.')
+          }
           setAuthState('ready')
           return
         }
@@ -823,7 +830,7 @@ export default function App() {
                     failed — never a connect wall while auth is still loading.
                     The session banner auto-clears on the next successful API
                     call (or via onDismiss), so it can never stay stuck. */}
-                {sessionError && <SessionExpiredBanner message={sessionError} onDismiss={() => setSessionError(null)} />}
+                {sessionError && <SessionExpiredBanner message={sessionError} shop={context.shop} onDismiss={() => setSessionError(null)} />}
                 {showConnect && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
                 {authState === 'ready' && !context.storeId && context.shop && !sessionError && <ContextPendingBanner shop={context.shop} />}
                 {authState === 'unavailable' && !context.storeId && <ContextLoadErrorBanner onRetry={retryContext} />}
@@ -1855,10 +1862,16 @@ function ContextBanner({ onConnect }: { onConnect: () => void }) { return <div c
  * critical banner (never stacked toasts) when the Shopify admin can no longer
  * mint a session token or the API answers 401.
  */
-function SessionExpiredBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+function SessionExpiredBanner({ message, shop, onDismiss }: { message: string; shop?: string | null; onDismiss: () => void }) {
+  // "Reconnect Shopify" re-runs the install/authorize flow at TOP level (OAuth
+  // pages refuse to render inside the admin iframe). It is the recovery the
+  // automatic redirect could not perform — e.g. App Bridge never booted — so
+  // the merchant is never stuck on an unactionable 401 card.
+  const reconnect = () => { if (!requestEmbeddedReauthorization(shop ?? null)) window.location.reload() }
   return (
     <Banner tone="critical" title="Session expired" onDismiss={onDismiss}>
       <p>{message}</p>
+      <Button onClick={reconnect}>Reconnect Shopify</Button>
       <Button onClick={() => window.location.reload()}>Reload the app</Button>
     </Banner>
   )

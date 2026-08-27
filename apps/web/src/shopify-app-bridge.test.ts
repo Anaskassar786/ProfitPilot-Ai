@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, openAdminUrlInNewTab, redirectToShopifyCheckout, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, embeddedShopDomain, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, normalizeShopDomainForClient, openAdminUrlInNewTab, redirectToShopifyCheckout, redirectToShopifyReauthorization, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -213,5 +213,58 @@ describe('openAdminUrlInNewTab', () => {
   it('never throws when the bridge surface is malformed', () => {
     ;(window as unknown as { shopify: unknown }).shopify = { Navigation: { openExternal: 'not-a-function' } }
     expect(openAdminUrlInNewTab('https://shop.myshopify.com/admin/orders/123')).toBe(false)
+  })
+})
+
+/**
+ * PERMANENT 401 FIX — recovering a lost embedded session.
+ *
+ * When the API answers 401 with a re-authorizable reason, the app must leave
+ * the admin iframe and re-run the install flow. OAuth pages ship
+ * X-Frame-Options: DENY, so an in-frame navigation would render a blank page.
+ */
+describe('client-side shop domain normalization', () => {
+  it('matches the server normalizer for every spelling of the same store', () => {
+    for (const raw of ['commander-pilot.myshopify.com', ' Commander-Pilot.MyShopify.com ', 'https://commander-pilot.myshopify.com/', 'https://commander-pilot.myshopify.com/admin?x=1', 'commander-pilot']) {
+      expect(normalizeShopDomainForClient(raw)).toBe('commander-pilot.myshopify.com')
+    }
+    expect(normalizeShopDomainForClient('demo.example.com')).toBeNull()
+    expect(normalizeShopDomainForClient(null)).toBeNull()
+  })
+
+  it('prefers the shop query parameter, then the base64 host, then the caller hint', () => {
+    expect(embeddedShopDomain(null, '?shop=Commander-Pilot.myshopify.com')).toBe('commander-pilot.myshopify.com')
+    const host = btoa('admin.shopify.com/store/commander-pilot')
+    expect(embeddedShopDomain(null, `?host=${host}`)).toBe('commander-pilot.myshopify.com')
+    expect(embeddedShopDomain('https://commander-pilot.myshopify.com/', '')).toBe('commander-pilot.myshopify.com')
+    expect(embeddedShopDomain(null, '')).toBeNull()
+  })
+})
+
+describe('redirectToShopifyReauthorization', () => {
+  afterEach(() => {
+    delete (window as unknown as { shopify?: unknown }).shopify
+  })
+
+  it('re-runs the install flow at top level through App Bridge', () => {
+    const navigate = vi.fn()
+    ;(window as unknown as { shopify: unknown }).shopify = { navigate }
+    expect(redirectToShopifyReauthorization(null, '?shop=commander-pilot.myshopify.com')).toBe(true)
+    expect(navigate).toHaveBeenCalledWith({ url: '/shopify/install?shop=commander-pilot.myshopify.com', target: '_top' })
+  })
+
+  it('falls back to window.open(_top) when the bridge exposes no navigate()', () => {
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken: vi.fn() }
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    expect(redirectToShopifyReauthorization('commander-pilot.myshopify.com', '')).toBe(true)
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('/shopify/install?shop=commander-pilot.myshopify.com'), '_top')
+    open.mockRestore()
+  })
+
+  it('does nothing when no shop can be determined (standalone dev)', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    expect(redirectToShopifyReauthorization(null, '')).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+    open.mockRestore()
   })
 })

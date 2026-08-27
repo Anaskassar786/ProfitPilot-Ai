@@ -62,9 +62,14 @@ describe('HOTFIX 3 — silent 401 retry in the central fetcher', () => {
     expect(apiSource).toContain("retryHeaders.set('authorization', `Bearer ${fresh.token}`)")
   })
 
-  it('latches the session banner only when the retry also fails with 401', () => {
-    expect(apiSource).toContain('if (response.status === 401) notifyEmbeddedAuthFailure()')
+  it('routes a terminal 401 through auto-recovery before latching the banner', () => {
+    // PERMANENT FIX: a 401 that survived the fresh-token retry first tries a
+    // top-level re-authorization (re-install) — the banner is the fallback,
+    // never the only outcome.
+    expect(apiSource).toContain('if (response.status === 401) handleTerminalUnauthorized(payload)')
     expect(apiSource).toContain('throw failureFromPayload(payload, response.status)')
+    expect(apiSource).toContain('if (isRecoverableAuthFailure(payload) && requestEmbeddedReauthorization(shopFromAuthFailure(payload))) return')
+    expect(apiSource).toContain('notifyEmbeddedAuthFailure()')
   })
 
   it('auto-clears the latch on every successful response', () => {
@@ -75,7 +80,10 @@ describe('HOTFIX 3 — silent 401 retry in the central fetcher', () => {
   it('never raises the banner from token mint races at boot', () => {
     // The warm-up waits for the bridge but stays silent; the request outcome
     // (401-after-retry) is the only thing allowed to surface the banner.
-    expect(apiSource).toContain('await getShopifySessionTokenWithRetry()')
+    // The boot gate is shared by every request: the first call awaits the
+    // (retried) idToken() so no fetch can race App Bridge's boot.
+    expect(apiSource).toContain('getShopifySessionTokenWithRetry()')
+    expect(apiSource).toContain('await ensureEmbeddedSessionTokenReady()')
     expect(apiSource).not.toContain('embeddedAuthFailureHandler?.(result.message)')
   })
 })

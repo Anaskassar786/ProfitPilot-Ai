@@ -11,24 +11,42 @@ export type OAuthCallback = Readonly<Record<string, string>>
 export type AccessTokenExchange = (shop: string, code: string) => Promise<string>
 
 /**
+ * Structural logger accepted by the install service (kept structural so the
+ * shopify package does not depend on @profitpilot/logger). It exists for ONE
+ * reason: when the OAuth callback fails to write the offline access token or
+ * the store row, the exact database error must reach the logs. A swallowed
+ * DB error here is precisely what leaves a merchant installed on Shopify's
+ * side but unknown to the app — every later API call then 401s.
+ */
+export type InstallLogger = Readonly<{
+  info(message: string, fields?: Record<string, unknown>): void
+  warn(message: string, fields?: Record<string, unknown>): void
+  error(message: string, fields?: Record<string, unknown>): void
+}>
+
+export type ShopifyInstallOptions = Readonly<{ logger?: InstallLogger }>
+
+/**
  * Named steps of the OAuth callback. Every failure raised by complete() carries
  * its step in AppError.details.step so logs and alerts point at the exact stage
  * instead of a sanitized INTERNAL_ERROR.
  */
-export type InstallStep = 'validation' | 'hmac-verification' | 'state-verification' | 'token-exchange' | 'token-storage' | 'tenant-registration'
+export type InstallStep = 'validation' | 'hmac-verification' | 'state-verification' | 'token-exchange' | 'token-storage' | 'tenant-registration' | 'token-verification'
 
 export class ShopifyInstallService {
   private readonly config: ShopifyInstallConfig
   private readonly states: OAuthStates
   private readonly vault: TokenVault
   private readonly directory: StoreDirectory
+  private readonly logger: InstallLogger | null
 
-  public constructor(config: ShopifyInstallConfig, states: OAuthStates, vault: TokenVault, directory: StoreDirectory) {
+  public constructor(config: ShopifyInstallConfig, states: OAuthStates, vault: TokenVault, directory: StoreDirectory, options: ShopifyInstallOptions = {}) {
     if (!config.apiKey.trim() || !config.apiSecret.trim() || !config.redirectUri.trim()) throw new TypeError('Shopify OAuth configuration is incomplete')
     this.config = config
     this.states = states
     this.vault = vault
     this.directory = directory
+    this.logger = options.logger ?? null
   }
 
   public async start(shop: string): Promise<InstallStart> {
@@ -53,23 +71,68 @@ export class ShopifyInstallService {
     try {
       accessToken = await exchange(shop, callback.code)
     } catch (error: unknown) {
+      this.logger?.error('Shopify OAuth token exchange failed', { step: 'token-exchange', shopDomain: shop, ...describeDbError(error) })
       throw installError('DEPENDENCY_ERROR', 'token-exchange', 'Shopify access token exchange failed', 502, error)
     }
-    try {
-      await this.vault.put(shop, accessToken)
-    } catch (error: unknown) {
-      throw installError('INTERNAL_ERROR', 'token-storage', 'Failed to store the Shopify access token', 500, error, false)
-    }
+
+    // Tenant row FIRST. The `stores` row is what every embedded API call
+    // resolves the session token's `dest` shop to; registering it before the
+    // vault write means a transient token-vault failure can never leave the
+    // merchant with an installed app and no tenant (the state that produced
+    // 401 STORE_NOT_FOUND on every /api call). The upsert also resets
+    // status='ACTIVE' and uninstalled_at=NULL for a reinstalling merchant.
     let tenant: { storeId: StoreId; shopDomain: string }
     try {
-      // Register (or re-find) the tenant row so the dashboard has a storeId to
-      // attach the Shopify token to. This is what connects the stored token to
-      // the workspace context the web app renders from.
       tenant = await this.directory.upsertByShopDomain(shop)
     } catch (error: unknown) {
+      this.logger?.error('Shopify OAuth callback could not write the stores row', {
+        step: 'tenant-registration',
+        shopDomain: shop,
+        ...describeDbError(error),
+      })
       throw installError('INTERNAL_ERROR', 'tenant-registration', 'Failed to register the Shopify store tenant', 500, error, false)
     }
-    return { shop, storeId: tenant.storeId, tokenStored: true }
+    this.logger?.info('Shopify OAuth callback registered the store row', { shopDomain: tenant.shopDomain, storeId: tenant.storeId, status: 'ACTIVE', uninstalledAt: null })
+
+    // Offline access token → token vault (encrypted `shopify_tokens` row).
+    // Every failure mode here is logged with the EXACT database error
+    // (message, pg code, constraint, detail) because a silent write failure is
+    // indistinguishable from "the merchant never installed" at request time.
+    try {
+      await this.vault.put(tenant.shopDomain, accessToken)
+    } catch (error: unknown) {
+      this.logger?.error('Shopify OAuth callback failed to persist the offline access token to the token vault', {
+        step: 'token-storage',
+        shopDomain: tenant.shopDomain,
+        storeId: tenant.storeId,
+        ...describeDbError(error),
+      })
+      throw installError('INTERNAL_ERROR', 'token-storage', 'Failed to store the Shopify access token', 500, error, false)
+    }
+
+    // Read-back verification: proves the row is actually in the database (and
+    // decryptable) rather than trusting a write that a pooler may have rolled
+    // back. Without it, "install succeeded" and "token missing" can both be
+    // true — the exact production symptom being fixed.
+    try {
+      const stored = await this.vault.get(tenant.shopDomain)
+      if (!stored) {
+        this.logger?.error('Shopify OAuth callback stored no readable offline access token', { step: 'token-verification', shopDomain: tenant.shopDomain, storeId: tenant.storeId, reason: 'TOKEN_VAULT_READBACK_EMPTY' })
+        throw installError('INTERNAL_ERROR', 'token-verification', 'The Shopify access token was not persisted', 500, undefined, false)
+      }
+    } catch (error: unknown) {
+      if (error instanceof AppError) throw error
+      this.logger?.error('Shopify OAuth callback could not read back the offline access token', {
+        step: 'token-verification',
+        shopDomain: tenant.shopDomain,
+        storeId: tenant.storeId,
+        ...describeDbError(error),
+      })
+      throw installError('INTERNAL_ERROR', 'token-verification', 'The Shopify access token could not be verified after storage', 500, error, false)
+    }
+
+    this.logger?.info('Shopify OAuth callback persisted the offline access token', { shopDomain: tenant.shopDomain, storeId: tenant.storeId, accessMode: 'offline', tokenStored: true })
+    return { shop: tenant.shopDomain, storeId: tenant.storeId, tokenStored: true }
   }
 
   /**
@@ -117,6 +180,42 @@ function requireShopDomain(value: string): string {
   } catch {
     throw installError('VALIDATION_ERROR', 'validation', 'A valid *.myshopify.com shop domain is required', 400)
   }
+}
+
+/**
+ * Flattens a thrown value into the operator-facing fields that identify a
+ * database failure: the message, the PostgreSQL SQLSTATE (`code`), the
+ * violated `constraint`, the server `detail`/`hint`, the `table`, and the
+ * cause chain. These are what turn "Failed to store the Shopify access token"
+ * into an actionable line (e.g. `42P01 relation "shopify_tokens" does not
+ * exist` or `42501 new row violates row-level security policy`). No token,
+ * secret, or merchant PII is included.
+ */
+function describeDbError(error: unknown): Record<string, unknown> {
+  const source = error as Partial<Record<'message' | 'code' | 'detail' | 'hint' | 'constraint' | 'table' | 'schema' | 'routine' | 'severity', unknown>> | null
+  const cause = error instanceof Error ? error.cause : undefined
+  const causeSource = cause as Partial<Record<'message' | 'code' | 'constraint' | 'detail', unknown>> | null
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    errorName: error instanceof Error ? error.name : typeof error,
+    dbCode: stringOrNull(source?.code),
+    dbDetail: stringOrNull(source?.detail),
+    dbHint: stringOrNull(source?.hint),
+    dbConstraint: stringOrNull(source?.constraint),
+    dbTable: stringOrNull(source?.table),
+    dbSchema: stringOrNull(source?.schema),
+    dbRoutine: stringOrNull(source?.routine),
+    dbSeverity: stringOrNull(source?.severity),
+    cause: cause instanceof Error ? `${cause.name}: ${cause.message}` : typeof cause === 'string' ? cause : null,
+    causeCode: stringOrNull(causeSource?.code),
+    causeConstraint: stringOrNull(causeSource?.constraint),
+    causeDetail: stringOrNull(causeSource?.detail),
+    stack: error instanceof Error ? (error.stack ?? '') : '',
+  }
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : typeof value === 'number' ? String(value) : null
 }
 
 function normalizeShopDomainFallback(value: string): string {
