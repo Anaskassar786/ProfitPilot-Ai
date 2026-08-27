@@ -99,24 +99,24 @@ function emptyDataset(): InsightsDataset {
 }
 
 describe('insights hub environment configuration', () => {
-  it('reads the dedicated key and nemotron models from env', () => {
+  it('reads the dedicated key and models from env', () => {
     const config = insightsHubEnvConfig({
       INSIGHTS_HUB_API_KEY: 'sk-or-v1-test',
-      INSIGHTS_HUB_MODEL_PRIMARY: 'nvidia/nemotron-3.5-lightning:free',
-      INSIGHTS_HUB_MODEL_FALLBACK: 'nvidia/nemotron-3-super:free',
+      INSIGHTS_HUB_MODEL_PRIMARY: 'meta-llama/llama-3.3-70b-instruct:free',
+      INSIGHTS_HUB_MODEL_FALLBACK: 'google/gemma-2-9b-it:free',
       INSIGHTS_HUB_RATE_LIMIT_PER_STORE: '25',
     })
     expect(config.apiKey).toBe('sk-or-v1-test')
-    expect(config.models).toEqual(['nvidia/nemotron-3.5-lightning:free', 'nvidia/nemotron-3-super:free'])
+    expect(config.models).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'])
     expect(config.rateLimitPerStore).toBe(25)
     expect(config.enabled).toBe(true)
     expect(config.dailyBudgetUsd).toBe(0)
   })
-  it('falls back to the documented nemotron defaults', () => {
+  it('falls back to the current active free-model defaults', () => {
     const config = insightsHubEnvConfig({})
-    // QA 2026-08-22: the old `nemotron-3-super:free` slug was delisted; the
-    // fallback chain now points at a live endpoint.
-    expect(config.models).toEqual(['nvidia/nemotron-3.5-lightning:free', 'nvidia/nemotron-3-super-120b-a12b:free'])
+    // QA 2026-08-27: the nemotron slugs were delisted (404 / no_endpoints);
+    // the fallback chain now points at the current, active free models.
+    expect(config.models).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'])
     expect(config.minConfidenceScore).toBe(0.7)
     expect(config.apiRateLimit).toBe(100)
   })

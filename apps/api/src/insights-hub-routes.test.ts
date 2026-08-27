@@ -134,7 +134,7 @@ describe('Insights Hub — overview and usage', () => {
     const { body } = await getJson(base, `/insights/cost-summary?storeId=${STORE}`)
     const data = body.data as { estimatedCostUsd: number; models: string[] }
     expect(data.estimatedCostUsd).toBe(0)
-    expect(data.models).toContain('nvidia/nemotron-3.5-lightning:free')
+    expect(data.models).toContain('meta-llama/llama-3.3-70b-instruct:free')
   }))
 })
 

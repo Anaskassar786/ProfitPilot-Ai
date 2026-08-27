@@ -5,16 +5,22 @@ import { Logger } from '@profitpilot/logger'
 const fallbackLogger = new Logger()
 
 /**
- * Default OpenRouter fallback chain (verified active 2026-08-22).
+ * Default OpenRouter fallback chain (verified active 2026-08-27).
  *
- * The previous slugs (`nvidia/nemotron-3-nano-omni:free`,
- * `nvidia/nemotron-3-super:free`, `openai/gpt-oss-20b:free`) were delisted or
- * left with zero serving endpoints, so every request fell through to the
- * generic "temporarily unavailable" string. Each slug below was checked
- * against `/api/v1/models/{slug}/endpoints` and has at least one live
- * endpoint; `validateModels()` re-checks them at boot.
+ * The previous slugs (`nvidia/nemotron-3-super-120b-a12b:free`,
+ * `google/gemma-4-26b-a4b-it:free`, `nvidia/nemotron-3-nano-30b-a3b:free` —
+ * and before them `nvidia/nemotron-3-nano-omni:free`,
+ * `nvidia/nemotron-3-super:free`, `openai/gpt-oss-20b:free`,
+ * `LiquidAI: LFM2.5-Embedding-350M`) were delisted or left with zero serving
+ * endpoints, so OpenRouter answered 404 / `no_endpoints` and every request
+ * fell through to the generic "temporarily unavailable" string. The chain
+ * below is the current, active free tier: primary 70B Llama 3.3 Instruct,
+ * Gemma 2 9B IT as the secondary fallback, and Qwen 2.5 7B Instruct as the
+ * tertiary fallback. `validateModels()` re-checks them at boot (see
+ * `validateOpenRouterModels` in the API bootstrap) and a failed validation
+ * only logs an alert — it never blocks server boot.
  */
-export const DEFAULT_AI_MODELS = ['nvidia/nemotron-3-super-120b-a12b:free', 'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3-nano-30b-a3b:free'] as const
+export const DEFAULT_AI_MODELS = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free', 'qwen/qwen-2.5-7b-instruct:free'] as const
 export const DEFAULT_AI_TIMEOUT_MS = 25_000
 export type AiModel = string
 export type AiUsage = Readonly<{ promptTokens: number; completionTokens: number; totalTokens: number }>

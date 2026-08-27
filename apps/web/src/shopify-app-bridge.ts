@@ -157,6 +157,69 @@ export function redirectToShopifyCheckout(confirmationUrl: string): void {
 }
 
 /**
+ * Navigates the TOP-LEVEL window to `url` — the iframe escape used by the
+ * automatic 401 reinstall/re-authorize redirect. The top-level frame is
+ * Shopify admin (a different origin), so the URL must be ABSOLUTE (a
+ * relative path would resolve against `admin.shopify.com` and 404) and the
+ * navigation must go through a surface that can reach the top frame:
+ *
+ *   1. App Bridge v4 CDN: `window.shopify.navigation.navigate(url)`
+ *   2. App Bridge builds exposing `navigate({ url, target: '_top' })`
+ *   3. `window.open(url, '_top')` — Shopify's documented bridge-free escape.
+ *      A popup-blocked call returns `null` (it does NOT throw), so the
+ *      failure is detected and reported instead of being silently reported
+ *      as success — that silent success was what left merchants stuck on
+ *      the static red 401 card.
+ *   4. Standalone (top === self): plain `window.location.assign(url)`.
+ *
+ * Returns true when a navigation was dispatched, false when no surface
+ * could take it (callers then keep the user-visible re-auth banner as the
+ * fallback so the merchant is never left on a dead page).
+ */
+export function navigateTopLevel(url: string): boolean {
+  if (typeof window === 'undefined') return false
+  let embedded = false
+  try { embedded = window.top !== window.self } catch { embedded = true }
+  if (!embedded) {
+    try {
+      window.location.assign(url)
+      return true
+    } catch {
+      return false
+    }
+  }
+  try {
+    const shopify = (window as { shopify?: unknown }).shopify
+    if (shopify && typeof shopify === 'object') {
+      const navigation = (shopify as { navigation?: unknown }).navigation
+      const navigationNavigate = navigation && typeof navigation === 'object'
+        ? (navigation as { navigate?: unknown }).navigate
+        : undefined
+      if (typeof navigationNavigate === 'function') {
+        ;(navigationNavigate as (target: string) => void)(url)
+        return true
+      }
+      const directNavigate = (shopify as { navigate?: unknown }).navigate
+      if (typeof directNavigate === 'function') {
+        ;(directNavigate as (options: Readonly<{ url: string; target: '_top' }>) => void)({ url, target: '_top' })
+        return true
+      }
+    }
+  } catch {
+    // App Bridge still booting or exposing a different surface — fall
+    // through to the standards-based top-level escape below.
+  }
+  try {
+    const opened = window.open(url, '_top', 'noopener')
+    if (opened) return true
+  } catch {
+    // window.open can throw in hardened embeds — no surface left to reach
+    // the top frame, so the caller keeps the manual re-auth banner.
+  }
+  return false
+}
+
+/**
  * Opens a Shopify admin deep link (e.g. /admin/orders/… or /admin/products/…)
  * from the app without navigating the app's own frame.
  *

@@ -72,7 +72,7 @@ its own `docs/GROWTHIQ.md`.
   from real synced rows (`apps/api/src/executive-analytics.ts`). Missing
   metrics are reported as "not measurable" instead of estimated.
 - **Grounded AI language** — OpenRouter (shared `STORE_COACH_API_KEY`,
-  `nvidia/nemotron-3-ultra:free` → `nvidia/nemotron-3-super:free` fallback)
+  `meta-llama/llama-3.3-70b-instruct:free` → `google/gemma-2-9b-it:free` fallback)
   writes narrative only; the language firewall rejects any invented number,
   and deterministic templates keep every report complete without the provider.
 - **Plan-gated everywhere** — 402 `UPGRADE_REQUIRED` with upgrade context from
@@ -106,8 +106,8 @@ placeholder (existing templates are preserved, not deleted).
 - **Plan gating** — Trial (2 priorities, 1 goal, 5 chat msgs), Start, Growth,
   Commander per the matrix in `docs/STORE_COACH.md`; trial expiry blocks the
   module with a 402 until upgrade. Upgrade CTAs always say "Upgrade Plan".
-- **Infrastructure** — OpenRouter `nvidia/nemotron-3-ultra:free` (fallback
-  `nvidia/nemotron-3-super:free`) via `STORE_COACH_API_KEY`, cost-ledger
+- **Infrastructure** — OpenRouter `meta-llama/llama-3.3-70b-instruct:free`
+  (fallback `google/gemma-2-9b-it:free`) via `STORE_COACH_API_KEY`, cost-ledger
   tracking, 24h huddle caching, RLS-isolated tables (migration 0023), and an
   hourly scheduler for huddles, Sunday digests, and badge sweeps.
 - **UI** — extracted workspace files (`store-coach.tsx`, `store-coach-panels.tsx`,

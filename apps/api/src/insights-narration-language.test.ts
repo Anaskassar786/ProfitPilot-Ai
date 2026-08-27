@@ -42,7 +42,7 @@ describe('PatternAI narration language', () => {
     const provider: NarratorProvider = {
       generate: async (system: string) => {
         capturedSystem = system
-        return { text: 'राजस्व में 42 की बढ़त देखी गई।', model: 'nemotron:free' }
+        return { text: 'राजस्व में 42 की बढ़त देखी गई।', model: 'meta-llama/llama-3.3-70b-instruct:free' }
       },
     }
     const narrator = createInsightsNarrator(asProvider(provider))
@@ -63,7 +63,7 @@ describe('PatternAI narration language', () => {
     const provider: NarratorProvider = {
       generate: async (system: string) => {
         capturedSystem = system
-        return { text: 'Revenue climbed by 42.', model: 'nemotron:free' }
+        return { text: 'Revenue climbed by 42.', model: 'meta-llama/llama-3.3-70b-instruct:free' }
       },
     }
     const narrator = createInsightsNarrator(asProvider(provider))
@@ -74,7 +74,7 @@ describe('PatternAI narration language', () => {
 
   it('still rejects an invented number in Hindi narration via the language firewall', async () => {
     const provider: NarratorProvider = {
-      generate: async () => ({ text: 'राजस्व 999 तक बढ़ा।', model: 'nemotron:free' }),
+      generate: async () => ({ text: 'राजस्व 999 तक बढ़ा।', model: 'meta-llama/llama-3.3-70b-instruct:free' }),
     }
     const narrator = createInsightsNarrator(asProvider(provider))
     const result = await narrator({

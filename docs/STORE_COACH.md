@@ -81,8 +81,8 @@ endpoint returns 402 until the merchant upgrades. All upgrade CTAs say
 ## AI provider
 
 - Provider: OpenRouter
-- Primary model: `nvidia/nemotron-3-ultra:free`
-- Fallback: `nvidia/nemotron-3-super:free`
+- Primary model: `meta-llama/llama-3.3-70b-instruct:free`
+- Fallback: `google/gemma-2-9b-it:free`
 - Key: `STORE_COACH_API_KEY` (shared with PR #49 AI Executive)
 - Rate limit: 30 requests/minute per store
 - Daily budget: $0 (free tier)

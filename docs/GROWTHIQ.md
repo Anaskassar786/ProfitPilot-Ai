@@ -107,7 +107,7 @@ migrations/0022_ai_executive.sql      Tables + RLS + seeded public benchmarks
    `AnalyticsRepository`), the deterministic engine computes vitals, risks,
    opportunities, and benchmark percentiles into an `ExecutiveFacts` sheet.
 3. `ExecutiveAiService.generateBoardReport` sends the fact sheet to
-   OpenRouter (`nvidia/nemotron-3-ultra:free` → `nvidia/nemotron-3-super:free`,
+   OpenRouter (`meta-llama/llama-3.3-70b-instruct:free` → `google/gemma-2-9b-it:free`,
    shared `STORE_COACH_API_KEY`). The response must pass
    `validateLanguageResponse` against the facts' numbers — any invented number
    rejects the section, which falls back to the deterministic template.
@@ -169,8 +169,8 @@ per-store rate limit (429 with `retryAfterMs`).
 ```
 STORE_COACH_API_KEY=sk-or-v1-…          shared OpenRouter key (PR #48/#49)
 AI_EXECUTIVE_ENABLED=true
-AI_EXECUTIVE_MODEL_PRIMARY=nvidia/nemotron-3-ultra:free
-AI_EXECUTIVE_MODEL_FALLBACK=nvidia/nemotron-3-super:free
+AI_EXECUTIVE_MODEL_PRIMARY=meta-llama/llama-3.3-70b-instruct:free
+AI_EXECUTIVE_MODEL_FALLBACK=google/gemma-2-9b-it:free
 AI_EXECUTIVE_RATE_LIMIT_PER_STORE=20
 AI_EXECUTIVE_DAILY_BUDGET_USD=0
 AI_EXECUTIVE_PDF_ENABLED=true

@@ -10,7 +10,7 @@ import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult
 import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
-import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
+import { getShopifySessionToken, getShopifySessionTokenWithRetry, navigateTopLevel } from './shopify-app-bridge.js'
 import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
@@ -62,10 +62,11 @@ async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetche
   let response = await performFetch(path, init, headers, fetcher)
   let payload = await readJsonPayload(response)
 
-  // Silent 401 retry: fast tab switching can race the App Bridge idToken
-  // mint and send a stale bearer. Mint a FRESH token now and retry once
-  // before surfacing anything to the merchant.
-  if (response.status === 401 && allowRetry && !callerAuthorization) {
+  // Silent unauthorized retry: fast tab switching can race the App Bridge
+  // idToken mint and send a stale bearer, so the API answers 401 (or a
+  // STORE_NOT_FOUND it cannot resolve without a fresh token). Mint a FRESH
+  // token now and retry once before surfacing anything to the merchant.
+  if (isUnauthorizedResponse(payload, response.status) && allowRetry && !callerAuthorization) {
     const fresh = await getShopifySessionToken()
     if (fresh.status === 'ok') {
       const retryHeaders = new Headers(init.headers)
@@ -83,9 +84,10 @@ async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetche
       await initializeCsrf(fetcher)
       return requestJsonAttempt<Value>(path, init, fetcher, false)
     }
-    // A 401 that survived the fresh-token retry is genuine session expiry —
-    // the ONLY place in the fetch path allowed to latch the banner.
-    if (response.status === 401) notifyEmbeddedAuthFailure()
+    // An unauthorized response that survived the fresh-token retry is
+    // genuine session expiry / a missing store — the ONLY place in the
+    // fetch path allowed to latch the banner (or auto-redirect).
+    if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()
     throw failureFromPayload(payload, response.status)
   }
 
@@ -127,17 +129,21 @@ async function requestFileAttempt(path: string, init: RequestInit, fetcher: Fetc
   const callerAuthorization = headers.has('authorization')
   await attachEmbeddedSessionToken(headers)
   let response = await performFetch(path, init, headers, fetcher)
-  if (response.status === 401 && allowRetry && !callerAuthorization) {
+  // The JSON envelope is only parsed for non-2xx responses — a successful
+  // download is binary and its body must stay intact for `response.blob()`.
+  let payload: unknown = response.ok ? null : await readJsonPayload(response)
+  if (!response.ok && isUnauthorizedResponse(payload, response.status) && allowRetry && !callerAuthorization) {
     const fresh = await getShopifySessionToken()
     if (fresh.status === 'ok') {
       const retryHeaders = new Headers(init.headers)
       retryHeaders.set('authorization', `Bearer ${fresh.token}`)
       response = await performFetch(path, init, retryHeaders, fetcher)
+      payload = response.ok ? null : await readJsonPayload(response)
     }
   }
   if (!response.ok) {
-    if (response.status === 401) notifyEmbeddedAuthFailure()
-    throw failureFromPayload(await readJsonPayload(response), response.status)
+    if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()
+    throw failureFromPayload(payload, response.status)
   }
   notifyEmbeddedAuthRecovered()
   return {
@@ -211,6 +217,7 @@ export function resetApiClientStateForTests(): void {
   embeddedAuthFailureHandler = null
   embeddedAuthRecoveryHandler = null
   embeddedReinstallRedirectAttempted = false
+  embeddedReinstallRedirectDispatched = false
 }
 
 /* ── Embedded App Bridge session tokens (P0 App Store fix) ──────────────── */
@@ -222,6 +229,7 @@ let embeddedAuthFailureHandler: EmbeddedAuthFailureHandler | null = null
 let embeddedAuthRecoveryHandler: EmbeddedAuthRecoveryHandler | null = null
 let embeddedAuthFailureNotified = false
 let embeddedReinstallRedirectAttempted = false
+let embeddedReinstallRedirectDispatched = false
 
 /**
  * Registers the user-visible handler for embedded session-token failures
@@ -249,21 +257,25 @@ export function setEmbeddedAuthRecoveryHandler(handler: EmbeddedAuthRecoveryHand
 
 /**
  * Internal: latches the session-expired notification exactly once. Called
- * exclusively from the 401-after-retry path — never from token mint races.
+ * exclusively from the unauthorized-after-fresh-token-retry path — never
+ * from token mint races.
+ *
+ * 401 AUTO-RECOVERY: an unauthorized response that survived the fresh-token
+ * retry means the offline session cannot be repaired client-side (store row
+ * missing, token vault empty, or the grant was revoked). The FIRST action is
+ * therefore transparent recovery: break out to the top level and run the
+ * OAuth reinstall/re-authorization, which rewrites the offline token and
+ * reactivates the store. Attempted at most once per page load. The
+ * user-visible red "session expired" card is latched ONLY when no redirect
+ * surface could take over (standalone dev, unknown store, popup-blocked
+ * navigation) — when the re-auth redirect is in flight the merchant must
+ * never be left staring at a static "Authentication is required" card.
  */
 function notifyEmbeddedAuthFailure(): void {
   if (embeddedAuthFailureNotified) return
   embeddedAuthFailureNotified = true
+  if (attemptEmbeddedReinstallRedirect()) return
   embeddedAuthFailureHandler?.('Your Shopify session expired — reload the app to reconnect.')
-  // 401 AUTO-RECOVERY: a 401 that survived the fresh-token retry means the
-  // offline session cannot be repaired client-side (store row missing, token
-  // vault empty, or the grant was revoked). Do NOT leave the merchant stuck
-  // on permanent red 401 cards — break out to the top level and run the
-  // OAuth reinstall/re-authorization, which rewrites the offline token and
-  // reactivates the store. Attempted at most once per page load; the session
-  // banner stays visible as the fallback when navigation is blocked or the
-  // page runs outside the embedded admin.
-  attemptEmbeddedReinstallRedirect()
 }
 
 /* ── Embedded 401 auto-recovery: top-level reinstall redirect ───────────── */
@@ -315,39 +327,68 @@ export function embeddedShopDomainFromUrl(search: string = currentWindowSearch()
 }
 
 /**
- * Performs the top-level navigation to the OAuth reinstall endpoint:
- * `shopify.navigate({ url, target: '_top' })` when the App Bridge exposes a
- * navigate API, otherwise `window.open(url, '_top')` (the standards-based
- * escape from the admin iframe) with `location.assign` as a last resort.
- * Returns true when a navigation was dispatched.
+ * Error codes the API uses for an expired or unresolvable session. They are
+ * treated exactly like an HTTP 401 for the silent fresh-token retry and the
+ * automatic reinstall redirect (see `isUnauthorizedResponse`).
+ */
+const UNAUTHORIZED_ERROR_CODES = new Set(['UNAUTHORIZED', 'STORE_NOT_FOUND'])
+
+/**
+ * True when the response reports an unrepairable session: HTTP 401, or an
+ * error envelope carrying code `UNAUTHORIZED` / `STORE_NOT_FOUND` on any
+ * status (e.g. a 404 the API maps to a missing store row).
+ */
+export function isUnauthorizedResponse(payload: unknown, status: number): boolean {
+  if (status === 401) return true
+  if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.code === 'string') {
+    return UNAUTHORIZED_ERROR_CODES.has(payload.error.code)
+  }
+  return false
+}
+
+/**
+ * Resolves the store's myshopify domain for the reinstall redirect: prefers
+ * the strict `shop` query parameter (present in both the embedded and
+ * standalone app URLs) and falls back to the decoded admin `host` parameter.
+ */
+function reinstallShopDomain(): string | null {
+  const search = currentWindowSearch()
+  const shop = new URLSearchParams(search).get('shop')?.trim()
+  if (shop) {
+    const normalized = normalizeReinstallShopDomain(shop)
+    if (normalized) return normalized
+  }
+  return embeddedShopDomainFromUrl(search)
+}
+
+/**
+ * The OAuth reinstall endpoint as an ABSOLUTE URL. The top-level window in
+ * the embedded admin is Shopify's origin, so a relative path would resolve
+ * against `admin.shopify.com` and 404 — it must be anchored on the app's
+ * own origin (the iframe's `window.location.origin`).
+ */
+export function buildInstallUrl(shopDomain: string): string {
+  const path = `/shopify/install?shop=${encodeURIComponent(shopDomain)}`
+  try {
+    return new URL(path, window.location.href).toString()
+  } catch {
+    return path
+  }
+}
+
+/**
+ * Performs the top-level navigation to the OAuth reinstall endpoint via
+ * `navigateTopLevel`: App Bridge navigation when the loaded bridge exposes
+ * one, otherwise `window.open(url, '_top')` (a popup-blocked call is
+ * detected via its `null` return), or a plain `location.assign` when the app
+ * already runs at the top level. Returns true when a navigation was
+ * dispatched.
  */
 export function triggerEmbeddedReinstallRedirect(): boolean {
   if (typeof window === 'undefined') return false
-  const shop = embeddedShopDomainFromUrl()
+  const shop = reinstallShopDomain()
   if (!shop) return false
-  const url = `/shopify/install?shop=${encodeURIComponent(shop)}`
-  try {
-    const bridge = (window as { shopify?: unknown }).shopify
-    const navigate = bridge !== null && typeof bridge === 'object' ? (bridge as { navigate?: unknown }).navigate : undefined
-    if (typeof navigate === 'function') {
-      ;(navigate as (options: Readonly<{ url: string; target: '_top' }>) => void)({ url, target: '_top' })
-      return true
-    }
-  } catch {
-    // App Bridge still booting or exposing a different surface — fall through
-    // to the top-level browser navigation below.
-  }
-  try {
-    window.open(url, '_top', 'noopener')
-    return true
-  } catch {
-    try {
-      window.location.assign(url)
-      return true
-    } catch {
-      return false
-    }
-  }
+  return navigateTopLevel(buildInstallUrl(shop))
 }
 
 /**
@@ -356,9 +397,20 @@ export function triggerEmbeddedReinstallRedirect(): boolean {
  * answer 401 simultaneously on a dead session.
  */
 export function attemptEmbeddedReinstallRedirect(): boolean {
-  if (embeddedReinstallRedirectAttempted) return false
+  if (embeddedReinstallRedirectAttempted) return embeddedReinstallRedirectDispatched
   embeddedReinstallRedirectAttempted = true
-  return triggerEmbeddedReinstallRedirect()
+  embeddedReinstallRedirectDispatched = triggerEmbeddedReinstallRedirect()
+  return embeddedReinstallRedirectDispatched
+}
+
+/**
+ * True once the automatic reinstall redirect was DISPATCHED in this page
+ * lifetime (transparent re-auth is in flight). App shells use it to suppress
+ * their static red 401 cards while the top-level window is already
+ * re-authorizing the store.
+ */
+export function isEmbeddedReinstallInFlight(): boolean {
+  return embeddedReinstallRedirectDispatched
 }
 
 /**
@@ -625,6 +677,7 @@ export async function runAllAgents(storeId: string, onEvent: (event: RunAllEvent
   if (!response.ok || !response.body) {
     let payload: unknown = null
     try { payload = await response.json() } catch { payload = null }
+    if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()
     throw failureFromPayload(payload, response.status)
   }
   const reader = response.body.getReader()
@@ -807,6 +860,7 @@ export async function streamJarvisMessage(storeId: string, sessionId: string, te
   if (!response.ok || !response.body) {
     let payload: unknown = null
     try { payload = await response.json() } catch { payload = null }
+    if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()
     throw failureFromPayload(payload, response.status)
   }
   const reader = response.body.getReader()
@@ -1049,6 +1103,7 @@ export async function streamCoachChat(storeId: string, message: string, onDelta:
   if (!response.ok || !response.body) {
     let payload: unknown = null
     try { payload = await response.json() } catch { payload = null }
+    if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()
     throw failureFromPayload(payload, response.status)
   }
   const reader = response.body.getReader()

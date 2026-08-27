@@ -254,7 +254,7 @@ describe('Store Coach huddle salutations', () => {
 })
 
 function generation(text: string): AiGeneration {
-  return { text, model: 'nvidia/nemotron-3-ultra:free', keyIndex: 0, usage: { promptTokens: 120, completionTokens: 60, totalTokens: 180 }, attempts: 1 }
+  return { text, model: 'meta-llama/llama-3.3-70b-instruct:free', keyIndex: 0, usage: { promptTokens: 120, completionTokens: 60, totalTokens: 180 }, attempts: 1 }
 }
 
 function buildService(overrides: Partial<Parameters<typeof makeDeps>[0]> = {}): StoreCoachService {
