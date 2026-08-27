@@ -35,12 +35,54 @@ export function sanitizeSessionTokenConfig(config: Readonly<{ apiKey: string | u
 const DEFAULT_LEEWAY_SECONDS = 10
 
 /**
+ * Diagnostic sink for session-token verification failures. Wired by the API
+ * layer (`apps/api`) into the structured logger; defaults to a no-op so the
+ * shared package never writes to the console on its own. Every message is
+ * technical only — never the token itself and never the API secret.
+ */
+export type SessionTokenVerificationLogger = (message: string, context: Readonly<Record<string, unknown>>) => void
+
+let sessionTokenVerificationLogger: SessionTokenVerificationLogger = () => {}
+
+export function setSessionTokenVerificationLogger(logger: SessionTokenVerificationLogger | null): void {
+  sessionTokenVerificationLogger = logger ?? (() => {})
+}
+
+function logSessionTokenFailure(message: string, context: Readonly<Record<string, unknown>> = {}): void {
+  try {
+    sessionTokenVerificationLogger(message, context)
+  } catch {
+    /* diagnostics must never break verification */
+  }
+}
+
+/**
+ * Reads the `dest`/`aud` claims out of a session token WITHOUT verifying it,
+ * strictly for diagnostic log lines. Values from an unverified payload are
+ * attacker-controlled — callers must never use them for authorization
+ * decisions, only to explain a rejection.
+ */
+export function sessionTokenClaimsPreview(token: string): Readonly<{ dest: string | null; aud: string | null }> {
+  const payload = decodeJsonSegment(token.trim().split('.')[1] ?? '')
+  return {
+    dest: payload !== null && typeof payload.dest === 'string' ? payload.dest : null,
+    aud: payload !== null && typeof payload.aud === 'string' ? payload.aud : null,
+  }
+}
+
+/**
  * Verify a Shopify session token (`id_token`).
  *
  * The token is a JWT signed HS256 with the app's client secret, so a valid
  * signature proves Shopify issued it and that the `dest` claim (the shop) is
  * authentic. Returns null rather than throwing: callers treat an unverifiable
  * token as "no identity" and fall back to a read-only lookup.
+ *
+ * The `aud` claim is compared against `config.apiKey`, which the API bootstrap
+ * builds as `sanitizeCredential(process.env.SHOPIFY_API_KEY)` — i.e. the
+ * trimmed, quote/newline-stripped SHOPIFY_API_KEY env value. Every failure is
+ * logged through the diagnostics sink with the exact received-vs-expected
+ * audience so a production 401 is diagnosable from the server log alone.
  */
 export function verifyShopifySessionToken(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): ShopifySessionTokenClaims | null {
   const config = sanitizeSessionTokenConfig(rawConfig)
@@ -54,23 +96,39 @@ export function verifyShopifySessionToken(token: string, rawConfig: SessionToken
   if (!header || header.alg !== 'HS256' || (header.typ !== undefined && header.typ !== 'JWT')) return null
 
   const expected = createHmac('sha256', config.apiSecret).update(`${encodedHeader}.${encodedPayload}`, 'utf8').digest('base64url')
-  if (!safeEqualString(signature, expected)) return null
+  if (!safeEqualString(signature, expected)) {
+    // The payload is NOT authenticated at this point, so its claims are never
+    // echoed — only the expected (public) client id is safe to log.
+    logSessionTokenFailure(`[AuthDiagnostics] JWT verification failed: INVALID_SIGNATURE (payload not authenticated, claims unavailable) aud_expected=${config.apiKey}`, { reason: 'signature-mismatch' })
+    return null
+  }
 
   const payload = decodeJsonSegment(encodedPayload)
   if (!payload) return null
 
-  // `aud` is the app's client id. Without this check a session token minted for
-  // a different app on the same store would be accepted.
-  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) return null
+  const destClaim = typeof payload.dest === 'string' ? payload.dest : '(absent)'
+  const audClaim = typeof payload.aud === 'string' ? payload.aud : '(absent)'
+  const failWithDiagnostics = (reason: SessionTokenRejection): null => {
+    logSessionTokenFailure(
+      `[AuthDiagnostics] JWT verification failed for shop=${destClaim}, aud_received=${audClaim}, aud_expected=${config.apiKey}`,
+      { reason },
+    )
+    return null
+  }
+
+  // `aud` is the app's client id (`process.env.SHOPIFY_API_KEY?.trim()`).
+  // Without this check a session token minted for a different app on the same
+  // store would be accepted.
+  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) return failWithDiagnostics('audience-mismatch')
 
   const seconds = Math.floor(now / 1000)
   const exp = numberClaim(payload.exp)
   const nbf = numberClaim(payload.nbf)
-  if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return null
-  if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return null
+  if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return failWithDiagnostics('expired')
+  if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return failWithDiagnostics('not-yet-valid')
 
   const shop = shopFromDest(payload.dest)
-  if (!shop) return null
+  if (!shop) return failWithDiagnostics('missing-shop')
 
   return {
     shop,

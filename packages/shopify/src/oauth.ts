@@ -32,8 +32,24 @@ export function sanitizeCredential(value: string | undefined | null): string {
   return cleaned
 }
 
+/**
+ * Strict shop-domain normalization applied at EVERY entry point (OAuth start,
+ * OAuth callback, session-token `dest`, webhook headers, DB lookups).
+ *
+ * Merchants and intermediaries routinely pass domains as
+ * `https://Commander-Pilot.myshopify.com/` — with a scheme, mixed case, and a
+ * trailing slash. Any of those variants previously produced a different map
+ * key than the bare `commander-pilot.myshopify.com` the JWT `dest` claim maps
+ * to, so the token vault lookup missed and every API call 401'd with
+ * "Authentication is required". Normalizing once, identically, everywhere,
+ * makes that mismatch impossible.
+ */
+export function normalizeShopDomainInput(value: string): string {
+  return value.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+}
+
 export function parseShopDomain(value: string): string {
-  const normalized = value.trim().toLowerCase()
+  const normalized = normalizeShopDomainInput(value)
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) {
     throw new TypeError('Invalid Shopify shop domain')
   }

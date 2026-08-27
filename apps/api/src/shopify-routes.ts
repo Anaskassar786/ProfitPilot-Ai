@@ -9,7 +9,14 @@ import { rawBodyFor } from './security.js'
 import { setSessionCookie } from './cookies.js'
 
 export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void>; finalize?: (event: WebhookEvent) => Promise<void> }>
-export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies }>
+/**
+ * Read-back probe for the encrypted offline token right after OAuth completes.
+ * The callback used to assume `vault.put` succeeded whenever it did not throw;
+ * a silently RLS-hidden row or a pooler retry meant the install "succeeded"
+ * while every later API call 401'd. Probing the vault immediately after the
+ * write turns that silent failure into an explicit, logged error.
+ */
+export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies; verifyTokenPersisted?: (shop: string) => Promise<boolean> }>
 
 export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencies): Router {
   const router = Router()
@@ -45,11 +52,47 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
     })
     try {
       const result = await dependencies.installer.complete(callback, dependencies.exchange, rawQuery)
+      // complete() only returns after the offline access token has been
+      // written to the token vault (shopify_tokens) AND the stores row has
+      // been upserted with status='ACTIVE', uninstalled_at=NULL. Do not take
+      // the write on faith when a read-back probe is wired: verify the token
+      // is actually retrievable for the normalized shop domain.
+      const requestId = String(response.getHeader('x-request-id') ?? '')
+      if (dependencies.verifyTokenPersisted) {
+        try {
+          const persisted = await dependencies.verifyTokenPersisted(result.shop)
+          if (!persisted) {
+            dependencies.logger?.error('[OAuthPersistence] Token vault write reported success but the offline access token is NOT readable after the OAuth callback', {
+              shopDomain: result.shop,
+              storeId: result.storeId,
+              step: 'token-storage',
+              requestId,
+            })
+          } else {
+            dependencies.logger?.info('[OAuthPersistence] Offline access token persisted and verified in the token vault', {
+              shopDomain: result.shop,
+              storeId: result.storeId,
+              table: 'shopify_tokens',
+              storeStatus: 'ACTIVE',
+              requestId,
+            })
+          }
+        } catch (verifyError: unknown) {
+          dependencies.logger?.error('[OAuthPersistence] Token vault read-back verification failed after the OAuth callback', {
+            shopDomain: result.shop,
+            storeId: result.storeId,
+            step: 'token-storage',
+            dbError: verifyError instanceof Error ? `${verifyError.name}: ${verifyError.message}` : String(verifyError),
+            stack: verifyError instanceof Error ? verifyError.stack ?? '' : '',
+            requestId,
+          })
+        }
+      }
       const location = dependencies.installer.postInstallRedirect(callback, result.shop, result.storeId)
       // Persist the tenant context so refreshes of the embedded app keep the
       // workspace attached even when the redirect query string is absent.
       setSessionCookie(response, result.storeId)
-      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, storeId: result.storeId, matchedHmacMethod: diagnostics.matchedMethod, requestId: String(response.getHeader('x-request-id') ?? '') })
+      dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, storeId: result.storeId, matchedHmacMethod: diagnostics.matchedMethod, requestId })
       // OAuth completes in the merchant's browser; send them into the embedded
       // app inside Shopify admin rather than returning a bare JSON body.
       response.redirect(302, location)
@@ -57,8 +100,9 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       // Response bodies stay sanitized; the real diagnostics belong in logs.
       // Never log the raw query: it contains the code, state token, and hmac.
       // diagnostics (and redactedRawUrl) are the safe equivalent.
+      const step = installStepFromError(error) ?? 'unknown'
       dependencies.logger?.error('Shopify OAuth callback failed', {
-        step: installStepFromError(error) ?? 'unknown',
+        step,
         shopDomain: callback.shop ?? '',
         error: error instanceof Error ? error.message : String(error),
         cause: describeCause(error),
@@ -66,6 +110,18 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
         hmac: diagnostics,
         requestId: String(response.getHeader('x-request-id') ?? ''),
       })
+      // The two persistence steps deserve their own loud, exact DB error: a
+      // failed token-vault or stores write during the callback is precisely
+      // the condition that later shows up as permanent embedded 401s.
+      if (step === 'token-storage' || step === 'tenant-registration') {
+        dependencies.logger?.error(`[OAuthPersistence] DB write failed during OAuth callback (${step === 'token-storage' ? 'token vault' : 'stores row'})`, {
+          step,
+          shopDomain: callback.shop ?? '',
+          dbError: describeCause(error) || (error instanceof Error ? error.message : String(error)),
+          stack: error instanceof Error ? error.stack ?? '' : '',
+          requestId: String(response.getHeader('x-request-id') ?? ''),
+        })
+      }
       next(error)
     }
   })

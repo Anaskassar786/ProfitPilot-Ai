@@ -20,6 +20,17 @@ describe('tenant Shopify store directory', () => {
     expect(queries[0]).not.toContain('DEMO.MYSHOPIFY.COM')
     await expect(new PostgresStoreDirectory(executor).getByShopDomain('')).resolves.toBeNull()
   })
+  it('normalizes scheme, case and trailing slash so every variant hits the same row', async () => {
+    const parameters: unknown[][] = []
+    const executor: SqlExecutor = { async query<Row extends QueryResultRow>(_text: string, params?: readonly unknown[]): Promise<DatabaseResult<Row>> { parameters.push([...(params ?? [])]); return { rows: [{ id: 'store-1', shop_domain: 'commander-pilot.myshopify.com' } as unknown as Row], rowCount: 1 } } }
+    const directory = new PostgresStoreDirectory(executor)
+    for (const variant of ['https://Commander-Pilot.myshopify.com/', 'HTTP://commander-pilot.myshopify.com', ' commander-pilot.myshopify.com// ', 'commander-pilot.myshopify.com']) {
+      expect(await directory.getByShopDomain(variant)).toEqual({ storeId: 'store-1', shopDomain: 'commander-pilot.myshopify.com' })
+    }
+    // Every variant must bind the exact same normalized key — no missing or
+    // extra `.myshopify.com`, no scheme or slash residue.
+    for (const bound of parameters) expect(bound).toEqual(['commander-pilot.myshopify.com'])
+  })
   it('idempotently upserts a shop domain with ON CONFLICT and returns the tenant id', async () => {
     const queries: string[] = []
     const values: unknown[][] = []

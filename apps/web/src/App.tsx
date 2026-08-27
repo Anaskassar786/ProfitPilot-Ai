@@ -84,7 +84,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
+import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, triggerEmbeddedReinstallRedirect, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -1859,6 +1859,14 @@ function SessionExpiredBanner({ message, onDismiss }: { message: string; onDismi
   return (
     <Banner tone="critical" title="Session expired" onDismiss={onDismiss}>
       <p>{message}</p>
+      {/*
+        * AUTO-RECOVERY, not a dead end: the primary action re-runs the OAuth
+        * reinstall/re-authorization at the top level (App Bridge navigate or
+        * window.open '_top'), which rewrites the offline token and restores
+        * every failing /api/* call. Reload stays as the secondary fallback
+        * for standalone (non-embedded) sessions.
+      */}
+      <Button onClick={() => { if (!triggerEmbeddedReinstallRedirect()) window.location.reload() }}>Reconnect your store</Button>
       <Button onClick={() => window.location.reload()}>Reload the app</Button>
     </Banner>
   )
