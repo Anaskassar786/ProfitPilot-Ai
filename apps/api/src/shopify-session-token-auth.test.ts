@@ -5,7 +5,7 @@ import { InMemorySessionRepository, InMemoryStoreDirectory } from '@profitpilot/
 import { Logger } from '@profitpilot/logger'
 import { AuthService, JwtService } from './auth.js'
 import { createApi } from './app.js'
-import { securityOptionsFromEnv } from './security.js'
+import { securityOptionsFromEnv, setAuthDiagnosticsLogger } from './security.js'
 import { storeId, userId } from '@profitpilot/types'
 import type { AnalyticsSnapshot } from '@profitpilot/db'
 
@@ -121,12 +121,42 @@ describe('Shopify session-token bearer auth (embedded, cookies blocked)', () => 
     })
   })
 
-  it('rejects a session token minted for a different app (audience check)', async () => {
+  it('gracefully authenticates a signature-valid token with a stale audience via the shop-domain lookup', async () => {
+    // Credential-drift incident class: SHOPIFY_API_SECRET still matches the
+    // app that minted the token, but the deployed SHOPIFY_API_KEY drifted.
+    // The store must be resolved from the authenticated dest claim instead of
+    // 401-ing every embedded /api/* call — with the fallback logged loudly.
+    const directory = new InMemoryStoreDirectory()
+    const connection = await directory.upsertByShopDomain(SHOP)
+    const app = embeddedApp(directory)
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      await withServer(app, async (base) => {
+        const staleAudience = sessionToken({ aud: 'another-app-client-id' })
+        const response = await fetch(`${base}/analytics?storeId=${connection.storeId}`, { headers: { authorization: `Bearer ${staleAudience}` } })
+        expect(response.status).toBe(200)
+      })
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+    const fallback = logs.find((entry) => entry.message.startsWith('[AuthDiagnostic] Session token audience fallback'))
+    expect(fallback).toBeDefined()
+    expect(fallback?.context).toMatchObject({ aud_received: 'another-app-client-id', key_expected: API_KEY, shop: SHOP })
+  })
+
+  it('still rejects a token whose signature does not verify, even with a known shop', async () => {
+    // The audience fallback must never relax the HMAC check: only tokens
+    // Shopify signed with the configured secret reach the store lookup.
     const directory = new InMemoryStoreDirectory()
     const connection = await directory.upsertByShopDomain(SHOP)
     await withServer(embeddedApp(directory), async (base) => {
-      const otherApp = sessionToken({ aud: 'another-app-client-id' })
-      const response = await fetch(`${base}/analytics?storeId=${connection.storeId}`, { headers: { authorization: `Bearer ${otherApp}` } })
+      const seconds = Math.floor(Date.now() / 1000)
+      const forged = sign({
+        iss: `https://${SHOP}/admin`, dest: `https://${SHOP}`, aud: 'another-app-client-id', sub: '42',
+        exp: seconds + 60, nbf: seconds - 5, iat: seconds, sid: 'sid-1',
+      }, 'attacker-secret')
+      const response = await fetch(`${base}/analytics?storeId=${connection.storeId}`, { headers: { authorization: `Bearer ${forged}` } })
       expect(response.status).toBe(401)
     })
   })

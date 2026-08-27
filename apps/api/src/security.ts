@@ -351,7 +351,10 @@ export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' |
  *   1. A Shopify session token (App Bridge `idToken()`), verified with the
  *      app's API secret. This is the PRIMARY path for the embedded app: the
  *      token travels in an `Authorization` header, so it works even when
- *      third-party cookies are blocked.
+ *      third-party cookies are blocked. Signature-valid tokens whose `aud`
+ *      drifted away from SHOPIFY_API_KEY are recovered gracefully (the store
+ *      is resolved from the authenticated dest/iss claim) instead of 401-ing
+ *      every embedded call.
  *   2. A first-party access JWT (existing session flow) — the fallback for
  *      local dev and non-embedded clients.
  *
@@ -362,24 +365,40 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
   const shopify = options.shopifySessionToken
   if (shopify) {
     const config = sanitizeSessionTokenConfig(shopify.config)
-    const shopClaims = verifyShopifySessionToken(token, config)
+    // Graceful handling of key/secret drift: a token whose signature verifies
+    // against SHOPIFY_API_SECRET but whose `aud` no longer equals
+    // SHOPIFY_API_KEY is accepted (flagged) and the store is resolved from the
+    // authenticated `dest`/`iss` claim via the shop-domain directory lookup in
+    // resolveShopifySessionContext. Forged tokens fail the HMAC check first
+    // and never reach the fallback. Unauthenticated request headers/query are
+    // NEVER used as identity — only echoed as diagnostic hints below.
+    const shopClaims = verifyShopifySessionToken(token, config, Date.now(), { allowAudienceFallback: true })
     if (shopClaims) {
       return resolveShopifySessionContext(shopify.directory, shopClaims, request)
     }
-    // The bearer looked like a Shopify session token but did not verify. Say
-    // exactly why (AUD_MISMATCH / INVALID_SIGNATURE / EXPIRED / …) so the
-    // production 401 is diagnosable from the server log alone. The
-    // `[AuthDiagnostics]` identity line itself is emitted by
-    // verifyShopifySessionToken through the diagnostics sink wired above.
+    // The bearer looked like a Shopify session token but did not verify. Emit
+    // the explicit 401 diagnostic — received vs expected client id plus the
+    // shop — together with the operator-facing explanation (AUD_MISMATCH /
+    // INVALID_SIGNATURE / EXPIRED / …) so the production 401 is diagnosable
+    // from the server log alone. The `[AuthDiagnostics]` identity line itself
+    // is emitted by verifyShopifySessionToken through the diagnostics sink
+    // wired above. NOTE: `aud_received`/`shop` here come from an UNVERIFIED
+    // payload whenever the signature did not check out — diagnostic only,
+    // never used for an authorization decision.
     if (looksLikeJwt(token)) {
       const diagnostics = diagnoseSessionToken(token, config)
       const preview = sessionTokenClaimsPreview(token)
-      logAuthFailure(diagnostics.message, {
+      logAuthFailure('[AuthDiagnostic] Session token 401 failure', {
+        aud_received: preview.aud ?? null,
+        key_expected: config.apiKey,
+        shop: preview.dest ?? null,
         code: diagnostics.code,
         reason: diagnostics.reason,
-        shopClaim: preview.dest ?? '(absent)',
-        audReceived: preview.aud ?? '(absent)',
-        audExpected: config.apiKey,
+        detail: diagnostics.message,
+        // Diagnostic hints only (attacker-controlled, never trusted): the shop
+        // the caller claims via query/header, to compare against the token.
+        shopQueryHint: typeof request.query.shop === 'string' ? request.query.shop : null,
+        shopHeaderHint: request.header('x-shopify-shop-domain') ?? null,
         path: request.path,
         method: request.method,
         requestId: request.header('x-request-id') ?? null,

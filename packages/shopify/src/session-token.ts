@@ -22,6 +22,15 @@ export type ShopifySessionTokenClaims = Readonly<{
   nbf: number
   iat: number
   sid: string
+  /**
+   * `true` only when the token was accepted through the audience-mismatch
+   * fallback (`SessionTokenVerificationOptions.allowAudienceFallback`): the
+   * HMAC signature verified against the configured API secret, but `aud` did
+   * not equal the configured API key — i.e. credential drift. Callers should
+   * surface this to operators (the diagnostic line is also logged) so the
+   * stale SHOPIFY_API_KEY gets corrected.
+   */
+  audienceFallback?: boolean
 }>
 
 export type SessionTokenConfig = Readonly<{ apiKey: string; apiSecret: string }>
@@ -70,6 +79,23 @@ export function sessionTokenClaimsPreview(token: string): Readonly<{ dest: strin
   }
 }
 
+export type SessionTokenVerificationOptions = Readonly<{
+  /**
+   * Graceful recovery from credential drift (the "stale SHOPIFY_API_KEY"
+   * incident class). With the flag set, a token whose HMAC signature verifies
+   * against the configured API secret but whose `aud` differs from the
+   * configured API key is still accepted, flagged `audienceFallback: true`,
+   * and its store is resolved from the authenticated `dest` claim (falling
+   * back to the `iss` claim). Rationale: the signature proves Shopify minted
+   * the token with this app's secret, so the claims are authentic even when
+   * the deployed client id drifted. The flag NEVER relaxes the signature
+   * check, expiry checks, or the myshopify-domain check — a forged token
+   * cannot reach the audience comparison. Strict verification (the default)
+   * still rejects audience mismatches outright.
+   */
+  allowAudienceFallback?: boolean
+}>
+
 /**
  * Verify a Shopify session token (`id_token`).
  *
@@ -84,7 +110,12 @@ export function sessionTokenClaimsPreview(token: string): Readonly<{ dest: strin
  * logged through the diagnostics sink with the exact received-vs-expected
  * audience so a production 401 is diagnosable from the server log alone.
  */
-export function verifyShopifySessionToken(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): ShopifySessionTokenClaims | null {
+export function verifyShopifySessionToken(
+  token: string,
+  rawConfig: SessionTokenConfig,
+  now: number = Date.now(),
+  options: SessionTokenVerificationOptions = {},
+): ShopifySessionTokenClaims | null {
   const config = sanitizeSessionTokenConfig(rawConfig)
   if (!config.apiKey || !config.apiSecret) return null
   const parts = token.trim().split('.')
@@ -99,7 +130,7 @@ export function verifyShopifySessionToken(token: string, rawConfig: SessionToken
   if (!safeEqualString(signature, expected)) {
     // The payload is NOT authenticated at this point, so its claims are never
     // echoed — only the expected (public) client id is safe to log.
-    logSessionTokenFailure(`[AuthDiagnostics] JWT verification failed: INVALID_SIGNATURE (payload not authenticated, claims unavailable) aud_expected=${config.apiKey}`, { reason: 'signature-mismatch' })
+    logSessionTokenFailure(`[AuthDiagnostics] JWT verification failed: INVALID_SIGNATURE (payload not authenticated, claims unavailable) aud_expected=${config.apiKey}`, { reason: 'signature-mismatch', aud_received: null, key_expected: config.apiKey, shop: null })
     return null
   }
 
@@ -111,7 +142,14 @@ export function verifyShopifySessionToken(token: string, rawConfig: SessionToken
   const failWithDiagnostics = (reason: SessionTokenRejection): null => {
     logSessionTokenFailure(
       `[AuthDiagnostics] JWT verification failed for shop=${destClaim}, aud_received=${audClaim}, aud_expected=${config.apiKey}`,
-      { reason },
+      {
+        reason,
+        // Safe to echo: the signature verified above, so these claims are
+        // authentic, not attacker-controlled.
+        aud_received: typeof payload.aud === 'string' ? payload.aud : null,
+        key_expected: config.apiKey,
+        shop: typeof payload.dest === 'string' ? payload.dest : null,
+      },
     )
     return null
   }
@@ -119,7 +157,16 @@ export function verifyShopifySessionToken(token: string, rawConfig: SessionToken
   // `aud` is the app's client id (`process.env.SHOPIFY_API_KEY?.trim()`).
   // Without this check a session token minted for a different app on the same
   // store would be accepted.
-  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) return failWithDiagnostics('audience-mismatch')
+  let audienceFallback = false
+  if (typeof payload.aud !== 'string' || !safeEqualString(payload.aud, config.apiKey)) {
+    if (!options.allowAudienceFallback) return failWithDiagnostics('audience-mismatch')
+    // Credential drift: the signature verified against SHOPIFY_API_SECRET, so
+    // Shopify minted this token for the app whose secret we hold — the
+    // deployed SHOPIFY_API_KEY is simply stale relative to it. Recover
+    // gracefully instead of 401-ing every embedded call; the accepted fallback
+    // is logged loudly below so the stale env gets corrected.
+    audienceFallback = true
+  }
 
   const seconds = Math.floor(now / 1000)
   const exp = numberClaim(payload.exp)
@@ -127,18 +174,30 @@ export function verifyShopifySessionToken(token: string, rawConfig: SessionToken
   if (exp === null || exp + DEFAULT_LEEWAY_SECONDS <= seconds) return failWithDiagnostics('expired')
   if (nbf !== null && nbf - DEFAULT_LEEWAY_SECONDS > seconds) return failWithDiagnostics('not-yet-valid')
 
-  const shop = shopFromDest(payload.dest)
+  const shopFromDestClaim = shopFromDest(payload.dest)
+  // `iss` (`https://{shop}.myshopify.com/admin`) is consulted only in the
+  // signature-verified fallback path, so the strict default keeps deriving the
+  // shop exclusively from `dest`.
+  const shop = shopFromDestClaim ?? (audienceFallback ? shopFromIss(payload.iss) : null)
   if (!shop) return failWithDiagnostics('missing-shop')
+
+  if (audienceFallback) {
+    logSessionTokenFailure(
+      `[AuthDiagnostic] Session token audience fallback: accepting signature-valid token for shop=${shop} (resolved from ${shopFromDestClaim ? 'dest' : 'iss'} claim), aud_received=${audClaim}, key_expected=${config.apiKey} — SHOPIFY_API_KEY is stale relative to the app that minted this token`,
+      { reason: 'audience-mismatch-fallback', aud_received: typeof payload.aud === 'string' ? payload.aud : null, key_expected: config.apiKey, shop, source: shopFromDestClaim ? 'dest' : 'iss' },
+    )
+  }
 
   return {
     shop,
-    dest: String(payload.dest),
-    aud: payload.aud,
+    dest: typeof payload.dest === 'string' ? payload.dest : '',
+    aud: typeof payload.aud === 'string' ? payload.aud : '',
     sub: typeof payload.sub === 'string' ? payload.sub : '',
     exp,
     nbf: nbf ?? 0,
     iat: numberClaim(payload.iat) ?? 0,
     sid: typeof payload.sid === 'string' ? payload.sid : '',
+    ...(audienceFallback ? { audienceFallback: true } : {}),
   }
 }
 
@@ -217,6 +276,15 @@ function shopFromDest(dest: unknown): string | null {
   const withoutScheme = dest.trim().replace(/^https?:\/\//, '')
   const host = withoutScheme.split('/')[0] ?? ''
   return safeShopDomain(host)
+}
+
+/**
+ * Shopify's `iss` claim is `https://{shop}.myshopify.com/admin` — the same
+ * shop as `dest` with a path suffix. Used only as the secondary shop source
+ * in the signature-verified audience fallback, so it is equally authentic.
+ */
+function shopFromIss(iss: unknown): string | null {
+  return shopFromDest(iss)
 }
 
 function safeShopDomain(value: string): string | null {

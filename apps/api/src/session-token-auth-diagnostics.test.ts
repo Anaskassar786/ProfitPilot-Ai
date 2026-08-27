@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { diagnoseSessionToken, sanitizeCredential, verifyShopifySessionToken } from '@profitpilot/shopify'
+import type { StoreDirectory } from '@profitpilot/db'
 import { authenticationMiddleware, getAuthContext, setAuthDiagnosticsLogger } from './security.js'
 import { injectShopifyAppBridgeApiKey, resolveAppBridgeApiKey } from './web-app.js'
 
@@ -131,5 +132,101 @@ describe('store directory resilience in authentication', () => {
     await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
     expect(getAuthContext(authorized)?.claims.storeId).toBe('store-1')
     setAuthDiagnosticsLogger(null)
+  })
+})
+
+describe('[AuthDiagnostic] Session token 401 failure log', () => {
+  type LogEntry = Readonly<{ message: string; context: Readonly<Record<string, unknown>> }>
+
+  function bearerRequest(token: string): Parameters<ReturnType<typeof authenticationMiddleware>>[0] {
+    return {
+      path: '/api/analytics',
+      method: 'GET',
+      query: { storeId: 'store-1' },
+      header: (name: string): string | undefined => (name.toLowerCase() === 'authorization' ? `Bearer ${token}` : undefined),
+    } as unknown as Parameters<ReturnType<typeof authenticationMiddleware>>[0]
+  }
+
+  function middlewareWith(directory: StoreDirectory): ReturnType<typeof authenticationMiddleware> {
+    return authenticationMiddleware({
+      requireAuthentication: true,
+      shopifySessionToken: { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory },
+    })
+  }
+
+  it('logs aud_received, key_expected and shop whenever session-token verification fails', async () => {
+    const logs: LogEntry[] = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const middleware = middlewareWith({
+        get: async () => null,
+        getByShopDomain: async () => { throw new Error('unreachable: verification fails first') },
+        upsertByShopDomain: async () => { throw new Error('unreachable: verification fails first') },
+      })
+      const seconds = Math.floor(Date.now() / 1000)
+      const expired = sign(claims({ exp: seconds - 120, nbf: seconds - 200, iat: seconds - 200 }))
+      const request = bearerRequest(expired)
+      const error = await new Promise<unknown>((resolve) => { middleware(request, {} as never, resolve as never) })
+      // An unverifiable bearer is treated like a missing one (the tenant
+      // middleware answers the actual 401 — see the full-stack tests), but no
+      // auth context may be established …
+      expect(error).toBeUndefined()
+      expect(getAuthContext(request)).toBeNull()
+      // … and the log names the mismatch precisely.
+      const failure = logs.find((entry) => entry.message === '[AuthDiagnostic] Session token 401 failure')
+      expect(failure).toBeDefined()
+      expect(failure?.context).toMatchObject({
+        aud_received: API_KEY,
+        key_expected: API_KEY,
+        shop: 'https://demo.myshopify.com',
+        code: 'EXPIRED',
+      })
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('diagnoses a secret mismatch without authenticating the received claims', async () => {
+    const logs: LogEntry[] = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const middleware = middlewareWith({
+        get: async () => null,
+        getByShopDomain: async () => { throw new Error('unreachable: verification fails first') },
+        upsertByShopDomain: async () => { throw new Error('unreachable: verification fails first') },
+      })
+      const forged = sign(claims(), 'wrong-secret')
+      await new Promise<unknown>((resolve) => { middleware(bearerRequest(forged), {} as never, resolve as never) })
+      const failure = logs.find((entry) => entry.message === '[AuthDiagnostic] Session token 401 failure')
+      expect(failure?.context).toMatchObject({ code: 'INVALID_SIGNATURE', key_expected: API_KEY })
+      // The package-level identity line must not authenticate forged claims …
+      expect(logs.some((entry) => entry.message.includes('INVALID_SIGNATURE') && entry.message.includes('payload not authenticated'))).toBe(true)
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('does not 401 a signature-valid token with a stale audience — the store is resolved from the dest claim', async () => {
+    const logs: LogEntry[] = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const middleware = middlewareWith({
+        get: async () => null,
+        getByShopDomain: async (shopDomain: string) => ({ storeId: 'store-1' as never, shopDomain }),
+        upsertByShopDomain: async (shopDomain: string) => ({ storeId: 'store-1' as never, shopDomain }),
+      })
+      const staleAudience = sign(claims({ aud: 'rotated-client-id' }))
+      const request = bearerRequest(staleAudience)
+      const error = await new Promise<unknown>((resolve) => { middleware(request, {} as never, resolve as never) })
+      expect(error).toBeUndefined()
+      expect(getAuthContext(request)?.claims.storeId).toBe('store-1')
+      expect(getAuthContext(request)?.shop).toBe('demo.myshopify.com')
+      // No 401-failure line; instead the accepted fallback is logged.
+      expect(logs.some((entry) => entry.message === '[AuthDiagnostic] Session token 401 failure')).toBe(false)
+      const fallback = logs.find((entry) => entry.message.startsWith('[AuthDiagnostic] Session token audience fallback'))
+      expect(fallback?.context).toMatchObject({ aud_received: 'rotated-client-id', key_expected: API_KEY, shop: 'demo.myshopify.com' })
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
   })
 })
