@@ -573,6 +573,23 @@ export default function App() {
 
   useEffect(() => { void loadData() }, [context.storeId])
 
+  // WINDOW FOCUS / VISIBILITY RE-CHECK: automatically trigger a clean API data
+  // refetch when the browser window regains focus after an OAuth install flow
+  // completion, so stale 401 error cards refresh into live store data instantly.
+  useEffect(() => {
+    if (!context.storeId) return
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void loadData()
+    }
+    const handleFocus = () => void loadData()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [context.storeId])
+
   // PR #46: notification read-state is per store and survives reloads.
   useEffect(() => {
     if (!context.storeId) { setReadNotificationIds(new Set()); return }

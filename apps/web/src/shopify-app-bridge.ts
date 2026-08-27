@@ -50,6 +50,36 @@ export function isEmbeddedShopifyApp(search: string = currentSearch()): boolean 
   return embeddedHost(search) !== null
 }
 
+/**
+ * Resolves the shop domain from URL query parameters. Prefer the explicit
+ * `shop` parameter; if missing, decode the base64 `host` parameter and extract
+ * the store handle (e.g., `YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvY29tbWFuZGVyLXBpbG90`
+ * -> `commander-pilot.myshopify.com`). Returns null when no shop can be identified.
+ */
+export function getShopDomain(search: string = currentSearch()): string | null {
+  try {
+    const params = new URLSearchParams(search)
+    // Prefer the explicit shop parameter
+    const shop = params.get('shop')?.trim()
+    if (shop) {
+      // Normalize: lowercase, trim, strip scheme and trailing slashes
+      const normalized = shop.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+      if (/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) return normalized
+      if (/^[a-z0-9][a-z0-9-]*$/.test(normalized)) return `${normalized}.myshopify.com`
+      return normalized
+    }
+    // Fall back to decoding the base64 host parameter
+    const host = params.get('host')?.trim()
+    if (!host || typeof atob !== 'function') return null
+    const decoded = atob(host)
+    // Extract store handle from admin.shopify.com/store/<handle> pattern
+    const match = /admin\.shopify\.com\/store\/([a-zA-Z0-9][a-zA-Z0-9-]*)/i.exec(decoded)
+    return match?.[1] ? `${match[1].toLowerCase()}.myshopify.com` : null
+  } catch {
+    return null
+  }
+}
+
 /** Public app key only — never the API secret (Vite only exposes VITE_ vars). */
 export function publicShopifyApiKey(): string | null {
   try {

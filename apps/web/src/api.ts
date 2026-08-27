@@ -327,6 +327,33 @@ export function embeddedShopDomainFromUrl(search: string = currentWindowSearch()
 }
 
 /**
+ * Resolves the shop domain from URL query parameters. Prefer the explicit
+ * `shop` parameter; if missing, decode the base64 `host` parameter and extract
+ * the store handle (e.g., `YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvY29tbWFuZGVyLXBpbG90`
+ * -> `commander-pilot.myshopify.com`). Returns null when no shop can be identified.
+ */
+export function getShopDomain(search: string = currentWindowSearch()): string | null {
+  try {
+    const params = new URLSearchParams(search)
+    // Prefer the explicit shop parameter
+    const shop = params.get('shop')?.trim()
+    if (shop) {
+      const normalized = normalizeReinstallShopDomain(shop)
+      if (normalized) return normalized
+    }
+    // Fall back to decoding the base64 host parameter
+    const host = params.get('host')?.trim()
+    if (!host || typeof atob !== 'function') return null
+    const decoded = atob(host)
+    // Extract store handle from admin.shopify.com/store/<handle> pattern
+    const match = /admin\.shopify\.com\/store\/([a-zA-Z0-9][a-zA-Z0-9-]*)/i.exec(decoded)
+    return match?.[1] ? `${match[1].toLowerCase()}.myshopify.com` : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Error codes the API uses for an expired or unresolvable session. They are
  * treated exactly like an HTTP 401 for the silent fresh-token retry and the
  * automatic reinstall redirect (see `isUnauthorizedResponse`).
