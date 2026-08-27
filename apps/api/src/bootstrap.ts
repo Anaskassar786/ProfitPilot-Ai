@@ -1,6 +1,7 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from '@profitpilot/db'
 import type { StoreDirectory } from '@profitpilot/db'
+import { sanitizeCredential } from '@profitpilot/shopify'
 import { PostgresOAuthStateStore, PostgresTokenRecordStore, PostgresWebhookProcessingStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import { parseShopifyScopes } from './app-store-assets.js'
@@ -60,7 +61,7 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {
-  const value = env[key]?.trim()
+  const value = sanitizeCredential(env[key])
   if (!value) throw new Error(`Missing required environment variable ${key}`)
   return value
 }
