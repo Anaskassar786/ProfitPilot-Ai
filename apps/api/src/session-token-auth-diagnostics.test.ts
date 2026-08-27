@@ -1,7 +1,8 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { diagnoseSessionToken, sanitizeCredential, verifyShopifySessionToken } from '@profitpilot/shopify'
-import { authenticationMiddleware, getAuthContext, setAuthDiagnosticsLogger } from './security.js'
+import { AppError } from '@profitpilot/types'
+import { authenticationMiddleware, getAuthContext, getAuthFailure, setAuthDiagnosticsLogger, tenantContextMiddleware } from './security.js'
 import { injectShopifyAppBridgeApiKey, resolveAppBridgeApiKey } from './web-app.js'
 
 const API_KEY = 'client-id-123'
@@ -131,5 +132,94 @@ describe('store directory resilience in authentication', () => {
     await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
     expect(getAuthContext(authorized)?.claims.storeId).toBe('store-1')
     setAuthDiagnosticsLogger(null)
+  })
+})
+
+/**
+ * PERMANENT 401 FIX — the API must tell the embedded client WHETHER a 401 can
+ * be recovered by re-authorizing, and for WHICH shop. Without those two fields
+ * the web app can only show a red card; with them it re-runs
+ * /shopify/install?shop=… at top level and the merchant is back in seconds.
+ */
+describe('recoverable 401 envelope for the embedded client', () => {
+  const baseRequest = { path: '/api/orders', method: 'GET', query: { storeId: 'store-1' }, header: () => undefined } as unknown as Parameters<ReturnType<typeof authenticationMiddleware>>[0]
+
+  function withBearer(token: string, query: Record<string, string> = { storeId: 'store-1' }): typeof baseRequest {
+    return { ...baseRequest, query, header: (name: string) => (name.toLowerCase() === 'authorization' ? `Bearer ${token}` : undefined) } as typeof baseRequest
+  }
+
+  it('marks STORE_NOT_FOUND as re-authorizable and names the normalized shop', async () => {
+    setAuthDiagnosticsLogger(() => {})
+    const middleware = authenticationMiddleware({
+      requireAuthentication: true,
+      shopifySessionToken: {
+        config: { apiKey: API_KEY, apiSecret: API_SECRET },
+        directory: { get: async () => null, getByShopDomain: async () => null, upsertByShopDomain: async () => null as never },
+      },
+    })
+    // dest carries a scheme: the failure must still name the canonical domain.
+    const request = withBearer(sign(claims({ dest: 'https://commander-pilot.myshopify.com/' })))
+    await new Promise<void>((resolve) => { middleware(request, {} as never, (() => resolve()) as never) })
+    expect(getAuthFailure(request)).toEqual({ reason: 'STORE_NOT_FOUND', shop: 'commander-pilot.myshopify.com', code: 'STORE_NOT_FOUND' })
+
+    const error = await new Promise<unknown>((resolve) => { tenantContextMiddleware(true)(request, {} as never, resolve as never) })
+    expect(error).toBeInstanceOf(AppError)
+    expect((error as AppError).status).toBe(401)
+    expect((error as AppError).message).toBe('Authentication is required')
+    expect((error as AppError).details).toMatchObject({ reason: 'STORE_NOT_FOUND', shop: 'commander-pilot.myshopify.com', reauthorize: true })
+    setAuthDiagnosticsLogger(null)
+  })
+
+  it('never asks the client to re-install when the database is the problem', async () => {
+    setAuthDiagnosticsLogger(() => {})
+    const middleware = authenticationMiddleware({
+      requireAuthentication: true,
+      shopifySessionToken: {
+        config: { apiKey: API_KEY, apiSecret: API_SECRET },
+        directory: {
+          get: async () => null,
+          getByShopDomain: async () => { throw new Error('pooler connection terminated') },
+          upsertByShopDomain: async () => { throw new Error('pooler connection terminated') },
+        },
+      },
+    })
+    const request = withBearer(sign(claims()))
+    await new Promise<void>((resolve) => { middleware(request, {} as never, (() => resolve()) as never) })
+    expect(getAuthFailure(request)?.reason).toBe('DB_UNAVAILABLE')
+    const error = await new Promise<unknown>((resolve) => { tenantContextMiddleware(true)(request, {} as never, resolve as never) })
+    expect((error as AppError).details).toMatchObject({ reason: 'DB_UNAVAILABLE', reauthorize: false })
+    setAuthDiagnosticsLogger(null)
+  })
+
+  it('resolves a store row written for the canonical domain from a scheme-prefixed dest claim', async () => {
+    setAuthDiagnosticsLogger(() => {})
+    const queried: string[] = []
+    const middleware = authenticationMiddleware({
+      requireAuthentication: true,
+      shopifySessionToken: {
+        config: { apiKey: API_KEY, apiSecret: API_SECRET },
+        directory: {
+          get: async () => null,
+          getByShopDomain: async (shopDomain: string) => {
+            queried.push(shopDomain)
+            return shopDomain === 'commander-pilot.myshopify.com' ? { storeId: 'store-1' as never, shopDomain } : null
+          },
+          upsertByShopDomain: async (shopDomain: string) => ({ storeId: 'store-1' as never, shopDomain }),
+        },
+      },
+    })
+    const request = withBearer(sign(claims({ dest: 'https://COMMANDER-PILOT.myshopify.com/' })))
+    await new Promise<void>((resolve) => { middleware(request, {} as never, (() => resolve()) as never) })
+    expect(queried).toEqual(['commander-pilot.myshopify.com'])
+    expect(getAuthContext(request)?.claims.storeId).toBe('store-1')
+    expect(getAuthContext(request)?.shop).toBe('commander-pilot.myshopify.com')
+    setAuthDiagnosticsLogger(null)
+  })
+
+  it('falls back to the request shop hint when no session token identified one', async () => {
+    const middleware = authenticationMiddleware({ requireAuthentication: true })
+    const request = { ...baseRequest, query: { storeId: 'store-1', shop: 'https://Commander-Pilot.myshopify.com/' }, header: () => undefined } as unknown as typeof baseRequest
+    const error = await new Promise<unknown>((resolve) => { middleware(request, {} as never, resolve as never) })
+    expect((error as AppError).details).toMatchObject({ reason: 'NO_AUTH_CONTEXT', shop: 'commander-pilot.myshopify.com', reauthorize: true })
   })
 })

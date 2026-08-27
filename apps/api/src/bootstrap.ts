@@ -1,7 +1,9 @@
 import { AesGcmCipher } from '@profitpilot/crypto'
 import { databaseConfigFromEnv, PostgresDatabase, PostgresStoreDirectory } from '@profitpilot/db'
 import type { StoreDirectory } from '@profitpilot/db'
-import { sanitizeCredential } from '@profitpilot/shopify'
+import { sanitizeCredential, setSessionTokenDiagnosticsSink } from '@profitpilot/shopify'
+import { Logger } from '@profitpilot/logger'
+import type { JsonObject } from '@profitpilot/logger'
 import { PostgresOAuthStateStore, PostgresTokenRecordStore, PostgresWebhookProcessingStore, ShopifyInstallService, ShopifyTokenExchangeService, TokenVault, WebhookProcessor, WebhookVerifier } from '@profitpilot/shopify'
 import type { AccessTokenExchange } from '@profitpilot/shopify'
 import { parseShopifyScopes } from './app-store-assets.js'
@@ -21,7 +23,7 @@ const REQUIRED_KEYS = ['DATABASE_URL', 'ENCRYPTION_KEY', 'SHOPIFY_API_KEY', 'SHO
 
 type RequiredKey = (typeof REQUIRED_KEYS)[number]
 
-export function createF1Bootstrap(env: Readonly<Record<string, string | undefined>>): F1Bootstrap | null {
+export function createF1Bootstrap(env: Readonly<Record<string, string | undefined>>, logger: Logger = new Logger()): F1Bootstrap | null {
   const present = REQUIRED_KEYS.filter((key) => Boolean(env[key]?.trim()))
   if (present.length === 0) return null
   if (present.length !== REQUIRED_KEYS.length) throw new Error(`F1 bootstrap requires: ${REQUIRED_KEYS.filter((key) => !env[key]?.trim()).join(', ')}`)
@@ -39,7 +41,21 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
   // parseShopifyScopes always includes the required registry (write_discounts
   // included) so a stale SHOPIFY_SCOPES value cannot produce an install that
   // 403s the first time a discount action runs.
-  const installer = new ShopifyInstallService({ ...sessionToken, scopes: parseShopifyScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') }, new PostgresOAuthStateStore(database), vault, storeDirectory)
+  // The installer logs the EXACT database error whenever the OAuth callback
+  // cannot write the stores row or the encrypted token-vault row, so a failed
+  // install is diagnosable from the deploy logs instead of surfacing later as
+  // a blanket 401 on every embedded API call.
+  const installer = new ShopifyInstallService(
+    { ...sessionToken, scopes: parseShopifyScopes(env.SHOPIFY_SCOPES), redirectUri: requiredEnv(env, 'SHOPIFY_REDIRECT_URI') },
+    new PostgresOAuthStateStore(database),
+    vault,
+    storeDirectory,
+    { logger: { info: (message, fields) => logger.info(message, (fields ?? {}) as JsonObject), warn: (message, fields) => logger.warn(message, (fields ?? {}) as JsonObject), error: (message, fields) => logger.error(message, (fields ?? {}) as JsonObject) } },
+  )
+  // Route the `[AuthDiagnostics] JWT verification failed for shop=…,
+  // aud_received=…, aud_expected=…` line through the structured logger so a
+  // production 401 names the shop and both client ids in one record.
+  setSessionTokenDiagnosticsSink((message, context) => logger.warn(message, context as JsonObject))
   const exchange: AccessTokenExchange = async (shop, code) => exchangeCode(shop, code, sessionToken.apiKey, sessionToken.apiSecret)
   // Managed installation uses the same credentials to validate the id_token,
   // exchange it for a non-expiring offline token, and persist via this vault.

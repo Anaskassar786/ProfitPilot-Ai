@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { isMissingRelationError } from './ai-keys.js'
-import { diagnoseSessionToken, isShopifyApiError, sanitizeCredential, sanitizeSessionTokenConfig, verifyShopifySessionToken } from '@profitpilot/shopify'
+import { diagnoseSessionToken, isShopifyApiError, normalizeShopDomain, sanitizeCredential, sanitizeSessionTokenConfig, verifyShopifySessionToken } from '@profitpilot/shopify'
 import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
@@ -51,8 +51,62 @@ export type SecurityOptions = Readonly<{
 
 export type SecurityRouteDependencies = Readonly<{ environment: string; csrfSecret: string }>
 
+/**
+ * Why a verified-looking credential still produced no AuthContext.
+ *
+ * `STORE_NOT_FOUND` is the one the embedded app can RECOVER from: the session
+ * token is cryptographically valid, but this shop has no `stores` row (the
+ * install never persisted, or the row was written under a different spelling
+ * of the domain). Surfacing it in the 401 body lets the web app re-run
+ * `/shopify/install?shop=…` at top level instead of parking the merchant in
+ * front of a permanent red card.
+ */
+export type AuthFailureReason = 'STORE_NOT_FOUND' | 'SESSION_TOKEN_INVALID' | 'NO_AUTH_CONTEXT' | 'DB_UNAVAILABLE'
+
+export type AuthFailure = Readonly<{ reason: AuthFailureReason; shop: string | null; code?: string }>
+
 interface RequestWithAuth extends Request {
   profitPilotAuth?: AuthContext
+  profitPilotAuthFailure?: AuthFailure
+}
+
+/** The recorded reason the request could not be authenticated (if any). */
+export function getAuthFailure(request: Request): AuthFailure | null {
+  return (request as RequestWithAuth).profitPilotAuthFailure ?? null
+}
+
+function setAuthFailure(request: Request, failure: AuthFailure): void {
+  ;(request as RequestWithAuth).profitPilotAuthFailure = failure
+}
+
+/**
+ * Builds the 401 the embedded client can act on. `details.reason` +
+ * `details.shop` are what `apps/web/src/api.ts` reads to trigger the App
+ * Bridge top-level re-authorization redirect.
+ */
+function unauthorizedError(request: Request, fallbackReason: AuthFailureReason = 'NO_AUTH_CONTEXT'): AppError {
+  const failure = getAuthFailure(request)
+  const reason = failure?.reason ?? fallbackReason
+  const shop = failure?.shop ?? shopHintFromRequest(request)
+  const recoverable = reason === 'STORE_NOT_FOUND' || reason === 'SESSION_TOKEN_INVALID' || reason === 'NO_AUTH_CONTEXT'
+  return new AppError('UNAUTHORIZED', 'Authentication is required', 401, {
+    reason,
+    ...(failure?.code ? { code: failure.code } : {}),
+    ...(shop ? { shop } : {}),
+    // The client only re-runs the install flow when the server says the
+    // session is recoverable by re-authorizing — never for a DB outage.
+    reauthorize: recoverable,
+  })
+}
+
+/** Best-effort shop domain for a request that never produced an AuthContext. */
+function shopHintFromRequest(request: Request): string | null {
+  const candidates = [request.query.shop, request.query.shopDomain, request.header('x-shopify-shop-domain')]
+  for (const candidate of candidates) {
+    const value = typeof candidate === 'string' ? normalizeShopDomain(candidate) : ''
+    if (value.endsWith('.myshopify.com')) return value
+  }
+  return null
 }
 
 /**
@@ -318,7 +372,7 @@ export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' |
     const token = bearerToken(request)
     const hasTenant = requestTenantValue(request) !== null
     const unauthenticated = (): void => {
-      if (options.requireAuthentication && hasTenant) next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
+      if (options.requireAuthentication && hasTenant) next(unauthorizedError(request))
       else next()
     }
     if (!token) {
@@ -366,6 +420,9 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
     if (looksLikeJwt(token)) {
       const diagnostics = diagnoseSessionToken(token, config)
       logAuthFailure(diagnostics.message, { code: diagnostics.code, reason: diagnostics.reason, path: request.path, method: request.method, requestId: request.header('x-request-id') ?? null })
+      // An expired or mis-audienced session token is recoverable by
+      // re-authorizing, so record it as such for the 401 body.
+      setAuthFailure(request, { reason: 'SESSION_TOKEN_INVALID', shop: shopHintFromRequest(request), code: diagnostics.code })
     }
   }
   if (!options.auth) return null
@@ -389,24 +446,44 @@ async function resolveShopifySessionContext(directory: StoreDirectory, shopClaim
   // logged dependency problem, not as a silent "Session expired" — so every
   // directory call is wrapped and the lookup/upsert are attempted
   // independently.
-  const context = { path: request?.path ?? null, method: request?.method ?? null, requestId: request?.header('x-request-id') ?? null }
-  const existing = await safeDirectoryCall(() => directory.getByShopDomain(shopClaims.shop), 'getByShopDomain', context)
-  if (existing) return shopifyAuthContext(existing.storeId, shopClaims)
-  const created = await safeDirectoryCall(() => directory.upsertByShopDomain(shopClaims.shop), 'upsertByShopDomain', context)
-  if (created) return shopifyAuthContext(created.storeId, shopClaims)
-  logAuthFailure('Session token verified but the store row could not be resolved: STORE_NOT_FOUND', { code: 'STORE_NOT_FOUND', ...context })
+  //
+  // DOMAIN NORMALIZATION: `claims.shop` is already canonical
+  // (`<handle>.myshopify.com`), but normalize once more here — the last hop
+  // before the database — so a query can never carry a scheme, mixed case or
+  // a trailing slash the OAuth callback did not write.
+  const shop = normalizeShopDomain(shopClaims.shop) || shopClaims.shop
+  const context = { shopDomain: shop, dest: shopClaims.dest, path: request?.path ?? null, method: request?.method ?? null, requestId: request?.header('x-request-id') ?? null }
+  let databaseFailed = false
+  const onDatabaseError = (): void => { databaseFailed = true }
+  const existing = await safeDirectoryCall(() => directory.getByShopDomain(shop), 'getByShopDomain', context, onDatabaseError)
+  if (existing) return shopifyAuthContext(existing.storeId, shopClaims, shop)
+  const created = await safeDirectoryCall(() => directory.upsertByShopDomain(shop), 'upsertByShopDomain', context, onDatabaseError)
+  if (created) return shopifyAuthContext(created.storeId, shopClaims, shop)
+  // A database outage is NOT a missing install: telling the client to
+  // re-authorize then would bounce the merchant through OAuth for nothing.
+  if (databaseFailed) {
+    logAuthFailure(`[AuthDiagnostics] Session token verified but the store directory is unavailable for shop=${shop} (dest=${shopClaims.dest}): DB_UNAVAILABLE`, { code: 'DB_UNAVAILABLE', ...context })
+    if (request) setAuthFailure(request, { reason: 'DB_UNAVAILABLE', shop, code: 'DB_UNAVAILABLE' })
+    return null
+  }
+  logAuthFailure(`[AuthDiagnostics] Session token verified but no stores row resolved for shop=${shop} (dest=${shopClaims.dest}): STORE_NOT_FOUND`, { code: 'STORE_NOT_FOUND', ...context })
+  // Recoverable: re-running the install re-creates the row and re-grants the
+  // offline token, so tell the client to re-authorize rather than leaving it
+  // parked on a permanent 401 card.
+  if (request) setAuthFailure(request, { reason: 'STORE_NOT_FOUND', shop, code: 'STORE_NOT_FOUND' })
   return null
 }
 
-function shopifyAuthContext(storeId: StoreId, shopClaims: ShopifySessionTokenClaims): AuthContext {
-  return { method: 'shopify-session-token', claims: { storeId, sub: shopClaims.sub || shopClaims.shop }, session: null, shop: shopClaims.shop }
+function shopifyAuthContext(storeId: StoreId, shopClaims: ShopifySessionTokenClaims, shop: string = shopClaims.shop): AuthContext {
+  return { method: 'shopify-session-token', claims: { storeId, sub: shopClaims.sub || shop }, session: null, shop }
 }
 
 /** Runs a store-directory query defensively, logging (never throwing) on failure. */
-async function safeDirectoryCall<T>(run: () => Promise<T | null>, operation: string, context: Readonly<Record<string, unknown>>): Promise<T | null> {
+async function safeDirectoryCall<T>(run: () => Promise<T | null>, operation: string, context: Readonly<Record<string, unknown>>, onError?: () => void): Promise<T | null> {
   try {
     return await run()
   } catch (error: unknown) {
+    onError?.()
     logAuthFailure(`Store directory ${operation} failed: DB_UNAVAILABLE — ${error instanceof Error ? error.message : String(error)}`, { code: 'DB_UNAVAILABLE', operation, ...context })
     return null
   }
@@ -433,7 +510,7 @@ export function tenantContextMiddleware(requireAuthentication: boolean): Request
           hasBearer: Boolean(request.header('authorization')),
           requestId: request.header('x-request-id') ?? null,
         })
-        next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
+        next(unauthorizedError(request))
       } else next()
       return
     }

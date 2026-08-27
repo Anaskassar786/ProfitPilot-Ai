@@ -10,7 +10,7 @@ import type { ApiAccessStatus, ApiKeyReveal, ComparisonType, DiscoveryFeedResult
 import type { AgentActivityItem, AgentOverview, AiCommandPageMetrics, CostBreakdownRow, CostSummaryView, RuleCatalogEntry, RunAllEvent, StoreHealthResult } from './command-center-model.js'
 import { parseSseFrame } from './command-center-model.js'
 import { safeDayKey } from './safe-date.js'
-import { getShopifySessionToken, getShopifySessionTokenWithRetry } from './shopify-app-bridge.js'
+import { getShopifySessionToken, getShopifySessionTokenWithRetry, redirectToShopifyReauthorization } from './shopify-app-bridge.js'
 import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 
 export type SyncResult = Readonly<{ storeId: string; module: SectionId | string; pages: number; records: number; cursor: string | null; resumedFrom: string | null }>
@@ -83,9 +83,13 @@ async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetche
       await initializeCsrf(fetcher)
       return requestJsonAttempt<Value>(path, init, fetcher, false)
     }
-    // A 401 that survived the fresh-token retry is genuine session expiry —
-    // the ONLY place in the fetch path allowed to latch the banner.
-    if (response.status === 401) notifyEmbeddedAuthFailure()
+    // A 401 that survived the fresh-token retry is genuine session loss.
+    // Before latching a banner, try to RECOVER it: when the API says the
+    // session is re-authorizable (STORE_NOT_FOUND / "Authentication is
+    // required"), bounce the merchant through /shopify/install at top level
+    // so the install re-creates the store row and the offline token. The
+    // merchant is never left staring at a permanent red 401 card.
+    if (response.status === 401) handleTerminalUnauthorized(payload)
     throw failureFromPayload(payload, response.status)
   }
 
@@ -136,8 +140,9 @@ async function requestFileAttempt(path: string, init: RequestInit, fetcher: Fetc
     }
   }
   if (!response.ok) {
-    if (response.status === 401) notifyEmbeddedAuthFailure()
-    throw failureFromPayload(await readJsonPayload(response), response.status)
+    const payload = await readJsonPayload(response)
+    if (response.status === 401) handleTerminalUnauthorized(payload)
+    throw failureFromPayload(payload, response.status)
   }
   notifyEmbeddedAuthRecovered()
   return {
@@ -210,6 +215,8 @@ export function resetApiClientStateForTests(): void {
   embeddedAuthFailureNotified = false
   embeddedAuthFailureHandler = null
   embeddedAuthRecoveryHandler = null
+  embeddedReauthAttempted = false
+  embeddedSessionTokenBoot = null
 }
 
 /* ── Embedded App Bridge session tokens (P0 App Store fix) ──────────────── */
@@ -255,6 +262,71 @@ function notifyEmbeddedAuthFailure(): void {
   embeddedAuthFailureHandler?.('Your Shopify session expired — reload the app to reconnect.')
 }
 
+/* ── 401 auto-recovery (re-install / re-authorize) ─────────────────────────
+ *
+ * A 401 that survives the fresh-token retry has exactly two shapes:
+ *
+ *   a) RECOVERABLE — the token is fine but the app has no usable grant for
+ *      this shop: `STORE_NOT_FOUND`, "Authentication is required", or an
+ *      `UNAUTHORIZED` envelope whose details say `reauthorize: true`. Running
+ *      the install flow again re-creates the store row and the offline access
+ *      token, so the app must send the merchant there instead of parking them
+ *      on a red card forever.
+ *
+ *   b) NOT RECOVERABLE — e.g. the API reports the database is unavailable
+ *      (`DB_UNAVAILABLE`). Re-installing would bounce the merchant through
+ *      OAuth for nothing, so only the banner shows.
+ *
+ * The redirect is attempted at most ONCE per page load (a redirect loop
+ * inside the admin iframe is worse than the 401 it replaces).
+ */
+const RECOVERABLE_AUTH_CODES: ReadonlySet<string> = new Set(['UNAUTHORIZED', 'STORE_NOT_FOUND', 'SESSION_TOKEN_INVALID', 'NO_AUTH_CONTEXT'])
+const UNRECOVERABLE_AUTH_REASONS: ReadonlySet<string> = new Set(['DB_UNAVAILABLE', 'SCHEMA_MISSING'])
+
+let embeddedReauthAttempted = false
+
+/** Test seam + App.tsx entry point: force the re-authorization redirect. */
+export function requestEmbeddedReauthorization(shopHint?: string | null): boolean {
+  if (embeddedReauthAttempted) return false
+  embeddedReauthAttempted = redirectToShopifyReauthorization(shopHint ?? null)
+  return embeddedReauthAttempted
+}
+
+/** True when this 401 body describes a session the install flow can restore. */
+export function isRecoverableAuthFailure(payload: unknown): boolean {
+  if (!isRecord(payload) || !isRecord(payload.error)) return false
+  const error = payload.error
+  const code = typeof error.code === 'string' ? error.code : ''
+  const message = typeof error.message === 'string' ? error.message : ''
+  const details = isRecord(error.details) ? error.details : {}
+  const reason = typeof details.reason === 'string' ? details.reason : ''
+  if (UNRECOVERABLE_AUTH_REASONS.has(reason)) return false
+  if (details.reauthorize === false) return false
+  if (details.reauthorize === true) return true
+  return (
+    RECOVERABLE_AUTH_CODES.has(code) ||
+    RECOVERABLE_AUTH_CODES.has(reason) ||
+    /authentication is required|store_not_found|session (?:expired|is no longer valid)/i.test(message)
+  )
+}
+
+/** Shop domain the API attached to the 401 body, when it knew one. */
+function shopFromAuthFailure(payload: unknown): string | null {
+  if (!isRecord(payload) || !isRecord(payload.error)) return null
+  const details = isRecord(payload.error.details) ? payload.error.details : {}
+  return typeof details.shop === 'string' && details.shop.trim() ? details.shop.trim() : null
+}
+
+/**
+ * Single decision point for a terminal 401: try re-authorization first, and
+ * only surface the session banner when no redirect was possible (standalone
+ * dev, unknown shop, or a non-recoverable failure).
+ */
+function handleTerminalUnauthorized(payload: unknown): void {
+  if (isRecoverableAuthFailure(payload) && requestEmbeddedReauthorization(shopFromAuthFailure(payload))) return
+  notifyEmbeddedAuthFailure()
+}
+
 /**
  * Internal: clears a latched session-expired notification once a 2xx proves
  * the session is actually valid, so a false alarm can never stay stuck.
@@ -278,12 +350,26 @@ function notifyEmbeddedAuthRecovered(): void {
  * a fresh token, and a successful request clears any latched banner. Only a
  * 401 that survives that retry can surface the banner.
  */
+let embeddedSessionTokenBoot: Promise<void> | null = null
+
 export async function warmUpEmbeddedSessionToken(): Promise<void> {
-  try {
-    await getShopifySessionTokenWithRetry()
-  } catch {
-    /* request outcomes decide — see HOTFIX 3 */
+  await ensureEmbeddedSessionTokenReady()
+}
+
+/**
+ * The boot gate itself: `idToken()` (retried once) is awaited BEFORE the first
+ * API fetch leaves the app, and every concurrent boot request shares the same
+ * promise instead of racing its own mint. This is what removes the App Bridge
+ * race that made the very first `/session/context` call land without a bearer
+ * and answer 401.
+ */
+async function ensureEmbeddedSessionTokenReady(): Promise<void> {
+  if (!embeddedSessionTokenBoot) {
+    embeddedSessionTokenBoot = getShopifySessionTokenWithRetry()
+      .then(() => undefined)
+      .catch(() => undefined)
   }
+  await embeddedSessionTokenBoot
 }
 
 /**
@@ -296,6 +382,9 @@ export async function warmUpEmbeddedSessionToken(): Promise<void> {
  */
 export async function attachEmbeddedSessionToken(headers: Headers): Promise<EmbeddedSessionTokenResult> {
   if (headers.has('authorization')) return { status: 'not-embedded' }
+  // Boot gate: on the first call this awaits App Bridge's (retried) idToken()
+  // so no request can be sent while the bridge is still booting.
+  await ensureEmbeddedSessionTokenReady()
   // `getShopifySessionToken` is a no-op outside a browser (Node tests) and
   // when the page is not embedded; the extra try/catch guarantees a broken
   // bridge can degrade a request to cookie fallback but never fail it.
