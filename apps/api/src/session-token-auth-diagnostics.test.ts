@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { diagnoseSessionToken, sanitizeCredential, verifyShopifySessionToken } from '@profitpilot/shopify'
-import { authenticationMiddleware, getAuthContext, setAuthDiagnosticsLogger } from './security.js'
+import { authenticationMiddleware, getAuthContext, securityOptionsFromEnv, setAuthDiagnosticsLogger } from './security.js'
 import { injectShopifyAppBridgeApiKey, resolveAppBridgeApiKey } from './web-app.js'
 
 const API_KEY = 'client-id-123'
@@ -131,5 +131,129 @@ describe('store directory resilience in authentication', () => {
     await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
     expect(getAuthContext(authorized)?.claims.storeId).toBe('store-1')
     setAuthDiagnosticsLogger(null)
+  })
+})
+
+/**
+ * The 401 diagnostic contract: one log line that names what the token claims,
+ * what the server expected, and which shop the token names — plus the
+ * guarantee that an unverifiable token never resolves a tenant.
+ */
+describe('[AuthDiagnostic] Session token 401 failure', () => {
+  const request = { path: '/api/analytics', method: 'GET', query: { storeId: 'store-1' }, header: () => undefined } as unknown as Parameters<ReturnType<typeof authenticationMiddleware>>[0]
+
+  function bearerRequest(token: string, extraHeaders: Record<string, string> = {}): typeof request {
+    return {
+      ...request,
+      header: (name: string) => {
+        const key = name.toLowerCase()
+        if (key === 'authorization') return `Bearer ${token}`
+        return extraHeaders[key]
+      },
+    } as typeof request
+  }
+
+  const directory = {
+    get: async () => null,
+    getByShopDomain: async () => null,
+    upsertByShopDomain: async (shopDomain: string) => ({ storeId: 'store-1' as never, shopDomain }),
+  }
+
+  it('logs aud_received, key_expected and shop when the audience does not match', async () => {
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const middleware = authenticationMiddleware({
+        requireAuthentication: true,
+        shopifySessionToken: { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory },
+      })
+      const authorized = bearerRequest(sign(claims({ aud: 'another-app' })))
+      await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
+      const entry = logs.find((log) => log.message === '[AuthDiagnostic] Session token 401 failure')
+      expect(entry).toBeDefined()
+      expect(entry?.context).toMatchObject({
+        aud_received: 'another-app',
+        key_expected: API_KEY,
+        shop: 'https://demo.myshopify.com',
+        code: 'AUD_MISMATCH',
+        claims_authenticated: true,
+      })
+      expect(getAuthContext(authorized)).toBeNull()
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('marks the claims unauthenticated and refuses the store lookup on a signature failure', async () => {
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const middleware = authenticationMiddleware({
+        requireAuthentication: true,
+        shopifySessionToken: { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory },
+      })
+      // Forged: attacker secret, but names a victim shop in dest/iss.
+      const forged = sign(claims({ dest: 'https://victim.myshopify.com', iss: 'https://victim.myshopify.com/admin' }), 'attacker-secret')
+      const authorized = bearerRequest(forged, { 'x-shopify-shop-domain': 'victim.myshopify.com' })
+      await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
+
+      const diagnostic = logs.find((log) => log.message === '[AuthDiagnostic] Session token 401 failure')
+      expect(diagnostic?.context).toMatchObject({ code: 'INVALID_SIGNATURE', claims_authenticated: false, shop_source: 'unverified-claim' })
+      // The claimed shop is logged for triage but explicitly labelled as coming
+      // from an unverified payload — never presented as an identity.
+      expect(logs.some((log) => log.message.includes('SHOP_CLAIM_FALLBACK_REFUSED'))).toBe(true)
+      expect(getAuthContext(authorized)).toBeNull()
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('never authenticates from a shop header or query parameter with no verifiable credential', async () => {
+    const seen: string[] = []
+    const spyDirectory = {
+      get: async () => null,
+      getByShopDomain: async (shopDomain: string) => { seen.push(shopDomain); return null },
+      upsertByShopDomain: async (shopDomain: string) => { seen.push(shopDomain); return { storeId: 'store-1' as never, shopDomain } },
+    }
+    setAuthDiagnosticsLogger(() => {})
+    try {
+      const middleware = authenticationMiddleware({
+        requireAuthentication: true,
+        shopifySessionToken: { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory: spyDirectory },
+      })
+      const unsigned = bearerRequest('not-a-token', { 'x-shopify-shop-domain': 'victim.myshopify.com', 'x-shop': 'victim.myshopify.com' })
+      await new Promise<void>((resolve) => { middleware(unsigned, {} as never, (() => resolve()) as never) })
+      expect(getAuthContext(unsigned)).toBeNull()
+      expect(seen).toEqual([])
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('authenticates a signature-valid alias token and logs CLIENT_ID_DRIFT', async () => {
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setAuthDiagnosticsLogger((message, context) => logs.push({ message, context }))
+    try {
+      const security = securityOptionsFromEnv(
+        { NODE_ENV: 'development', SHOPIFY_API_KEY_ALIASES: 'legacy-client-id' },
+        undefined,
+        { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory },
+      )
+      expect(security.shopifySessionToken?.config.audienceAliases).toEqual(['legacy-client-id'])
+      const middleware = authenticationMiddleware(security)
+      const authorized = bearerRequest(sign(claims({ aud: 'legacy-client-id' })))
+      await new Promise<void>((resolve) => { middleware(authorized, {} as never, (() => resolve()) as never) })
+      expect(getAuthContext(authorized)?.claims.storeId).toBe('store-1')
+      expect(getAuthContext(authorized)?.shop).toBe('demo.myshopify.com')
+      const drift = logs.find((log) => log.message.includes('CLIENT_ID_DRIFT'))
+      expect(drift?.context).toMatchObject({ aud_received: 'legacy-client-id', key_expected: API_KEY, key_accepted_alias: 'legacy-client-id' })
+    } finally {
+      setAuthDiagnosticsLogger(null)
+    }
+  })
+
+  it('ignores SHOPIFY_API_KEY_ALIASES when the env value is empty', () => {
+    const security = securityOptionsFromEnv({ NODE_ENV: 'development', SHOPIFY_API_KEY_ALIASES: ' , ' }, undefined, { config: { apiKey: API_KEY, apiSecret: API_SECRET }, directory })
+    expect(security.shopifySessionToken?.config.audienceAliases).toBeUndefined()
   })
 })
