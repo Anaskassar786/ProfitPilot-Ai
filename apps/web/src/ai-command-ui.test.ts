@@ -195,6 +195,14 @@ describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
       startReauthorize('/shopify/install?shop=demo.myshopify.com')
       expect(assign).toHaveBeenCalledWith('/shopify/install?shop=demo.myshopify.com')
       expect(open).toHaveBeenCalledTimes(1)
+
+      // Embedded with a real location: the relative install URL is anchored
+      // on the APP's origin — the top frame is on Shopify's origin, so a
+      // bare relative path would 404 on admin.shopify.com.
+      const openAnchored = vi.fn()
+      globals.window = { top: { name: 'top' }, self: { name: 'self' }, open: openAnchored, location: { href: 'https://profitpilot.app/?host=YWJj' } }
+      startReauthorize('/shopify/install?shop=demo.myshopify.com')
+      expect(openAnchored).toHaveBeenCalledWith('https://profitpilot.app/shopify/install?shop=demo.myshopify.com', '_top', 'noopener')
     } finally {
       if (original === undefined) delete globals.window
       else globals.window = original

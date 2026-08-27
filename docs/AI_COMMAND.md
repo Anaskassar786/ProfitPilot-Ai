@@ -75,8 +75,8 @@ Email send requires a verified merchant sender and a live SMTP (Brevo) response.
 ```
 AI_COMMAND_ENABLED=true
 AI_COMMAND_API_KEY=
-AI_COMMAND_MODEL_PRIMARY=cohere/north-mini-code:free
-AI_COMMAND_MODEL_FALLBACK=nvidia/nemotron-3-nano-omni:free
+AI_COMMAND_MODEL_PRIMARY=meta-llama/llama-3.3-70b-instruct:free
+AI_COMMAND_MODEL_FALLBACK=google/gemma-2-9b-it:free
 AI_COMMAND_ACTIONS_ENABLED=true
 ```
 

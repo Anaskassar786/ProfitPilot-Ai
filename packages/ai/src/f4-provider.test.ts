@@ -16,8 +16,11 @@ describe('OpenRouter fallback client', () => {
     expect(generation.usage.totalTokens).toBe(7)
     expect(calls[0]).toContain('key-1')
   })
-  it('defaults to the verified free model chain and a 25-second timeout', () => {
+  it('defaults to the current active free model chain and a 25-second timeout', () => {
     expect(new OpenRouterClient({ keys: ['key'] }).models).toEqual([...DEFAULT_AI_MODELS])
+    // QA 2026-08-27: the delisted nemotron/LiquidAI/gpt-oss slugs returned
+    // 404 / no_endpoints; the default chain is the current, active free tier.
+    expect(DEFAULT_AI_MODELS).toEqual(['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free', 'qwen/qwen-2.5-7b-instruct:free'])
     expect(DEFAULT_AI_TIMEOUT_MS).toBe(25_000)
     expect(DEFAULT_AI_MODELS.every((model) => model.endsWith(':free'))).toBe(true)
   })
@@ -90,6 +93,13 @@ describe('OpenRouter fallback client', () => {
       { model: 'valid', available: true, statusCode: 200, reason: 'available' },
       { model: 'gone', available: false, statusCode: 404, reason: 'not_found' },
       { model: 'dormant', available: false, statusCode: 200, reason: 'no_endpoints' },
+    ])
+  })
+  it('fails validation gracefully (never throws) when the endpoint is unreachable, so boot is never blocked', async () => {
+    const client = new OpenRouterClient({ keys: ['key'], models: ['flaky-a', 'flaky-b'], fetcher: async () => { throw new Error('ENOTFOUND openrouter.ai') }, timeoutMs: 5_000 })
+    await expect(client.validateModels()).resolves.toEqual([
+      { model: 'flaky-a', available: false, statusCode: null, reason: 'request_failed' },
+      { model: 'flaky-b', available: false, statusCode: null, reason: 'request_failed' },
     ])
   })
   it('does not call a provider without configured keys', async () => {

@@ -909,7 +909,16 @@ export function ActionBlockedBlock({ data }: { data: Record<string, unknown> }) 
  * navigate, because replacing the embedded frame would break the admin.
  */
 export function startReauthorize(url: string | null): void {
-  const target = url ?? '/shopify/install'
+  let target = url ?? '/shopify/install'
+  // Anchor relative URLs on the app's own origin: inside the embedded admin
+  // the top-level window is on Shopify's origin, so a relative install path
+  // would resolve against admin.shopify.com and 404.
+  try {
+    const href = typeof window !== 'undefined' ? (window.location as { href?: string } | undefined)?.href : undefined
+    if (typeof href === 'string' && href.length > 0) target = new URL(target, href).toString()
+  } catch {
+    /* keep the provided URL as-is */
+  }
   let embedded = false
   try { embedded = window.top !== window.self } catch { embedded = true }
   if (embedded) window.open(target, '_top', 'noopener')

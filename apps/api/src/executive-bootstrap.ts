@@ -73,9 +73,14 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
   const database = f9.database
   const repository = new PostgresExecutiveRepository(database)
   const resolvedKeys = resolveApiKeys(env)
+  // Default to the current, active free OpenRouter chain (primary Llama 3.3
+  // 70B Instruct, Gemma 2 9B IT fallback). Both the provider and the
+  // cost-summary endpoint resolve the SAME list so the UI never reports a
+  // model the provider does not actually use.
+  const executiveModels = [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'meta-llama/llama-3.3-70b-instruct:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'google/gemma-2-9b-it:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
   const provider = new OpenRouterClient({
     keys: resolvedKeys.keys,
-    models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra-550b-a55b:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super-120b-a12b:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
+    models: executiveModels,
     timeoutMs: 60_000,
     maxRetries: 1,
     temperature: 0.3,
@@ -134,7 +139,7 @@ export function createExecutiveBootstrap(f9: F9Bootstrap, env: Readonly<Record<s
       return {
         summary: { day: summary.day, microDollars: summary.microDollars, capMicroDollars: summary.capMicroDollars, calls: summary.calls },
         executiveCalls: reportsUsed + scenariosUsed,
-        models: [env.AI_EXECUTIVE_MODEL_PRIMARY ?? 'nvidia/nemotron-3-ultra-550b-a55b:free', env.AI_EXECUTIVE_MODEL_FALLBACK ?? 'nvidia/nemotron-3-super-120b-a12b:free'].filter((model): model is string => typeof model === 'string' && model.trim().length > 0),
+        models: executiveModels,
         budgetUsd: numberEnv(env, 'AI_EXECUTIVE_DAILY_BUDGET_USD', 0),
       }
     },

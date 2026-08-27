@@ -84,7 +84,7 @@ import {
 } from './icons.js'
 import { PhaseNotImplementedError, PLAN_ENTITLEMENT_LIMITS, HIDDEN_METER_KEYS, FAIR_USE_ORDERS_30D, FAIR_USE_PRODUCTS_ACTIVE, FAIR_USE_CUSTOMERS } from '@profitpilot/types'
 import type { EntitlementKey, PlanTier } from '@profitpilot/types'
-import { analyzeRecommendations, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, triggerEmbeddedReinstallRedirect, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
+import { analyzeRecommendations, buildInstallUrl, cancelBillingSubscription, createBillingCharge, resetSyncCircuit, createCampaignTemplate, createTicket, decideRecommendation, exportRows, fetchAgentStatuses, fetchAnalytics, fetchBilling, fetchBillingPlans, fetchBillingRoi, fetchBillingUsage, fetchCampaignTemplates, fetchCatalog, fetchInventory, fetchJarvisPreferences, initializeCsrf, isEmbeddedReinstallInFlight, fetchRecommendations, fetchSessionContext, fetchSyncStatus, fetchTickets, redeemGiftCode, requestSync, requestSyncAll, saveMerchantEmail, setEmbeddedAuthFailureHandler, setEmbeddedAuthRecoveryHandler, triggerEmbeddedReinstallRedirect, verifyBillingCharge, verifyMerchantEmail, warmUpEmbeddedSessionToken, ApiClientError } from './api.js'
 import { AutomationWorkspace } from './automation.js'
 import { isDeveloperWorkspace } from './dev-workspace.js'
 import type { AgentStatus, AnalyticsSnapshot, CatalogProduct, Recommendation, SectionId, WorkspaceContext } from './model.js'
@@ -440,8 +440,10 @@ export default function App() {
           if (cancelled) return
           if (error instanceof ApiClientError && error.status === 401) {
             // Session expired AFTER the fetcher's silent fresh-token retry:
-            // single re-auth banner, NOT an install wall.
-            if (!urlContext.storeId && !context.storeId) setSessionError('Your Shopify session expired — reload the app to reconnect.')
+            // single re-auth banner, NOT an install wall. When the fetcher
+            // already dispatched the automatic top-level reinstall redirect,
+            // no static red card is shown — the top window is re-authorizing.
+            if (!urlContext.storeId && !context.storeId && !isEmbeddedReinstallInFlight()) setSessionError('Your Shopify session expired — reload the app to reconnect.')
             setAuthState('ready')
             return
           }
@@ -469,7 +471,9 @@ export default function App() {
         setAuthState('ready')
       } catch (error: unknown) {
         if (error instanceof ApiClientError && error.status === 401) {
-          setSessionError('Your Shopify session expired — reload the app to reconnect.')
+          // Auto-recovery takes over the top-level window — stay quiet when
+          // the reinstall redirect is already in flight (no red card).
+          if (!isEmbeddedReinstallInFlight()) setSessionError('Your Shopify session expired — reload the app to reconnect.')
           setAuthState('ready')
           return
         }
@@ -488,8 +492,11 @@ export default function App() {
   useEffect(() => {
     // Embedded App Bridge session tokens (P0 App Store fix): the failure
     // handler only fires from the fetcher's 401-AFTER-fresh-token-retry path,
-    // so a transient token race can never latch it. The single surface is
-    // the Polaris session banner below — never stacked toasts.
+    // so a transient token race can never latch it. It is additionally
+    // gated by the fetcher: when the automatic top-level reinstall redirect
+    // was dispatched, this handler is never called and no static red card
+    // appears — the top window is already re-authorizing the store. The
+    // single surface is the Polaris session banner below — never stacked toasts.
     setEmbeddedAuthFailureHandler(() => {
       // Only the bootstrap phase is allowed to surface this banner, and only
       // when no usable store data has loaded yet — page data rendering
@@ -1902,7 +1909,9 @@ function NotificationDrawer({ recommendations, unreadIds, onOpenRecommendation, 
   return <><Button className="drawer-backdrop" onClick={onClose} aria-label="Close notifications" /><aside className="notification-drawer"><div className="drawer-header"><div><span className="drawer-kicker"><Bell size={13} /> NOTIFICATIONS</span><h2>{unreadCount > 0 ? `${unreadCount} new recommendation${unreadCount === 1 ? '' : 's'}` : pending.length > 0 ? 'Pending recommendations' : 'No new notifications'}</h2></div><Button className="icon-button" onClick={onClose}><X size={18} /></Button></div>{pending.length === 0 ? <div className="notification-empty"><Bell size={22} /><strong>Quiet by default</strong><span>New AI recommendations appear here the moment they are generated from your real store data.</span></div> : <div className="notification-list">{pending.map((item) => <Button key={item.id} className={`notification-row ${unreadIds.has(item.id) ? 'unread' : ''}`} onClick={() => onOpenRecommendation(item.id)}><span className="notification-row-icon"><Sparkles size={14} /></span><span className="notification-row-copy"><strong>{item.title}</strong><small>{formatMoney(item.impactValue, item.currency)} · pending your decision</small></span>{unreadIds.has(item.id) && <i className="notification-dot" />}</Button>)}{unreadCount > 0 && <Button className="text-button full" onClick={onMarkAllRead}>Mark all read <Check size={13} /></Button>}</div>}<Button className="text-button full" onClick={onClose}>Close drawer <X size={14} /></Button></aside></>
 }
 function CommandPalette({ devWorkspace, onClose, onNavigate }: { devWorkspace: boolean; onClose: () => void; onNavigate: (page: SectionId) => void }) { const [query, setQuery] = useState(''); const results = visibleNavGroups(devWorkspace).flatMap((group) => group.items).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 10); return <div className="command-overlay"><Button className="command-overlay-close" onClick={onClose} aria-label="Close command palette" /><div className="command-panel command-palette"><div className="command-input-wrap"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search sections…" /><kbd>ESC</kbd></div><div className="command-results"><span className="command-section-label">Navigate</span>{results.map((item) => { const Icon = item.icon; return <Button key={item.id} className="command-result" onClick={() => onNavigate(item.id)}><span className="command-result-icon"><Icon size={16} /></span><span>{item.label}</span><ChevronRight size={15} /></Button> })}{results.length === 0 && <div className="command-empty"><Search size={20} /><strong>No matching section</strong><span>Try Dashboard, Analytics, or Settings.</span></div>}</div><div className="command-footer"><span><ArrowUpRight size={13} /> Open</span><span><ChevronDown size={13} /> Navigate</span><span><kbd>ESC</kbd> Close</span></div></div></div> }
-function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const dialogRef = useRef<HTMLDivElement>(null); useModalDialog(dialogRef, onClose); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } const installUrl = `/shopify/install?shop=${encodeURIComponent(normalized)}`; let embedded = false; try { embedded = window.top !== window.self } catch { embedded = true } if (embedded) { // Embedded in the Shopify admin iframe: navigating the app's own frame to
+function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, setShop] = useState(''); const [error, setError] = useState<string | null>(null); const dialogRef = useRef<HTMLDivElement>(null); useModalDialog(dialogRef, onClose); const connect = () => { const normalized = shop.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) { setError('Enter a valid *.myshopify.com domain.'); return } // ABSOLUTE URL: from the embedded admin the top-level window is on
+    // Shopify's origin, so a relative install path would 404 there.
+    const installUrl = buildInstallUrl(normalized); let embedded = false; try { embedded = window.top !== window.self } catch { embedded = true } if (embedded) { // Embedded in the Shopify admin iframe: navigating the app's own frame to
     // the OAuth flow would replace the app and break the admin. Hand the
     // install URL to the top-level window instead; the post-OAuth return
     // re-enters the admin embed. window.open with `_top` is the bridge-free,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, openAdminUrlInNewTab, redirectToShopifyCheckout, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
+import { embeddedHost, ensureEmbeddedAppBridgeRedirect, ensureShopifyApiKeyMetaTag, getShopifySessionToken, getShopifySessionTokenWithRetry, isEmbeddedShopifyApp, navigateTopLevel, openAdminUrlInNewTab, redirectToShopifyCheckout, overrideShopifyAppBridgeForTests, resetShopifyAppBridgeStateForTests, setAppBridgeReadyTimingForTests } from './shopify-app-bridge.js'
 
 /**
  * App Bridge integration (embedded session tokens). jsdom so the module's
@@ -179,6 +179,94 @@ describe('redirectToShopifyCheckout', () => {
 
   it('rejects non-HTTPS checkout URLs', () => {
     expect(() => redirectToShopifyCheckout('http://example.com/charge')).toThrow('HTTPS')
+  })
+})
+
+describe('navigateTopLevel (401 auto-recovery iframe escape)', () => {
+  const INSTALL = 'http://localhost:3000/shopify/install?shop=commander-pilot.myshopify.com'
+  const nested = (): (() => void) => {
+    const originalTop = window.top
+    Object.defineProperty(window, 'top', { configurable: true, value: {} })
+    return () => Object.defineProperty(window, 'top', { configurable: true, value: originalTop })
+  }
+
+  it('uses App Bridge navigation.navigate (v4 CDN surface) from an embedded iframe', () => {
+    const restore = nested()
+    const navigate = vi.fn()
+    const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    ;(window as unknown as { shopify: unknown }).shopify = { navigation: { navigate } }
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(navigate).toHaveBeenCalledWith(INSTALL)
+      expect(open).not.toHaveBeenCalled()
+    } finally {
+      delete (window as unknown as { shopify?: unknown }).shopify
+      restore()
+    }
+  })
+
+  it('uses the direct navigate({ url, target: _top }) API when exposed', () => {
+    const restore = nested()
+    const navigate = vi.fn()
+    const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    ;(window as unknown as { shopify: unknown }).shopify = { navigate }
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(navigate).toHaveBeenCalledWith({ url: INSTALL, target: '_top' })
+      expect(open).not.toHaveBeenCalled()
+    } finally {
+      delete (window as unknown as { shopify?: unknown }).shopify
+      restore()
+    }
+  })
+
+  it('falls back to window.open(url, _top) when the v4 CDN bridge exposes only idToken()', () => {
+    const restore = nested()
+    const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    ;(window as unknown as { shopify: unknown }).shopify = { idToken: vi.fn(async () => 'token') }
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(open).toHaveBeenCalledWith(INSTALL, '_top', 'noopener')
+    } finally {
+      delete (window as unknown as { shopify?: unknown }).shopify
+      restore()
+    }
+  })
+
+  it('reports failure (not success) when window.open is popup-blocked (null)', () => {
+    const restore = nested()
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(false)
+      expect(open).toHaveBeenCalledTimes(1)
+    } finally {
+      restore()
+    }
+  })
+
+  it('navigates the app itself via location.assign when it already runs at the top level', () => {
+    const assign = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } })
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(assign).toHaveBeenCalledWith(INSTALL)
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
+  it('never throws for a malformed bridge surface', () => {
+    const restore = nested()
+    ;(window as unknown as { shopify: unknown }).shopify = { navigation: { navigate: 'not-a-function' }, navigate: 42 }
+    const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(open).toHaveBeenCalledWith(INSTALL, '_top', 'noopener')
+    } finally {
+      delete (window as unknown as { shopify?: unknown }).shopify
+      restore()
+    }
   })
 })
 

@@ -32,7 +32,12 @@ import {
 
 export type StoreCoachBootstrap = Readonly<F9Bootstrap & { storeCoach: Readonly<{ service: StoreCoachService }> }>
 
-const DEFAULT_COACH_MODELS = ['nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia/nemotron-3-super-120b-a12b:free'] as const
+/**
+ * Current, active free OpenRouter chain for Store Coach. The previous
+ * nemotron slugs were delisted (404 / no_endpoints), so every huddle
+ * generation fell back to the canned string.
+ */
+const DEFAULT_COACH_MODELS = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'] as const
 
 export function createStoreCoachBootstrap(rawEnv: Readonly<Record<string, string | undefined>>, logger = new Logger()): StoreCoachBootstrap | null {
   const f9 = createF9Bootstrap(rawEnv, logger)

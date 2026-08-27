@@ -54,17 +54,30 @@ const coachWidgetSource = readFileSync(join(here, 'coach-widget.tsx'), 'utf8')
 // ---------------------------------------------------------------------------
 
 describe('HOTFIX 3 — silent 401 retry in the central fetcher', () => {
-  it('awaits a fresh idToken before every request and retries a 401 exactly once', () => {
+  it('awaits a fresh idToken before every request and retries an unauthorized response exactly once', () => {
     expect(apiSource).toContain('await attachEmbeddedSessionToken(headers)')
-    expect(apiSource).toContain('if (response.status === 401 && allowRetry && !callerAuthorization)')
+    // HTTP 401 OR an UNAUTHORIZED / STORE_NOT_FOUND error code — the retry
+    // applies to both (a missing store row often surfaces as either).
+    expect(apiSource).toContain('isUnauthorizedResponse(payload, response.status) && allowRetry && !callerAuthorization')
+    expect(apiSource).toContain("const UNAUTHORIZED_ERROR_CODES = new Set(['UNAUTHORIZED', 'STORE_NOT_FOUND'])")
     // The retry mints a brand-new token instead of reusing the stale bearer.
     expect(apiSource).toContain('const fresh = await getShopifySessionToken()')
     expect(apiSource).toContain("retryHeaders.set('authorization', `Bearer ${fresh.token}`)")
   })
 
   it('latches the session banner only when the retry also fails with 401', () => {
-    expect(apiSource).toContain('if (response.status === 401) notifyEmbeddedAuthFailure()')
+    expect(apiSource).toContain('if (isUnauthorizedResponse(payload, response.status)) notifyEmbeddedAuthFailure()')
     expect(apiSource).toContain('throw failureFromPayload(payload, response.status)')
+  })
+
+  it('prefers the automatic top-level reinstall redirect over the static red card', () => {
+    // 401 AUTO-RECOVERY: when a redirect surface takes over the top-level
+    // window (OAuth reinstall/re-authorize), the user-visible
+    // "Authentication is required" card is suppressed; it only latches as
+    // the fallback when no navigation could be dispatched.
+    expect(apiSource).toContain('if (attemptEmbeddedReinstallRedirect()) return')
+    expect(apiSource).toContain('embeddedAuthFailureHandler?.(')
+    expect(apiSource).toContain('export function isEmbeddedReinstallInFlight')
   })
 
   it('auto-clears the latch on every successful response', () => {

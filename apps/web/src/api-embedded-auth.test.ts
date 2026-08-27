@@ -13,6 +13,9 @@ import type { EmbeddedSessionTokenResult } from './shopify-app-bridge.js'
 vi.mock('./shopify-app-bridge.js', () => ({
   getShopifySessionToken: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
   getShopifySessionTokenWithRetry: vi.fn(async (): Promise<EmbeddedSessionTokenResult> => ({ status: 'not-embedded' })),
+  // No top window in the Node test environment: no redirect can be
+  // dispatched, so the banner-latch fallback path is exercised.
+  navigateTopLevel: vi.fn(() => false),
 }))
 
 const sessionTokenMock = vi.mocked(getShopifySessionToken)
