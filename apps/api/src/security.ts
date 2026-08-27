@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { isMissingRelationError } from './ai-keys.js'
-import { diagnoseSessionToken, isShopifyApiError, sanitizeCredential, sanitizeSessionTokenConfig, sessionTokenClaimsPreview, setSessionTokenVerificationLogger, verifyShopifySessionToken } from '@profitpilot/shopify'
+import { diagnoseSessionToken, isShopifyApiError, parseAudienceAliases, sanitizeCredential, sanitizeSessionTokenConfig, sessionTokenClaimsPreview, setSessionTokenVerificationLogger, verifyShopifySessionToken } from '@profitpilot/shopify'
 import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
@@ -157,7 +157,28 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     csrfSecret: sanitizeCredential(env.CSRF_SECRET) || sanitizeCredential(env.JWT_SECRET) || 'development-csrf-secret-change-me',
     rateLimiter: new EndpointRateLimiter({ limit: numberEnv(env, 'RATE_LIMIT_DEFAULT', 120), windowMs: numberEnv(env, 'RATE_LIMIT_WINDOW_MS', 60_000) }),
   }
-  return { ...base, ...(auth ? { auth } : {}), ...(shopifySessionToken ? { shopifySessionToken } : {}) }
+  return { ...base, ...(auth ? { auth } : {}), ...(shopifySessionToken ? { shopifySessionToken: withAudienceAliases(shopifySessionToken, env) } : {}) }
+}
+
+/**
+ * Applies `SHOPIFY_API_KEY_ALIASES` (comma-separated Shopify client ids) to the
+ * session-token verifier.
+ *
+ * This is the supported recovery path for the reported
+ * "API key/secret mismatch" 401: the deployment's SHOPIFY_API_SECRET is correct
+ * (signatures verify) but SHOPIFY_API_KEY no longer matches the client id App
+ * Bridge is minting tokens for. The `[AuthDiagnostic] Session token 401
+ * failure` line names the offending `aud_received`; adding that value here
+ * restores service WITHOUT weakening authentication, because
+ * `verifyShopifySessionToken` still requires a valid HMAC signature.
+ *
+ * An explicitly supplied `config.audienceAliases` wins over the env value.
+ */
+function withAudienceAliases(shopifySessionToken: SecurityShopifySessionToken, env: Readonly<Record<string, string | undefined>>): SecurityShopifySessionToken {
+  if (shopifySessionToken.config.audienceAliases !== undefined) return shopifySessionToken
+  const aliases = parseAudienceAliases(env.SHOPIFY_API_KEY_ALIASES)
+  if (aliases.length === 0) return shopifySessionToken
+  return { ...shopifySessionToken, config: { ...shopifySessionToken.config, audienceAliases: aliases } }
 }
 
 export function defaultSecurityOptions(): SecurityOptions {
@@ -364,6 +385,24 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
     const config = sanitizeSessionTokenConfig(shopify.config)
     const shopClaims = verifyShopifySessionToken(token, config)
     if (shopClaims) {
+      // Accepted through SHOPIFY_API_KEY_ALIASES rather than SHOPIFY_API_KEY.
+      // The signature verified, so the identity is genuine — but the merchant's
+      // App Bridge is minting tokens for a different client id than the one this
+      // deployment advertises, which means the embedded bundle and the API
+      // disagree about which app they are. Loud on purpose: it is the exact
+      // configuration drift that produces intermittent 401s after a release.
+      if (shopClaims.audienceAlias) {
+        logAuthFailure('Session token authenticated via SHOPIFY_API_KEY_ALIASES, not SHOPIFY_API_KEY: CLIENT_ID_DRIFT', {
+          code: 'CLIENT_ID_DRIFT',
+          aud_received: shopClaims.aud,
+          key_expected: config.apiKey,
+          key_accepted_alias: shopClaims.audienceAlias,
+          shop: shopClaims.shop,
+          path: request.path,
+          method: request.method,
+          requestId: request.header('x-request-id') ?? null,
+        })
+      }
       return resolveShopifySessionContext(shopify.directory, shopClaims, request)
     }
     // The bearer looked like a Shopify session token but did not verify. Say
@@ -374,16 +413,37 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
     if (looksLikeJwt(token)) {
       const diagnostics = diagnoseSessionToken(token, config)
       const preview = sessionTokenClaimsPreview(token)
-      logAuthFailure(diagnostics.message, {
+      // A signature failure means the payload is attacker-controlled, so the
+      // claims below are logged for triage only and never used to resolve a
+      // tenant. `shop_source` states which of the two cases this line is.
+      const claimsAuthenticated = diagnostics.reason !== 'signature-mismatch' && diagnostics.reason !== 'malformed'
+      logAuthFailure('[AuthDiagnostic] Session token 401 failure', {
+        // The three fields an operator needs to compare in one line: what the
+        // token says, what the server expected, which shop it claims.
+        aud_received: safeClaimForLog(preview.aud),
+        key_expected: config.apiKey,
+        shop: safeClaimForLog(preview.dest ?? preview.iss),
         code: diagnostics.code,
         reason: diagnostics.reason,
-        shopClaim: preview.dest ?? '(absent)',
-        audReceived: preview.aud ?? '(absent)',
-        audExpected: config.apiKey,
+        message: diagnostics.message,
+        iss_received: safeClaimForLog(preview.iss),
+        key_expected_aliases: config.audienceAliases ?? [],
+        claims_authenticated: claimsAuthenticated,
+        shop_source: claimsAuthenticated ? 'verified-claim' : 'unverified-claim',
         path: request.path,
         method: request.method,
         requestId: request.header('x-request-id') ?? null,
       })
+      if (diagnostics.reason === 'signature-mismatch') {
+        logAuthFailure('Refusing store lookup from unverified dest/iss claims: SHOP_CLAIM_FALLBACK_REFUSED', {
+          code: 'SHOP_CLAIM_FALLBACK_REFUSED',
+          reason: diagnostics.reason,
+          key_expected: config.apiKey,
+          path: request.path,
+          method: request.method,
+          requestId: request.header('x-request-id') ?? null,
+        })
+      }
     }
   }
   if (!options.auth) return null
@@ -432,6 +492,22 @@ async function safeDirectoryCall<T>(run: () => Promise<T | null>, operation: str
 
 function looksLikeJwt(token: string): boolean {
   return token.trim().split('.').length === 3
+}
+
+/**
+ * Neutralizes an attacker-controlled JWT claim before it reaches the log.
+ *
+ * On a signature failure the decoded `dest`/`iss`/`aud` are whatever the
+ * sender put there, so they can contain newlines (log forging) or be
+ * arbitrarily long (log flooding). They are still worth logging — naming the
+ * shop a forged token claims is exactly what an incident responder needs — so
+ * they are stripped of control characters and truncated rather than dropped.
+ */
+function safeClaimForLog(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '(absent)'
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, '').trim()
+  if (!cleaned) return '(blank)'
+  return cleaned.length > 253 ? `${cleaned.slice(0, 253)}…` : cleaned
 }
 
 export function tenantContextMiddleware(requireAuthentication: boolean): RequestHandler {

@@ -128,9 +128,81 @@ describe('session-token verification diagnostics', () => {
     }
   })
 
-  it('previews dest/aud claims for diagnostics without verifying the token', async () => {
+  it('previews dest/iss/aud claims for diagnostics without verifying the token', async () => {
     const { sessionTokenClaimsPreview } = await import('./session-token.js')
-    expect(sessionTokenClaimsPreview(sign(validPayload()))).toEqual({ dest: 'https://commander-pilot.myshopify.com', aud: API_KEY })
-    expect(sessionTokenClaimsPreview('not-a-jwt')).toEqual({ dest: null, aud: null })
+    expect(sessionTokenClaimsPreview(sign(validPayload()))).toEqual({
+      dest: 'https://commander-pilot.myshopify.com',
+      iss: 'https://commander-pilot.myshopify.com/admin',
+      aud: API_KEY,
+    })
+    expect(sessionTokenClaimsPreview('not-a-jwt')).toEqual({ dest: null, iss: null, aud: null })
+  })
+})
+
+describe('audience aliases (SHOPIFY_API_KEY_ALIASES)', () => {
+  it('accepts a signature-valid token whose aud is a configured alias and reports which one', async () => {
+    const { sanitizeSessionTokenConfig } = await import('./session-token.js')
+    const config = sanitizeSessionTokenConfig({ apiKey: API_KEY, apiSecret: API_SECRET, audienceAliases: [' "legacy-client-id"\n'] })
+    const claims = verifyShopifySessionToken(sign(validPayload({ aud: 'legacy-client-id' })), config, NOW)
+    expect(claims?.shop).toBe('commander-pilot.myshopify.com')
+    expect(claims?.audienceAlias).toBe('legacy-client-id')
+  })
+
+  it('reports an empty alias for a token matching the primary key', () => {
+    const claims = verifyShopifySessionToken(sign(validPayload()), { ...CONFIG, audienceAliases: ['legacy-client-id'] }, NOW)
+    expect(claims?.audienceAlias).toBe('')
+  })
+
+  it('still rejects an aud that is neither the key nor an alias', async () => {
+    const { sanitizeSessionTokenConfig } = await import('./session-token.js')
+    const config = sanitizeSessionTokenConfig({ apiKey: API_KEY, apiSecret: API_SECRET, audienceAliases: ['legacy-client-id'] })
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'unknown-app' })), config, NOW)).toBeNull()
+  })
+
+  it('never accepts a forged token just because its aud is an alias — the signature still must verify', async () => {
+    const { sanitizeSessionTokenConfig } = await import('./session-token.js')
+    const config = sanitizeSessionTokenConfig({ apiKey: API_KEY, apiSecret: API_SECRET, audienceAliases: ['attacker-client-id'] })
+    // Signed with an attacker secret but naming an allowlisted audience.
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'attacker-client-id' }), 'attacker-secret'), config, NOW)).toBeNull()
+  })
+
+  it('drops aliases equal to the primary key and de-duplicates them', async () => {
+    const { sanitizeSessionTokenConfig } = await import('./session-token.js')
+    expect(sanitizeSessionTokenConfig({ apiKey: API_KEY, apiSecret: API_SECRET, audienceAliases: [API_KEY, 'a', 'a', '  '] }).audienceAliases).toEqual(['a'])
+  })
+
+  it('parses a comma-separated env value and ignores blank entries', async () => {
+    const { parseAudienceAliases } = await import('./session-token.js')
+    expect(parseAudienceAliases(' "a"\n , b ,,')).toEqual(['a', 'b'])
+    expect(parseAudienceAliases(undefined)).toEqual([])
+    expect(parseAudienceAliases('')).toEqual([])
+  })
+})
+
+describe('shop resolution from verified claims', () => {
+  it('falls back to the iss host when dest is absent, because the signature is already verified', () => {
+    const payload = validPayload()
+    delete payload.dest
+    expect(verifyShopifySessionToken(sign(payload), CONFIG, NOW)?.shop).toBe('commander-pilot.myshopify.com')
+  })
+
+  it('rejects when neither dest nor iss names a myshopify.com host', () => {
+    const payload = validPayload({ dest: 'https://evil.example.com', iss: 'https://evil.example.com/admin' })
+    expect(verifyShopifySessionToken(sign(payload), CONFIG, NOW)).toBeNull()
+  })
+
+  it('does NOT let a valid iss rescue a present-but-invalid dest', () => {
+    // Shopify always mints dest and iss from the same host, so this shape is
+    // malformed. Preferring iss here would silently drop the dest guard.
+    const claims = verifyShopifySessionToken(sign(validPayload({ dest: 'https://evil.example.com' })), CONFIG, NOW)
+    expect(claims).toBeNull()
+  })
+
+  it('never resolves a shop from a forged token claiming a victim store', () => {
+    // The payload names a real-looking victim shop but is signed with the wrong
+    // secret: dest/iss must never become a tenant lookup key here.
+    const forged = sign(validPayload({ dest: 'https://victim.myshopify.com', iss: 'https://victim.myshopify.com/admin' }), 'attacker-secret')
+    expect(verifyShopifySessionToken(forged, CONFIG, NOW)).toBeNull()
+    expect(verifyEmbeddedRequest({ id_token: forged }, CONFIG, undefined, NOW)).toBeNull()
   })
 })
