@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { isMissingRelationError } from './ai-keys.js'
-import { diagnoseSessionToken, isShopifyApiError, sanitizeCredential, sanitizeSessionTokenConfig, verifyShopifySessionToken } from '@profitpilot/shopify'
+import { diagnoseSessionToken, isShopifyApiError, sanitizeCredential, sanitizeSessionTokenConfig, sessionTokenClaimsPreview, setSessionTokenVerificationLogger, verifyShopifySessionToken } from '@profitpilot/shopify'
 import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
@@ -82,6 +82,12 @@ function logAuthFailure(message: string, context: Readonly<Record<string, unknow
     /* diagnostics must never break a request */
   }
 }
+
+// Route the shared Shopify package's session-token verification diagnostics
+// through the same sink so the exact `[AuthDiagnostics] JWT verification
+// failed for shop=…, aud_received=…, aud_expected=…` line lands in the
+// structured production log (Render/Railway) instead of being swallowed.
+setSessionTokenVerificationLogger((message, context) => logAuthFailure(message, context))
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const rawBodies = new WeakMap<Request, string>()
@@ -362,10 +368,22 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
     }
     // The bearer looked like a Shopify session token but did not verify. Say
     // exactly why (AUD_MISMATCH / INVALID_SIGNATURE / EXPIRED / …) so the
-    // production 401 is diagnosable from the server log alone.
+    // production 401 is diagnosable from the server log alone. The
+    // `[AuthDiagnostics]` identity line itself is emitted by
+    // verifyShopifySessionToken through the diagnostics sink wired above.
     if (looksLikeJwt(token)) {
       const diagnostics = diagnoseSessionToken(token, config)
-      logAuthFailure(diagnostics.message, { code: diagnostics.code, reason: diagnostics.reason, path: request.path, method: request.method, requestId: request.header('x-request-id') ?? null })
+      const preview = sessionTokenClaimsPreview(token)
+      logAuthFailure(diagnostics.message, {
+        code: diagnostics.code,
+        reason: diagnostics.reason,
+        shopClaim: preview.dest ?? '(absent)',
+        audReceived: preview.aud ?? '(absent)',
+        audExpected: config.apiKey,
+        path: request.path,
+        method: request.method,
+        requestId: request.header('x-request-id') ?? null,
+      })
     }
   }
   if (!options.auth) return null

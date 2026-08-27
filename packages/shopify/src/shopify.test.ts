@@ -5,7 +5,13 @@ import { createHmac } from 'node:crypto'
 
 describe('Shopify domain and OAuth primitives', () => {
   it('normalizes a valid shop domain', () => expect(parseShopDomain(' Demo-Store.myshopify.com ')).toBe('demo-store.myshopify.com'))
+  it('normalizes scheme, case and trailing slashes at every entry point', () => {
+    expect(parseShopDomain('https://Commander-Pilot.myshopify.com')).toBe('commander-pilot.myshopify.com')
+    expect(parseShopDomain('HTTP://commander-pilot.myshopify.com/')).toBe('commander-pilot.myshopify.com')
+    expect(parseShopDomain(' commander-pilot.myshopify.com// ')).toBe('commander-pilot.myshopify.com')
+  })
   it('rejects a non-Shopify domain', () => expect(() => parseShopDomain('demo.example.com')).toThrow('shop domain'))
+  it('rejects a scheme-disguised non-Shopify domain', () => expect(() => parseShopDomain('https://evil.example.com/')).toThrow('shop domain'))
   it('issues a single-use OAuth state', async () => {
     const states = new OAuthStateStore(() => 100)
     const state = await states.issue('demo.myshopify.com', 50)

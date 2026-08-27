@@ -57,7 +57,12 @@ export function createF1Bootstrap(env: Readonly<Record<string, string | undefine
     handle: (event: Parameters<ShopifyComplianceService['handle']>[0]) => compliance.handle(event),
     finalize: (event: Parameters<ShopifyComplianceService['finalize']>[0]) => compliance.finalize(event),
   }
-  return { database, shopify: { installer, exchange, webhook }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
+  // OAuth callback read-back probe: after the token vault write completes,
+  // the callback verifies the encrypted offline token is actually readable
+  // for the normalized shop domain (guards an RLS-hidden row or a silent
+  // pooler retry, which otherwise surface later as permanent embedded 401s).
+  const verifyTokenPersisted = async (shop: string): Promise<boolean> => (await vault.get(shop)) !== null
+  return { database, shopify: { installer, exchange, webhook, verifyTokenPersisted }, storeDirectory, sessionToken, tokenVault: vault, tokenExchange }
 }
 
 function requiredEnv(env: Readonly<Record<string, string | undefined>>, key: RequiredKey): string {

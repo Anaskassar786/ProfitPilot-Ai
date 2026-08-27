@@ -210,6 +210,7 @@ export function resetApiClientStateForTests(): void {
   embeddedAuthFailureNotified = false
   embeddedAuthFailureHandler = null
   embeddedAuthRecoveryHandler = null
+  embeddedReinstallRedirectAttempted = false
 }
 
 /* ── Embedded App Bridge session tokens (P0 App Store fix) ──────────────── */
@@ -220,6 +221,7 @@ export type EmbeddedAuthRecoveryHandler = () => void
 let embeddedAuthFailureHandler: EmbeddedAuthFailureHandler | null = null
 let embeddedAuthRecoveryHandler: EmbeddedAuthRecoveryHandler | null = null
 let embeddedAuthFailureNotified = false
+let embeddedReinstallRedirectAttempted = false
 
 /**
  * Registers the user-visible handler for embedded session-token failures
@@ -253,6 +255,110 @@ function notifyEmbeddedAuthFailure(): void {
   if (embeddedAuthFailureNotified) return
   embeddedAuthFailureNotified = true
   embeddedAuthFailureHandler?.('Your Shopify session expired — reload the app to reconnect.')
+  // 401 AUTO-RECOVERY: a 401 that survived the fresh-token retry means the
+  // offline session cannot be repaired client-side (store row missing, token
+  // vault empty, or the grant was revoked). Do NOT leave the merchant stuck
+  // on permanent red 401 cards — break out to the top level and run the
+  // OAuth reinstall/re-authorization, which rewrites the offline token and
+  // reactivates the store. Attempted at most once per page load; the session
+  // banner stays visible as the fallback when navigation is blocked or the
+  // page runs outside the embedded admin.
+  attemptEmbeddedReinstallRedirect()
+}
+
+/* ── Embedded 401 auto-recovery: top-level reinstall redirect ───────────── */
+
+/**
+ * Strict shop-domain normalization (mirrors the API side): lowercase, trim,
+ * strip an http(s):// scheme and trailing slashes. A bare store handle is
+ * completed to `*.myshopify.com`. Returns null for anything that is not a
+ * Shopify store, so the redirect can never point at a foreign domain.
+ */
+function normalizeReinstallShopDomain(value: string): string | null {
+  const normalized = value.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  if (/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) return normalized
+  if (/^[a-z0-9][a-z0-9-]*$/.test(normalized)) return `${normalized}.myshopify.com`
+  return null
+}
+
+function currentWindowSearch(): string {
+  try {
+    const search = typeof window !== 'undefined' ? window.location.search : ''
+    return typeof search === 'string' ? search : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Resolves the store's myshopify domain from the embedded app URL: prefers
+ * the `shop` query parameter and falls back to decoding the admin `host`
+ * parameter (`https://admin.shopify.com/store/<handle>`). Returns null when
+ * the page is not embedded (no `host`) or the store cannot be identified.
+ */
+export function embeddedShopDomainFromUrl(search: string = currentWindowSearch()): string | null {
+  try {
+    const params = new URLSearchParams(search)
+    if (!params.get('host')) return null
+    const shop = params.get('shop')?.trim()
+    if (shop) {
+      const normalized = normalizeReinstallShopDomain(shop)
+      if (normalized) return normalized
+    }
+    const host = params.get('host')?.trim()
+    if (!host || typeof atob !== 'function') return null
+    const match = /admin\.shopify\.com\/store\/([a-zA-Z0-9][a-zA-Z0-9-]*)/i.exec(atob(host))
+    return match?.[1] ? `${match[1].toLowerCase()}.myshopify.com` : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Performs the top-level navigation to the OAuth reinstall endpoint:
+ * `shopify.navigate({ url, target: '_top' })` when the App Bridge exposes a
+ * navigate API, otherwise `window.open(url, '_top')` (the standards-based
+ * escape from the admin iframe) with `location.assign` as a last resort.
+ * Returns true when a navigation was dispatched.
+ */
+export function triggerEmbeddedReinstallRedirect(): boolean {
+  if (typeof window === 'undefined') return false
+  const shop = embeddedShopDomainFromUrl()
+  if (!shop) return false
+  const url = `/shopify/install?shop=${encodeURIComponent(shop)}`
+  try {
+    const bridge = (window as { shopify?: unknown }).shopify
+    const navigate = bridge !== null && typeof bridge === 'object' ? (bridge as { navigate?: unknown }).navigate : undefined
+    if (typeof navigate === 'function') {
+      ;(navigate as (options: Readonly<{ url: string; target: '_top' }>) => void)({ url, target: '_top' })
+      return true
+    }
+  } catch {
+    // App Bridge still booting or exposing a different surface — fall through
+    // to the top-level browser navigation below.
+  }
+  try {
+    window.open(url, '_top', 'noopener')
+    return true
+  } catch {
+    try {
+      window.location.assign(url)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+/**
+ * Latched wrapper around `triggerEmbeddedReinstallRedirect`: the reinstall
+ * bounce fires at most once per page load, no matter how many endpoints
+ * answer 401 simultaneously on a dead session.
+ */
+export function attemptEmbeddedReinstallRedirect(): boolean {
+  if (embeddedReinstallRedirectAttempted) return false
+  embeddedReinstallRedirectAttempted = true
+  return triggerEmbeddedReinstallRedirect()
 }
 
 /**

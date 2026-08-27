@@ -83,3 +83,54 @@ describe('verifyEmbeddedRequest', () => {
     expect(verifyEmbeddedRequest({ shop: 'commander-pilot.myshopify.com', hmac: 'deadbeef', timestamp: '1' }, CONFIG, undefined, NOW)).toBeNull()
   })
 })
+
+describe('session-token verification diagnostics', () => {
+  it('logs the exact audience mismatch diagnostic with shop, received aud and expected api key', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: string[] = []
+    setSessionTokenVerificationLogger((message) => logs.push(message))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload({ aud: 'another-app' })), CONFIG, NOW)).toBeNull()
+      expect(logs).toContain(
+        `[AuthDiagnostics] JWT verification failed for shop=https://commander-pilot.myshopify.com, aud_received=another-app, aud_expected=${API_KEY}`,
+      )
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+
+  it('logs an expired token with the authenticated payload identity', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setSessionTokenVerificationLogger((message, context) => logs.push({ message, context }))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload({ exp: SECONDS - 30 })), CONFIG, NOW)).toBeNull()
+      expect(logs).toHaveLength(1)
+      expect(logs[0]?.message).toContain(`[AuthDiagnostics] JWT verification failed for shop=https://commander-pilot.myshopify.com, aud_received=${API_KEY}, aud_expected=${API_KEY}`)
+      expect(logs[0]?.context).toMatchObject({ reason: 'expired' })
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+
+  it('never echoes unauthenticated claims for a signature mismatch', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: string[] = []
+    setSessionTokenVerificationLogger((message) => logs.push(message))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload(), 'attacker-secret'), CONFIG, NOW)).toBeNull()
+      expect(logs).toHaveLength(1)
+      expect(logs[0]).toContain('INVALID_SIGNATURE')
+      expect(logs[0]).toContain(`aud_expected=${API_KEY}`)
+      expect(logs[0]).not.toContain('commander-pilot.myshopify.com')
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+
+  it('previews dest/aud claims for diagnostics without verifying the token', async () => {
+    const { sessionTokenClaimsPreview } = await import('./session-token.js')
+    expect(sessionTokenClaimsPreview(sign(validPayload()))).toEqual({ dest: 'https://commander-pilot.myshopify.com', aud: API_KEY })
+    expect(sessionTokenClaimsPreview('not-a-jwt')).toEqual({ dest: null, aud: null })
+  })
+})

@@ -56,7 +56,7 @@ export class PostgresStoreDirectory implements StoreDirectory {
     if (!normalized) throw new TypeError('A valid Shopify shop domain is required')
     return this.withRlsContext('app.shop_domain', normalized, async (executor) => {
       const result = await executor.query<StoreRow>(
-        `INSERT INTO stores (shop_domain) VALUES ($1)
+        `INSERT INTO stores (shop_domain, status, uninstalled_at) VALUES ($1, 'ACTIVE', NULL)
          ON CONFLICT (shop_domain) DO UPDATE SET
            updated_at = now(),
            status = 'ACTIVE',
@@ -111,6 +111,14 @@ export class InMemoryStoreDirectory implements StoreDirectory {
   }
 }
 
+/**
+ * Strict shop-domain normalization for EVERY stores-table access: lowercase,
+ * trim, strip an http(s):// scheme, and drop trailing slashes. The JWT `dest`
+ * claim maps to `commander-pilot.myshopify.com`; a webhook, callback, or sync
+ * request arriving as `https://Commander-Pilot.myshopify.com/` must resolve
+ * to the exact same row — no missing or extra `.myshopify.com`, no case or
+ * scheme variants — or the token-vault lookup misses and every call 401s.
+ */
 function normalizeShopDomain(shopDomain: string): string {
-  return shopDomain.trim().toLowerCase()
+  return shopDomain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
 }
