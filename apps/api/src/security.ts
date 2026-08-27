@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { AppError, requestId, success, toAppError } from '@profitpilot/types'
 import type { StoreId } from '@profitpilot/types'
 import { isMissingRelationError } from './ai-keys.js'
-import { isShopifyApiError, verifyShopifySessionToken } from '@profitpilot/shopify'
+import { diagnoseSessionToken, isShopifyApiError, sanitizeCredential, sanitizeSessionTokenConfig, verifyShopifySessionToken } from '@profitpilot/shopify'
 import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot/shopify'
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
@@ -53,6 +53,34 @@ export type SecurityRouteDependencies = Readonly<{ environment: string; csrfSecr
 
 interface RequestWithAuth extends Request {
   profitPilotAuth?: AuthContext
+}
+
+/**
+ * Diagnostic sink for authentication failures. Defaults to stderr so Render /
+ * Railway logs state WHY a 401 happened without extra wiring; tests and the
+ * API bootstrap can redirect it into the structured logger. Messages are
+ * technical only — never a token, a secret, or merchant PII.
+ */
+export type AuthDiagnosticsLogger = (message: string, context: Readonly<Record<string, unknown>>) => void
+
+let authDiagnostics: AuthDiagnosticsLogger = (message, context) => {
+  // eslint-disable-next-line no-console -- operator-facing diagnostics
+  console.warn(`[AuthError] ${message}`, context)
+}
+
+export function setAuthDiagnosticsLogger(logger: AuthDiagnosticsLogger | null): void {
+  authDiagnostics = logger ?? ((message, context) => {
+    // eslint-disable-next-line no-console -- operator-facing diagnostics
+    console.warn(`[AuthError] ${message}`, context)
+  })
+}
+
+function logAuthFailure(message: string, context: Readonly<Record<string, unknown>> = {}): void {
+  try {
+    authDiagnostics(message, context)
+  } catch {
+    /* diagnostics must never break a request */
+  }
 }
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -120,7 +148,7 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     environment,
     allowedOrigins,
     requireAuthentication,
-    csrfSecret: env.CSRF_SECRET?.trim() || env.JWT_SECRET?.trim() || 'development-csrf-secret-change-me',
+    csrfSecret: sanitizeCredential(env.CSRF_SECRET) || sanitizeCredential(env.JWT_SECRET) || 'development-csrf-secret-change-me',
     rateLimiter: new EndpointRateLimiter({ limit: numberEnv(env, 'RATE_LIMIT_DEFAULT', 120), windowMs: numberEnv(env, 'RATE_LIMIT_WINDOW_MS', 60_000) }),
   }
   return { ...base, ...(auth ? { auth } : {}), ...(shopifySessionToken ? { shopifySessionToken } : {}) }
@@ -327,9 +355,17 @@ export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' |
 async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopifySessionToken'>, token: string, request: Request): Promise<AuthContext | null> {
   const shopify = options.shopifySessionToken
   if (shopify) {
-    const shopClaims = verifyShopifySessionToken(token, shopify.config)
+    const config = sanitizeSessionTokenConfig(shopify.config)
+    const shopClaims = verifyShopifySessionToken(token, config)
     if (shopClaims) {
-      return resolveShopifySessionContext(shopify.directory, shopClaims)
+      return resolveShopifySessionContext(shopify.directory, shopClaims, request)
+    }
+    // The bearer looked like a Shopify session token but did not verify. Say
+    // exactly why (AUD_MISMATCH / INVALID_SIGNATURE / EXPIRED / …) so the
+    // production 401 is diagnosable from the server log alone.
+    if (looksLikeJwt(token)) {
+      const diagnostics = diagnoseSessionToken(token, config)
+      logAuthFailure(diagnostics.message, { code: diagnostics.code, reason: diagnostics.reason, path: request.path, method: request.method, requestId: request.header('x-request-id') ?? null })
     }
   }
   if (!options.auth) return null
@@ -347,9 +383,37 @@ async function authenticateBearer(options: Pick<SecurityOptions, 'auth' | 'shopi
  * first app load; the idempotent upsert keeps API calls self-sufficient if
  * that row is missing (e.g. the very first frame's parallel requests).
  */
-async function resolveShopifySessionContext(directory: StoreDirectory, shopClaims: ShopifySessionTokenClaims): Promise<AuthContext> {
-  const connection = (await directory.getByShopDomain(shopClaims.shop)) ?? (await directory.upsertByShopDomain(shopClaims.shop))
-  return { method: 'shopify-session-token', claims: { storeId: connection.storeId, sub: shopClaims.sub || shopClaims.shop }, session: null, shop: shopClaims.shop }
+async function resolveShopifySessionContext(directory: StoreDirectory, shopClaims: ShopifySessionTokenClaims, request?: Request): Promise<AuthContext | null> {
+  // The session token itself is already cryptographically verified at this
+  // point. A flaky Supabase pooler connection must therefore surface as a
+  // logged dependency problem, not as a silent "Session expired" — so every
+  // directory call is wrapped and the lookup/upsert are attempted
+  // independently.
+  const context = { path: request?.path ?? null, method: request?.method ?? null, requestId: request?.header('x-request-id') ?? null }
+  const existing = await safeDirectoryCall(() => directory.getByShopDomain(shopClaims.shop), 'getByShopDomain', context)
+  if (existing) return shopifyAuthContext(existing.storeId, shopClaims)
+  const created = await safeDirectoryCall(() => directory.upsertByShopDomain(shopClaims.shop), 'upsertByShopDomain', context)
+  if (created) return shopifyAuthContext(created.storeId, shopClaims)
+  logAuthFailure('Session token verified but the store row could not be resolved: STORE_NOT_FOUND', { code: 'STORE_NOT_FOUND', ...context })
+  return null
+}
+
+function shopifyAuthContext(storeId: StoreId, shopClaims: ShopifySessionTokenClaims): AuthContext {
+  return { method: 'shopify-session-token', claims: { storeId, sub: shopClaims.sub || shopClaims.shop }, session: null, shop: shopClaims.shop }
+}
+
+/** Runs a store-directory query defensively, logging (never throwing) on failure. */
+async function safeDirectoryCall<T>(run: () => Promise<T | null>, operation: string, context: Readonly<Record<string, unknown>>): Promise<T | null> {
+  try {
+    return await run()
+  } catch (error: unknown) {
+    logAuthFailure(`Store directory ${operation} failed: DB_UNAVAILABLE — ${error instanceof Error ? error.message : String(error)}`, { code: 'DB_UNAVAILABLE', operation, ...context })
+    return null
+  }
+}
+
+function looksLikeJwt(token: string): boolean {
+  return token.trim().split('.').length === 3
 }
 
 export function tenantContextMiddleware(requireAuthentication: boolean): RequestHandler {
@@ -361,9 +425,20 @@ export function tenantContextMiddleware(requireAuthentication: boolean): Request
     }
     const context = getAuthContext(request)
     if (!context) {
-      if (requireAuthentication) next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
-      else next()
+      if (requireAuthentication) {
+        logAuthFailure('Tenant request rejected: NO_AUTH_CONTEXT — no verified session token or JWT accompanied a storeId-scoped request', {
+          code: 'NO_AUTH_CONTEXT',
+          path: request.path,
+          method: request.method,
+          hasBearer: Boolean(request.header('authorization')),
+          requestId: request.header('x-request-id') ?? null,
+        })
+        next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
+      } else next()
       return
+    }
+    if (context.claims.storeId !== tenant) {
+      logAuthFailure('Tenant request rejected: TENANT_MISMATCH — the storeId in the request does not belong to the authenticated session', { code: 'TENANT_MISMATCH', path: request.path, method: request.method, authMethod: context.method, requestId: request.header('x-request-id') ?? null })
     }
     if (context.claims.storeId !== tenant) next(new AppError('FORBIDDEN', 'Tenant context does not match the authenticated session', 403))
     else next()

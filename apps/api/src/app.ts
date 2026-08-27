@@ -4,7 +4,7 @@ import type { Logger } from '@profitpilot/logger'
 import type { ErrorMonitor, ProductAnalytics } from '@profitpilot/monitoring'
 import { createLegalRouter } from './legal-routes.js'
 import type { LegalRouteDependencies } from './legal-routes.js'
-import { EndpointRateLimiter, captureRawBody, createSecurityRouter, authenticationMiddleware, corsMiddleware, csrfMiddleware, defaultSecurityOptions, getAuthContext, normalizeRequestError, rateLimitMiddleware, requestIdMiddleware, securityHeadersMiddleware, tenantContextMiddleware, tenantInputGuard } from './security.js'
+import { EndpointRateLimiter, captureRawBody, createSecurityRouter, authenticationMiddleware, corsMiddleware, csrfMiddleware, defaultSecurityOptions, getAuthContext, normalizeRequestError, rateLimitMiddleware, requestIdMiddleware, securityHeadersMiddleware, tenantContextMiddleware, tenantInputGuard, setAuthDiagnosticsLogger } from './security.js'
 import type { SecurityOptions } from './security.js'
 import { evaluateReadiness } from './readiness.js'
 import type { DependencyCheck } from './readiness.js'
@@ -53,6 +53,9 @@ export type ApiDependencies = Readonly<{ readinessChecks: readonly DependencyChe
 export function createApi(dependencies: ApiDependencies): Express {
   const app = express()
   const security = dependencies.security ?? defaultSecurityOptions()
+  // Route 401 diagnostics into the structured logger so Render/Railway logs
+  // state the exact verification failure (AUD_MISMATCH, EXPIRED, …).
+  setAuthDiagnosticsLogger((message, context) => dependencies.logger.warn(`[AuthError] ${message}`, JSON.parse(JSON.stringify(context)) as Record<string, never>))
   app.disable('x-powered-by')
   app.use(requestIdMiddleware())
   app.use((request, response, next) => {

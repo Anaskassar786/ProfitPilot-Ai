@@ -12,6 +12,26 @@ export interface OAuthStates {
   consume(token: string, shop: string): Promise<boolean>
 }
 
+/**
+ * Normalize a credential read from `process.env`.
+ *
+ * Render/Railway/Docker `.env` files routinely carry values that LOOK correct
+ * in a dashboard but are byte-wrong at runtime: a trailing newline pasted from
+ * a terminal, a wrapping pair of quotes copied from a `KEY="value"` line, or a
+ * stray space. Any of those makes the HMAC signature and the `aud` comparison
+ * fail with a generic 401 that is impossible to diagnose from the outside, so
+ * every read of SHOPIFY_API_KEY / SHOPIFY_API_SECRET / JWT_SECRET goes through
+ * this helper.
+ */
+export function sanitizeCredential(value: string | undefined | null): string {
+  if (typeof value !== 'string') return ''
+  let cleaned = value.replace(/[\r\n\t]/g, '').trim()
+  while (cleaned.length >= 2 && ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'")))) {
+    cleaned = cleaned.slice(1, -1).trim()
+  }
+  return cleaned
+}
+
 export function parseShopDomain(value: string): string {
   const normalized = value.trim().toLowerCase()
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalized)) {

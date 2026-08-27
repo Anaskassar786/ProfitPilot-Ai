@@ -119,12 +119,32 @@ function sendShopifyIndex(response: Response, indexPath: string, next: (error?: 
  * public client id already on the API process) lets App Bridge v4 boot and
  * mint session tokens. Never inject the API secret.
  */
-export function injectShopifyAppBridgeApiKey(html: string, apiKey = process.env.SHOPIFY_API_KEY ?? process.env.VITE_SHOPIFY_API_KEY ?? ''): string {
-  if (!html.includes('shopify-api-key') && !html.includes('%VITE_SHOPIFY_API_KEY%')) return html
-  const safe = apiKey.trim().replace(/[<>"'&]/g, '')
-  return html
+export function injectShopifyAppBridgeApiKey(html: string, apiKey = resolveAppBridgeApiKey()): string {
+  const safe = sanitizeApiKeyForHtml(apiKey)
+  const hasPlaceholder = html.includes('%VITE_SHOPIFY_API_KEY%') || html.includes('%SHOPIFY_API_KEY%')
+  if (!html.includes('shopify-api-key') && !hasPlaceholder) return html
+  const injected = html
     .replaceAll('%VITE_SHOPIFY_API_KEY%', safe)
-    .replace(/<meta\s+name="shopify-api-key"\s+content="[^"]*"\s*\/?>/i, `<meta name="shopify-api-key" content="${safe}" />`)
+    .replaceAll('%SHOPIFY_API_KEY%', safe)
+    // Rewrite the tag regardless of attribute order/quoting so a build-time
+    // baked (possibly empty or stale) value can never win over the runtime one.
+    .replace(/<meta\s+[^>]*name=(?:"shopify-api-key"|'shopify-api-key')[^>]*>/i, `<meta name="shopify-api-key" content="${safe}" />`)
+  if (injected.includes(`content="${safe}"`) || safe === '') return injected
+  // No meta tag existed at all: add one so App Bridge can boot.
+  return injected.replace(/<head(\s[^>]*)?>/i, (match) => `${match}<meta name="shopify-api-key" content="${safe}" />`)
+}
+
+/** Runtime source of truth for the public client id, sanitized on every read. */
+export function resolveAppBridgeApiKey(env: NodeJS.ProcessEnv = process.env): string {
+  return sanitizeApiKeyForHtml(env.SHOPIFY_API_KEY ?? env.VITE_SHOPIFY_API_KEY ?? '')
+}
+
+function sanitizeApiKeyForHtml(value: string): string {
+  let cleaned = value.replace(/[\r\n\t]/g, '').trim()
+  while (cleaned.length >= 2 && ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'")))) {
+    cleaned = cleaned.slice(1, -1).trim()
+  }
+  return cleaned.replace(/[<>"'&]/g, '')
 }
 
 export function isApiPath(requestPath: string): boolean {

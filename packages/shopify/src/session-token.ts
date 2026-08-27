@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { parseShopDomain, verifyOAuthHmac } from './oauth.js'
+import { parseShopDomain, sanitizeCredential, verifyOAuthHmac } from './oauth.js'
 
 /**
  * Verified identity of an embedded app request.
@@ -26,6 +26,11 @@ export type ShopifySessionTokenClaims = Readonly<{
 
 export type SessionTokenConfig = Readonly<{ apiKey: string; apiSecret: string }>
 
+/** Sanitize both halves of a session-token config in one call. */
+export function sanitizeSessionTokenConfig(config: Readonly<{ apiKey: string | undefined; apiSecret: string | undefined }>): SessionTokenConfig {
+  return { apiKey: sanitizeCredential(config.apiKey), apiSecret: sanitizeCredential(config.apiSecret) }
+}
+
 /** Clock skew tolerated when checking `exp`/`nbf`. Session tokens live ~60s. */
 const DEFAULT_LEEWAY_SECONDS = 10
 
@@ -37,8 +42,10 @@ const DEFAULT_LEEWAY_SECONDS = 10
  * authentic. Returns null rather than throwing: callers treat an unverifiable
  * token as "no identity" and fall back to a read-only lookup.
  */
-export function verifyShopifySessionToken(token: string, config: SessionTokenConfig, now: number = Date.now()): ShopifySessionTokenClaims | null {
-  const parts = token.split('.')
+export function verifyShopifySessionToken(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): ShopifySessionTokenClaims | null {
+  const config = sanitizeSessionTokenConfig(rawConfig)
+  if (!config.apiKey || !config.apiSecret) return null
+  const parts = token.trim().split('.')
   if (parts.length !== 3) return null
   const [encodedHeader, encodedPayload, signature] = parts
   if (!encodedHeader || !encodedPayload || !signature) return null
@@ -85,6 +92,7 @@ export type SessionTokenRejection =
   | 'expired'
   | 'not-yet-valid'
   | 'missing-shop'
+  | 'missing-credentials'
   | 'valid'
 
 /**
@@ -94,7 +102,9 @@ export type SessionTokenRejection =
  * (audience-mismatch) and "the merchant sat on the page for two minutes"
  * (expired) — three causes that previously produced one identical log line.
  */
-export function describeSessionTokenRejection(token: string, config: SessionTokenConfig, now: number = Date.now()): SessionTokenRejection {
+export function describeSessionTokenRejection(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): SessionTokenRejection {
+  const config = sanitizeSessionTokenConfig(rawConfig)
+  if (!config.apiKey || !config.apiSecret) return 'missing-credentials'
   const parts = token.trim().split('.')
   if (parts.length !== 3) return 'malformed'
   const [encodedHeader, encodedPayload, signature] = parts
@@ -177,4 +187,63 @@ function safeEqualString(left: string, right: string): boolean {
   const a = Buffer.from(left)
   const b = Buffer.from(right)
   return a.byteLength === b.byteLength && timingSafeEqual(a, b)
+}
+
+export type SessionTokenDiagnostics = Readonly<{
+  /** Machine-readable rejection reason (never contains secrets or PII). */
+  reason: SessionTokenRejection
+  /** Uppercase code used in log lines, e.g. AUD_MISMATCH / EXPIRED. */
+  code: string
+  /** One-line technical explanation safe for server logs. */
+  message: string
+}>
+
+const REJECTION_CODES: Readonly<Record<SessionTokenRejection, string>> = {
+  malformed: 'MALFORMED_JWT',
+  'unsupported-algorithm': 'UNSUPPORTED_ALG',
+  'signature-mismatch': 'INVALID_SIGNATURE',
+  'audience-mismatch': 'AUD_MISMATCH',
+  expired: 'EXPIRED',
+  'not-yet-valid': 'NOT_YET_VALID',
+  'missing-shop': 'MISSING_DEST_SHOP',
+  'missing-credentials': 'MISSING_CREDENTIALS',
+  valid: 'VALID',
+}
+
+/**
+ * Explain a session-token rejection in terms an operator can act on, WITHOUT
+ * logging merchant PII or key material. Only the app's own (public) client id
+ * and the token's `aud` claim — also a public client id — are echoed, plus
+ * relative expiry in seconds.
+ */
+export function diagnoseSessionToken(token: string, rawConfig: SessionTokenConfig, now: number = Date.now()): SessionTokenDiagnostics {
+  const config = sanitizeSessionTokenConfig(rawConfig)
+  const reason = describeSessionTokenRejection(token, config, now)
+  const code = REJECTION_CODES[reason]
+  const payload = decodeJsonSegment(token.trim().split('.')[1] ?? '')
+  switch (reason) {
+    case 'audience-mismatch': {
+      const aud = typeof payload?.aud === 'string' ? payload.aud : '(absent)'
+      return { reason, code, message: `JWT verification failed: AUD_MISMATCH expected ${config.apiKey} got ${aud} — SHOPIFY_API_KEY does not match the App Bridge client id that minted this token` }
+    }
+    case 'signature-mismatch':
+      return { reason, code, message: 'JWT verification failed: INVALID_SIGNATURE — SHOPIFY_API_SECRET does not match the app that minted this token' }
+    case 'expired': {
+      const exp = numberClaim(payload?.exp)
+      const ageSeconds = exp === null ? null : Math.floor(now / 1000) - exp
+      return { reason, code, message: `JWT verification failed: EXPIRED${ageSeconds === null ? '' : ` (${ageSeconds}s past exp)`} — App Bridge must mint a fresh id_token per request` }
+    }
+    case 'not-yet-valid':
+      return { reason, code, message: 'JWT verification failed: NOT_YET_VALID — server clock is ahead of Shopify by more than the allowed leeway' }
+    case 'unsupported-algorithm':
+      return { reason, code, message: 'JWT verification failed: UNSUPPORTED_ALG — expected HS256 typ JWT' }
+    case 'missing-shop':
+      return { reason, code, message: 'JWT verification failed: MISSING_DEST_SHOP — the dest claim is not a valid *.myshopify.com domain' }
+    case 'missing-credentials':
+      return { reason, code, message: 'JWT verification failed: MISSING_CREDENTIALS — SHOPIFY_API_KEY / SHOPIFY_API_SECRET are empty after sanitization' }
+    case 'malformed':
+      return { reason, code, message: 'JWT verification failed: MALFORMED_JWT — the Authorization bearer is not a three-part base64url JWT' }
+    default:
+      return { reason, code, message: 'JWT verification succeeded' }
+  }
 }
