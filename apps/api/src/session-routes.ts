@@ -52,10 +52,14 @@ export function createSessionRouter(dependencies: SessionRouteDependencies): Rou
 
 async function resolveContext(directory: StoreDirectory, sessionToken: SessionTokenConfig | undefined, request: Request): Promise<SessionContext> {
   // 1. Embedded primary path: the App Bridge session token the fetch wrapper
-  //    attaches as a Bearer header. Verified, never trusted blind.
+  //    attaches as a Bearer header. Verified, never trusted blind. The
+  //    audience fallback mirrors the /api/* security middleware: a
+  //    signature-valid token with a stale `aud` still resolves its store from
+  //    the authenticated dest/iss claim (credential drift must not break the
+  //    bootstrap endpoint while /api/* keeps working).
   const bearer = bearerToken(request)
   if (bearer && sessionToken) {
-    const shopClaims = verifyShopifySessionToken(bearer, sessionToken)
+    const shopClaims = verifyShopifySessionToken(bearer, sessionToken, Date.now(), { allowAudienceFallback: true })
     if (shopClaims) {
       const connection = await directory.getByShopDomain(shopClaims.shop)
       if (connection) return { storeId: connection.storeId, shop: connection.shopDomain, installed: true }

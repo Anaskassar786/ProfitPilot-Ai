@@ -61,6 +61,87 @@ describe('verifyShopifySessionToken', () => {
   })
 })
 
+describe('audience-mismatch graceful fallback (stale SHOPIFY_API_KEY recovery)', () => {
+  const FALLBACK = { allowAudienceFallback: true } as const
+
+  it('accepts a signature-valid token whose aud drifted and flags the fallback', () => {
+    const claims = verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id' })), CONFIG, NOW, FALLBACK)
+    expect(claims?.shop).toBe('commander-pilot.myshopify.com')
+    expect(claims?.aud).toBe('rotated-client-id')
+    expect(claims?.audienceFallback).toBe(true)
+  })
+
+  it('keeps strict rejection as the default when the flag is absent', () => {
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id' })), CONFIG, NOW)).toBeNull()
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id' })), CONFIG, NOW, {})).toBeNull()
+    // A fully matching token verifies with or without the flag, unflagged.
+    const claims = verifyShopifySessionToken(sign(validPayload()), CONFIG, NOW, {})
+    expect(claims?.shop).toBe('commander-pilot.myshopify.com')
+    expect(claims?.audienceFallback).toBeUndefined()
+  })
+
+  it('never relaxes the signature check — forged tokens are still rejected', () => {
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id' }), 'attacker-secret'), CONFIG, NOW, FALLBACK)).toBeNull()
+  })
+
+  it('still enforces expiry and not-before on fallback tokens', () => {
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id', exp: SECONDS - 30 })), CONFIG, NOW, FALLBACK)).toBeNull()
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id', nbf: SECONDS + 600 })), CONFIG, NOW, FALLBACK)).toBeNull()
+  })
+
+  it('resolves the shop from the authenticated iss claim when dest is unusable', () => {
+    const claims = verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id', dest: 'https://evil.example.com' })), CONFIG, NOW, FALLBACK)
+    expect(claims?.shop).toBe('commander-pilot.myshopify.com')
+    expect(claims?.audienceFallback).toBe(true)
+  })
+
+  it('never falls back to iss in strict mode', () => {
+    expect(verifyShopifySessionToken(sign(validPayload({ dest: 'https://evil.example.com' })), CONFIG, NOW)).toBeNull()
+  })
+
+  it('rejects a fallback token that carries neither a usable dest nor iss', () => {
+    expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id', dest: 'https://evil.example.com', iss: 'https://evil.example.com/admin' })), CONFIG, NOW, FALLBACK)).toBeNull()
+  })
+
+  it('logs the fallback with aud_received, key_expected and shop', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setSessionTokenVerificationLogger((message, context) => logs.push({ message, context }))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload({ aud: 'rotated-client-id' })), CONFIG, NOW, FALLBACK)).not.toBeNull()
+      const fallback = logs.find((entry) => entry.message.startsWith('[AuthDiagnostic] Session token audience fallback'))
+      expect(fallback).toBeDefined()
+      expect(fallback?.context).toMatchObject({ aud_received: 'rotated-client-id', key_expected: API_KEY, shop: 'commander-pilot.myshopify.com', reason: 'audience-mismatch-fallback' })
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+
+  it('enriches failure diagnostics with aud_received, key_expected and shop', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setSessionTokenVerificationLogger((message, context) => logs.push({ message, context }))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload({ exp: SECONDS - 30 })), CONFIG, NOW)).toBeNull()
+      expect(logs[0]?.context).toMatchObject({ aud_received: API_KEY, key_expected: API_KEY, shop: 'https://commander-pilot.myshopify.com' })
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+
+  it('never echoes unauthenticated claims in the signature-mismatch context', async () => {
+    const { setSessionTokenVerificationLogger } = await import('./session-token.js')
+    const logs: Array<{ message: string; context: Readonly<Record<string, unknown>> }> = []
+    setSessionTokenVerificationLogger((message, context) => logs.push({ message, context }))
+    try {
+      expect(verifyShopifySessionToken(sign(validPayload(), 'attacker-secret'), CONFIG, NOW)).toBeNull()
+      expect(logs[0]?.context).toMatchObject({ aud_received: null, key_expected: API_KEY, shop: null })
+    } finally {
+      setSessionTokenVerificationLogger(null)
+    }
+  })
+})
+
 describe('verifyEmbeddedRequest', () => {
   it('identifies the shop from a session token on the app-load URL', () => {
     const identity = verifyEmbeddedRequest({ id_token: sign(validPayload()), shop: 'commander-pilot.myshopify.com' }, CONFIG, undefined, NOW)
