@@ -10,7 +10,7 @@ import { sanitizeCredential } from '@profitpilot/shopify'
 import { securityOptionsFromEnv } from './security.js'
 import type { SecurityOptions } from './security.js'
 
-export type F7Bootstrap = Readonly<F6Bootstrap & { legal: LegalRouteDependencies; accessReview: AccessReviewService; security: SecurityOptions }>
+export type F7Bootstrap = Readonly<F6Bootstrap & { legal: LegalRouteDependencies; accessReview: AccessReviewService; security: SecurityOptions; sessionCookieSecret: string }>
 
 export function createF7Bootstrap(env: Readonly<Record<string, string | undefined>>): F7Bootstrap | null {
   const f6 = createF6Bootstrap(env)
@@ -29,8 +29,20 @@ export function createF7Bootstrap(env: Readonly<Record<string, string | undefine
   const shopifySessionToken = apiKey && apiSecret
     ? { config: { apiKey, apiSecret }, directory: f6.storeDirectory }
     : undefined
-  const security = securityOptionsFromEnv(env, auth, shopifySessionToken)
-  return { ...f6, legal: { config: legalConfigFromEnv(env) }, accessReview: new AccessReviewService(new PostgresAccessReviewRepository(f6.database)), security }
+  // Signed tenant cookie: the credential the API can verify when App Bridge
+  // cannot mint a session token (standalone tab, blocked CDN, preview iframe).
+  // It is sealed with JWT_SECRET and only trusted when that secret is real
+  // (never the public development placeholder — see sessionCookieAuthEnabled).
+  const sessionCookieSecret = sanitizeCredential(env.SESSION_COOKIE_SECRET) || sanitizeCredential(env.JWT_SECRET)
+  const sessionCookie = sessionCookieSecret ? { secret: sessionCookieSecret, directory: f6.storeDirectory } : undefined
+  const security = securityOptionsFromEnv(env, auth, shopifySessionToken, sessionCookie)
+  return {
+    ...f6,
+    legal: { config: legalConfigFromEnv(env) },
+    accessReview: new AccessReviewService(new PostgresAccessReviewRepository(f6.database)),
+    security,
+    sessionCookieSecret,
+  }
 }
 
 function positiveNumber(value: string | undefined, fallback: number): number {

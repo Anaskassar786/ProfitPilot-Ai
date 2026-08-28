@@ -109,6 +109,7 @@ import {
   workspaceContext,
 } from './model.js'
 import type { ChartPeriod } from './model.js'
+import { navigateTopLevel } from './shopify-app-bridge.js'
 import { greetingForHour } from './recommendations-model.js'
 import { useModalDialog } from './modal-a11y.js'
 import { DashboardLayout } from './dashboard.js'
@@ -234,7 +235,8 @@ type NavItem = Readonly<{ id: SectionId; label: string; icon: SectionIcon; devOn
 type LoadState = 'idle' | 'loading' | 'ready' | 'partial' | 'offline'
 type ToastKind = 'success' | 'info' | 'warning' | 'error'
 const syncModules = ['products', 'orders', 'customers', 'inventory', 'collections', 'discounts'] as const
-type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number]; status: 'syncing' | 'succeeded' | 'failed'; detail: string }>
+/** `sync-all` is the request itself failing (auth/network) — no module ran, so no module should be blamed. */
+type SyncModuleProgress = Readonly<{ module: (typeof syncModules)[number] | 'sync-all'; status: 'syncing' | 'succeeded' | 'failed'; detail: string }>
 
 type WorkspaceData = Readonly<{ analytics: AnalyticsSnapshot | null; catalog: readonly CatalogProduct[]; agents: readonly AgentStatus[]; recommendations: readonly Recommendation[]; inventory: InventoryPageResult | null; loadState: LoadState; error: string | null }>
 
@@ -385,7 +387,18 @@ export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   const [verifyingSubscription, setVerifyingSubscription] = useState(false)
   const [sessionError, setSessionError] = useState<string | null>(null)
-  const context: WorkspaceContext = { storeId: urlContext.storeId ?? resolvedContext.storeId, shop: urlContext.shop ?? resolvedContext.shop }
+  // `authenticated` comes only from `/session/context` — the server is the sole
+  // authority on whether this session carries a verified credential. A context
+  // taken straight from the URL (post-OAuth redirect) has no server answer, so
+  // it keeps the previous optimistic behaviour instead of claiming a dead
+  // data plane is healthy.
+  const context: WorkspaceContext = {
+    storeId: urlContext.storeId ?? resolvedContext.storeId,
+    shop: urlContext.shop ?? resolvedContext.shop,
+    authenticated: resolvedContext.storeId !== null ? resolvedContext.authenticated === true : true,
+  }
+  /** The store is known but the API holds no verified credential for it. */
+  const unauthorizedStore = Boolean(context.storeId) && context.authenticated === false
   /** True only when the bootstrap settled and the app is genuinely not
    * connected: no tenant row AND no shop known from the URL/API. */
   const showConnect = authState === 'ready' && !context.storeId && !context.shop
@@ -779,7 +792,11 @@ export default function App() {
       await loadData()
     } catch (error: unknown) {
       const message = errorMessage(error)
-      setSyncProgress(syncModules.map((module) => ({ module, status: 'failed', detail: message })))
+      // The whole request failed (auth, network, server) — BEFORE any module
+      // ran. Painting all six modules red with one identical message read like
+      // "every Shopify module is broken" and sent merchants chasing six
+      // phantom problems. One row, one message, one cause.
+      setSyncProgress([{ module: 'sync-all', status: 'failed', detail: message }])
       showToast(message, 'error')
     } finally {
       setSyncAllRunning(false)
@@ -848,6 +865,11 @@ export default function App() {
                     The session banner auto-clears on the next successful API
                     call (or via onDismiss), so it can never stay stuck. */}
                 {sessionError && <SessionExpiredBanner message={sessionError} onDismiss={() => setSessionError(null)} />}
+                {/* The store resolves but the API holds no verified credential:
+                    every data call is about to 401. Say that once, at the top,
+                    with the re-authorization as the primary action — instead of
+                    a green "data plane ready" pill above a wall of empty cards. */}
+                {unauthorizedStore && !sessionError && <UnauthorizedStoreBanner onReconnect={() => { if (!triggerEmbeddedReinstallRedirect()) window.location.reload() }} />}
                 {showConnect && <ContextBanner onConnect={() => setOnboardingOpen(true)} />}
                 {authState === 'ready' && !context.storeId && context.shop && !sessionError && <ContextPendingBanner shop={context.shop} />}
                 {authState === 'unavailable' && !context.storeId && <ContextLoadErrorBanner onRetry={retryContext} />}
@@ -1049,13 +1071,19 @@ function DashboardPage({
       : displayName
         ? `${greeting}, ${displayName}`
         : greeting
-  const greetingDescription = context.storeId
-    ? (displayName
-        ? 'Welcome back — your workspace is ready for real Shopify data.'
-        : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.')
-    : showConnect
-      ? 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
-      : 'Looking for your Shopify store — your workspace will appear here in a moment.'
+  // The store is known but the API has no verified credential for it, so every
+  // data call is about to 401. Saying "your workspace is ready" here was the
+  // original lie: it made a credential outage look like an empty store.
+  const unauthorized = Boolean(context.storeId) && context.authenticated === false
+  const greetingDescription = unauthorized
+    ? 'Shopify has not authorized this session yet. Reconnect the app to restore the live data plane.'
+    : context.storeId
+      ? (displayName
+          ? 'Welcome back — your workspace is ready for real Shopify data.'
+          : 'Your workspace is ready for real Shopify data. Start a sync to build the first analytics snapshot.')
+      : showConnect
+        ? 'ProfitPilot never invents store numbers. Connect Shopify to unlock the live data plane.'
+        : 'Looking for your Shopify store — your workspace will appear here in a moment.'
 
   return (
     <PageLayout
@@ -1078,9 +1106,10 @@ function DashboardPage({
           <span />
         </span>
         <span>
-          <strong>{context.storeId ? 'Shopify data plane ready' : 'Waiting for store context…'}</strong> · {latestSyncLabel(data.analytics)}
+          <strong>{!context.storeId ? 'Waiting for store context…' : unauthorized ? 'Shopify authorization required' : 'Shopify data plane ready'}</strong> · {unauthorized ? 'No verified session credential' : latestSyncLabel(data.analytics)}
         </span>
-        {context.storeId && <Button onClick={() => void onSync('orders')}>Sync orders <ArrowUpRight size={13} /></Button>}
+        {context.storeId && !unauthorized && <Button onClick={() => void onSync('orders')}>Sync orders <ArrowUpRight size={13} /></Button>}
+        {context.storeId && unauthorized && <Button className="button primary" onClick={() => void triggerEmbeddedReinstallRedirect()}>Reconnect Shopify <ArrowUpRight size={13} /></Button>}
       </div>
       {syncProgress.length > 0 && <SyncAllProgress modules={syncProgress} dismissing={!!syncDismissing} />}
       <DashboardLayout
@@ -1107,7 +1136,7 @@ function SyncAllProgress({ modules, dismissing }: { modules: readonly SyncModule
         <div key={item.module} className={`sync-module ${item.status}`} title={item.detail}>
           {item.status === 'succeeded' ? <CheckCircle2 size={13} /> : item.status === 'failed' ? <AlertCircle size={13} /> : <RefreshCw className="spin" size={13} />}
           <span>
-            <strong>{item.module}</strong>
+            <strong>{item.module === 'sync-all' ? 'Sync request' : item.module}</strong>
             <small>{item.detail}</small>
           </span>
         </div>
@@ -1896,6 +1925,27 @@ function SessionExpiredBanner({ message, onDismiss }: { message: string; onDismi
   )
 }
 
+/**
+ * The store row resolves (so the shell knows WHICH store it is for) but the API
+ * has no verified credential for this session, so every `?storeId=` call is
+ * about to answer 401 "Authentication is required".
+ *
+ * This banner is the honest version of what the dashboard used to hide behind
+ * "Shopify data plane ready": the workspace is NOT ready, and the fix is
+ * re-authorization — not a reload, and not a sync.
+ */
+function UnauthorizedStoreBanner({ onReconnect }: { onReconnect: () => void }) {
+  return (
+    <Banner tone="critical" title="Shopify authorization required">
+      <p>
+        ProfitPilot knows this store, but Shopify has not verified this session — so products, orders, customers, inventory,
+        collections and discounts cannot be read yet. Re-authorizing the app restores access without touching your data.
+      </p>
+      <Button onClick={onReconnect}>Reconnect Shopify</Button>
+    </Banner>
+  )
+}
+
 /** Installed merchant (shop known) whose tenant row hasn't resolved yet. */
 function ContextPendingBanner({ shop }: { shop: string }) {
   return <div className="context-banner"><span className="context-banner-icon"><Server size={16} /></span><span><strong>Restoring your store context…</strong> {shop} is installed — reloading the app restores it.</span><Button onClick={() => window.location.reload()}>Reload the app <RotateCcw size={13} /></Button></div>
@@ -1933,7 +1983,7 @@ function OnboardingModal({ onClose }: { onClose: () => void }) { const [shop, se
     // install URL to the top-level window instead; the post-OAuth return
     // re-enters the admin embed. window.open with `_top` is the bridge-free,
     // user-gesture-safe way to do that from a cross-origin iframe.
-    window.open(installUrl, '_top', 'noopener')
+    navigateTopLevel(installUrl)
   } else { // Standalone top window (window.top === window.self): a plain
     // same-window navigation to the install endpoint is the normal OAuth
     // handoff.

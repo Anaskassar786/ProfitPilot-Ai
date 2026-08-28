@@ -40,6 +40,62 @@ export function setSessionCookie(response: Response, sessionValue: string): void
   response.append('Set-Cookie', serializeCookie(SESSION_COOKIE_NAME, sessionValue, sessionCookieOptions()))
 }
 
+/**
+ * Signs the tenant id before it goes into the session cookie.
+ *
+ * The cookie used to carry a bare `storeId`, which is fine for the *bootstrap*
+ * lookup (`/session/context` only reads it) but useless as an authentication
+ * credential: `storeId` values appear in URLs (the post-OAuth redirect carries
+ * `?storeId=…`), so trusting an unsigned cookie would let anyone impersonate a
+ * tenant by setting one. Signing it with a server-only secret turns the cookie
+ * into something the API can actually verify.
+ *
+ * The format is `<storeId>.<base64url HMAC-SHA256>`; `verifySessionValue`
+ * splits on the LAST dot so a dotted storeId stays intact.
+ */
+export function signSessionValue(secret: string, value: string): string {
+  if (!secret.trim()) throw new TypeError('Session cookie secret is required')
+  return `${value}.${signSession(secret, value)}`
+}
+
+/**
+ * Returns the tenant id when `signed` carries a valid signature, otherwise
+ * null. Never throws: an old unsigned cookie simply fails verification and the
+ * caller falls back to its unauthenticated path (no merchant is locked out by
+ * a deploy that rotates this format).
+ */
+export function verifySessionValue(secret: string, signed: string): string | null {
+  if (!secret.trim()) return null
+  const separator = signed.lastIndexOf('.')
+  if (separator <= 0 || separator === signed.length - 1) return null
+  const value = signed.slice(0, separator)
+  const signature = signed.slice(separator + 1)
+  const expected = signSession(secret, value)
+  const left = Buffer.from(signature)
+  const right = Buffer.from(expected)
+  return left.byteLength === right.byteLength && timingSafeEqual(left, right) ? value : null
+}
+
+function signSession(secret: string, value: string): string {
+  return createHmac('sha256', secret).update(value, 'utf8').digest('base64url')
+}
+
+/**
+ * Writes the tenant id to the session cookie in its SIGNED form. Every writer
+ * (OAuth callback, embedded app load) must use this so the credential the
+ * authentication middleware verifies is the one it was given.
+ */
+export function setSignedSessionCookie(response: Response, storeId: string, secret: string): void {
+  try {
+    setSessionCookie(response, signSessionValue(secret, storeId))
+  } catch {
+    // A missing secret must never break the OAuth callback or the app load:
+    // fall back to the unsigned cookie, which still serves the bootstrap
+    // lookup (it just cannot authenticate the data plane).
+    setSessionCookie(response, storeId)
+  }
+}
+
 export function setCsrfCookie(response: Response, token: string): void {
   response.append('Set-Cookie', serializeCookie(CSRF_COOKIE_NAME, token, csrfCookieOptions()))
 }

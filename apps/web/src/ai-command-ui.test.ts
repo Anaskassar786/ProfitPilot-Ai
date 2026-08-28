@@ -186,7 +186,10 @@ describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
       // Embedded: window.top !== window.self, so the top frame must navigate.
       globals.window = { top: { name: 'top' }, self: { name: 'self' }, open, location: { assign } }
       startReauthorize('/shopify/install?shop=demo.myshopify.com')
-      expect(open).toHaveBeenCalledWith('/shopify/install?shop=demo.myshopify.com', '_top', 'noopener')
+      // Two arguments only: `noopener` must never be passed for a `_top`
+      // navigation — it forces window.open to return null, which callers read
+      // as "the navigation was blocked" even though it was dispatched.
+      expect(open).toHaveBeenCalledWith('/shopify/install?shop=demo.myshopify.com', '_top')
       expect(assign).not.toHaveBeenCalled()
 
       // Standalone: a plain same-window navigation.
@@ -202,7 +205,7 @@ describe('Missing Shopify permission block (403 / ACCESS_DENIED)', () => {
       const openAnchored = vi.fn()
       globals.window = { top: { name: 'top' }, self: { name: 'self' }, open: openAnchored, location: { href: 'https://profitpilot.app/?host=YWJj' } }
       startReauthorize('/shopify/install?shop=demo.myshopify.com')
-      expect(openAnchored).toHaveBeenCalledWith('https://profitpilot.app/shopify/install?shop=demo.myshopify.com', '_top', 'noopener')
+      expect(openAnchored).toHaveBeenCalledWith('https://profitpilot.app/shopify/install?shop=demo.myshopify.com', '_top')
     } finally {
       if (original === undefined) delete globals.window
       else globals.window = original

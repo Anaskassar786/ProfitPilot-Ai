@@ -9,7 +9,7 @@ import type { SessionTokenConfig, ShopifySessionTokenClaims } from '@profitpilot
 import type { JwtClaims } from './auth.js'
 import { JwtService } from './auth.js'
 import type { SessionRecord, SessionRepository, StoreDirectory } from '@profitpilot/db'
-import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, createCsrfToken, parseCookies, setCsrfCookie, verifyCsrfToken } from './cookies.js'
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, createCsrfToken, parseCookies, setCsrfCookie, verifyCsrfToken, verifySessionValue } from './cookies.js'
 
 export type EndpointRateRule = Readonly<{ limit: number; windowMs: number }>
 export type RateLimitDecision = Readonly<{ allowed: boolean; limit: number; remaining: number; retryAfterMs: number }>
@@ -23,9 +23,15 @@ export type RateLimitDecision = Readonly<{ allowed: boolean; limit: number; rema
  *   merchants send as `Authorization: Bearer …`. Verified with the app's API
  *   secret; the `dest` claim maps to the store row. There is no app session
  *   row, so `session` is null.
+ * - `session-cookie` — the HMAC-signed `profitpilot_session` cookie set at
+ *   OAuth/embedded-app-load time. Only accepted when NO bearer was sent, so it
+ *   can never mask a rejected session token (an AUD_MISMATCH or
+ *   INVALID_SIGNATURE must stay visible in the log). It exists so contexts
+ *   where App Bridge cannot mint a token — a standalone tab, a blocked CDN
+ *   script, a preview iframe — are not a permanent dead end.
  */
 export type AuthContext = Readonly<{
-  method: 'jwt' | 'shopify-session-token'
+  method: 'jwt' | 'shopify-session-token' | 'session-cookie'
   claims: Readonly<{ storeId: StoreId; sub: string }>
   session: SessionRecord | null
   shop: string | null
@@ -39,6 +45,13 @@ export type SecurityAuth = Readonly<{ jwt: JwtService; sessions: SessionReposito
  */
 export type SecurityShopifySessionToken = Readonly<{ config: SessionTokenConfig; directory: StoreDirectory }>
 
+/**
+ * Signed-tenant-cookie authentication. `secret` signs the cookie and
+ * `directory` re-resolves the tenant on every request, so a cookie for a store
+ * that no longer exists (or was uninstalled) stops authenticating immediately.
+ */
+export type SecuritySessionCookie = Readonly<{ secret: string; directory: StoreDirectory }>
+
 export type SecurityOptions = Readonly<{
   environment: string
   allowedOrigins: readonly string[]
@@ -46,6 +59,7 @@ export type SecurityOptions = Readonly<{
   csrfSecret: string
   auth?: SecurityAuth
   shopifySessionToken?: SecurityShopifySessionToken
+  sessionCookie?: SecuritySessionCookie
   rateLimiter?: EndpointRateLimiter
 }>
 
@@ -136,7 +150,14 @@ export class EndpointRateLimiter {
   }
 }
 
-export function securityOptionsFromEnv(env: Readonly<Record<string, string | undefined>>, auth?: SecurityAuth, shopifySessionToken?: SecurityShopifySessionToken): SecurityOptions {
+/**
+ * Placeholder `csrfSecret` used by `defaultSecurityOptions()`. It is public
+ * (it ships in this file), so a signed session cookie sealed with it proves
+ * nothing — cookie authentication stays disabled whenever this is the secret.
+ */
+export const DEVELOPMENT_CSRF_SECRET = 'development-csrf-secret-change-me'
+
+export function securityOptionsFromEnv(env: Readonly<Record<string, string | undefined>>, auth?: SecurityAuth, shopifySessionToken?: SecurityShopifySessionToken, sessionCookie?: SecuritySessionCookie): SecurityOptions {
   const environment = env.NODE_ENV?.trim() || 'development'
   const allowedOrigins = unique([
     ...splitCsv(env.CORS_ALLOWED_ORIGINS),
@@ -157,7 +178,22 @@ export function securityOptionsFromEnv(env: Readonly<Record<string, string | und
     csrfSecret: sanitizeCredential(env.CSRF_SECRET) || sanitizeCredential(env.JWT_SECRET) || 'development-csrf-secret-change-me',
     rateLimiter: new EndpointRateLimiter({ limit: numberEnv(env, 'RATE_LIMIT_DEFAULT', 120), windowMs: numberEnv(env, 'RATE_LIMIT_WINDOW_MS', 60_000) }),
   }
-  return { ...base, ...(auth ? { auth } : {}), ...(shopifySessionToken ? { shopifySessionToken: withAudienceAliases(shopifySessionToken, env) } : {}) }
+  return {
+    ...base,
+    ...(auth ? { auth } : {}),
+    ...(shopifySessionToken ? { shopifySessionToken: withAudienceAliases(shopifySessionToken, env) } : {}),
+    ...(sessionCookie && sessionCookieAuthEnabled(sessionCookie.secret) ? { sessionCookie } : {}),
+  }
+}
+
+/**
+ * A signed cookie is only a credential when it was sealed with a real secret.
+ * The development placeholder is hardcoded in this module, so trusting it
+ * would let anyone forge a tenant cookie against a misconfigured deploy.
+ */
+export function sessionCookieAuthEnabled(secret: string): boolean {
+  const cleaned = sanitizeCredential(secret)
+  return cleaned.length > 0 && cleaned !== DEVELOPMENT_CSRF_SECRET
 }
 
 /**
@@ -189,7 +225,7 @@ export function defaultSecurityOptions(): SecurityOptions {
     environment: 'development',
     allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     requireAuthentication: false,
-    csrfSecret: 'development-csrf-secret-change-me',
+    csrfSecret: DEVELOPMENT_CSRF_SECRET,
     rateLimiter: new EndpointRateLimiter(),
   }
 }
@@ -337,7 +373,7 @@ export function assertSafeTenantValue(value: string): void {
   }
 }
 
-export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' | 'requireAuthentication' | 'shopifySessionToken'>): RequestHandler {
+export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' | 'requireAuthentication' | 'shopifySessionToken' | 'sessionCookie'>): RequestHandler {
   return (request, _response, next): void => {
     // /public-api/* carries its own Bearer credential (Insights Hub API
     // keys, PR #50); JWT session auth must not consume those requests.
@@ -348,8 +384,22 @@ export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' |
       if (options.requireAuthentication && hasTenant) next(new AppError('UNAUTHORIZED', 'Authentication is required', 401))
       else next()
     }
+    const finish = (context: AuthContext | null): void => {
+      if (context) (request as RequestWithAuth).profitPilotAuth = context
+      next()
+    }
     if (!token) {
-      unauthenticated()
+      // NO bearer at all — App Bridge cannot or did not mint one (standalone
+      // tab, blocked CDN script, preview iframe, non-embedded dev). Fall back
+      // to the signed tenant cookie so those contexts are not a permanent dead
+      // end; a request with no credential of any kind still 401s below.
+      //
+      // Deliberately NOT reached when a bearer WAS sent but failed: falling
+      // back there would silently paper over AUD_MISMATCH /
+      // INVALID_SIGNATURE and hide the very drift the log exists to expose.
+      void authenticateSessionCookie(options, request)
+        .then(finish)
+        .catch(() => unauthenticated())
       return
     }
     // An unverifiable bearer is treated exactly like a missing one: 401 when
@@ -358,12 +408,61 @@ export function authenticationMiddleware(options: Pick<SecurityOptions, 'auth' |
     // an expired or stale token from hard-failing requests that the cookie
     // path could still serve.
     void authenticateBearer(options, token, request)
-      .then((context) => {
-        if (context) (request as RequestWithAuth).profitPilotAuth = context
-        next()
-      })
+      .then(finish)
       .catch(() => unauthenticated())
   }
+}
+
+/**
+ * Authenticates a request from the HMAC-signed `profitpilot_session` cookie.
+ *
+ * Three independent checks, all mandatory:
+ *   1. the signature verifies against `sessionCookie.secret`
+ *      (`sessionCookieAuthEnabled` already rejected the public dev placeholder);
+ *   2. the signed storeId still resolves to a real store row — a cookie for an
+ *      uninstalled or deleted tenant stops authenticating at once; and
+ *   3. the request never carried an `Authorization` header (enforced by the
+ *      caller), so this path can never mask a rejected session token.
+ *
+ * Returns null (never throws for credential-shaped failures) when any check
+ * fails, which leaves the request to the existing unauthenticated path.
+ */
+async function authenticateSessionCookie(options: Pick<SecurityOptions, 'sessionCookie'>, request: Request): Promise<AuthContext | null> {
+  const dependency = options.sessionCookie
+  if (!dependency) return null
+  // Belt and braces: `securityOptionsFromEnv` already drops a placeholder
+  // secret, but a hand-built SecurityOptions (tests, future callers) must not
+  // be able to enable cookie auth with the public development value either.
+  if (!sessionCookieAuthEnabled(dependency.secret)) return null
+  const cookies = parseCookies(request.header('cookie'))
+  const signed = cookies[SESSION_COOKIE_NAME]?.trim() ?? ''
+  if (!signed) return null
+  const storeId = verifySessionValue(dependency.secret, signed)
+  if (!storeId) return null
+  let connection
+  try {
+    connection = await dependency.directory.get(storeId as StoreId)
+  } catch (error: unknown) {
+    logAuthFailure('Session cookie tenant lookup failed: DB_UNAVAILABLE', {
+      code: 'DB_UNAVAILABLE',
+      path: request.path,
+      method: request.method,
+      requestId: request.header('x-request-id') ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+  if (!connection) {
+    logAuthFailure('Session cookie signed correctly but the store row no longer exists: STORE_NOT_FOUND', {
+      code: 'STORE_NOT_FOUND',
+      authMethod: 'session-cookie',
+      path: request.path,
+      method: request.method,
+      requestId: request.header('x-request-id') ?? null,
+    })
+    return null
+  }
+  return { method: 'session-cookie', claims: { storeId: connection.storeId, sub: connection.storeId }, session: null, shop: connection.shopDomain }
 }
 
 /**

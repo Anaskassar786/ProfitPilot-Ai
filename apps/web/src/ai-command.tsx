@@ -921,7 +921,10 @@ export function startReauthorize(url: string | null): void {
   }
   let embedded = false
   try { embedded = window.top !== window.self } catch { embedded = true }
-  if (embedded) window.open(target, '_top', 'noopener')
+  // Same rule as navigateTopLevel: never pass `noopener` for a `_top`
+  // navigation — it forces window.open to return null, which callers read as
+  // "the navigation was blocked" when it was in fact dispatched.
+  if (embedded) window.open(target, '_top')
   else window.location.assign(target)
 }
 

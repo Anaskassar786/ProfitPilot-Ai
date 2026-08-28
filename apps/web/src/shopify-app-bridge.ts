@@ -240,8 +240,20 @@ export function navigateTopLevel(url: string): boolean {
     // through to the standards-based top-level escape below.
   }
   try {
-    const opened = window.open(url, '_top', 'noopener')
-    if (opened) return true
+    // NO `noopener` here — it is not a hardening measure for `_top`, it is a
+    // bug. Per MDN (`Window.open()` → noopener): "If this feature is set, the
+    // new window will not have access to the originating window via
+    // Window.opener and returns null." A `null` return therefore means
+    // "noopener was requested", NOT "a popup blocker stopped us" — the old
+    // `if (opened) return true` could never pass, so every automatic 401
+    // re-auth was reported as failed and the merchant was dropped on the
+    // static red "Session expired" card this function exists to prevent.
+    //
+    // `_top` navigates the existing top-level frame rather than opening a
+    // popup, so a null return is still a dispatched navigation: report it as
+    // one and let the caller suppress its fallback banner.
+    window.open(url, '_top')
+    return true
   } catch {
     // window.open can throw in hardened embeds — no surface left to reach
     // the top frame, so the caller keeps the manual re-auth banner.

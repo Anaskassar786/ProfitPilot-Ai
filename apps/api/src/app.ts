@@ -99,7 +99,7 @@ export function createApi(dependencies: ApiDependencies): Express {
   // neither a real endpoint nor an unknown API URL can return index.html.
   app.use(createSecurityRouter({ environment: security.environment, csrfSecret: security.csrfSecret }))
   if (dependencies.legal) app.use(createLegalRouter(dependencies.legal))
-  if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter({ ...dependencies.shopify, logger: dependencies.logger }))
+  if (dependencies.shopify) app.use('/shopify', createShopifyInstallRouter({ ...dependencies.shopify, logger: dependencies.logger, sessionCookieSecret: dependencies.security?.sessionCookie?.secret }))
   if (dependencies.session) app.use(createSessionRouter(dependencies.session))
   if (dependencies.dataPlane) app.use(createDataPlaneRouter(dependencies.dataPlane))
   if (dependencies.analytics) app.use(createAnalyticsRouter(dependencies.analytics))

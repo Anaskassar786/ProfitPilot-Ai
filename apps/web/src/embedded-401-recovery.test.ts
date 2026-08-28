@@ -143,16 +143,33 @@ describe('top-level reinstall redirect', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
     try {
       expect(triggerEmbeddedReinstallRedirect()).toBe(true)
-      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top', 'noopener')
+      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top')
     } finally {
       restore()
     }
   })
 
-  it('reports failure when window.open is popup-blocked (returns null) instead of claiming success', () => {
+  it('treats a null window.open(_top) return as dispatched, so the banner stays suppressed', () => {
+    // `_top` navigates the existing frame instead of opening a popup, and
+    // `noopener` (previously passed here) forces a null return. Reading null
+    // as "blocked" reported failure for navigation that had in fact been
+    // dispatched, which latched the static red "Session expired" card.
     window.history.replaceState({}, '', `/?shop=commander-pilot.myshopify.com&host=${HOST}`)
     const restore = simulateEmbeddedIframe()
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    try {
+      expect(triggerEmbeddedReinstallRedirect()).toBe(true)
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(open.mock.calls[0]).toHaveLength(2)
+    } finally {
+      restore()
+    }
+  })
+
+  it('reports failure when the embed refuses the navigation outright (window.open throws)', () => {
+    window.history.replaceState({}, '', `/?shop=commander-pilot.myshopify.com&host=${HOST}`)
+    const restore = simulateEmbeddedIframe()
+    const open = vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('blocked by the embed') })
     try {
       expect(triggerEmbeddedReinstallRedirect()).toBe(false)
       expect(open).toHaveBeenCalledTimes(1)
@@ -226,16 +243,16 @@ describe('401 auto-recovery in the central fetcher', () => {
       // merchant is NEVER shown the static "Authentication is required" card.
       expect(failures).toHaveLength(0)
       expect(open).toHaveBeenCalledTimes(1)
-      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top', 'noopener')
+      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top')
     } finally {
       restore()
     }
   })
 
-  it('latches the banner as the fallback when the top-level navigation is popup-blocked', async () => {
+  it('latches the banner as the fallback when no navigation surface can be reached', async () => {
     window.history.replaceState({}, '', `/?shop=commander-pilot.myshopify.com&host=${HOST}`)
     const restore = simulateEmbeddedIframe()
-    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const open = vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('blocked by the embed') })
     const failures: string[] = []
     setEmbeddedAuthFailureHandler((message) => failures.push(message))
     try {
@@ -260,7 +277,7 @@ describe('401 auto-recovery in the central fetcher', () => {
       await expect(requestJson('/session/context', {}, fetcher)).rejects.toMatchObject({ status: 404, code: 'STORE_NOT_FOUND' })
       expect(failures).toHaveLength(0)
       expect(open).toHaveBeenCalledTimes(1)
-      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top', 'noopener')
+      expect(open).toHaveBeenCalledWith(`${APP_ORIGIN}/shopify/install?shop=commander-pilot.myshopify.com`, '_top')
     } finally {
       restore()
     }
