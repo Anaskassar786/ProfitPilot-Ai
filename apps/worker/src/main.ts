@@ -4,8 +4,12 @@ import { WorkerRuntime } from './worker.js'
 import { createWorkerHealthServer } from './health.js'
 import { createInsightsDiscoveryRunner } from './insights-discovery-job.js'
 import { createBillingJobs } from './billing-job.js'
+import { enforceSecureTls } from '@profitpilot/monitoring'
 
 const logger = loggerFromEnv(process.env)
+// Must run before any outbound HTTPS call so a leftover NODE_TLS_REJECT_UNAUTHORIZED=0
+// in the deployment environment cannot disable certificate verification.
+enforceSecureTls(process.env, (message, context) => logger.error(message, context ?? {}))
 
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection in worker', {

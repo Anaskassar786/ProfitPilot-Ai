@@ -1,4 +1,5 @@
 export * from './monitor.js'
+export * from './tls.js'
 export * from './access-review.js'
 export * from './load.js'
 export * from './f9-controls.js'

@@ -75,10 +75,17 @@ Email send requires a verified merchant sender and a live SMTP (Brevo) response.
 ```
 AI_COMMAND_ENABLED=true
 AI_COMMAND_API_KEY=
-AI_COMMAND_MODEL_PRIMARY=meta-llama/llama-3.3-70b-instruct:free
-AI_COMMAND_MODEL_FALLBACK=google/gemma-2-9b-it:free
+AI_COMMAND_MODEL_PRIMARY=cohere/north-mini-code:free
+AI_COMMAND_MODEL_FALLBACK=google/gemma-4-26b-a4b-it:free
 AI_COMMAND_ACTIONS_ENABLED=true
 ```
+
+The two `AI_COMMAND_MODEL_*` slugs above were verified active on 2026-08-28
+against `https://openrouter.ai/api/v1/models/{id}/endpoints`. The values
+previously documented here (`meta-llama/llama-3.3-70b-instruct:free` and
+`google/gemma-2-9b-it:free`) are both dead — they return an empty endpoint list,
+which is the same failure that produced "every configured OpenRouter model is
+unavailable" in production. Keep them in sync with `AI_MODEL_*` in `.env.example`.
 
 The production command path is deterministic and answers directly from tool results. Provider configuration is reserved for a future metered narration layer; AI Command does not make a discarded/unmetered model call before answering. It never fills gaps with invented numbers.
 
