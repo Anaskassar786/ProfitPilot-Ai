@@ -1,0 +1,14 @@
+{
+  "httpStatus": 200,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/google/gemma-2-9b-it:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "body": {
+    "data": {
+      "id": "google/gemma-2-9b-it:free",
+      "name": "Google: Gemma 2 9B",
+      "created": 1719532800,
+      "architecture": { "modality": "text->text" },
+      "endpoints": []
+    }
+  }
+}

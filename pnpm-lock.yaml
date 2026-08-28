@@ -150,6 +150,9 @@ importers:
       '@profitpilot/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@profitpilot/monitoring':
+        specifier: workspace:*
+        version: link:../../packages/monitoring
       '@profitpilot/queue':
         specifier: workspace:*
         version: link:../../packages/queue

@@ -1,0 +1,14 @@
+{
+  "httpStatus": 200,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/meta-llama/llama-3.3-70b-instruct:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "body": {
+    "data": {
+      "id": "meta-llama/llama-3.3-70b-instruct:free",
+      "name": "Meta: Llama 3.3 70B Instruct",
+      "created": 1733506137,
+      "architecture": { "modality": "text->text" },
+      "endpoints": []
+    }
+  }
+}

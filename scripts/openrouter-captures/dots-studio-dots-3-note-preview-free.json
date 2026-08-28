@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/dots-studio/dots-3-note-preview:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "body": {
+    "data": {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "name": "Dots Studio: Dots3-Note Preview (free)",
+      "created": 1786680361,
+      "architecture": { "modality": "text+image->text" },
+      "endpoints": [
+        {
+          "name": "AtlasCloud | dots-studio/dots-3-note-preview-20260813:free",
+          "model_id": "dots-studio/dots-3-note-preview:free",
+          "provider_name": "AtlasCloud",
+          "tag": "atlas-cloud/fp8",
+          "context_length": 512000,
+          "pricing": { "prompt": "0", "completion": "0", "discount": 0 },
+          "status": 0,
+          "uptime_last_30m": 99.98662922860649,
+          "uptime_last_1d": 99.99238887304590
+        }
+      ]
+    }
+  }
+}

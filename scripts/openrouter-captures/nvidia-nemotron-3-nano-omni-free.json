@@ -1,0 +1,6 @@
+{
+  "httpStatus": 404,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/nvidia/nemotron-3-nano-omni:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "body": { "error": { "message": "Not Found", "code": 404 } }
+}

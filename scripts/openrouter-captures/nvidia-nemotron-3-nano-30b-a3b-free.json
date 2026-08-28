@@ -1,0 +1,14 @@
+{
+  "httpStatus": 200,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/nvidia/nemotron-3-nano-30b-a3b:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "body": {
+    "data": {
+      "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+      "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+      "created": 1765731275,
+      "architecture": { "modality": "text->text" },
+      "endpoints": []
+    }
+  }
+}

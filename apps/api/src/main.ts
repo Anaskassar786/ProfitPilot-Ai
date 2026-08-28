@@ -12,9 +12,13 @@ import { createInsightsHubBootstrap, InsightsHubService, PostgresInsightsHubRepo
 import { buildStoreSnapshot } from './store-snapshot.js'
 import { shouldRunMigrations } from './ai-keys.js'
 import { assertProductionAppUrl } from './app-url.js'
+import { enforceSecureTls } from '@profitpilot/monitoring'
 
 const port = Number(process.env.PORT ?? '3000')
 const logger = loggerFromEnv(process.env)
+// Must run before any outbound HTTPS call so a leftover NODE_TLS_REJECT_UNAUTHORIZED=0
+// in the deployment environment cannot disable certificate verification.
+enforceSecureTls(process.env, (message, context) => logger.error(message, context ?? {}))
 const startedAt = Date.now()
 const webDistPath = resolve(process.cwd(), process.env.WEB_DIST_PATH?.trim() || 'apps/web/dist')
 const webIndexPath = join(webDistPath, 'index.html')

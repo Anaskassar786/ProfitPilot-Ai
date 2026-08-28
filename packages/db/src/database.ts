@@ -16,6 +16,12 @@ export interface SqlExecutor {
 export class PostgresDatabase implements SqlExecutor {  private readonly pool: Pool
 
   public constructor(config: DatabaseConfig) {
+    if (config.sslModeRewrittenFrom) {
+      poolLogger.warn('DATABASE_URL sslmode normalized to verify-full', {
+        requested: config.sslModeRewrittenFrom,
+        reason: 'prefer/require/verify-ca are aliases of verify-full in pg 8 and downgrade to unverified TLS in pg 9',
+      })
+    }
     this.pool = new Pool({
       connectionString: config.connectionString,
       max: config.maxConnections,

@@ -1,5 +1,23 @@
 # ProfitPilot Railway deployment
 
+## Render environment checklist (production — 2026-08-28 fixes)
+
+ProfitPilot is deployed on **Render** (not Railway). Apply these three changes in the Render dashboard environment group; each one closes a production issue fixed in this repo:
+
+1. **`NODE_TLS_REJECT_UNAUTHORIZED` → DELETE the variable** (or set it to `1`). A value of `0` disables TLS certificate verification for every outbound HTTPS call in the process (OpenRouter, Shopify, Upstash, Postgres over TLS). As a safety net, both `apps/api` and `apps/worker` now call `enforceSecureTls()` (from `@profitpilot/monitoring`) before opening any socket: it restores the value to `1` and logs `SECURITY: NODE_TLS_REJECT_UNAUTHORIZED=0 ...` if a deploy still carries it. That log line means the variable is still in the environment group — remove it there.
+2. **`DATABASE_URL` → must end with `?sslmode=verify-full`** (e.g. `postgresql://user:pass@host:5432/profitpilot?sslmode=verify-full`; keep other query params after it if present). `pg-connection-string@2.14.0` treats `prefer`/`require`/`verify-ca` as aliases of `verify-full` and prints a `SECURITY WARNING`; in pg v9 those modes stop verifying the server certificate entirely (silent downgrade — with `uselibpqcompat` semantics they parse to `ssl.rejectUnauthorized=false`). `databaseConfigFromEnv` now rewrites those three modes to `verify-full` at startup (`packages/db/src/config.ts`, `uselibpqcompat=true` respected as an explicit opt-out) and logs `DATABASE_URL sslmode normalized to verify-full`, but set `verify-full` in the dashboard too — the rewrite is the safety net, not the source of truth.
+3. **OpenRouter model slugs → replace the dead ones.** Every previously configured `:free` slug is gone (verified live against `https://openrouter.ai/api/v1/models/{id}/endpoints`; a model is usable only with ≥1 endpoint):
+
+   | Variable | Value (verified active 2026-08-28) | Provider |
+   |---|---|---|
+   | `AI_MODEL_PRIMARY` | `nvidia/nemotron-3-super-120b-a12b:free` | Nvidia |
+   | `AI_MODEL_FALLBACK1` | `google/gemma-4-26b-a4b-it:free` | Google AI Studio |
+   | `AI_MODEL_FALLBACK2` | `inclusionai/ling-3.0-flash-fin:free` | Novita |
+   | `AI_COMMAND_MODEL_PRIMARY` (reserved) | `cohere/north-mini-code:free` | Cohere |
+   | `AI_COMMAND_MODEL_FALLBACK` (reserved) | `google/gemma-4-26b-a4b-it:free` | Google AI Studio |
+
+   Each `AI_MODEL_*` slot is on a different provider so a single provider outage cannot take down the whole fallback chain. Spare (preview, expires 2026-09-30): `dots-studio/dots-3-note-preview:free` (AtlasCloud). OpenRouter rotates the free tier daily — re-verify at the endpoints URL above before trusting any slug, and expect the boot logs `OpenRouter model validated` (per model) or `STARTUP ALERT: every configured OpenRouter model is unavailable` if a slug died again.
+
 ## Services
 
 Create two Railway services from this repository:
