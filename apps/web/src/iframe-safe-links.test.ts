@@ -87,11 +87,16 @@ describe('C5 — install (OAuth) handoff is branch-aware', () => {
   const app = source('./App.tsx')
 
   it('only assigns the top window when standalone, else opens the top window', () => {
-    // The embedded branch must hand the install URL to the top-level window.
-    expect(app).toContain('window.open(installUrl, \'_top\', \'noopener\')')
+    // The embedded branch must hand the install URL to the top-level window
+    // through `navigateTopLevel`, which never passes `noopener`: that feature
+    // forces `window.open` to return null, and a null was being read as "the
+    // navigation was blocked" — so every install handoff looked like a failure.
+    expect(app).toContain('navigateTopLevel(installUrl)')
     // The standalone branch keeps the plain same-window navigation.
     expect(app).toContain('window.location.assign(installUrl)')
     // And the decision is explicitly the top===self check.
     expect(app).toMatch(/window\.top\s*!==\s*window\.self/)
+    // No `_top` window.open anywhere in the app shell may carry `noopener`.
+    expect(app).not.toMatch(/window\.open\([^)]*'_top'[^)]*noopener/)
   })
 })

@@ -6,7 +6,7 @@ import type { Logger } from '@profitpilot/logger'
 import { installStepFromError } from '@profitpilot/shopify'
 import type { ShopifyInstallService, AccessTokenExchange, WebhookEvent, WebhookProcessor } from '@profitpilot/shopify'
 import { rawBodyFor } from './security.js'
-import { setSessionCookie } from './cookies.js'
+import { setSignedSessionCookie } from './cookies.js'
 
 export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; storeIdForShop: (shop: string) => Promise<StoreId | null>; handle: (event: WebhookEvent) => Promise<void>; finalize?: (event: WebhookEvent) => Promise<void> }>
 /**
@@ -16,7 +16,7 @@ export type WebhookRouteDependencies = Readonly<{ processor: WebhookProcessor; s
  * while every later API call 401'd. Probing the vault immediately after the
  * write turns that silent failure into an explicit, logged error.
  */
-export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies; verifyTokenPersisted?: (shop: string) => Promise<boolean> }>
+export type ShopifyRouteDependencies = Readonly<{ installer: ShopifyInstallService; exchange: AccessTokenExchange; logger?: Logger; webhook?: WebhookRouteDependencies; verifyTokenPersisted?: (shop: string) => Promise<boolean>; /** Secret used to sign the tenant session cookie so it can authenticate the data plane. */ sessionCookieSecret?: string | undefined }>
 
 export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencies): Router {
   const router = Router()
@@ -91,7 +91,9 @@ export function createShopifyInstallRouter(dependencies: ShopifyRouteDependencie
       const location = dependencies.installer.postInstallRedirect(callback, result.shop, result.storeId)
       // Persist the tenant context so refreshes of the embedded app keep the
       // workspace attached even when the redirect query string is absent.
-      setSessionCookie(response, result.storeId)
+      // Signed: the bare storeId is not a credential (it travels in URLs),
+      // so the cookie must carry an HMAC the API can verify.
+      setSignedSessionCookie(response, result.storeId, dependencies.sessionCookieSecret ?? '')
       dependencies.logger?.info('Shopify OAuth callback completed', { shopDomain: result.shop, storeId: result.storeId, matchedHmacMethod: diagnostics.matchedMethod, requestId })
       // OAuth completes in the merchant's browser; send them into the embedded
       // app inside Shopify admin rather than returning a bare JSON body.

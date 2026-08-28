@@ -226,16 +226,48 @@ describe('navigateTopLevel (401 auto-recovery iframe escape)', () => {
     ;(window as unknown as { shopify: unknown }).shopify = { idToken: vi.fn(async () => 'token') }
     try {
       expect(navigateTopLevel(INSTALL)).toBe(true)
-      expect(open).toHaveBeenCalledWith(INSTALL, '_top', 'noopener')
+      expect(open).toHaveBeenCalledWith(INSTALL, '_top')
     } finally {
       delete (window as unknown as { shopify?: unknown }).shopify
       restore()
     }
   })
 
-  it('reports failure (not success) when window.open is popup-blocked (null)', () => {
+  it('never passes `noopener` — it makes window.open return null and silently broke every auto-recovery', () => {
+    // Regression test. `noopener` disowns the opener, so per MDN window.open
+    // "returns null" whenever the feature is set. The old code read that null
+    // as "popup blocked" and returned false, so the merchant was dropped on
+    // the static red "Session expired" card instead of being re-authorized.
     const restore = nested()
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(open).toHaveBeenCalledTimes(1)
+      const args = open.mock.calls[0] ?? []
+      expect(args[1]).toBe('_top')
+      expect(args).toHaveLength(2)
+    } finally {
+      restore()
+    }
+  })
+
+  it('treats a null return from window.open(_top) as dispatched, not popup-blocked', () => {
+    // `_top` navigates the existing top-level frame rather than opening a
+    // popup, so browsers legitimately return null. Reporting false here was
+    // the bug that made the 401 auto-recovery look broken.
+    const restore = nested()
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    try {
+      expect(navigateTopLevel(INSTALL)).toBe(true)
+      expect(open).toHaveBeenCalledWith(INSTALL, '_top')
+    } finally {
+      restore()
+    }
+  })
+
+  it('reports failure only when no navigation surface can be reached at all', () => {
+    const restore = nested()
+    const open = vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('blocked by the embed') })
     try {
       expect(navigateTopLevel(INSTALL)).toBe(false)
       expect(open).toHaveBeenCalledTimes(1)
@@ -262,7 +294,7 @@ describe('navigateTopLevel (401 auto-recovery iframe escape)', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
     try {
       expect(navigateTopLevel(INSTALL)).toBe(true)
-      expect(open).toHaveBeenCalledWith(INSTALL, '_top', 'noopener')
+      expect(open).toHaveBeenCalledWith(INSTALL, '_top')
     } finally {
       delete (window as unknown as { shopify?: unknown }).shopify
       restore()

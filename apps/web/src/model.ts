@@ -48,10 +48,21 @@ export type ApiSuccess<Value> = Readonly<{ ok: true; data: Value; meta: ApiMeta 
 export type ApiFailure = Readonly<{ ok: false; error: Readonly<{ code: string; message: string; details?: Readonly<Record<string, JsonValue>> }>; meta?: ApiMeta }>
 export type ApiEnvelope<Value> = ApiSuccess<Value> | ApiFailure
 
-export type WorkspaceContext = Readonly<{ storeId: string | null; shop: string | null; installed?: boolean }>
+/**
+ * `authenticated` — true only when `/session/context` resolved the tenant from
+ * a credential the server verified (Shopify session token or signed tenant
+ * cookie). False means "we know WHICH store this is, but we have no proof we
+ * may read its data", which is exactly the state that used to render
+ * "Shopify data plane ready" on top of a wall of 401s.
+ *
+ * Undefined means "not answered yet" — callers treat it as unknown, not false.
+ */
+export type WorkspaceContext = Readonly<{ storeId: string | null; shop: string | null; installed?: boolean; authenticated?: boolean }>
 
 export function workspaceContext(search: string): WorkspaceContext {
   const params = new URLSearchParams(search)
+  // A URL parameter proves nothing about the caller, so a context sourced
+  // straight from the address bar starts out unauthenticated.
   return { storeId: nonEmpty(params.get('storeId')), shop: nonEmpty(params.get('shop')) }
 }
 

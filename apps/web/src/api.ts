@@ -68,6 +68,7 @@ async function requestJsonAttempt<Value>(path: string, init: RequestInit, fetche
   // token now and retry once before surfacing anything to the merchant.
   if (isUnauthorizedResponse(payload, response.status) && allowRetry && !callerAuthorization) {
     const fresh = await getShopifySessionToken()
+    lastSessionTokenResult = fresh
     if (fresh.status === 'ok') {
       const retryHeaders = new Headers(init.headers)
       if (UNSAFE_METHODS.has(method) && csrfToken) retryHeaders.set('x-csrf-token', csrfToken)
@@ -134,6 +135,7 @@ async function requestFileAttempt(path: string, init: RequestInit, fetcher: Fetc
   let payload: unknown = response.ok ? null : await readJsonPayload(response)
   if (!response.ok && isUnauthorizedResponse(payload, response.status) && allowRetry && !callerAuthorization) {
     const fresh = await getShopifySessionToken()
+    lastSessionTokenResult = fresh
     if (fresh.status === 'ok') {
       const retryHeaders = new Headers(init.headers)
       retryHeaders.set('authorization', `Bearer ${fresh.token}`)
@@ -214,6 +216,7 @@ export function resetApiClientStateForTests(): void {
   csrfToken = null
   csrfInitialization = null
   embeddedAuthFailureNotified = false
+  lastSessionTokenResult = null
   embeddedAuthFailureHandler = null
   embeddedAuthRecoveryHandler = null
   embeddedReinstallRedirectAttempted = false
@@ -230,6 +233,20 @@ let embeddedAuthRecoveryHandler: EmbeddedAuthRecoveryHandler | null = null
 let embeddedAuthFailureNotified = false
 let embeddedReinstallRedirectAttempted = false
 let embeddedReinstallRedirectDispatched = false
+/**
+ * The outcome of the most recent App Bridge session-token mint.
+ *
+ * `attachEmbeddedSessionToken` records it on EVERY request so a 401 can say
+ * what actually went wrong instead of always blaming expiry. Three very
+ * different failures used to produce one identical red card:
+ *   - `not-embedded` — no `host` param, so no token was ever requested
+ *     (the app is open outside the Shopify admin);
+ *   - `unavailable`  — App Bridge was asked and could not mint (CDN blocked,
+ *     `VITE_SHOPIFY_API_KEY` missing, bridge rejected `idToken()`);
+ *   - `ok`           — a token WAS sent and the server still said 401, which
+ *     is the only case that is genuinely about the session/credentials.
+ */
+let lastSessionTokenResult: EmbeddedSessionTokenResult | null = null
 
 /**
  * Registers the user-visible handler for embedded session-token failures
@@ -275,7 +292,7 @@ function notifyEmbeddedAuthFailure(): void {
   if (embeddedAuthFailureNotified) return
   embeddedAuthFailureNotified = true
   if (attemptEmbeddedReinstallRedirect()) return
-  embeddedAuthFailureHandler?.('Your Shopify session expired — reload the app to reconnect.')
+  embeddedAuthFailureHandler?.(unauthorizedGuidance(lastSessionTokenResult))
 }
 
 /* ── Embedded 401 auto-recovery: top-level reinstall redirect ───────────── */
@@ -486,11 +503,40 @@ export async function attachEmbeddedSessionToken(headers: Headers): Promise<Embe
   // bridge can degrade a request to cookie fallback but never fail it.
   try {
     const result = await getShopifySessionToken()
+    lastSessionTokenResult = result
     if (result.status === 'ok') headers.set('authorization', `Bearer ${result.token}`)
     return result
   } catch {
-    return { status: 'unavailable', message: 'Shopify session token request failed' }
+    const failure: EmbeddedSessionTokenResult = { status: 'unavailable', message: 'Shopify session token request failed' }
+    lastSessionTokenResult = failure
+    return failure
   }
+}
+
+/** Test seam: clears the remembered session-token outcome. */
+export function resetSessionTokenDiagnosticsForTests(): void {
+  lastSessionTokenResult = null
+}
+
+/** Test seam: the last recorded session-token outcome (or null). */
+export function lastSessionTokenOutcome(): EmbeddedSessionTokenResult | null {
+  return lastSessionTokenResult
+}
+
+/**
+ * Turns a 401 into the sentence that matches what actually failed.
+ *
+ * Exported so the app shell can reuse the same wording for its retry surfaces,
+ * and so tests can pin the three branches without driving a network layer.
+ */
+export function unauthorizedGuidance(result: EmbeddedSessionTokenResult | null): string {
+  if (result?.status === 'not-embedded') {
+    return 'Open ProfitPilot from your Shopify admin (Apps → ProfitPilot). This page is outside the admin, so Shopify cannot create a session for it.'
+  }
+  if (result?.status === 'unavailable') {
+    return `Shopify could not create a session token${result.message ? ` (${result.message})` : ''}. Reload the app inside your Shopify admin to reconnect.`
+  }
+  return 'Your Shopify session expired — reload the app to reconnect.'
 }
 
 export function fetchAnalytics(storeId: string, fetcher: Fetcher = fetch): Promise<AnalyticsSnapshot> {

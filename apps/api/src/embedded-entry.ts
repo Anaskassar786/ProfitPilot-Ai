@@ -4,7 +4,7 @@ import type { StoreConnection, StoreDirectory } from '@profitpilot/db'
 import { verifyEmbeddedRequest } from '@profitpilot/shopify'
 import type { OfflineTokenResult, SessionTokenConfig } from '@profitpilot/shopify'
 import { missingShopifyScopes } from './app-store-assets.js'
-import { setSessionCookie } from './cookies.js'
+import { setSignedSessionCookie } from './cookies.js'
 import { isApiPath, isClientRoutePath } from './web-app.js'
 
 export type EmbeddedTokenExchange = Readonly<{
@@ -17,6 +17,8 @@ export type EmbeddedEntryDependencies = Readonly<{
   sessionToken: SessionTokenConfig
   tokenExchange?: EmbeddedTokenExchange
   logger?: Logger
+  /** Secret used to sign the tenant session cookie so it can authenticate the data plane. */
+  sessionCookieSecret?: string | undefined
 }>
 
 /**
@@ -65,7 +67,7 @@ async function registerTenant(
   let tenant: StoreConnection
   try {
     tenant = await dependencies.directory.upsertByShopDomain(shop)
-    setSessionCookie(response, tenant.storeId)
+    setSignedSessionCookie(response, tenant.storeId, dependencies.sessionCookieSecret ?? '')
     dependencies.logger?.info('Embedded app load registered tenant', {
       shopDomain: tenant.shopDomain,
       storeId: tenant.storeId,

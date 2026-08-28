@@ -219,6 +219,8 @@ describe('HOTFIX 3 — silent 401 retry and banner auto-clear', () => {
     expect(error).toBeInstanceOf(ApiClientError)
     expect((error as ApiClientError).status).toBe(401)
     expect(calls).toBe(1)
-    expect(failures).toEqual(['Your Shopify session expired — reload the app to reconnect.'])
+    // The last token mint was `unavailable`, so the banner names App Bridge
+    // instead of blaming expiry — the whole point of the guidance split.
+    expect(failures).toEqual(['Shopify could not create a session token (Shopify App Bridge did not load). Reload the app inside your Shopify admin to reconnect.'])
   })
 })
