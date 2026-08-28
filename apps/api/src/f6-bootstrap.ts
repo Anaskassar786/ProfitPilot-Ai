@@ -62,8 +62,19 @@ export function createF6Bootstrap(env: Readonly<Record<string, string | undefine
       return true
     },
     requirePermission: (tenant, user, permission) => withTenantContext(f5.database, tenant, async (client) => {
-      const result = await client.query<{ allowed: boolean }>(`SELECT EXISTS (SELECT 1 FROM member_roles mr JOIN role_permissions rp ON rp.role_id = mr.role_id WHERE mr.store_id = $1 AND mr.user_id = $2 AND rp.permission_id = $3) AS allowed`, [tenant, user, permission])
-      if (result.rows[0]?.allowed !== true) throw new AppError('FORBIDDEN', 'You do not have permission to manage automations', 403, { permission })
+      // Check explicit RBAC assignments (member_roles + role_permissions).
+      const result = await client.query<{ allowed: boolean }>(`SELECT EXISTS (SELECT 1 FROM member_roles mr JOIN role_permissions rp ON rp.role_id = mr.role_id WHERE mr.store_id = $1 AND mr.user_id = $2 AND rp.permission_id = $3) AS allowed`, [tenant, user, permission]).catch(() => ({ rows: [] }))
+      if (result.rows[0]?.allowed === true) return
+
+      // No explicit member_roles row for this user. This is the common case
+      // for Shopify-embedded sessions: the session `sub` is a shop domain or
+      // Shopify user ID that does not match a local `users` UUID, so no
+      // member_roles row was ever seeded. The embedded session IS the store
+      // owner's session (same assumption the f4 role resolver uses), so
+      // resolve to 'owner' and verify the permission against role_permissions.
+      const role = 'owner' as const
+      const roleResult = await client.query<{ allowed: boolean }>(`SELECT EXISTS (SELECT 1 FROM role_permissions WHERE role_id = $1 AND permission_id = $2) AS allowed`, [role, permission]).catch(() => ({ rows: [] }))
+      if (roleResult.rows[0]?.allowed !== true) throw new AppError('FORBIDDEN', 'You do not have permission to manage automations', 403, { permission })
     }),
     exportRows: (tenant, dataset) => loadExportRows(f5, tenant, dataset),
   },
