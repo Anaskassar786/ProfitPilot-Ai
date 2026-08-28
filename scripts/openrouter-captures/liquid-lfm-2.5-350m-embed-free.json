@@ -1,0 +1,7 @@
+{
+  "httpStatus": 404,
+  "capturedFrom": "https://openrouter.ai/api/v1/models/liquid/lfm-2.5-350m-embed:free/endpoints",
+  "capturedAt": "2026-08-28",
+  "note": "Render's AI_MODEL_PRIMARY was the display name 'LiquidAI: LFM2.5-Embedding-350M'; the closest real slug form of that embedding model is also gone (404). Embedding models cannot serve chat completions anyway.",
+  "body": { "error": { "message": "Not Found", "code": 404 } }
+}
