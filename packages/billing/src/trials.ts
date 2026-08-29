@@ -155,6 +155,10 @@ export class TrialAndGiftLedger {
   private giftKillSwitch = false
 
   public hydrate(trial: TrialRecord): void { if (!this.trials.has(trial.shopId)) this.trials.set(trial.shopId, trial) }
+  /** Overwrites the cached trial unconditionally. Used when a write path (e.g.
+   *  gift redemption) changes the authoritative row but `hydrate` would keep a
+   *  now-stale pre-write snapshot. */
+  public setTrial(trial: TrialRecord): void { this.trials.set(trial.shopId, trial) }
   public hydrateGift(code: GiftCode): void { this.gifts.set(code.code.trim().toUpperCase(), { ...code, code: code.code.trim().toUpperCase() }) }
   public hydrateRedemption(redemption: GiftRedemption): void { this.redemptions.set(redemption.shopId, redemption) }
 
@@ -488,6 +492,29 @@ export class PostgresTrialGiftStore {
       [code],
     )
     if (updatedGift.rows[0]) this.cache.hydrateGift(mapGift(updatedGift.rows[0]))
+
+    // The SQL above forfeits the trial (consumed/CANCELLED/trial_forfeited) in
+    // the DB, but the in-memory cache was hydrated with the pre-redemption
+    // ACTIVE trial back when the store first viewed billing — and `hydrate`
+    // refuses to overwrite it. Without a refresh, every later read in THIS
+    // process returns that stale ACTIVE trial, and once the gift window closes
+    // `expiredGiftRevert` resurrects the 14-day trial (the reported
+    // "trial is granted after a gift code is used"). So explicitly set the
+    // forfeited trial into the cache, preferring the authoritative DB row.
+    const forfeitedTrial = await this.loadTrial(shopId).catch(() => null)
+    if (forfeitedTrial) {
+      this.cache.setTrial(normalizeForfeitedTrial(forfeitedTrial, now) ?? forfeitedTrial)
+    } else {
+      const cachedTrial = this.cache.trial(shopId, now)
+      this.cache.setTrial({
+        shopId,
+        startedAt: cachedTrial?.startedAt ?? now - DEFAULT_TRIAL_DAYS * 86_400_000,
+        expiresAt: cachedTrial ? Math.min(cachedTrial.expiresAt, now) : now,
+        consumed: true,
+        state: 'CANCELLED',
+        trialForfeited: true,
+      })
+    }
 
     return redemption
   }
