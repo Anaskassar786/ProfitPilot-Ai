@@ -76,11 +76,11 @@ Email send requires a verified merchant sender and a live SMTP (Brevo) response.
 AI_COMMAND_ENABLED=true
 AI_COMMAND_API_KEY=
 AI_COMMAND_MODEL_PRIMARY=cohere/north-mini-code:free
-AI_COMMAND_MODEL_FALLBACK=google/gemma-4-26b-a4b-it:free
+AI_COMMAND_MODEL_FALLBACK=google/gemma-4-31b-it:free
 AI_COMMAND_ACTIONS_ENABLED=true
 ```
 
-The two `AI_COMMAND_MODEL_*` slugs above were verified active on 2026-08-28
+The two `AI_COMMAND_MODEL_*` slugs above were verified active on 2026-08-29
 against `https://openrouter.ai/api/v1/models/{id}/endpoints`. The values
 previously documented here (`meta-llama/llama-3.3-70b-instruct:free` and
 `google/gemma-2-9b-it:free`) are both dead — they return an empty endpoint list,

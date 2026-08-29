@@ -18,9 +18,10 @@
  * (the exact method apps/api/src/f8-bootstrap.ts calls at every boot) with a
  * fetcher replaying payloads LIVE-CAPTURED from
  * https://openrouter.ai/api/v1/models/{id}/endpoints on 2026-08-28 (see
- * scripts/openrouter-captures/). Old Render slugs must come back unavailable,
- * the new slugs must validate, and the startup logger must stop emitting
- * "every configured OpenRouter model is unavailable".
+ * scripts/openrouter-captures/; google/gemma-4-31b-it:free was captured
+ * 2026-08-29 when it replaced ling as AI_MODEL_FALLBACK2). Old Render slugs
+ * must come back unavailable, the new slugs must validate, and the startup
+ * logger must stop emitting "every configured OpenRouter model is unavailable".
  *
  * Proof 3 — TLS guard: exercises enforceSecureTls() against a process.env-like
  * object, mirroring what apps/api and apps/worker now run before any socket.
@@ -180,15 +181,19 @@ check('boot reproduces the production alert "every configured OpenRouter model i
   oldUnavailable === oldValidations.length && bootLog.some(([level, message]) => level === 'error' && message.includes('every configured OpenRouter model is unavailable')))
 
 // 2b. The new chain from .env.example, plus the reserved AI_COMMAND slots.
-const newChain = ['nvidia/nemotron-3-super-120b-a12b:free', 'google/gemma-4-26b-a4b-it:free', 'inclusionai/ling-3.0-flash-fin:free']
-const commandChain = ['cohere/north-mini-code:free', 'google/gemma-4-26b-a4b-it:free']
+// (Refreshed 2026-08-29: AI_MODEL_FALLBACK2 and AI_COMMAND_MODEL_FALLBACK moved to
+// google/gemma-4-31b-it:free, live-captured the same day — see openrouter-captures.)
+const newChain = ['nvidia/nemotron-3-super-120b-a12b:free', 'google/gemma-4-26b-a4b-it:free', 'google/gemma-4-31b-it:free']
+const commandChain = ['cohere/north-mini-code:free', 'google/gemma-4-31b-it:free']
 const newValidations = [...await provider(newChain).validateModels(), ...await provider(commandChain).validateModels()]
 for (const validation of newValidations) console.log(`  new slug ${validation.model.padEnd(46)} → available=${validation.available} reason=${validation.reason} provider=${captures.get(validation.model)?.body.data.endpoints[0]?.provider_name}`)
 check('every new slug validates with a live endpoint', newValidations.every((v) => v.available))
 check('boot logs "OpenRouter model validated" for every new slug', emitBootValidation(newValidations) === 0 && newValidations.every((v) => bootLog.some(([, message, context]) => message === 'OpenRouter model validated' && context.model === v.model)))
 const providers = new Set(newChain.map((model) => captures.get(model)?.body.data.endpoints[0]?.provider_name))
-check('AI_MODEL_* chain spans 3 distinct providers (one outage cannot kill the chain)', providers.size === 3 && JSON.stringify([...providers].sort()) === '["Google AI Studio","Novita","Nvidia"]')
-check('AI_COMMAND_MODEL_PRIMARY is on a 4th provider (Cohere)', captures.get('cohere/north-mini-code:free')?.body.data.endpoints[0]?.provider_name === 'Cohere')
+check('AI_MODEL_* primary runs on Nvidia and both fallbacks on Google AI Studio (2 distinct providers)', providers.size === 2 && JSON.stringify([...providers].sort()) === '["Google AI Studio","Nvidia"]')
+check('AI_COMMAND_MODEL_PRIMARY is on a 3rd provider (Cohere)', captures.get('cohere/north-mini-code:free')?.body.data.endpoints[0]?.provider_name === 'Cohere')
+const spareValidations = await provider(['inclusionai/ling-3.0-flash-fin:free', 'dots-studio/dots-3-note-preview:free']).validateModels()
+check('spares still validate (ling on Novita, dots on AtlasCloud — first promotion candidates)', spareValidations.every((v) => v.available))
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\nProof 3 — enforceSecureTls() startup guard (what apps/api & apps/worker run first)\n')

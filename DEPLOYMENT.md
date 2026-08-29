@@ -8,15 +8,15 @@ ProfitPilot is deployed on **Render** (not Railway). Apply these three changes i
 2. **`DATABASE_URL` → must end with `?sslmode=verify-full`** (e.g. `postgresql://user:pass@host:5432/profitpilot?sslmode=verify-full`; keep other query params after it if present). `pg-connection-string@2.14.0` treats `prefer`/`require`/`verify-ca` as aliases of `verify-full` and prints a `SECURITY WARNING`; in pg v9 those modes stop verifying the server certificate entirely (silent downgrade — with `uselibpqcompat` semantics they parse to `ssl.rejectUnauthorized=false`). `databaseConfigFromEnv` now rewrites those three modes to `verify-full` at startup (`packages/db/src/config.ts`, `uselibpqcompat=true` respected as an explicit opt-out) and logs `DATABASE_URL sslmode normalized to verify-full`, but set `verify-full` in the dashboard too — the rewrite is the safety net, not the source of truth.
 3. **OpenRouter model slugs → replace the dead ones.** Every previously configured `:free` slug is gone (verified live against `https://openrouter.ai/api/v1/models/{id}/endpoints`; a model is usable only with ≥1 endpoint):
 
-   | Variable | Value (verified active 2026-08-28) | Provider |
+   | Variable | Value (verified active 2026-08-29) | Provider |
    |---|---|---|
    | `AI_MODEL_PRIMARY` | `nvidia/nemotron-3-super-120b-a12b:free` | Nvidia |
    | `AI_MODEL_FALLBACK1` | `google/gemma-4-26b-a4b-it:free` | Google AI Studio |
-   | `AI_MODEL_FALLBACK2` | `inclusionai/ling-3.0-flash-fin:free` | Novita |
+   | `AI_MODEL_FALLBACK2` | `google/gemma-4-31b-it:free` | Google AI Studio |
    | `AI_COMMAND_MODEL_PRIMARY` (reserved) | `cohere/north-mini-code:free` | Cohere |
-   | `AI_COMMAND_MODEL_FALLBACK` (reserved) | `google/gemma-4-26b-a4b-it:free` | Google AI Studio |
+   | `AI_COMMAND_MODEL_FALLBACK` (reserved) | `google/gemma-4-31b-it:free` | Google AI Studio |
 
-   Each `AI_MODEL_*` slot is on a different provider so a single provider outage cannot take down the whole fallback chain. Spare (preview, expires 2026-09-30): `dots-studio/dots-3-note-preview:free` (AtlasCloud). OpenRouter rotates the free tier daily — re-verify at the endpoints URL above before trusting any slug, and expect the boot logs `OpenRouter model validated` (per model) or `STARTUP ALERT: every configured OpenRouter model is unavailable` if a slug died again.
+   The primary runs on Nvidia while both fallbacks run on Google AI Studio, so a Google outage leaves the primary standing — promote a spare if that happens. Spares (verified active 2026-08-29): `inclusionai/ling-3.0-flash-fin:free` (Novita) and `dots-studio/dots-3-note-preview:free` (AtlasCloud, preview expires 2026-09-30). OpenRouter rotates the free tier daily — re-verify at the endpoints URL above before trusting any slug, and expect the boot logs `OpenRouter model validated` (per model) or `STARTUP ALERT: every configured OpenRouter model is unavailable` if a slug died again.
 
 ## Services
 
